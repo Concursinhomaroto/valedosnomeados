@@ -36,6 +36,10 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
+  // Ignora esquemas que a Cache API não suporta (ex.: chrome-extension://,
+  // de extensões do navegador injetando suas próprias requisições) — deixa
+  // o navegador lidar com elas normalmente, sem passar pelo cache.
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
   const isSameOrigin = url.origin === self.location.origin;
   const isAppDoc = req.mode === 'navigate' || url.pathname.endsWith('index.html') || url.pathname.endsWith('app.html') || url.pathname.endsWith('/');
 
