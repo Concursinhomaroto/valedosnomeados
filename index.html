@@ -76,6 +76,10 @@ header{position:sticky;top:0;z-index:20;background:color-mix(in srgb, var(--bg2)
 .header-nav a.active::after{content:'';position:absolute;left:0;right:0;bottom:-6px;height:3px;border-radius:3px;background:linear-gradient(135deg,var(--accent),var(--accent2));}
 .brand{text-decoration:none;cursor:pointer;}
 .header-cta{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.header-cta .cta-link{font-size:14px;font-weight:800;color:var(--text2);text-decoration:none;white-space:nowrap;padding:4px 6px;transition:color .15s;position:relative;}
+.header-cta .cta-link:hover{color:var(--accent);}
+.header-cta .cta-link.active{color:var(--accent);}
+.header-cta .cta-link.active::after{content:'';position:absolute;left:6px;right:6px;bottom:-6px;height:3px;border-radius:3px;background:linear-gradient(135deg,var(--accent),var(--accent2));}
 .header-cta .brand{font-size:12px;gap:4px;}
 .header-cta .brand .brand-logo{font-size:16px;}
 .header-cta .nav-drop summary{padding:7px 10px;font-size:13px;}
@@ -287,9 +291,9 @@ footer{border-top:1px solid var(--border);padding:28px 0;margin-top:20px;}
       <a href="#sobre" data-tab="sobre" onclick="return goTab('sobre')">Sobre nós</a>
       <a href="#plataforma" data-tab="plataforma" onclick="return goTab('plataforma')">Plataforma</a>
       <a href="#contato" data-tab="contato" onclick="return goTab('contato')">Fale conosco</a>
-      <a href="#precos" data-tab="precos" onclick="return goTab('precos')">Preços</a>
     </nav>
     <div class="header-cta">
+      <a class="cta-link" href="#precos" data-tab="precos" onclick="return goTab('precos')">Preços</a>
       <details class="nav-drop" id="nav-drop-preedital">
         <summary>📋 Pré-Edital <span class="care">▾</span></summary>
         <div class="nav-drop-menu">
@@ -637,7 +641,7 @@ const TAB_SECTIONS=Array.from(document.querySelectorAll('section[data-tab]'));
 function goTab(tab){
   if(!TAB_NAMES.includes(tab))tab='home';
   TAB_SECTIONS.forEach(el=>{ el.style.display = el.dataset.tab===tab ? '' : 'none'; });
-  document.querySelectorAll('.header-nav a').forEach(a=>a.classList.toggle('active', a.dataset.tab===tab));
+  document.querySelectorAll('.header-nav a, .header-cta .cta-link').forEach(a=>a.classList.toggle('active', a.dataset.tab===tab));
   window.scrollTo(0,0);
   history.replaceState(null,'', tab==='home' ? location.pathname : '#'+tab);
   return false;
