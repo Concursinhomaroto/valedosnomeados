@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste Facebook — Vale dos Nomeados</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,'Segoe UI',Inter,sans-serif;background:#14122a;color:#ede9fe;padding:20px;padding-bottom:60px}
+  h1{font-size:20px;margin:0 0 4px}
+  p.sub{color:#a9a3c9;font-size:13px;margin:0 0 24px}
+  label{display:block;font-size:13px;font-weight:700;color:#c4b5fd;margin:18px 0 6px}
+  input,select,textarea{width:100%;padding:12px 14px;border-radius:10px;border:1.5px solid #332f54;background:#201d38;color:#ede9fe;font-size:15px;font-family:inherit}
+  textarea{resize:vertical;min-height:60px}
+  button{width:100%;margin-top:20px;padding:14px;border-radius:12px;border:none;background:linear-gradient(135deg,#1877f2,#0d5dc4);color:#fff;font-weight:800;font-size:15px;cursor:pointer}
+  button:active{opacity:.85}
+  button.secondary{background:#201d38;border:1.5px solid #332f54;color:#ede9fe}
+  .tabs{display:flex;gap:8px;margin-top:20px}
+  .tabs button{margin-top:0;flex:1;background:#201d38;border:1.5px solid #332f54;color:#a9a3c9;font-size:13px;padding:10px}
+  .tabs button.active{background:linear-gradient(135deg,#1877f2,#0d5dc4);color:#fff;border-color:transparent}
+  .panel{display:none}
+  .panel.active{display:block}
+  #result{margin-top:20px;padding:14px;border-radius:10px;background:#201d38;border:1.5px solid #332f54;font-size:13px;white-space:pre-wrap;word-break:break-all;display:none}
+  #result.show{display:block}
+  #result.ok{border-color:#4ade80}
+  #result.err{border-color:#f87171}
+  .hint{font-size:11.5px;color:#7c7699;margin-top:6px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<h1>📘 Teste de publicação no Facebook</h1>
+<p class="sub">Página só sua, pra testar a API sem precisar digitar código no console.</p>
+
+<label for="adminKey">Admin Key (senha do Worker)</label>
+<input id="adminKey" type="password" placeholder="cole sua ADMIN_KEY aqui" autocapitalize="off" autocorrect="off" spellcheck="false">
+<div class="hint">Fica salva só nesse aparelho (localStorage), não é enviada a mais ninguém.</div>
+
+<div class="tabs">
+  <button type="button" class="tab-btn active" data-tab="photo">Foto</button>
+  <button type="button" class="tab-btn" data-tab="video">Vídeo</button>
+  <button type="button" class="tab-btn" data-tab="text">Texto</button>
+</div>
+
+<div class="panel active" id="panel-photo">
+  <label for="imageUrl">Imagem</label>
+  <select id="imageUrl">
+    <option value="https://valedosnomeados.com.br/social/instagram/post-27.png">post-27.png (explicativo)</option>
+    <option value="custom">Outra URL...</option>
+  </select>
+  <input id="imageUrlCustom" type="url" placeholder="https://..." style="display:none;margin-top:8px" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label for="photoCaption">Legenda</label>
+  <textarea id="photoCaption">Teste de publicação via API</textarea>
+  <button id="btnPhoto">🚀 Publicar foto de teste</button>
+</div>
+
+<div class="panel" id="panel-video">
+  <label for="videoUrl">Vídeo</label>
+  <select id="videoUrl">
+    <option value="https://valedosnomeados.com.br/social/instagram/reel-dica-revisao.mp4">reel-dica-revisao.mp4</option>
+    <option value="https://valedosnomeados.com.br/social/instagram/reel-motivacional-aprovado.mp4">reel-motivacional-aprovado.mp4</option>
+    <option value="https://valedosnomeados.com.br/social/instagram/reel-divulgacao-mapa.mp4">reel-divulgacao-mapa.mp4</option>
+    <option value="https://valedosnomeados.com.br/social/instagram/reel-curiosidade-inss.mp4">reel-curiosidade-inss.mp4</option>
+    <option value="https://valedosnomeados.com.br/social/instagram/reel-divulgacao-flashcards.mp4">reel-divulgacao-flashcards.mp4</option>
+    <option value="custom">Outra URL...</option>
+  </select>
+  <input id="videoUrlCustom" type="url" placeholder="https://..." style="display:none;margin-top:8px" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label for="videoCaption">Legenda</label>
+  <textarea id="videoCaption">Teste de publicação via API</textarea>
+  <button id="btnVideo">🚀 Publicar vídeo de teste</button>
+</div>
+
+<div class="panel" id="panel-text">
+  <label for="textMessage">Mensagem</label>
+  <textarea id="textMessage">Teste de publicação de texto via API</textarea>
+  <label for="textLink">Link (opcional)</label>
+  <input id="textLink" type="url" placeholder="https://valedosnomeados.com.br" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <button id="btnText">🚀 Publicar post de texto</button>
+</div>
+
+<button id="btnStatus" class="secondary">🔍 Checar status da última publicação</button>
+
+<div id="result"></div>
+
+<script>
+  var WORKER = 'https://vdn-facebook.leonardobrunotlc.workers.dev';
+  var $ = function(id){ return document.getElementById(id); };
+
+  var savedKey = localStorage.getItem('vdn_fb_adminkey');
+  if (savedKey) $('adminKey').value = savedKey;
+
+  document.querySelectorAll('.tab-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+      btn.classList.add('active');
+      $('panel-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  $('imageUrl').addEventListener('change', function(){
+    $('imageUrlCustom').style.display = this.value === 'custom' ? 'block' : 'none';
+  });
+  $('videoUrl').addEventListener('change', function(){
+    $('videoUrlCustom').style.display = this.value === 'custom' ? 'block' : 'none';
+  });
+
+  function showResult(obj, ok){
+    var el = $('result');
+    el.className = 'show ' + (ok ? 'ok' : 'err');
+    el.textContent = JSON.stringify(obj, null, 2);
+  }
+
+  function withKey(extra){
+    var adminKey = $('adminKey').value.trim();
+    if (adminKey) localStorage.setItem('vdn_fb_adminkey', adminKey);
+    return Object.assign({ adminKey: adminKey }, extra);
+  }
+
+  function post(path, payload, btn){
+    var adminKey = $('adminKey').value.trim();
+    if (!adminKey) { showResult({error:'preenche a Admin Key primeiro'}, false); return; }
+    var original = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Publicando...';
+    fetch(WORKER + path, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    }).then(function(r){ return r.json(); })
+      .then(function(data){
+        showResult(data, !!data.ok);
+        if (data.ok && data.postId) localStorage.setItem('vdn_fb_lastpost', data.postId);
+      })
+      .catch(function(e){ showResult({error:String(e)}, false); })
+      .finally(function(){ btn.disabled = false; btn.textContent = original; });
+  }
+
+  $('btnPhoto').addEventListener('click', function(){
+    var sel = $('imageUrl').value;
+    var imageUrl = sel === 'custom' ? $('imageUrlCustom').value.trim() : sel;
+    post('/publish-photo', withKey({ imageUrl: imageUrl, caption: $('photoCaption').value }), this);
+  });
+
+  $('btnVideo').addEventListener('click', function(){
+    var sel = $('videoUrl').value;
+    var videoUrl = sel === 'custom' ? $('videoUrlCustom').value.trim() : sel;
+    post('/publish-video', withKey({ videoUrl: videoUrl, caption: $('videoCaption').value }), this);
+  });
+
+  $('btnText').addEventListener('click', function(){
+    post('/publish-text', withKey({ message: $('textMessage').value, link: $('textLink').value.trim() || undefined }), this);
+  });
+
+  $('btnStatus').addEventListener('click', function(){
+    var adminKey = $('adminKey').value.trim();
+    var postId = localStorage.getItem('vdn_fb_lastpost');
+    if (!adminKey) { showResult({error:'preenche a Admin Key primeiro'}, false); return; }
+    if (!postId) { showResult({error:'ainda não tem nenhuma publicação recente registrada'}, false); return; }
+    var btn = this;
+    var original = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Checando...';
+    fetch(WORKER + '/status?adminKey=' + encodeURIComponent(adminKey) + '&postId=' + encodeURIComponent(postId))
+      .then(function(r){ return r.json(); })
+      .then(function(data){ showResult(data, !data.error); })
+      .catch(function(e){ showResult({error:String(e)}, false); })
+      .finally(function(){ btn.disabled = false; btn.textContent = original; });
+  });
+</script>
+</body>
+</html>
