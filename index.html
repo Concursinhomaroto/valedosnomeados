@@ -74,6 +74,7 @@ header{position:sticky;top:0;z-index:20;background:color-mix(in srgb, var(--bg2)
 .header-nav a:hover{color:var(--accent);}
 .header-nav a.active{color:var(--accent);}
 .header-nav a.active::after{content:'';position:absolute;left:0;right:0;bottom:-6px;height:3px;border-radius:3px;background:linear-gradient(135deg,var(--accent),var(--accent2));}
+.header-nav .precos-mobile{display:none;}
 .brand{text-decoration:none;cursor:pointer;}
 .header-cta{display:flex;align-items:center;gap:10px;flex-shrink:0;}
 .header-cta .cta-link{font-size:14px;font-weight:800;color:var(--text2);text-decoration:none;white-space:nowrap;padding:4px 2px;transition:color .15s;position:relative;}
@@ -247,6 +248,8 @@ footer{border-top:1px solid var(--border);padding:28px 0;margin-top:20px;}
   .header-inner{flex-wrap:wrap;row-gap:10px;}
   .header-nav{order:3;width:100%;overflow-x:auto;gap:24px;padding-top:10px;border-top:1px solid var(--border);scrollbar-width:none;}
   .header-nav::-webkit-scrollbar{display:none;}
+  .header-nav .precos-mobile{display:inline;}
+  .header-cta .cta-link{display:none;}
   .header-cta{flex-wrap:wrap;row-gap:8px;width:100%;}
   .header-cta .brand{order:10;width:100%;justify-content:flex-end;}
 }
@@ -291,6 +294,7 @@ footer{border-top:1px solid var(--border);padding:28px 0;margin-top:20px;}
       <a href="#sobre" data-tab="sobre" onclick="return goTab('sobre')">Sobre nós</a>
       <a href="#plataforma" data-tab="plataforma" onclick="return goTab('plataforma')">Plataforma</a>
       <a href="#contato" data-tab="contato" onclick="return goTab('contato')">Fale conosco</a>
+      <a href="#precos" data-tab="precos" onclick="return goTab('precos')" class="precos-mobile">Preços</a>
     </nav>
     <div class="header-cta">
       <a class="cta-link" href="#precos" data-tab="precos" onclick="return goTab('precos')">Preços</a>
