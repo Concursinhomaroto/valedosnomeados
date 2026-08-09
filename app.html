@@ -893,7 +893,11 @@ nav{
 
 /* MODO ESTUDO */
 .fc-study-wrap{perspective:1200px;margin-bottom:20px;}
-.fc-card-3d{width:100%;min-height:300px;max-height:min(65vh,520px);position:relative;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.4,0,.2,1);cursor:pointer;}
+/* Os dois faces (.fc-face) são position:absolute, então não contam pra altura
+   automática do card — sem um "height" explícito aqui, o card ficava sempre
+   preso no min-height (300px), e o max-height antigo nunca tinha efeito real
+   (nada o fazia crescer além do mínimo pra ele "estourar" contra). */
+.fc-card-3d{width:100%;height:min(62vh,520px);min-height:300px;position:relative;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.4,0,.2,1);cursor:pointer;}
 .fc-card-3d.flipped{transform:rotateY(180deg);}
 /* Pergunta/resposta longa (ex: artigo de lei inteiro) não pode estourar o card por cima dos
    outros elementos da tela — .fc-face vira a área rolável, e o "margin:auto" no wrapper
@@ -909,6 +913,24 @@ nav{
 .fc-face-text{font-size:18px;font-weight:700;line-height:1.5;white-space:pre-wrap;word-break:break-word;}
 .fc-front .fc-face-text{color:#fff;}
 .fc-back .fc-face-text{color:var(--text);}
+/* Aviso de "tem mais texto embaixo" — só some quando o conteúdo cabe todo sem
+   precisar rolar (classe fc-has-more é ligada/desligada via JS, ver fcCheckOverflow).
+   O margin-top negativo faz ele "flutuar" por cima do fim do texto (grudado no
+   fundo da área rolável) em vez de empurrar o card pra baixo; o gradiente atrás
+   esmaece o texto que passaria por trás, pra não parecer um bug de sobreposição. */
+.fc-scroll-cue{display:none;position:sticky;left:0;right:0;bottom:0;height:46px;margin-top:-46px;align-items:flex-end;justify-content:center;padding-bottom:8px;pointer-events:none;}
+.fc-face-inner.fc-has-more .fc-scroll-cue{display:flex;}
+.fc-front .fc-scroll-cue{background:linear-gradient(to bottom,rgba(79,70,229,0) 0%,#4f46e5 70%);}
+.fc-back .fc-scroll-cue{background:linear-gradient(to bottom,rgba(32,29,56,0) 0%,var(--panel) 70%);}
+.fc-scroll-cue span{font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;animation:fcScrollCueBounce 1.4s infinite;}
+.fc-front .fc-scroll-cue span{background:rgba(0,0,0,.28);color:#fff;}
+.fc-back .fc-scroll-cue span{background:var(--bg2);color:var(--accent);}
+@keyframes fcScrollCueBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+@media(max-width:480px){
+  .fc-card-3d{height:min(72vh,640px);}
+  .fc-face{padding:22px 18px;}
+  .fc-face-text{font-size:16px;line-height:1.45;}
+}
 .fc-diff-dots{display:flex;gap:4px;margin-top:14px;}
 .fc-diff-dot{width:10px;height:10px;border-radius:50%;}
 
@@ -8812,7 +8834,7 @@ function renderFCMain(){
 
     ${fcMode==='grid'?fcGridHTML(cards):fcMode==='study'?fcStudyHTML(cards):fcTimelineHTML(all)}
   `;
-  if(fcMode==='study')fcVoiceMaybeSpeak();
+  if(fcMode==='study'){fcVoiceMaybeSpeak();requestAnimationFrame(fcCheckOverflow);}
 }
 
 // ---- GRID ----
@@ -9078,6 +9100,7 @@ function fcStudyHTML(cards){
             <div class="fc-face-text" style="white-space:pre-wrap">${c.pergunta}</div>
             <div style="margin-top:12px;font-size:9px;font-weight:800;color:rgba(255,255,255,0.6)">${fcStatusLabel(st,c)}</div>
             <div class="fc-diff-dots">${[1,2,3,4,5].map(n=>`<div class="fc-diff-dot" style="background:${n<=(c.dificuldade||3)?DIFF_COLORS[c.dificuldade||3]:'rgba(255,255,255,0.2)'}"></div>`).join('')}</div>
+            <div class="fc-scroll-cue"><span>role pra ler mais ⌄</span></div>
           </div>
         </div>
         <div class="fc-face fc-back">
@@ -9085,6 +9108,7 @@ function fcStudyHTML(cards){
             <div class="fc-face-hint">💡 Resposta</div>
             <div class="fc-face-text" style="white-space:pre-wrap">${c.resposta}</div>
             ${c.tags?`<div style="margin-top:12px;display:flex;gap:4px;flex-wrap:wrap;justify-content:center">${c.tags.split(',').filter(t=>t.trim()).map(t=>`<span class="fc-card-tag">#${t.trim()}</span>`).join('')}</div>`:''}
+            <div class="fc-scroll-cue"><span>role pra ler mais ⌄</span></div>
           </div>
         </div>
       </div>
@@ -9222,6 +9246,25 @@ function fcVoiceMaybeSpeak(){
   }
 }
 
+// Mostra "role pra ler mais" quando a pergunta/resposta não cabe inteira na
+// altura do card (comum em cards gerados por PDF, com trechos de lei longos).
+// Reage também ao scroll dentro do card, pra sumir assim que chegar no fim.
+function fcCheckOverflow(){
+  document.querySelectorAll('#fc-study-card .fc-face').forEach(face=>{
+    const inner=face.querySelector('.fc-face-inner');
+    if(!inner)return;
+    const update=()=>{
+      const overflowing=face.scrollHeight>face.clientHeight+4;
+      const nearBottom=face.scrollTop+face.clientHeight>=face.scrollHeight-4;
+      inner.classList.toggle('fc-has-more',overflowing&&!nearBottom);
+    };
+    update();
+    if(!face.dataset.fcScrollBound){
+      face.dataset.fcScrollBound='1';
+      face.addEventListener('scroll',update);
+    }
+  });
+}
 function fcStudyFlip(){
   fcStudyFlipped=!fcStudyFlipped;
   renderFCMain();
