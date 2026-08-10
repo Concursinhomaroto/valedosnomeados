@@ -47,6 +47,17 @@
   </div>
 
   <div id="app">
+    <div id="add-box" style="max-width:520px;margin:0 auto 24px;background:#241a3d;border:1px solid #3d2f63;border-radius:12px;padding:18px;">
+      <div style="font-weight:800;color:#f5a623;margin-bottom:12px;font-size:14px">+ Adicionar à fila</div>
+      <select id="add-mediatype" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #3d2f63;background:#170f2b;color:#fff;font-size:14px;margin-bottom:10px">
+        <option value="VIDEO">🎬 Vídeo (Reel)</option>
+        <option value="IMAGE">🖼️ Foto</option>
+      </select>
+      <input id="add-url" placeholder="URL do vídeo/imagem (https://...)" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #3d2f63;background:#170f2b;color:#fff;font-size:14px;margin-bottom:10px">
+      <textarea id="add-caption" placeholder="Legenda (com hashtags)" rows="4" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #3d2f63;background:#170f2b;color:#fff;font-size:14px;margin-bottom:10px;resize:vertical;font-family:inherit"></textarea>
+      <input id="add-kind" placeholder="Categoria (opcional, ex: divulgacao)" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #3d2f63;background:#170f2b;color:#fff;font-size:14px;margin-bottom:12px">
+      <button onclick="adicionar()" style="width:100%;padding:10px;border-radius:8px;border:none;background:#16a34a;color:#fff;font-weight:700;cursor:pointer;font-size:14px">+ Adicionar à fila</button>
+    </div>
     <div class="filters" id="filters"></div>
     <div class="grid" id="grid"></div>
   </div>
@@ -116,6 +127,27 @@ function renderGrid(){
       </div>
     </div>
   `).join('');
+}
+
+async function adicionar(){
+  const mediaType = document.getElementById('add-mediatype').value;
+  const url = document.getElementById('add-url').value.trim();
+  const caption = document.getElementById('add-caption').value.trim();
+  const kind = document.getElementById('add-kind').value.trim();
+  if(!url) return alert('Preenche a URL do vídeo/imagem');
+  const body = { adminKey: ADMIN_KEY, mediaType, caption, kind };
+  if(mediaType === 'VIDEO') body.videoUrl = url; else body.imageUrl = url;
+  const res = await fetch(`${WORKER_URL}/queue/add`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if(!res.ok){ alert('Erro: '+JSON.stringify(data)); return; }
+  document.getElementById('add-url').value='';
+  document.getElementById('add-caption').value='';
+  document.getElementById('add-kind').value='';
+  await carregar();
+  alert('Adicionado na fila! ✅');
 }
 
 async function acao(tipo, id){
