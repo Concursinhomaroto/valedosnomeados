@@ -266,18 +266,39 @@ footer{border-top:1px solid var(--border);padding:28px 0;margin-top:20px;}
   .whatsapp-float{width:52px;height:52px;bottom:16px;right:16px;}
   .whatsapp-float svg{width:26px;height:26px;}
 }
+
+/* ===== MODAL DE LOGIN/CADASTRO (fica na própria página, sem navegar pro app.html antes de logar) ===== */
+.auth-modal-backdrop{position:fixed;inset:0;z-index:1000;background:rgba(10,8,20,0.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;}
+.auth-modal-card{position:relative;width:100%;max-width:380px;background:var(--panel);border:1.5px solid var(--border2);border-radius:var(--r-xl);padding:34px 28px 28px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;gap:14px;animation:authModalIn .25s ease both;}
+@keyframes authModalIn{from{opacity:0;transform:translateY(16px) scale(.97);}to{opacity:1;transform:translateY(0) scale(1);}}
+.auth-modal-close{position:absolute;top:14px;right:14px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;padding:4px;}
+.auth-modal-close:hover{color:var(--text);}
+.auth-modal-logo{font-size:38px;}
+.auth-modal-title{font-size:15px;font-weight:900;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:.5px;}
+.auth-modal-card .auth-tabs{display:flex;gap:4px;background:var(--bg2);border-radius:10px;padding:3px;width:100%;}
+.auth-modal-card .auth-tab{flex:1;background:none;border:none;color:var(--muted);font-size:12px;font-weight:800;padding:9px;border-radius:8px;cursor:pointer;transition:all .15s;font-family:inherit;}
+.auth-modal-card .auth-tab.active{background:var(--accent2);color:#fff;}
+.auth-modal-card .auth-error{display:none;font-size:12px;color:#f87171;font-weight:700;text-align:center;width:100%;line-height:1.4;}
+#lp-auth-form{width:100%;display:flex;flex-direction:column;gap:10px;}
+#lp-auth-form input{width:100%;padding:11px 14px;border-radius:var(--r-md);border:1.5px solid var(--border2);background:var(--panel2);color:var(--text);font-family:inherit;font-size:14px;}
+.auth-modal-card .btn{width:100%;}
+.auth-modal-card .auth-forgot{background:none;border:none;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;text-decoration:underline;padding:2px;font-family:inherit;}
+.auth-modal-card .auth-divider{width:100%;text-align:center;font-size:10px;color:var(--muted);font-weight:800;letter-spacing:.5px;}
+.auth-terms{font-size:10.5px;color:var(--muted);text-align:center;line-height:1.5;margin-top:2px;}
+.auth-terms a{color:var(--muted);text-decoration:underline;}
 </style>
 <!-- SDK do Firebase (compat) — usado só pra leitura pública de promo/lifetime (faixa de
      vagas do vitalício). Sem login aqui, é uma página estática de qualquer forma. -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 </head>
 <body>
 
 <div id="promo-banner" class="promo-banner" style="display:none">
   <div class="wrap promo-banner-inner">
     <span>🔥 <b>Vitalício de lançamento</b> — restam poucas vagas, sem prazo pra decidir</span>
-    <a href="app.html?plano=vitalicio" class="promo-banner-cta">Garantir vaga →</a>
+    <a href="app.html?plano=vitalicio" class="promo-banner-cta" onclick="return openAuthModal('signup','app.html?plano=vitalicio')">Garantir vaga →</a>
   </div>
 </div>
 
@@ -303,8 +324,8 @@ footer{border-top:1px solid var(--border);padding:28px 0;margin-top:20px;}
           <a href="professor.html">🍎 Professor</a>
         </div>
       </details>
-      <a class="btn btn-ghost" href="app.html">Entrar</a>
-      <a class="btn btn-primary" href="app.html">Teste grátis por 3 dias</a>
+      <a class="btn btn-ghost" href="app.html" onclick="return openAuthModal('login')">Entrar</a>
+      <a class="btn btn-primary" href="app.html" onclick="return openAuthModal('signup')">Teste grátis por 3 dias</a>
       <a class="brand" href="#" onclick="return goTab('home')"><span class="brand-logo">🐉</span> VALE DOS NOMEADOS</a>
     </div>
   </div>
@@ -317,8 +338,8 @@ footer{border-top:1px solid var(--border);padding:28px 0;margin-top:20px;}
       <h1>Transforme o edital num <span class="accent">jogo que você quer vencer</span></h1>
       <p>Flashcards com revisão espaçada de verdade, simulados e correção de redação por IA, e um painel que te mostra exatamente o que estudar hoje — tudo organizado por matéria, num só lugar.</p>
       <div class="hero-ctas">
-        <a class="btn btn-primary btn-lg" href="app.html">Começar teste grátis de 3 dias <i>→</i></a>
-        <a class="btn btn-ghost btn-lg" href="app.html">Já tenho conta</a>
+        <a class="btn btn-primary btn-lg" href="app.html" onclick="return openAuthModal('signup')">Começar teste grátis de 3 dias <i>→</i></a>
+        <a class="btn btn-ghost btn-lg" href="app.html" onclick="return openAuthModal('login')">Já tenho conta</a>
       </div>
       <div class="hero-note">3 dias grátis, plataforma inteira liberada. Depois, R$ 19,90/mês. Cancele quando quiser.</div>
     </div>
@@ -513,7 +534,7 @@ footer{border-top:1px solid var(--border);padding:28px 0;margin-top:20px;}
           <li>Acesso completo à plataforma</li>
           <li>Cancele quando quiser, sem multa</li>
         </ul>
-        <a class="btn btn-primary btn-lg" href="app.html?plano=mensal" style="width:100%">Começar teste grátis</a>
+        <a class="btn btn-primary btn-lg" href="app.html?plano=mensal" style="width:100%" onclick="return openAuthModal('signup','app.html?plano=mensal')">Começar teste grátis</a>
       </div>
       <div class="pricing-card featured">
         <span class="pricing-badge">MELHOR CUSTO-BENEFÍCIO</span>
@@ -527,7 +548,7 @@ footer{border-top:1px solid var(--border);padding:28px 0;margin-top:20px;}
           <li>Mesmo preço garantido pelos 12 meses</li>
           <li>Ideal pra quem já decidiu que vai estudar o ano todo</li>
         </ul>
-        <a class="btn btn-primary btn-lg" href="app.html?plano=anual" style="width:100%">Começar teste grátis</a>
+        <a class="btn btn-primary btn-lg" href="app.html?plano=anual" style="width:100%" onclick="return openAuthModal('signup','app.html?plano=anual')">Começar teste grátis</a>
       </div>
       <div class="pricing-card lifetime">
         <span class="pricing-badge" id="promo-badge-price">🔥 LANÇAMENTO: RESTAM POUCAS VAGAS</span>
@@ -542,7 +563,7 @@ footer{border-top:1px solid var(--border);padding:28px 0;margin-top:20px;}
           <li>Não expira nunca — nem depois que você passar no concurso</li>
           <li>Prioridade no suporte e nas sugestões de novos recursos</li>
         </ul>
-        <a class="btn btn-primary btn-lg" href="app.html?plano=vitalicio" style="width:100%" id="promo-cta-price">Garantir minha vaga</a>
+        <a class="btn btn-primary btn-lg" href="app.html?plano=vitalicio" style="width:100%" id="promo-cta-price" onclick="return openAuthModal('signup','app.html?plano=vitalicio')">Garantir minha vaga</a>
       </div>
     </div>
   </div>
@@ -587,7 +608,7 @@ footer{border-top:1px solid var(--border);padding:28px 0;margin-top:20px;}
     <div class="final-cta">
       <h2>Bora dominar o edital?</h2>
       <p>Comece seu teste grátis de 3 dias agora e organize seus estudos hoje mesmo.</p>
-      <a class="btn btn-primary btn-lg" href="app.html">Começar teste grátis</a>
+      <a class="btn btn-primary btn-lg" href="app.html" onclick="return openAuthModal('signup')">Começar teste grátis</a>
     </div>
   </div>
 </section>
@@ -620,10 +641,35 @@ footer{border-top:1px solid var(--border);padding:28px 0;margin-top:20px;}
   <svg viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.14-2.9-7.01A9.87 9.87 0 0 0 12.04 2m0 1.67a8.2 8.2 0 0 1 5.83 2.42 8.19 8.19 0 0 1 2.41 5.82c0 4.55-3.7 8.24-8.25 8.24a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.18 8.18 0 0 1-1.26-4.38c0-4.55 3.7-8.24 8.25-8.24m-4.53 4.72c-.16 0-.42.06-.64.3s-.85.83-.85 2.03.87 2.36.99 2.52c.12.16 1.7 2.72 4.2 3.7 2.07.82 2.49.65 2.94.61.45-.04 1.44-.59 1.65-1.16s.2-1.05.14-1.16c-.06-.1-.22-.16-.46-.28s-1.44-.71-1.66-.79-.39-.12-.55.12-.63.79-.78.96c-.14.16-.28.18-.53.06s-1.03-.38-1.96-1.21c-.72-.65-1.21-1.44-1.35-1.68s-.02-.38.1-.5c.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42s-.55-1.33-.76-1.82c-.2-.48-.4-.42-.55-.42h-.47" /></svg>
 </a>
 
+<div id="auth-modal-backdrop" class="auth-modal-backdrop" style="display:none" onclick="if(event.target===this)closeAuthModal()">
+  <div class="auth-modal-card">
+    <button type="button" class="auth-modal-close" onclick="closeAuthModal()" aria-label="Fechar">✕</button>
+    <div class="auth-modal-logo">🐉</div>
+    <div class="auth-modal-title">VALE DOS NOMEADOS</div>
+    <div class="auth-tabs">
+      <button type="button" class="auth-tab active" id="lp-auth-tab-login" onclick="authSetTab('login')">Entrar</button>
+      <button type="button" class="auth-tab" id="lp-auth-tab-signup" onclick="authSetTab('signup')">Criar conta</button>
+    </div>
+    <div class="auth-error" id="lp-auth-error"></div>
+    <form id="lp-auth-form" onsubmit="event.preventDefault();authSubmit();">
+      <input type="email" id="lp-auth-email" placeholder="E-mail" autocomplete="email" required>
+      <input type="password" id="lp-auth-password" placeholder="Senha (mín. 6 caracteres)" autocomplete="current-password" required minlength="6">
+      <button type="submit" class="btn btn-primary" id="lp-auth-submit-btn">Entrar</button>
+    </form>
+    <button type="button" class="auth-forgot" onclick="authForgotPassword()">Esqueci minha senha</button>
+    <div class="auth-divider">— ou —</div>
+    <button type="button" class="btn btn-ghost" onclick="authSignInGoogle()">
+      <svg width="16" height="16" viewBox="0 0 48 48" style="flex-shrink:0"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34 5.1 29.3 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.2-.1-2.5-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34 5.1 29.3 3 24 3c-7.5 0-14 4.2-17.7 10.4z"/><path fill="#4CAF50" d="M24 45c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.3 36.4 26.8 37 24 37c-5.2 0-9.7-3.5-11.3-8.2l-6.5 5C9.9 40.6 16.4 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.3-4.1 5.7l6.2 5.2C40.5 36 44 30.6 44 24c0-1.2-.1-2.5-.4-3.5z"/></svg>
+      Entrar com Google
+    </button>
+    <div class="auth-terms">Ao continuar, você concorda com os <a href="termos.html" target="_blank">Termos de Uso</a> e a <a href="privacidade.html" target="_blank">Política de Privacidade</a>.</div>
+  </div>
+</div>
+
 <footer>
   <div class="wrap footer-inner">
     <div>🐉 Vale dos Nomeados — Concurso Federal Quest</div>
-    <div><a href="app.html" style="text-decoration:underline">Ir para o app</a></div>
+    <div><a href="app.html" style="text-decoration:underline" onclick="return openAuthModal('login')">Ir para o app</a></div>
   </div>
   <div class="footer-legal">
     <p>© <span id="footer-year"></span> Vale dos Nomeados. CNPJ: 62.501.336/0001-95. Todos os direitos reservados. A propriedade intelectual desta plataforma — incluindo marca, layout, código-fonte e conteúdo — é protegida pela Lei de Propriedade Industrial (Lei nº 9.279/1996) e pela Lei de Direitos Autorais (Lei nº 9.610/1998). Reprodução, cópia ou uso não autorizado é proibido.</p>
@@ -680,36 +726,155 @@ document.getElementById('footer-year').textContent=new Date().getFullYear();
   drop.querySelectorAll('a').forEach(a=>a.addEventListener('click', ()=>{ drop.open=false; }));
 })();
 
+// ===== FIREBASE (mesmo projeto do app.html — init único da página) =====
+let lpFirebaseOk=false;
+try{
+  firebase.initializeApp({
+    apiKey: "AIzaSyAlLEfgUlGP_GwDX_sgdScgwHLK3f1-iJY",
+    authDomain: "vale-dos-nomeados.firebaseapp.com",
+    databaseURL: "https://vale-dos-nomeados-default-rtdb.firebaseio.com",
+    projectId: "vale-dos-nomeados",
+    storageBucket: "vale-dos-nomeados.firebasestorage.app",
+    messagingSenderId: "737113678098",
+    appId: "1:737113678098:web:31fae3686442c90c7393cb"
+  });
+  lpFirebaseOk=true;
+}catch(e){
+  console.warn('Firebase indisponível:',e);
+}
+
 // ===== FAIXA DE URGÊNCIA (promoção vitalício) =====
 // Lê o mesmo caminho público (promo/lifetime) que o app usa — sem login, só leitura —
 // pra não deixar a landing com um número de vagas estático que pode ficar errado depois
 // que alguém compra ou o prazo vence. Some sozinho se a promoção não estiver ativa.
 function initPromoBanner(){
-  try{
-    firebase.initializeApp({
-      apiKey: "AIzaSyAlLEfgUlGP_GwDX_sgdScgwHLK3f1-iJY",
-      authDomain: "vale-dos-nomeados.firebaseapp.com",
-      databaseURL: "https://vale-dos-nomeados-default-rtdb.firebaseio.com",
-      projectId: "vale-dos-nomeados",
-      storageBucket: "vale-dos-nomeados.firebasestorage.app",
-      messagingSenderId: "737113678098",
-      appId: "1:737113678098:web:31fae3686442c90c7393cb"
-    });
-    firebase.database().ref('promo/lifetime').once('value').then(snap=>{
-      const promo=snap.val()||{};
-      // Sem prazo — só limite de vagas. O número exato não aparece mais (só "restam
-      // poucas vagas" no HTML), pra não parecer contador artificial de urgência.
-      const active=promo.enabled&&(promo.slotsLeft||0)>0;
-      if(!active)return; // deixa o banner escondido e o card de preço com o texto padrão
+  if(!lpFirebaseOk)return;
+  firebase.database().ref('promo/lifetime').once('value').then(snap=>{
+    const promo=snap.val()||{};
+    // Sem prazo — só limite de vagas. O número exato não aparece mais (só "restam
+    // poucas vagas" no HTML), pra não parecer contador artificial de urgência.
+    const active=promo.enabled&&(promo.slotsLeft||0)>0;
+    if(!active)return; // deixa o banner escondido e o card de preço com o texto padrão
 
-      const bannerEl=document.getElementById('promo-banner');
-      if(bannerEl)bannerEl.style.display='block';
-    }).catch(e=>console.warn('Promo banner: falha ao ler promo/lifetime:',e));
-  }catch(e){
-    console.warn('Promo banner: Firebase indisponível:',e);
-  }
+    const bannerEl=document.getElementById('promo-banner');
+    if(bannerEl)bannerEl.style.display='block';
+  }).catch(e=>console.warn('Promo banner: falha ao ler promo/lifetime:',e));
 }
 initPromoBanner();
+
+// ===== LOGIN/CADASTRO NA PRÓPRIA PÁGINA (modal — não navega pro app.html antes de logar) =====
+let lpAuthFirebase=null, lpAuthMode='login', lpAuthRedirect='app.html';
+try{
+  if(lpFirebaseOk)lpAuthFirebase=firebase.auth();
+}catch(e){
+  console.warn('Firebase Auth indisponível:',e);
+}
+
+function openAuthModal(mode, redirectTo){
+  lpAuthMode=mode||'login';
+  lpAuthRedirect=redirectTo||'app.html';
+  // Sessão de visita anterior já ativa? Pula o modal e vai direto pro app.
+  if(lpAuthFirebase&&lpAuthFirebase.currentUser){
+    window.location.href=lpAuthRedirect;
+    return false;
+  }
+  authSetTab(lpAuthMode);
+  authClearError();
+  const form=document.getElementById('lp-auth-form');
+  if(form)form.reset();
+  document.getElementById('auth-modal-backdrop').style.display='flex';
+  setTimeout(()=>document.getElementById('lp-auth-email')?.focus(),60);
+  if(window.gtag)gtag('event','auth_modal_open',{mode:lpAuthMode});
+  return false;
+}
+function closeAuthModal(){
+  document.getElementById('auth-modal-backdrop').style.display='none';
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&document.getElementById('auth-modal-backdrop').style.display!=='none')closeAuthModal();
+});
+
+function authSetTab(mode){
+  lpAuthMode=mode;
+  document.getElementById('lp-auth-tab-login')?.classList.toggle('active',mode==='login');
+  document.getElementById('lp-auth-tab-signup')?.classList.toggle('active',mode==='signup');
+  const btn=document.getElementById('lp-auth-submit-btn');
+  if(btn)btn.textContent=mode==='login'?'Entrar':'Criar conta';
+}
+function authClearError(){
+  const el=document.getElementById('lp-auth-error');
+  if(!el)return;
+  el.style.display='none';el.textContent='';el.style.color='';
+}
+function authShowError(msg,ok){
+  const el=document.getElementById('lp-auth-error');
+  if(!el)return;
+  el.textContent=msg;el.style.display='block';el.style.color=ok?'#4ade80':'';
+}
+function authErrorMessage(code){
+  const map={
+    'auth/invalid-email':'E-mail inválido.',
+    'auth/user-disabled':'Esta conta foi desativada.',
+    'auth/user-not-found':'Não existe conta com esse e-mail.',
+    'auth/wrong-password':'Senha incorreta.',
+    'auth/invalid-credential':'E-mail ou senha incorretos.',
+    'auth/email-already-in-use':'Já existe uma conta com esse e-mail — tente entrar em vez de criar uma nova.',
+    'auth/weak-password':'A senha precisa ter pelo menos 6 caracteres.',
+    'auth/missing-password':'Digite uma senha.',
+    'auth/too-many-requests':'Muitas tentativas seguidas. Aguarde um pouco e tente de novo.',
+    'auth/network-request-failed':'Falha de conexão. Verifique sua internet e tente de novo.',
+    'auth/popup-closed-by-user':'Login com Google cancelado.',
+    'auth/cancelled-popup-request':'Login com Google cancelado.',
+    'auth/popup-blocked':'O navegador bloqueou a janela de login do Google. Permita pop-ups e tente de novo.',
+  };
+  return map[code]||'Não foi possível autenticar agora. Tente novamente.';
+}
+function authSubmit(){
+  if(!lpAuthFirebase){authShowError('Autenticação indisponível neste momento.');return;}
+  const email=(document.getElementById('lp-auth-email')?.value||'').trim();
+  const password=document.getElementById('lp-auth-password')?.value||'';
+  authClearError();
+  if(!email||!password){authShowError('Preencha e-mail e senha.');return;}
+  const btn=document.getElementById('lp-auth-submit-btn');
+  const originalLabel=lpAuthMode==='login'?'Entrar':'Criar conta';
+  if(btn){btn.disabled=true;btn.textContent='Aguarde...';}
+  const action=lpAuthMode==='login'
+    ?lpAuthFirebase.signInWithEmailAndPassword(email,password)
+    :lpAuthFirebase.createUserWithEmailAndPassword(email,password);
+  action.then(()=>{
+    if(window.gtag)gtag('event',lpAuthMode==='signup'?'sign_up':'login',{method:'email'});
+    window.location.href=lpAuthRedirect;
+  }).catch(e=>{
+    console.warn('Auth error:',e);
+    authShowError(authErrorMessage(e.code));
+    if(btn){btn.disabled=false;btn.textContent=originalLabel;}
+  });
+}
+function authSignInGoogle(){
+  if(!lpAuthFirebase){authShowError('Autenticação indisponível neste momento.');return;}
+  authClearError();
+  const provider=new firebase.auth.GoogleAuthProvider();
+  lpAuthFirebase.signInWithPopup(provider).then(()=>{
+    if(window.gtag)gtag('event','login',{method:'google'});
+    window.location.href=lpAuthRedirect;
+  }).catch(e=>{
+    console.warn('Google sign-in error:',e);
+    if(e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/cancelled-popup-request'){
+      authShowError(authErrorMessage(e.code));
+    }
+  });
+}
+function authForgotPassword(){
+  if(!lpAuthFirebase){authShowError('Autenticação indisponível neste momento.');return;}
+  const email=(document.getElementById('lp-auth-email')?.value||'').trim();
+  if(!email){authShowError('Digite seu e-mail no campo acima e clique de novo em "Esqueci minha senha".');return;}
+  authClearError();
+  lpAuthFirebase.sendPasswordResetEmail(email).then(()=>{
+    authShowError('📧 E-mail de redefinição enviado! Confira sua caixa de entrada.',true);
+  }).catch(e=>{
+    authShowError(authErrorMessage(e.code));
+  });
+}
 </script>
 
 </body>
