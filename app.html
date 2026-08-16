@@ -4748,6 +4748,7 @@ function resumoPanelHTML(s){
             <i class="fa fa-paperclip"></i> Arquivo
             <input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf" style="display:none" onchange="resumoFileSelected('${s.id}',this)">
           </label>
+          <button class="btn btn-xs btn-ghost" onclick="openAISettingsModal()" title="Trocar a voz de leitura ou a chave de IA"><i class="fa fa-gear"></i></button>
         </div>
       </div>
       <div class="resumo-body">${s.resumo.texto}</div>
@@ -4755,7 +4756,7 @@ function resumoPanelHTML(s){
     `;
   }
   return`
-    <div class="resumo-header"><div class="resumo-title"><i class="fa fa-file-lines"></i> Resumo com IA</div></div>
+    <div class="resumo-header"><div class="resumo-title"><i class="fa fa-file-lines"></i> Resumo com IA</div><button class="btn btn-xs btn-ghost" onclick="openAISettingsModal()" title="Escolher a voz de leitura ou configurar a chave de IA"><i class="fa fa-gear"></i> Voz</button></div>
     <div class="resumo-empty">Anexe um PDF (ou arquivo de texto) desse assunto e a IA gera um resumo completo, no nível de concurso — com opção de ouvir em voz.</div>
     <label class="resumo-drop" id="resumo-drop-${s.id}" ondragover="resumoDragOver(event)" ondragleave="resumoDragLeave(event)" ondrop="resumoDrop('${s.id}',event)">
       <div class="resumo-drop-icon"><i class="fa fa-cloud-arrow-up"></i></div>
@@ -5012,9 +5013,21 @@ async function generateResumoWeb(subId){
 }
 
 // ---- Leitura em voz do resumo (com pausar/continuar/parar) ----
-function resumoSplitForSpeech(text){
+// Remove marcadores que às vezes escapam da instrução "sem markdown" do prompt (a IA
+// nem sempre obedece à risca) e separadores tipo "--- Página 1 ---" — sem isso, o
+// sintetizador de voz às vezes lê os símbolos em voz alta ("asterisco", "traço"...).
+function sanitizeForSpeech(text){
+  return(text||'')
+    .replace(/-{2,}\s*Página\s*\d+\s*-{2,}/gi,' ')
+    .replace(/[#*_`~]/g,'')
+    .replace(/-{2,}/g,' ')
+    .replace(/[ \t]{2,}/g,' ')
+    .trim();
+}
+function resumoSplitForSpeech(rawText){
   // Quebra em pedaços por parágrafo/frase — evita estourar o limite de utterance de
   // alguns navegadores em textos longos, e permite pausar num ponto razoável.
+  const text=sanitizeForSpeech(rawText);
   const paragraphs=text.split(/\n{2,}/).map(p=>p.trim()).filter(Boolean);
   const chunks=[];
   const MAX=1400;
@@ -9566,7 +9579,7 @@ function fcStudyHTML(cards){
 function fcSpeak(text,onEnd){
   if(!('speechSynthesis' in window)){if(onEnd)onEnd();return;}
   window.speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(text);
+  const u=new SpeechSynthesisUtterance(sanitizeForSpeech(text));
   u.lang='pt-BR';
   const voice=pickBestPTVoice();
   if(voice)u.voice=voice;
@@ -9963,7 +9976,12 @@ async function extractPDFText(file,onProgress){
 // usuário (nunca no código-fonte), usada só pra gerar flashcards a partir de PDF.
 function openAISettingsModal(){
   const hasKey=!!(db.geminiApiKey||'').trim();
-  const voices=('speechSynthesis' in window?window.speechSynthesis.getVoices():[]).filter(v=>v.lang&&v.lang.toLowerCase().startsWith('pt'));
+  const allVoices=('speechSynthesis' in window)?window.speechSynthesis.getVoices():[];
+  const ptVoices=allVoices.filter(v=>v.lang&&v.lang.toLowerCase().startsWith('pt'));
+  const outrasVoices=allVoices.filter(v=>!v.lang||!v.lang.toLowerCase().startsWith('pt'));
+  // Se o aparelho não tem nenhuma voz marcada como português, ainda mostramos as
+  // outras vozes disponíveis — melhor deixar o usuário tentar alguma do que travar
+  // ele numa lista vazia sem nenhuma opção de escolha (era o que acontecia antes).
   openModal('⚙️ IA e voz',`
     <div style="text-align:left">
       <p style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">
@@ -9975,17 +9993,31 @@ function openAISettingsModal(){
 
       <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">🔊 Voz da leitura (flashcards e resumos)</div>
       <p style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
-        Escolha qual voz em português o navegador deve usar pra ler em voz alta. As vozes disponíveis dependem do seu aparelho — em muitos celulares, vozes que não sejam "Google" costumam soar mais naturais.
+        Escolha qual voz o navegador deve usar pra ler em voz alta. As vozes disponíveis dependem do seu aparelho, não do site — se a voz estiver lendo errado (com sotaque de outro idioma), o mais comum é o aparelho não ter nenhuma voz em português instalada (veja a dica abaixo).
       </p>
-      <select id="voice-select-input" class="inp" style="width:100%;margin-bottom:8px">
+      <select id="voice-select-input" class="inp" style="width:100%;margin-bottom:6px">
         <option value="">Automático (evita a voz padrão do Google quando houver outra opção)</option>
-        ${voices.map(v=>`<option value="${v.voiceURI}" ${db.preferredVoiceURI===v.voiceURI?'selected':''}>${v.name} (${v.lang})</option>`).join('')}
+        ${ptVoices.length?`<optgroup label="Português">${ptVoices.map(v=>`<option value="${v.voiceURI}" ${db.preferredVoiceURI===v.voiceURI?'selected':''}>${v.name} (${v.lang})</option>`).join('')}</optgroup>`:''}
+        ${outrasVoices.length?`<optgroup label="${ptVoices.length?'Outros idiomas (não recomendado)':'Nenhuma voz em português encontrada — outras vozes do aparelho'}">${outrasVoices.map(v=>`<option value="${v.voiceURI}" ${db.preferredVoiceURI===v.voiceURI?'selected':''}>${v.name} (${v.lang||'idioma desconhecido'})</option>`).join('')}</optgroup>`:''}
       </select>
-      ${!voices.length?`<div style="font-size:10px;color:var(--muted);margin-bottom:8px">Nenhuma voz em português encontrada ainda — se a lista estiver vazia, feche e abra esta janela de novo (algumas telas carregam as vozes com um pequeno atraso).</div>`:''}
-      <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-bottom:18px" onclick="testVoicePreview()"><i class="fa fa-volume-high"></i> Testar voz</button>
+      <div style="font-size:9.5px;color:var(--muted);margin-bottom:6px">${allVoices.length} voz(es) encontrada(s) no total no seu aparelho — ${ptVoices.length} em português.</div>
+      ${!allVoices.length?`<div style="font-size:10.5px;color:var(--orange);background:rgba(234,88,12,0.08);border:1.5px solid rgba(234,88,12,0.25);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.5">⏳ Nenhuma voz carregada ainda — em alguns navegadores isso demora um instante. Clique em "Atualizar lista" abaixo.</div>`:''}
+      ${allVoices.length&&!ptVoices.length?`<div style="font-size:10.5px;color:var(--orange);background:rgba(234,88,12,0.08);border:1.5px solid rgba(234,88,12,0.25);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.5">⚠️ Seu aparelho não tem nenhuma voz em português instalada — por isso ela lê com sotaque/pronúncia errada. Isso é uma configuração do sistema, não do site: no <b>Android</b>, vá em Configurações → Sistema → Idiomas → Conversão de texto em voz (Text-to-Speech) e baixe uma voz em Português (Brasil). No <b>iPhone</b>, vá em Ajustes → Acessibilidade → Conteúdo Falado → Vozes e baixe uma voz em Português. Depois, feche e abra o app de novo.</div>`:''}
+      <div style="display:flex;gap:8px;margin-bottom:18px">
+        <button class="btn btn-sm btn-ghost" style="flex:1;justify-content:center" onclick="reloadVoiceOptions()"><i class="fa fa-rotate"></i> Atualizar lista</button>
+        <button class="btn btn-sm btn-ghost" style="flex:1;justify-content:center" onclick="testVoicePreview()"><i class="fa fa-volume-high"></i> Testar voz</button>
+      </div>
 
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveGeminiApiKey()">Salvar</button>
     </div>`);
+}
+// Recarrega a lista de vozes sem fechar o modal — útil quando o navegador demora
+// pra carregar as vozes (comum logo depois de abrir o app pela primeira vez).
+function reloadVoiceOptions(){
+  const voiceSel=document.getElementById('voice-select-input');
+  const uri=voiceSel?voiceSel.value:'';
+  if(uri)db.preferredVoiceURI=uri; // preserva a escolha ainda não salva ao reabrir
+  openAISettingsModal();
 }
 function testVoicePreview(){
   if(!('speechSynthesis' in window)){toast('⚠️ Seu navegador não suporta leitura em voz','var(--red)');return;}
