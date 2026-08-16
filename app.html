@@ -3157,7 +3157,7 @@ let legisGenerating=new Set(); // subIds com geração de IA em andamento
 let openSim=new Set(); // subIds com painel de simulado aberto
 let simGenerating=new Set(); // subIds com geração de simulado em andamento
 let openResumo=new Set(); // subIds cujo painel de resumo (IA a partir de arquivo) está aberto
-let resumoGenerating=new Set(); // subIds com geração de resumo em andamento
+let resumoGenerating=new Map(); // subId -> 'arquivo'|'web', enquanto a geração está em andamento
 let resumoSpeakSubId=null; // subId cujo resumo está sendo lido em voz agora (ou null se nenhum)
 let resumoSpeakQueue=[]; // pedaços de texto do resumo atual, na ordem de leitura
 let resumoSpeakIdx=0; // índice do pedaço sendo lido agora
@@ -4725,27 +4725,33 @@ function cyclePriority(subId,topicId){
 // ===== RESUMO (IA a partir de arquivo anexado, com leitura em voz) =====
 function resumoPanelHTML(s){
   if(resumoGenerating.has(s.id)){
+    const modo=resumoGenerating.get(s.id);
     return`<div class="resumo-header"><div class="resumo-title"><i class="fa fa-file-lines"></i> Resumo com IA</div></div>
-      <div class="resumo-status"><i class="fa fa-spinner fa-spin"></i> <span class="resumo-status-txt">Lendo o arquivo...</span></div>`;
+      <div class="resumo-status"><i class="fa fa-spinner fa-spin"></i> <span class="resumo-status-txt">${modo==='web'?'Pesquisando na internet...':'Lendo o arquivo...'}</span></div>`;
   }
   if(s.resumo&&s.resumo.texto){
     const geradoEm=s.resumo.geradoEm?new Date(s.resumo.geradoEm).toLocaleDateString('pt-BR'):'';
+    const isWeb=s.resumo.origem==='web';
     const isSpeaking=resumoSpeakSubId===s.id&&window.speechSynthesis&&window.speechSynthesis.speaking;
     const isPaused=isSpeaking&&resumoSpeakPaused;
+    const fonteTxt=isWeb
+      ?(s.resumo.grounded?', com apoio de pesquisa na internet e dos seus flashcards':', com base no conhecimento já treinado do modelo (busca na internet indisponível agora)')
+      :' a partir do arquivo enviado';
     return`
       <div class="resumo-header">
-        <div class="resumo-title"><i class="fa fa-file-lines"></i> Resumo${s.resumo.fileName?` — ${s.resumo.fileName}`:''}</div>
+        <div class="resumo-title"><i class="fa fa-file-lines"></i> Resumo${isWeb?' 🌐':(s.resumo.fileName?` — ${s.resumo.fileName}`:'')}</div>
         <div class="resumo-actions">
           <button class="btn btn-xs ${isSpeaking?'btn-gold':'btn-ghost'}" onclick="resumoToggleSpeak('${s.id}')" title="${isSpeaking?(isPaused?'Continuar leitura':'Pausar leitura'):'Ouvir resumo'}"><i class="fa fa-${isSpeaking?(isPaused?'play':'pause'):'volume-high'}"></i> ${isSpeaking?(isPaused?'Continuar':'Pausar'):'Ouvir'}</button>
           ${isSpeaking?`<button class="btn btn-xs btn-ghost" onclick="resumoSpeakStop()" title="Parar leitura"><i class="fa fa-stop"></i></button>`:''}
-          <label class="btn btn-xs btn-ghost" style="cursor:pointer" title="Gerar de novo com outro arquivo">
-            <i class="fa fa-rotate"></i> Trocar arquivo
+          <button class="btn btn-xs btn-ghost" onclick="generateResumoWeb('${s.id}')" title="Gerar de novo buscando na internet + flashcards, sem precisar de arquivo"><i class="fa fa-globe"></i> Pesquisar</button>
+          <label class="btn btn-xs btn-ghost" style="cursor:pointer" title="Gerar de novo a partir de um arquivo">
+            <i class="fa fa-paperclip"></i> Arquivo
             <input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf" style="display:none" onchange="resumoFileSelected('${s.id}',this)">
           </label>
         </div>
       </div>
       <div class="resumo-body">${s.resumo.texto}</div>
-      <div class="resumo-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm} a partir do arquivo enviado — confira sempre a fonte oficial antes de usar na prova.</div>
+      <div class="resumo-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm}${fonteTxt} — confira sempre a fonte oficial antes de usar na prova.</div>
     `;
   }
   return`
@@ -4757,6 +4763,11 @@ function resumoPanelHTML(s){
       <div class="resumo-drop-sub">PDF ou .txt/.md</div>
       <input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf" style="display:none" onchange="resumoFileSelected('${s.id}',this)">
     </label>
+    <div style="text-align:center;font-size:10px;color:var(--muted);margin:12px 0;display:flex;align-items:center;gap:8px">
+      <span style="flex:1;height:1px;background:var(--border)"></span>ou<span style="flex:1;height:1px;background:var(--border)"></span>
+    </div>
+    <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center" onclick="generateResumoWeb('${s.id}')"><i class="fa fa-globe"></i> Gerar buscando na internet (sem arquivo)</button>
+    <div style="font-size:9.5px;color:var(--muted);text-align:center;margin-top:6px">A IA pesquisa as principais atualizações do tema e também usa os flashcards já cadastrados nesse chefão como contexto, quando existirem.</div>
   `;
 }
 function toggleResumo(subId){
@@ -4869,7 +4880,7 @@ async function generateResumo(subId,file){
   }
   if(resumoGenerating.has(subId)){toast('Geração em andamento...','var(--orange)');return;}
 
-  resumoGenerating.add(subId);
+  resumoGenerating.set(subId,'arquivo');
   openResumo.add(subId);
   resumoRefreshPanel(subId);
 
@@ -4926,9 +4937,72 @@ async function generateResumo(subId,file){
       resumoFinal=(await callGeminiGenerate(apiKey,resumoPromptConsolida(contexto,parciais))).trim();
     }
 
-    sub.resumo={texto:resumoFinal,geradoEm:new Date().toISOString(),fileName:file.name};
+    sub.resumo={texto:resumoFinal,geradoEm:new Date().toISOString(),fileName:file.name,origem:'arquivo'};
     saveDB();
     toast('📄 Resumo gerado!','var(--green)');
+  }catch(e){
+    toast('❌ '+(e.message||'Erro ao gerar resumo'),'var(--red)');
+  }finally{
+    resumoGenerating.delete(subId);
+    resumoRefreshPanel(subId);
+  }
+}
+
+function resumoPromptWeb(contexto,flashcardsTxt){
+  return`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil.
+
+TAREFA: Pesquise na internet as informações mais atuais e as principais alterações/atualizações relevantes (mudanças de lei, novas súmulas, jurisprudência recente, mudanças de entendimento) sobre o assunto abaixo, e produza um RESUMO COMPLETO, organizado e didático — cobrindo tanto a base teórica quanto o que mudou recentemente. É um material de estudo completo, não um resumo superficial.
+
+${contexto}
+${flashcardsTxt?`\nO aluno já tem os seguintes flashcards cadastrados sobre esse chefão — use como contexto do que ele já estuda, incorporando o que for relevante ao resumo (não copie no formato pergunta/resposta):\n${flashcardsTxt}\n`:''}
+REGRAS:
+- Organize por tópicos e subtópicos, com títulos curtos em MAIÚSCULAS seguidos de dois pontos.
+- Destaque conceitos-chave, definições, exceções, prazos, números, classificações e, principalmente, alterações recentes relevantes pra concurso.
+- Se não tiver certeza sobre uma informação específica (data exata, número de lei, etc.), sinalize isso como algo a confirmar, em vez de inventar.
+- Escreva em texto corrido organizado por tópicos, sem markdown (sem #, sem **, sem bullets com símbolos especiais), porque esse texto também vai ser lido em voz alta.`;
+}
+
+async function generateResumoWeb(subId){
+  let sub=null,topic=null,kingdom=null;
+  for(const k of db.kingdoms){
+    (db.topics[k.id]||[]).forEach(t=>{const f=t.subtopics?.find(s=>s.id===subId);if(f){sub=f;topic=t;kingdom=k;}});
+    if(sub)break;
+  }
+  if(!sub||!topic||!kingdom)return;
+
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey){
+    toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');
+    openAISettingsModal();
+    return;
+  }
+  if(resumoGenerating.has(subId)){toast('Geração em andamento...','var(--orange)');return;}
+
+  resumoGenerating.set(subId,'web');
+  openResumo.add(subId);
+  resumoRefreshPanel(subId);
+
+  try{
+    // Flashcards ficam ligados ao chefão (mbId=topic.id), não ao miniboss específico —
+    // então o recorte usado como contexto é do chefão inteiro, o mais próximo que temos.
+    const cardsDoChefao=Object.values(db.flashcards||{}).filter(c=>c.mbId===topic.id);
+    let flashcardsTxt='';
+    if(cardsDoChefao.length){
+      const MAX_CARDS=120;
+      const usados=cardsDoChefao.slice(0,MAX_CARDS);
+      flashcardsTxt=usados.map(c=>`P: ${c.pergunta}\nR: ${c.resposta}`).join('\n\n');
+      if(cardsDoChefao.length>MAX_CARDS)flashcardsTxt+=`\n\n(+ ${cardsDoChefao.length-MAX_CARDS} outros flashcards cadastrados, não incluídos aqui por espaço)`;
+    }
+
+    const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
+    const statusEl=document.querySelector(`#resumo-${subId} .resumo-status-txt`);
+    if(statusEl)statusEl.textContent='Pesquisando na internet e gerando o resumo...';
+
+    const{raw,grounded}=await callGeminiGenerateSearch(apiKey,resumoPromptWeb(contexto,flashcardsTxt));
+
+    sub.resumo={texto:raw.trim(),geradoEm:new Date().toISOString(),origem:'web',grounded};
+    saveDB();
+    toast(grounded?'🌐 Resumo gerado com pesquisa na internet!':'📄 Resumo gerado (busca na internet indisponível agora — usei o conhecimento da IA)','var(--green)');
   }catch(e){
     toast('❌ '+(e.message||'Erro ao gerar resumo'),'var(--red)');
   }finally{
@@ -9939,15 +10013,19 @@ function saveGeminiApiKey(){
 // costuma aposentar versões específicas (ex: gemini-2.5-flash) sem muito aviso,
 // então isso evita que a geração quebre de novo no futuro por causa só do nome.
 const GEMINI_MODEL_CANDIDATES=['gemini-3.6-flash','gemini-3.5-flash-lite','gemini-2.5-flash','gemini-flash-latest'];
-async function tryGeminiModel(apiKey,model,prompt){
+async function tryGeminiModel(apiKey,model,prompt,opts){
   try{
+    const body={contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:8192}};
+    // Grounding com Google Search: a IA pesquisa na internet antes de responder, em vez
+    // de usar só o que aprendeu no treinamento. Usado no Resumo "sem arquivo".
+    if(opts&&opts.useSearch)body.tools=[{google_search:{}}];
     const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       // maxOutputTokens explícito: sem isso a API usa um teto padrão que, em respostas
       // grandes (ex: simulado com muitas questões), corta o JSON no meio e quebra o
       // parse — o pedido então volta com menos itens do que o solicitado (ou falha).
-      body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:8192}})
+      body:JSON.stringify(body)
     });
     if(!response.ok){
       const err=await response.text();
@@ -9998,6 +10076,25 @@ async function callGeminiGenerate(apiKey,prompt){
     attempts.push(`${model} (${r.reason})`);
   }
   throw new Error(`Nenhum modelo do Gemini respondeu. Tentativas: ${attempts.join(' · ')||'nenhuma'}. Verifique se sua chave em aistudio.google.com/apikey está válida.`);
+}
+// Igual ao callGeminiGenerate, mas pedindo pra IA pesquisar na internet antes de responder
+// (grounding). Nem toda chave/modelo tem esse recurso liberado (algumas contas do Google
+// exigem faturamento ativado pra grounding) — se todas as tentativas com busca falharem,
+// cai pro modo normal (sem busca, só o conhecimento já treinado da IA) em vez de falhar
+// a geração inteira. `grounded` no retorno diz se a busca realmente rolou ou não.
+async function callGeminiGenerateSearch(apiKey,prompt){
+  const attempts=[];
+  for(const model of GEMINI_MODEL_CANDIDATES){
+    const r=await tryGeminiModel(apiKey,model,prompt,{useSearch:true});
+    if(r.ok)return{raw:r.raw,grounded:true};
+    attempts.push(`${model} (${r.reason})`);
+  }
+  try{
+    const raw=await callGeminiGenerate(apiKey,prompt);
+    return{raw,grounded:false};
+  }catch(e){
+    throw new Error(`Não foi possível gerar o resumo, nem com busca na internet nem sem ela. Tentativas com busca: ${attempts.join(' · ')||'nenhuma'}. Erro final: ${e.message}`);
+  }
 }
 
 // Extrai JSON de uma resposta de IA de forma tolerante (parse direto -> acha objeto/array
