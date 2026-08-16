@@ -454,11 +454,25 @@ nav{
 .rd-ai-erro-trecho{color:var(--red);font-weight:700;font-style:italic;}
 .rd-ai-erro-sugestao{color:var(--text2);margin-top:3px;}
 
-/* ===== RESUMO ESTRATÉGICO ===== */
-.strat-badge-done{background:rgba(22,163,74,0.1);color:var(--green);border:1.5px solid rgba(22,163,74,0.35);border-radius:8px;font-size:9px;padding:2px 8px;font-weight:900;cursor:pointer;transition:all 0.2s;}
-.strat-badge-done:hover{background:rgba(22,163,74,0.2);}
-.strat-badge-todo{background:rgba(107,114,128,0.08);color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:9px;padding:2px 8px;font-weight:700;cursor:pointer;transition:all 0.2s;}
-.strat-badge-todo:hover{background:rgba(108,71,255,0.08);color:var(--accent);border-color:var(--accent);}
+/* ===== RESUMO (IA a partir de arquivo) ===== */
+.resumo-badge-done{background:rgba(139,92,246,0.1);color:#8b5cf6;border:1.5px solid rgba(139,92,246,0.35);border-radius:8px;font-size:9px;padding:2px 8px;font-weight:900;cursor:pointer;transition:all 0.2s;}
+.resumo-badge-done:hover{background:rgba(139,92,246,0.2);}
+.resumo-badge-todo{background:rgba(107,114,128,0.08);color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:9px;padding:2px 8px;font-weight:700;cursor:pointer;transition:all 0.2s;}
+.resumo-badge-todo:hover{background:rgba(139,92,246,0.08);color:#8b5cf6;border-color:#8b5cf6;}
+.resumo-wrap{background:rgba(139,92,246,0.05);border:1.5px solid rgba(139,92,246,0.25);border-radius:14px;padding:14px;margin-top:10px;display:none;}
+.resumo-wrap.resumo-open{display:block;}
+.resumo-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+.resumo-title{font-size:11px;font-weight:900;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;}
+.resumo-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.resumo-body{font-size:12.5px;color:var(--text2);line-height:1.7;white-space:pre-line;max-height:340px;overflow-y:auto;padding-right:4px;}
+.resumo-disclaimer{font-size:9.5px;color:var(--muted);margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);display:flex;align-items:center;gap:5px;}
+.resumo-empty{font-size:12px;color:var(--muted);text-align:center;padding:2px 0 10px;}
+.resumo-drop{display:block;border:1.5px dashed rgba(139,92,246,0.4);border-radius:12px;padding:18px 12px;text-align:center;cursor:pointer;transition:all 0.2s;}
+.resumo-drop:hover,.resumo-drop.drag-over{border-color:#8b5cf6;background:rgba(139,92,246,0.06);}
+.resumo-drop-icon{font-size:22px;color:#8b5cf6;margin-bottom:6px;}
+.resumo-drop-txt{font-size:11.5px;color:var(--text2);font-weight:700;}
+.resumo-drop-sub{font-size:9.5px;color:var(--muted);margin-top:3px;}
+.resumo-status{font-size:11px;color:#8b5cf6;text-align:center;padding:10px 0;display:flex;align-items:center;justify-content:center;gap:8px;}
 
 /* ===== TOTAL TIME CHIP ===== */
 .total-time-chip{background:rgba(139,92,246,0.1);border:1.5px solid rgba(139,92,246,0.3);color:#8b5cf6;border-radius:8px;padding:2px 8px;font-size:10px;font-weight:800;}
@@ -3142,6 +3156,12 @@ let openLegis=new Set(); // subIds whose painel de base legal está aberto
 let legisGenerating=new Set(); // subIds com geração de IA em andamento
 let openSim=new Set(); // subIds com painel de simulado aberto
 let simGenerating=new Set(); // subIds com geração de simulado em andamento
+let openResumo=new Set(); // subIds cujo painel de resumo (IA a partir de arquivo) está aberto
+let resumoGenerating=new Set(); // subIds com geração de resumo em andamento
+let resumoSpeakSubId=null; // subId cujo resumo está sendo lido em voz agora (ou null se nenhum)
+let resumoSpeakQueue=[]; // pedaços de texto do resumo atual, na ordem de leitura
+let resumoSpeakIdx=0; // índice do pedaço sendo lido agora
+let resumoSpeakPaused=false; // true quando a leitura está pausada (não parada)
 let simActive={}; // subId -> {questoes,quantidade,corrected} do simulado em andamento (não salvo até corrigir)
 let simGeralConfig={selectedSubIds:new Set()}; // seleção de assuntos pro Simulado Geral (tela de configuração)
 let simGeralActive=null; // {questoes,startedAt,limiteSec,corrected,tempoGastoSec,finishedAt} do simulado geral em andamento
@@ -4628,7 +4648,7 @@ function subItemHTML(s,topicId){
   const nextLbl=nextPri===30?'🟢':nextPri===70?'🟠':'🔴';
   const hasNote=s.note&&s.note.trim().length>0;
   const noteOpen=openNotes.has(s.id);
-  const stratDone=s.stratDone===true;
+  const hasResumo=!!(s.resumo&&s.resumo.texto);
   // Current session display time
   let displayTime=time;
   if(running) displayTime=time+Math.floor((Date.now()-t.startedAt)/1000);
@@ -4658,14 +4678,15 @@ function subItemHTML(s,topicId){
       <button class="btn btn-sm ${running?'btn-gold':'btn-primary'}" onclick="toggleTimer('${s.id}','${topicId}')"><i class="fa fa-${running?'pause':'play'}"></i> ${running?'Pausar':'Estudar'}</button>
       <button class="btn btn-sm btn-cyan" onclick="showSubRevisions('${s.id}','${topicId}')"><i class="fa fa-calendar-check"></i> Revisões${revLocked?' 🔒':''}</button>
       <button class="btn btn-sm ${hasNote?'btn-gold':'btn-ghost'}" onclick="toggleNote('${s.id}')" id="note-btn-${s.id}"><i class="fa fa-note-sticky"></i> ${hasNote?'Anotação':'Anotar'}</button>
-      <button class="${stratDone?'strat-badge-done':'strat-badge-todo'}" onclick="toggleStrat('${s.id}','${topicId}')" title="Resumo estratégico concluído?">
-        ${stratDone?'✅ Resumo feito':'📋 Resumo'}
+      <button class="${hasResumo?'resumo-badge-done':'resumo-badge-todo'}" onclick="toggleResumo('${s.id}')" id="resumo-btn-${s.id}" title="Anexe um arquivo pra IA gerar um resumo completo, com opção de ouvir">
+        ${hasResumo?'✅ Resumo':'📄 Resumo'}
       </button>
       <button class="btn btn-sm ${s.legislacao?'btn-cyan':'btn-ghost'}" onclick="toggleLegis('${s.id}')" id="legis-btn-${s.id}"><i class="fa fa-scale-balanced"></i> ${s.legislacao?'Base Legal':'Base Legal'}</button>
       <button class="btn btn-sm ${s.simStats?'btn-pink':'btn-ghost'}" onclick="toggleSim('${s.id}')" id="sim-btn-${s.id}"><i class="fa fa-list-check"></i> Simulado</button>
       <button class="btn btn-sm" onclick="renameSubtopic('${topicId}','${s.id}')" title="Renomear miniboss"><i class="fa fa-pen"></i></button>
       <button class="btn btn-sm btn-danger" onclick="deleteSub('${topicId}','${s.id}')"><i class="fa fa-trash"></i></button>
     </div>
+    <div class="resumo-wrap${openResumo.has(s.id)?' resumo-open':''}" id="resumo-${s.id}">${resumoPanelHTML(s)}</div>
     <div class="legis-wrap${openLegis.has(s.id)?' legis-open':''}" id="legis-${s.id}">${legisPanelHTML(s)}</div>
     <div class="sim-wrap${openSim.has(s.id)?' sim-open':''}" id="sim-${s.id}">${simPanelHTML(s)}</div>
     <div class="timer-wrap" id="tw-${s.id}" ${panelOpen?'style="display:block"':''}>
@@ -4701,21 +4722,292 @@ function cyclePriority(subId,topicId){
   if(topic)refreshSubs(topic,topicId);
 }
 
-function toggleStrat(subId,topicId){
-  let sub=null,topic=null;
+// ===== RESUMO (IA a partir de arquivo anexado, com leitura em voz) =====
+function resumoPanelHTML(s){
+  if(resumoGenerating.has(s.id)){
+    return`<div class="resumo-header"><div class="resumo-title"><i class="fa fa-file-lines"></i> Resumo com IA</div></div>
+      <div class="resumo-status"><i class="fa fa-spinner fa-spin"></i> <span class="resumo-status-txt">Lendo o arquivo...</span></div>`;
+  }
+  if(s.resumo&&s.resumo.texto){
+    const geradoEm=s.resumo.geradoEm?new Date(s.resumo.geradoEm).toLocaleDateString('pt-BR'):'';
+    const isSpeaking=resumoSpeakSubId===s.id&&window.speechSynthesis&&window.speechSynthesis.speaking;
+    const isPaused=isSpeaking&&resumoSpeakPaused;
+    return`
+      <div class="resumo-header">
+        <div class="resumo-title"><i class="fa fa-file-lines"></i> Resumo${s.resumo.fileName?` — ${s.resumo.fileName}`:''}</div>
+        <div class="resumo-actions">
+          <button class="btn btn-xs ${isSpeaking?'btn-gold':'btn-ghost'}" onclick="resumoToggleSpeak('${s.id}')" title="${isSpeaking?(isPaused?'Continuar leitura':'Pausar leitura'):'Ouvir resumo'}"><i class="fa fa-${isSpeaking?(isPaused?'play':'pause'):'volume-high'}"></i> ${isSpeaking?(isPaused?'Continuar':'Pausar'):'Ouvir'}</button>
+          ${isSpeaking?`<button class="btn btn-xs btn-ghost" onclick="resumoSpeakStop()" title="Parar leitura"><i class="fa fa-stop"></i></button>`:''}
+          <label class="btn btn-xs btn-ghost" style="cursor:pointer" title="Gerar de novo com outro arquivo">
+            <i class="fa fa-rotate"></i> Trocar arquivo
+            <input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf" style="display:none" onchange="resumoFileSelected('${s.id}',this)">
+          </label>
+        </div>
+      </div>
+      <div class="resumo-body">${s.resumo.texto}</div>
+      <div class="resumo-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm} a partir do arquivo enviado — confira sempre a fonte oficial antes de usar na prova.</div>
+    `;
+  }
+  return`
+    <div class="resumo-header"><div class="resumo-title"><i class="fa fa-file-lines"></i> Resumo com IA</div></div>
+    <div class="resumo-empty">Anexe um PDF (ou arquivo de texto) desse assunto e a IA gera um resumo completo, no nível de concurso — com opção de ouvir em voz.</div>
+    <label class="resumo-drop" id="resumo-drop-${s.id}" ondragover="resumoDragOver(event)" ondragleave="resumoDragLeave(event)" ondrop="resumoDrop('${s.id}',event)">
+      <div class="resumo-drop-icon"><i class="fa fa-cloud-arrow-up"></i></div>
+      <div class="resumo-drop-txt">Clique ou arraste um arquivo aqui</div>
+      <div class="resumo-drop-sub">PDF ou .txt/.md</div>
+      <input type="file" accept=".pdf,.txt,.md,text/plain,application/pdf" style="display:none" onchange="resumoFileSelected('${s.id}',this)">
+    </label>
+  `;
+}
+function toggleResumo(subId){
+  if(openResumo.has(subId))openResumo.delete(subId);else openResumo.add(subId);
+  const wrap=document.getElementById('resumo-'+subId);
+  if(wrap){
+    wrap.classList.toggle('resumo-open',openResumo.has(subId));
+    wrap.style.display='';
+  }
+}
+function closeResumo(subId){
+  openResumo.delete(subId);
+  const wrap=document.getElementById('resumo-'+subId);
+  if(wrap){wrap.classList.remove('resumo-open');wrap.style.display='';}
+}
+function resumoRefreshPanel(subId){
+  const sub=simFindSub(subId);
+  if(!sub)return;
+  const wrap=document.getElementById('resumo-'+subId);
+  if(wrap){wrap.innerHTML=resumoPanelHTML(sub);wrap.classList.add('resumo-open');wrap.style.display='';}
+  const btn=document.getElementById('resumo-btn-'+subId);
+  if(btn){
+    const hasResumo=!!(sub.resumo&&sub.resumo.texto);
+    btn.className=hasResumo?'resumo-badge-done':'resumo-badge-todo';
+    btn.innerHTML=hasResumo?'✅ Resumo':'📄 Resumo';
+  }
+}
+function resumoDragOver(e){e.preventDefault();e.currentTarget.classList.add('drag-over');}
+function resumoDragLeave(e){e.currentTarget.classList.remove('drag-over');}
+function resumoDrop(subId,e){
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const f=e.dataTransfer.files&&e.dataTransfer.files[0];
+  if(f)generateResumo(subId,f);
+}
+function resumoFileSelected(subId,inputEl){
+  const f=inputEl.files&&inputEl.files[0];
+  inputEl.value='';
+  if(f)generateResumo(subId,f);
+}
+
+function resumoPromptUnico(contexto,texto){
+  return`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil.
+
+TAREFA: Leia o material abaixo e produza um RESUMO COMPLETO, organizado e didático, com todas as informações relevantes pra prova — não é um resumo superficial, é um material de estudo completo sobre o que foi enviado.
+
+${contexto}
+
+REGRAS:
+- Organize por tópicos e subtópicos, com títulos curtos em MAIÚSCULAS seguidos de dois pontos.
+- Cubra TODO o conteúdo relevante do material, sem pular partes importantes.
+- Destaque conceitos-chave, definições, exceções, prazos, números e classificações — é isso que cai em prova.
+- Não invente informação que não esteja no material. Se algo estiver ambíguo ou incompleto no texto, sinalize isso brevemente em vez de completar por conta própria.
+- Escreva em texto corrido organizado por tópicos, sem markdown (sem #, sem **, sem bullets com símbolos especiais — use só quebras de linha e frases objetivas), porque esse texto também vai ser lido em voz alta.
+
+MATERIAL:
+${texto}`;
+}
+function resumoPromptParcial(contexto,texto,parte,total){
+  return`Você é um professor especialista em concursos públicos de alto nível no Brasil.
+
+TAREFA: Isto é a parte ${parte} de ${total} de um material maior. Extraia e organize TODAS as informações relevantes pra prova dessa parte específica — conceitos, definições, exceções, prazos, números, classificações. Não resuma demais: liste o que é importante, com clareza.
+
+${contexto}
+
+REGRAS:
+- Texto corrido organizado por tópicos, sem markdown.
+- Não invente informação que não esteja no material.
+
+PARTE ${parte}/${total} DO MATERIAL:
+${texto}`;
+}
+function resumoPromptConsolida(contexto,parciais){
+  return`Você é um professor especialista em concursos públicos de alto nível no Brasil.
+
+TAREFA: Abaixo estão anotações extraídas em partes de um material maior (mesmo documento, dividido em pedaços por causa do tamanho). Consolide tudo num ÚNICO resumo completo, organizado e sem repetições, cobrindo todo o conteúdo relevante pra prova.
+
+${contexto}
+
+REGRAS:
+- Organize por tópicos e subtópicos, com títulos curtos em MAIÚSCULAS seguidos de dois pontos.
+- Elimine repetições entre as partes, mas não perca informação.
+- Não invente nada que não esteja nas anotações abaixo.
+- Texto corrido organizado por tópicos, sem markdown (sem #, sem **, sem bullets com símbolos especiais), porque também vai ser lido em voz alta.
+
+ANOTAÇÕES POR PARTE:
+${parciais.map((p,i)=>`--- Parte ${i+1} ---\n${p}`).join('\n\n')}`;
+}
+
+async function generateResumo(subId,file){
+  let sub=null,topic=null,kingdom=null;
   for(const k of db.kingdoms){
-    (db.topics[k.id]||[]).forEach(t=>{const f=t.subtopics?.find(s=>s.id===subId);if(f){sub=f;topic=t;}});
+    (db.topics[k.id]||[]).forEach(t=>{const f=t.subtopics?.find(s=>s.id===subId);if(f){sub=f;topic=t;kingdom=k;}});
     if(sub)break;
   }
-  if(!sub)return;
-  sub.stratDone=!sub.stratDone;
-  saveDB();
-  if(sub.stratDone){
-    toast('📋 Resumo estratégico marcado como feito! ✅','var(--green)');
-  } else {
-    toast('📋 Resumo estratégico desmarcado','var(--muted)');
+  if(!sub||!topic||!kingdom)return;
+
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey){
+    toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');
+    openAISettingsModal();
+    return;
   }
-  if(topic)refreshSubs(topic,topicId);
+
+  const isPDF=file.type==='application/pdf'||/\.pdf$/i.test(file.name);
+  const isText=file.type.startsWith('text/')||/\.(txt|md)$/i.test(file.name);
+  if(!isPDF&&!isText){
+    toast('⚠️ Por enquanto só PDF ou arquivo de texto (.txt/.md) são suportados','var(--red)');
+    return;
+  }
+  if(resumoGenerating.has(subId)){toast('Geração em andamento...','var(--orange)');return;}
+
+  resumoGenerating.add(subId);
+  openResumo.add(subId);
+  resumoRefreshPanel(subId);
+
+  try{
+    let texto='';
+    if(isPDF){
+      texto=await extractPDFText(file,(pageNum,total,modo)=>{
+        const statusEl=document.querySelector(`#resumo-${subId} .resumo-status-txt`);
+        if(statusEl)statusEl.textContent=modo==='ocr'
+          ?`Página ${pageNum}/${total} sem texto direto — lendo por OCR (pode demorar)...`
+          :`Lendo página ${pageNum}/${total}...`;
+      });
+    }else{
+      texto=await file.text();
+    }
+
+    if(!texto||texto.trim().length<50){
+      throw new Error('Não foi possível extrair texto suficiente desse arquivo (PDF de imagem sem OCR legível, ou arquivo muito curto).');
+    }
+
+    // Mesmo esquema de fatiamento usado no upload de PDF pra flashcards — evita
+    // estourar o teto de resposta da API em materiais longos (ver comentário em fcHandlePDF).
+    const CHUNK_SIZE=60000;
+    const chunks=[];
+    {
+      let i=0;
+      while(i<texto.length){
+        let end=Math.min(i+CHUNK_SIZE,texto.length);
+        if(end<texto.length){
+          const lastBreak=texto.lastIndexOf('\n',end);
+          if(lastBreak>i+CHUNK_SIZE*0.5)end=lastBreak;
+        }
+        chunks.push(texto.slice(i,end));
+        i=end;
+      }
+    }
+
+    const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
+    let resumoFinal='';
+    if(chunks.length===1){
+      const statusEl=document.querySelector(`#resumo-${subId} .resumo-status-txt`);
+      if(statusEl)statusEl.textContent=`IA gerando o resumo (${texto.length} caracteres lidos)...`;
+      resumoFinal=(await callGeminiGenerate(apiKey,resumoPromptUnico(contexto,chunks[0]))).trim();
+    }else{
+      const parciais=[];
+      for(let idx=0;idx<chunks.length;idx++){
+        const statusEl=document.querySelector(`#resumo-${subId} .resumo-status-txt`);
+        if(statusEl)statusEl.textContent=`IA lendo parte ${idx+1}/${chunks.length} do material...`;
+        const raw=await callGeminiGenerate(apiKey,resumoPromptParcial(contexto,chunks[idx],idx+1,chunks.length));
+        parciais.push(raw.trim());
+      }
+      const statusEl=document.querySelector(`#resumo-${subId} .resumo-status-txt`);
+      if(statusEl)statusEl.textContent='IA consolidando o resumo final...';
+      resumoFinal=(await callGeminiGenerate(apiKey,resumoPromptConsolida(contexto,parciais))).trim();
+    }
+
+    sub.resumo={texto:resumoFinal,geradoEm:new Date().toISOString(),fileName:file.name};
+    saveDB();
+    toast('📄 Resumo gerado!','var(--green)');
+  }catch(e){
+    toast('❌ '+(e.message||'Erro ao gerar resumo'),'var(--red)');
+  }finally{
+    resumoGenerating.delete(subId);
+    resumoRefreshPanel(subId);
+  }
+}
+
+// ---- Leitura em voz do resumo (com pausar/continuar/parar) ----
+function resumoSplitForSpeech(text){
+  // Quebra em pedaços por parágrafo/frase — evita estourar o limite de utterance de
+  // alguns navegadores em textos longos, e permite pausar num ponto razoável.
+  const paragraphs=text.split(/\n{2,}/).map(p=>p.trim()).filter(Boolean);
+  const chunks=[];
+  const MAX=1400;
+  paragraphs.forEach(p=>{
+    if(p.length<=MAX){chunks.push(p);return;}
+    const sentences=p.split(/(?<=[.!?])\s+/);
+    let buf='';
+    sentences.forEach(s=>{
+      if((buf+' '+s).trim().length>MAX&&buf){chunks.push(buf.trim());buf=s;}
+      else buf=(buf+' '+s).trim();
+    });
+    if(buf)chunks.push(buf.trim());
+  });
+  return chunks.length?chunks:[text];
+}
+function resumoSpeakNext(){
+  if(resumoSpeakIdx>=resumoSpeakQueue.length){
+    resumoSpeakStop();
+    return;
+  }
+  const u=new SpeechSynthesisUtterance(resumoSpeakQueue[resumoSpeakIdx]);
+  u.lang='pt-BR';
+  const voice=pickBestPTVoice();
+  if(voice)u.voice=voice;
+  u.onend=()=>{resumoSpeakIdx++;resumoSpeakNext();};
+  u.onerror=(ev)=>{
+    console.warn('Fala do resumo falhou:',ev&&ev.error);
+    if(navigator.onLine===false||(ev&&ev.error==='network')){
+      toast('⚠️ A leitura por voz pode não funcionar sem internet, dependendo do navegador.','var(--red)');
+      resumoSpeakStop();
+      return;
+    }
+    resumoSpeakIdx++;resumoSpeakNext();
+  };
+  window.speechSynthesis.speak(u);
+}
+function resumoToggleSpeak(subId){
+  const sub=simFindSub(subId);
+  if(!sub||!sub.resumo||!sub.resumo.texto)return;
+  if(!('speechSynthesis' in window)){toast('⚠️ Seu navegador não suporta leitura em voz','var(--red)');return;}
+  if(resumoSpeakSubId===subId&&window.speechSynthesis.speaking){
+    if(resumoSpeakPaused){
+      window.speechSynthesis.resume();
+      resumoSpeakPaused=false;
+    }else{
+      window.speechSynthesis.pause();
+      resumoSpeakPaused=true;
+    }
+    resumoRefreshPanel(subId);
+    return;
+  }
+  window.speechSynthesis.cancel();
+  resumoSpeakSubId=subId;
+  resumoSpeakQueue=resumoSplitForSpeech(sub.resumo.texto);
+  resumoSpeakIdx=0;
+  resumoSpeakPaused=false;
+  resumoSpeakNext();
+  resumoRefreshPanel(subId);
+}
+function resumoSpeakStop(){
+  window.speechSynthesis.cancel();
+  const prevId=resumoSpeakSubId;
+  resumoSpeakSubId=null;
+  resumoSpeakQueue=[];
+  resumoSpeakIdx=0;
+  resumoSpeakPaused=false;
+  if(prevId)resumoRefreshPanel(prevId);
 }
 
 // ===== NOTES (OBSERVAÇÕES) =====
@@ -5478,7 +5770,7 @@ function addSubtopic(topicId){
   const priEl=document.getElementById('sp-'+topicId);
   const name=nameEl.value.trim();if(!name){toast('⚠️ Digite o nome do miniboss','var(--red)');return;}
   const priority=parseInt(priEl.value);
-  const s={id:genId(),name,priority,createdAt:todayStr(),studied:false,note:'',stratDone:false};
+  const s={id:genId(),name,priority,createdAt:todayStr(),studied:false,note:''};
   // Search across all kingdoms in case currentKingdom ref is stale
   let topic=null;
   const kId=currentKingdom?.id||'';
@@ -8448,6 +8740,32 @@ let fcRecognition=null; // instância única de SpeechRecognition (reaproveitada
 let fcAutoListenTimer=null; // limite de segurança pra nunca travar esperando resposta
 let fcVoiceOfflineWarned=false; // mostra o aviso de voz sem internet só uma vez por sessão
 
+// Escolhe a melhor voz em pt-BR disponível pra leitura (flashcards e resumos). Respeita
+// a escolha manual do usuário (db.preferredVoiceURI) e, no automático, evita a voz padrão
+// "Google português do Brasil" quando existe outra opção instalada — é a voz mais citada
+// como "robótica"/"voz de mulher do Google" pelos usuários.
+function pickBestPTVoice(){
+  if(!('speechSynthesis' in window))return null;
+  const voices=window.speechSynthesis.getVoices();
+  if(!voices.length)return null;
+  if(db.preferredVoiceURI){
+    const chosen=voices.find(v=>v.voiceURI===db.preferredVoiceURI);
+    if(chosen)return chosen;
+  }
+  const ptVoices=voices.filter(v=>v.lang&&v.lang.toLowerCase().startsWith('pt'));
+  if(!ptVoices.length)return null;
+  const nonGoogle=ptVoices.find(v=>!/google/i.test(v.name));
+  return nonGoogle||ptVoices[0];
+}
+if('speechSynthesis' in window){
+  window.speechSynthesis.getVoices(); // dispara o carregamento cedo em alguns navegadores
+  window.speechSynthesis.onvoiceschanged=()=>{
+    // Se o modal de configurações estiver aberto esperando a lista de vozes, re-renderiza
+    // com a lista já carregada (em alguns navegadores ela chega de forma assíncrona).
+    if(document.getElementById('voice-select-input'))openAISettingsModal();
+  };
+}
+
 const DIFF_COLORS=['','#22c55e','#84cc16','#f59e0b','#f97316','#ef4444'];
 const DIFF_LABELS=['','Fácil','Fácil+','Médio','Difícil','Difícil+'];
 const FC_INTERVALS=[7,14,21,41];
@@ -9176,9 +9494,8 @@ function fcSpeak(text,onEnd){
   window.speechSynthesis.cancel();
   const u=new SpeechSynthesisUtterance(text);
   u.lang='pt-BR';
-  const voices=window.speechSynthesis.getVoices();
-  const ptVoice=voices.find(v=>v.lang&&v.lang.toLowerCase().startsWith('pt'));
-  if(ptVoice)u.voice=ptVoice;
+  const voice=pickBestPTVoice();
+  if(voice)u.voice=voice;
   if(onEnd)u.onend=onEnd;
   // Em alguns navegadores (Chrome principalmente), a voz em português só existe como
   // voz "de rede" — sem internet, ela falha silenciosamente e o evento 'end' nunca
@@ -9572,23 +9889,50 @@ async function extractPDFText(file,onProgress){
 // usuário (nunca no código-fonte), usada só pra gerar flashcards a partir de PDF.
 function openAISettingsModal(){
   const hasKey=!!(db.geminiApiKey||'').trim();
-  openModal('⚙️ IA para gerar flashcards',`
+  const voices=('speechSynthesis' in window?window.speechSynthesis.getVoices():[]).filter(v=>v.lang&&v.lang.toLowerCase().startsWith('pt'));
+  openModal('⚙️ IA e voz',`
     <div style="text-align:left">
       <p style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">
-        Pra gerar flashcards a partir de PDF, o app usa a IA do <b>Google Gemini</b>.
+        Pra gerar flashcards, base legal, simulados e resumos a partir de arquivo, o app usa a IA do <b>Google Gemini</b>.
         Crie uma chave gratuita em <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--accent)">aistudio.google.com/apikey</a> e cole aqui.
       </p>
       <input type="password" id="gemini-key-input" class="inp" placeholder="Cole sua chave de API do Gemini" value="${hasKey?db.geminiApiKey:''}" style="width:100%;margin-bottom:6px">
-      <div style="font-size:10px;color:var(--muted);margin-bottom:14px">${hasKey?'✅ Chave configurada':'⚠️ Nenhuma chave configurada ainda'} — fica salva só no seu banco de dados, nunca no código do app.</div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveGeminiApiKey()">Salvar chave</button>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:18px">${hasKey?'✅ Chave configurada':'⚠️ Nenhuma chave configurada ainda'} — fica salva só no seu banco de dados, nunca no código do app.</div>
+
+      <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">🔊 Voz da leitura (flashcards e resumos)</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
+        Escolha qual voz em português o navegador deve usar pra ler em voz alta. As vozes disponíveis dependem do seu aparelho — em muitos celulares, vozes que não sejam "Google" costumam soar mais naturais.
+      </p>
+      <select id="voice-select-input" class="inp" style="width:100%;margin-bottom:8px">
+        <option value="">Automático (evita a voz padrão do Google quando houver outra opção)</option>
+        ${voices.map(v=>`<option value="${v.voiceURI}" ${db.preferredVoiceURI===v.voiceURI?'selected':''}>${v.name} (${v.lang})</option>`).join('')}
+      </select>
+      ${!voices.length?`<div style="font-size:10px;color:var(--muted);margin-bottom:8px">Nenhuma voz em português encontrada ainda — se a lista estiver vazia, feche e abra esta janela de novo (algumas telas carregam as vozes com um pequeno atraso).</div>`:''}
+      <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-bottom:18px" onclick="testVoicePreview()"><i class="fa fa-volume-high"></i> Testar voz</button>
+
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveGeminiApiKey()">Salvar</button>
     </div>`);
+}
+function testVoicePreview(){
+  if(!('speechSynthesis' in window)){toast('⚠️ Seu navegador não suporta leitura em voz','var(--red)');return;}
+  const sel=document.getElementById('voice-select-input');
+  const uri=sel?sel.value:'';
+  const voices=window.speechSynthesis.getVoices();
+  const voice=uri?voices.find(v=>v.voiceURI===uri):pickBestPTVoice();
+  window.speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance('Essa é a voz que vai ser usada pra ler os flashcards e os resumos.');
+  u.lang='pt-BR';
+  if(voice)u.voice=voice;
+  window.speechSynthesis.speak(u);
 }
 function saveGeminiApiKey(){
   const v=(document.getElementById('gemini-key-input')?.value||'').trim();
+  const voiceSel=document.getElementById('voice-select-input');
   db.geminiApiKey=v;
+  if(voiceSel)db.preferredVoiceURI=voiceSel.value;
   saveDB();
   closeModal();
-  toast(v?'✅ Chave da IA salva!':'Chave removida.','var(--green)');
+  toast(v?'✅ Configurações salvas!':'Chave removida.','var(--green)');
 }
 
 // Tenta gerar conteúdo testando alguns nomes de modelo em sequência — o Google
@@ -10141,7 +10485,6 @@ window.setTopicPrio=setTopicPrio;
 window.toggleNote=toggleNote;
 window.closeNote=closeNote;
 window.saveNote=saveNote;
-window.toggleStrat=toggleStrat;
 window.floatTimerOpen=floatTimerOpen;
 window.floatTimerClose=floatTimerClose;
 window.floatTimerToggle=floatTimerToggle;
