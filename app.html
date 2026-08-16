@@ -2470,7 +2470,7 @@ if(authFirebase){
   bootApp();
 }
 
-let db={kingdoms:[],topics:{},times:{},revisions:{},xp:0,examDate:'',sessions:{}};
+let db={kingdoms:[],topics:{},times:{},revisions:{},xp:0,examDate:'',sessions:{},lastModified:0};
 let firebaseReady=false;
 let isSaving=false;
 let saveTimeout=null;
@@ -2657,8 +2657,25 @@ function loadDB(callback){
     const prevLastPayment=db.lastPaymentAt;
     const prevAccountEmail=db.accountEmail;
     const data=snapshot.val();
+    // Se o celular ficou estudando OFFLINE numa sessão anterior (sem internet
+    // nenhuma — não só uma queda passageira), a escrita pro Firebase nunca chegou a
+    // sair daqui: ela só existe no localStorage deste aparelho. Ao reabrir o app já
+    // conectado, esse primeiro snapshot do Firebase traz o valor ANTIGO (de antes de
+    // você ter ficado offline) — sem essa checagem, ele sobrescreveria e perderia o
+    // tempo estudado offline. Só faz sentido comparar no primeiro load da sessão.
+    let usedLocalOverride=false;
     if(data){
-      Object.assign(db,data);
+      if(!firebaseReady){
+        try{
+          const localRaw=localStorage.getItem(LS_KEY);
+          const local=localRaw?JSON.parse(localRaw):null;
+          if(local&&(local.lastModified||0)>(data.lastModified||0)){
+            Object.assign(db,local);
+            usedLocalOverride=true;
+          }
+        }catch(e){}
+      }
+      if(!usedLocalOverride)Object.assign(db,data);
     }else if(!firebaseReady){
       // Conta genuinamente nova (primeiro load, sem nada salvo ainda) — marca explícito
       // pra applyDefaults() não sobrescrever com o default "true" (pular onboarding), e
@@ -2669,6 +2686,12 @@ function loadDB(callback){
     }
     applyDefaults();
     applyOrigemStarterDeck();
+    // A versão local venceu o conflito — empurra ela de volta pro Firebase, senão o
+    // servidor continua com o dado velho até a próxima alteração qualquer.
+    if(usedLocalOverride){
+      toast('☁️ Sincronizando dados estudados offline...','var(--green)');
+      saveDB();
+    }
     // Histórico de pagamentos: detecta quando lastPaymentAt muda (você confirmou uma
     // renovação no Firebase Console) e registra no histórico. Só depois do primeiro load
     // (wasReady), senão logaria uma "renovação" falsa toda vez que a conta simplesmente
@@ -3020,6 +3043,7 @@ function checkOverdueNotifications(force){
 }
 
 function saveDB(){
+  db.lastModified=Date.now();
   try{localStorage.setItem(LS_KEY,JSON.stringify(sanitizeForFirebase(db)));}catch(e){}
   if(useLocalFallback||!DB_REF)return;
   isSaving=true;
@@ -8422,6 +8446,7 @@ let fcVoiceTimer=null;  // timeout entre ler a pergunta e virar o card sozinho
 let fcAutoMode=false;   // modo 100% automático: ouve a nota de confiança e passa sozinho
 let fcRecognition=null; // instância única de SpeechRecognition (reaproveitada entre cards)
 let fcAutoListenTimer=null; // limite de segurança pra nunca travar esperando resposta
+let fcVoiceOfflineWarned=false; // mostra o aviso de voz sem internet só uma vez por sessão
 
 const DIFF_COLORS=['','#22c55e','#84cc16','#f59e0b','#f97316','#ef4444'];
 const DIFF_LABELS=['','Fácil','Fácil+','Médio','Difícil','Difícil+'];
@@ -9147,7 +9172,7 @@ function fcStudyHTML(cards){
 // pergunta "Como foi?" e ouve a resposta falada, convertendo pra uma das 4 notas sozinho —
 // aí sim passa pro próximo card sem precisar tocar em nada.
 function fcSpeak(text,onEnd){
-  if(!('speechSynthesis' in window))return;
+  if(!('speechSynthesis' in window)){if(onEnd)onEnd();return;}
   window.speechSynthesis.cancel();
   const u=new SpeechSynthesisUtterance(text);
   u.lang='pt-BR';
@@ -9155,6 +9180,19 @@ function fcSpeak(text,onEnd){
   const ptVoice=voices.find(v=>v.lang&&v.lang.toLowerCase().startsWith('pt'));
   if(ptVoice)u.voice=ptVoice;
   if(onEnd)u.onend=onEnd;
+  // Em alguns navegadores (Chrome principalmente), a voz em português só existe como
+  // voz "de rede" — sem internet, ela falha silenciosamente e o evento 'end' nunca
+  // dispara. Sem esse onerror, o modo automático inteiro travava esperando um callback
+  // que nunca ia chegar. Agora, se a fala falhar, o fluxo continua mesmo assim (só sem
+  // áudio) em vez de ficar parado no mesmo card pra sempre.
+  u.onerror=(ev)=>{
+    console.warn('Fala falhou:',ev&&ev.error);
+    if(!fcVoiceOfflineWarned&&(navigator.onLine===false||(ev&&ev.error==='network'))){
+      fcVoiceOfflineWarned=true;
+      toast('⚠️ A leitura por voz pode não funcionar sem internet, dependendo do navegador. O estudo continua normalmente.','var(--red)');
+    }
+    if(onEnd)onEnd();
+  };
   window.speechSynthesis.speak(u);
 }
 function fcVoiceStop(){
