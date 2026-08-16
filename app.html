@@ -3159,9 +3159,14 @@ let simGenerating=new Set(); // subIds com geração de simulado em andamento
 let openResumo=new Set(); // subIds cujo painel de resumo (IA a partir de arquivo) está aberto
 let resumoGenerating=new Map(); // subId -> 'arquivo'|'web', enquanto a geração está em andamento
 let resumoSpeakSubId=null; // subId cujo resumo está sendo lido em voz agora (ou null se nenhum)
-let resumoSpeakQueue=[]; // pedaços de texto do resumo atual, na ordem de leitura
-let resumoSpeakIdx=0; // índice do pedaço sendo lido agora
+let resumoSpeakMode=null; // 'audio' (áudio real gerado pela IA — sobrevive à tela bloqueada), 'browser' (voz do navegador — para se a tela travar) ou 'loading' (gerando o áudio)
+let resumoSpeakQueue=[]; // pedaços de texto do resumo atual, na ordem de leitura (modo 'browser')
+let resumoSpeakIdx=0; // índice do pedaço sendo lido agora (modo 'browser')
 let resumoSpeakPaused=false; // true quando a leitura está pausada (não parada)
+let resumoAudioEl=null; // elemento <audio> real reaproveitado entre resumos (necessário pra tocar com a tela travada)
+let resumoAudioQueue=[]; // pedaços de texto ainda não convertidos em áudio (modo 'audio')
+let resumoAudioIdx=0; // índice do pedaço de áudio tocando agora
+let resumoAudioCache=new Map(); // idx -> URL do blob de áudio já gerado (evita gerar de novo e permite pré-carregar o próximo)
 let simActive={}; // subId -> {questoes,quantidade,corrected} do simulado em andamento (não salvo até corrigir)
 let simGeralConfig={selectedSubIds:new Set()}; // seleção de assuntos pro Simulado Geral (tela de configuração)
 let simGeralActive=null; // {questoes,startedAt,limiteSec,corrected,tempoGastoSec,finishedAt} do simulado geral em andamento
@@ -4732,17 +4737,22 @@ function resumoPanelHTML(s){
   if(s.resumo&&s.resumo.texto){
     const geradoEm=s.resumo.geradoEm?new Date(s.resumo.geradoEm).toLocaleDateString('pt-BR'):'';
     const isWeb=s.resumo.origem==='web';
-    const isSpeaking=resumoSpeakSubId===s.id&&window.speechSynthesis&&window.speechSynthesis.speaking;
+    const isMine=resumoSpeakSubId===s.id;
+    const isLoadingAudio=isMine&&resumoSpeakMode==='loading';
+    const isSpeaking=isMine&&(resumoSpeakMode==='audio'||(resumoSpeakMode==='browser'&&window.speechSynthesis&&window.speechSynthesis.speaking));
     const isPaused=isSpeaking&&resumoSpeakPaused;
     const fonteTxt=isWeb
       ?(s.resumo.grounded?', com apoio de pesquisa na internet e dos seus flashcards':', com base no conhecimento já treinado do modelo (busca na internet indisponível agora)')
       :' a partir do arquivo enviado';
+    const ouvirBtn=isLoadingAudio
+      ?`<button class="btn btn-xs btn-gold" disabled><i class="fa fa-spinner fa-spin"></i> Gerando áudio...</button>`
+      :`<button class="btn btn-xs ${isSpeaking?'btn-gold':'btn-ghost'}" onclick="resumoToggleSpeak('${s.id}')" title="${isSpeaking?(isPaused?'Continuar leitura':'Pausar leitura'):'Ouvir resumo'}"><i class="fa fa-${isSpeaking?(isPaused?'play':'pause'):'volume-high'}"></i> ${isSpeaking?(isPaused?'Continuar':'Pausar'):'Ouvir'}</button>`;
     return`
       <div class="resumo-header">
         <div class="resumo-title"><i class="fa fa-file-lines"></i> Resumo${isWeb?' 🌐':(s.resumo.fileName?` — ${s.resumo.fileName}`:'')}</div>
         <div class="resumo-actions">
-          <button class="btn btn-xs ${isSpeaking?'btn-gold':'btn-ghost'}" onclick="resumoToggleSpeak('${s.id}')" title="${isSpeaking?(isPaused?'Continuar leitura':'Pausar leitura'):'Ouvir resumo'}"><i class="fa fa-${isSpeaking?(isPaused?'play':'pause'):'volume-high'}"></i> ${isSpeaking?(isPaused?'Continuar':'Pausar'):'Ouvir'}</button>
-          ${isSpeaking?`<button class="btn btn-xs btn-ghost" onclick="resumoSpeakStop()" title="Parar leitura"><i class="fa fa-stop"></i></button>`:''}
+          ${ouvirBtn}
+          ${isSpeaking||isLoadingAudio?`<button class="btn btn-xs btn-ghost" onclick="resumoSpeakStop()" title="Parar leitura"><i class="fa fa-stop"></i></button>`:''}
           <button class="btn btn-xs btn-ghost" onclick="generateResumoWeb('${s.id}')" title="Gerar de novo buscando na internet + flashcards, sem precisar de arquivo"><i class="fa fa-globe"></i> Pesquisar</button>
           <label class="btn btn-xs btn-ghost" style="cursor:pointer" title="Gerar de novo a partir de um arquivo">
             <i class="fa fa-paperclip"></i> Arquivo
@@ -4751,6 +4761,7 @@ function resumoPanelHTML(s){
           <button class="btn btn-xs btn-ghost" onclick="openAISettingsModal()" title="Trocar a voz de leitura ou a chave de IA"><i class="fa fa-gear"></i></button>
         </div>
       </div>
+      ${isSpeaking?`<div style="font-size:9.5px;color:var(--muted);margin:-4px 0 8px;display:flex;align-items:center;gap:5px">${resumoSpeakMode==='audio'?'<i class=\"fa fa-lock-open\"></i> Áudio da IA — continua tocando com a tela travada.':'<i class=\"fa fa-triangle-exclamation\"></i> Voz do navegador — para se a tela travar (configure sua chave de IA pra ouvir com a tela travada).'}</div>`:''}
       <div class="resumo-body">${s.resumo.texto}</div>
       <div class="resumo-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm}${fonteTxt} — confira sempre a fonte oficial antes de usar na prova.</div>
     `;
@@ -5064,23 +5075,132 @@ function resumoSpeakNext(){
   };
   window.speechSynthesis.speak(u);
 }
+
+// ---- Áudio real gerado pela IA (Gemini TTS) — ao contrário da voz do navegador
+// (speechSynthesis), isso vira um arquivo de áudio de verdade tocado num elemento
+// <audio>, que os navegadores mobile mantêm tocando com a tela travada (igual um
+// player de música/podcast), usando a Media Session API pros controles do sistema.
+function getResumoAudioEl(){
+  if(!resumoAudioEl){
+    resumoAudioEl=document.createElement('audio');
+    resumoAudioEl.id='resumo-audio-player';
+    resumoAudioEl.style.display='none';
+    resumoAudioEl.setAttribute('playsinline','');
+    document.body.appendChild(resumoAudioEl);
+    resumoAudioEl.addEventListener('ended',()=>{
+      if(resumoSpeakMode==='audio')resumoAudioPlayChunk(resumoAudioIdx+1);
+    });
+  }
+  return resumoAudioEl;
+}
+function setupResumoMediaSession(sub,topicName){
+  if(!('mediaSession' in navigator))return;
+  try{
+    navigator.mediaSession.metadata=new MediaMetadata({
+      title:'Resumo — '+sub.name,
+      artist:'Vale dos Nomeados'+(topicName?' · '+topicName:'')
+    });
+    const el=getResumoAudioEl();
+    navigator.mediaSession.setActionHandler('play',()=>el.play());
+    navigator.mediaSession.setActionHandler('pause',()=>el.pause());
+    navigator.mediaSession.setActionHandler('stop',()=>resumoSpeakStop());
+    navigator.mediaSession.playbackState='playing';
+  }catch(e){console.warn('mediaSession indisponível:',e);}
+}
+function resumoAudioClearCache(){
+  resumoAudioCache.forEach(url=>{try{URL.revokeObjectURL(url);}catch(e){}});
+  resumoAudioCache.clear();
+}
+async function resumoAudioGenerateChunk(idx){
+  const apiKey=(db.geminiApiKey||'').trim();
+  const voiceName=db.preferredGeminiVoice||GEMINI_TTS_VOICE_DEFAULT;
+  const{base64,sampleRate}=await callGeminiTTS(apiKey,resumoAudioQueue[idx],voiceName);
+  const blob=pcmBase64ToWavBlob(base64,sampleRate);
+  const url=URL.createObjectURL(blob);
+  resumoAudioCache.set(idx,url);
+  return url;
+}
+async function resumoAudioPlayChunk(idx){
+  if(resumoSpeakMode!=='audio')return; // parado/trocado de modo enquanto gerava
+  if(idx>=resumoAudioQueue.length){resumoSpeakStop();return;}
+  resumoAudioIdx=idx;
+  try{
+    let url=resumoAudioCache.get(idx);
+    if(!url)url=await resumoAudioGenerateChunk(idx);
+    if(resumoSpeakMode!=='audio')return; // pode ter mudado durante o await
+    const audioEl=getResumoAudioEl();
+    audioEl.src=url;
+    resumoSpeakPaused=false;
+    resumoRefreshPanel(resumoSpeakSubId);
+    await audioEl.play();
+    // Pré-carrega o próximo pedaço em paralelo, sem travar o que já está tocando —
+    // evita silêncio entre um trecho e outro.
+    if(idx+1<resumoAudioQueue.length&&!resumoAudioCache.has(idx+1)){
+      resumoAudioGenerateChunk(idx+1).catch(()=>{});
+    }
+  }catch(e){
+    console.warn('Erro ao gerar/tocar áudio do resumo:',e);
+    throw e;
+  }
+}
+async function resumoPlayViaAI(subId,sub,topicName){
+  resumoAudioClearCache();
+  resumoAudioQueue=resumoSplitForSpeech(sub.resumo.texto);
+  resumoAudioIdx=0;
+  resumoSpeakSubId=subId;
+  resumoSpeakMode='audio';
+  resumoSpeakPaused=false;
+  resumoRefreshPanel(subId); // mostra "gerando áudio..." enquanto o 1º pedaço é gerado
+  setupResumoMediaSession(sub,topicName);
+  await resumoAudioPlayChunk(0);
+}
 function resumoToggleSpeak(subId){
   const sub=simFindSub(subId);
   if(!sub||!sub.resumo||!sub.resumo.texto)return;
-  if(!('speechSynthesis' in window)){toast('⚠️ Seu navegador não suporta leitura em voz','var(--red)');return;}
-  if(resumoSpeakSubId===subId&&window.speechSynthesis.speaking){
-    if(resumoSpeakPaused){
-      window.speechSynthesis.resume();
-      resumoSpeakPaused=false;
-    }else{
-      window.speechSynthesis.pause();
-      resumoSpeakPaused=true;
+
+  // Já está tocando/pausado esse resumo — só alterna pausar/continuar, sem gerar de novo.
+  if(resumoSpeakSubId===subId){
+    if(resumoSpeakMode==='audio'){
+      const el=getResumoAudioEl();
+      if(el.paused){el.play();resumoSpeakPaused=false;}else{el.pause();resumoSpeakPaused=true;}
+      resumoRefreshPanel(subId);
+      return;
     }
-    resumoRefreshPanel(subId);
+    if(resumoSpeakMode==='browser'&&'speechSynthesis' in window&&window.speechSynthesis.speaking){
+      if(resumoSpeakPaused){window.speechSynthesis.resume();resumoSpeakPaused=false;}
+      else{window.speechSynthesis.pause();resumoSpeakPaused=true;}
+      resumoRefreshPanel(subId);
+      return;
+    }
+    if(resumoSpeakMode==='loading')return; // já gerando, evita clique duplo
+  }
+
+  resumoSpeakStop();
+
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(apiKey){
+    // Tenta primeiro o áudio real gerado pela IA: voz mais natural e, principalmente,
+    // continua tocando com a tela do celular travada (economiza bateria).
+    let topicName='';
+    for(const k of db.kingdoms){
+      (db.topics[k.id]||[]).forEach(t=>{if(t.subtopics?.some(x=>x.id===subId))topicName=t.name;});
+    }
+    resumoPlayViaAI(subId,sub,topicName).catch(e=>{
+      console.warn('TTS por IA falhou, caindo pra voz do navegador:',e);
+      toast('⚠️ Não consegui gerar áudio com a IA agora — usando a voz do navegador (nesse modo, a leitura para se a tela travar).','var(--orange)');
+      resumoSpeakStop();
+      resumoPlayViaBrowser(subId,sub);
+    });
     return;
   }
+
+  resumoPlayViaBrowser(subId,sub);
+}
+function resumoPlayViaBrowser(subId,sub){
+  if(!('speechSynthesis' in window)){toast('⚠️ Seu navegador não suporta leitura em voz','var(--red)');return;}
   window.speechSynthesis.cancel();
   resumoSpeakSubId=subId;
+  resumoSpeakMode='browser';
   resumoSpeakQueue=resumoSplitForSpeech(sub.resumo.texto);
   resumoSpeakIdx=0;
   resumoSpeakPaused=false;
@@ -5088,11 +5208,21 @@ function resumoToggleSpeak(subId){
   resumoRefreshPanel(subId);
 }
 function resumoSpeakStop(){
-  window.speechSynthesis.cancel();
+  if('speechSynthesis' in window)window.speechSynthesis.cancel();
+  if(resumoAudioEl){
+    try{resumoAudioEl.pause();resumoAudioEl.removeAttribute('src');resumoAudioEl.load();}catch(e){}
+  }
+  resumoAudioClearCache();
+  if('mediaSession' in navigator){
+    try{navigator.mediaSession.playbackState='none';navigator.mediaSession.metadata=null;}catch(e){}
+  }
   const prevId=resumoSpeakSubId;
   resumoSpeakSubId=null;
+  resumoSpeakMode=null;
   resumoSpeakQueue=[];
   resumoSpeakIdx=0;
+  resumoAudioQueue=[];
+  resumoAudioIdx=0;
   resumoSpeakPaused=false;
   if(prevId)resumoRefreshPanel(prevId);
 }
@@ -10003,13 +10133,42 @@ function openAISettingsModal(){
       <div style="font-size:9.5px;color:var(--muted);margin-bottom:6px">${allVoices.length} voz(es) encontrada(s) no total no seu aparelho — ${ptVoices.length} em português.</div>
       ${!allVoices.length?`<div style="font-size:10.5px;color:var(--orange);background:rgba(234,88,12,0.08);border:1.5px solid rgba(234,88,12,0.25);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.5">⏳ Nenhuma voz carregada ainda — em alguns navegadores isso demora um instante. Clique em "Atualizar lista" abaixo.</div>`:''}
       ${allVoices.length&&!ptVoices.length?`<div style="font-size:10.5px;color:var(--orange);background:rgba(234,88,12,0.08);border:1.5px solid rgba(234,88,12,0.25);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.5">⚠️ Seu aparelho não tem nenhuma voz em português instalada — por isso ela lê com sotaque/pronúncia errada. Isso é uma configuração do sistema, não do site: no <b>Android</b>, vá em Configurações → Sistema → Idiomas → Conversão de texto em voz (Text-to-Speech) e baixe uma voz em Português (Brasil). No <b>iPhone</b>, vá em Ajustes → Acessibilidade → Conteúdo Falado → Vozes e baixe uma voz em Português. Depois, feche e abra o app de novo.</div>`:''}
-      <div style="display:flex;gap:8px;margin-bottom:18px">
+      <div style="display:flex;gap:8px;margin-bottom:20px">
         <button class="btn btn-sm btn-ghost" style="flex:1;justify-content:center" onclick="reloadVoiceOptions()"><i class="fa fa-rotate"></i> Atualizar lista</button>
         <button class="btn btn-sm btn-ghost" style="flex:1;justify-content:center" onclick="testVoicePreview()"><i class="fa fa-volume-high"></i> Testar voz</button>
       </div>
 
+      <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">🎧 Voz da IA no Resumo (funciona com a tela travada)</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
+        Com a chave configurada, o botão "Ouvir" do Resumo tenta gerar um áudio de verdade com a IA (voz mais natural, e continua tocando mesmo com o celular travado, tipo um podcast). Se não conseguir, usa a voz do navegador acima como reserva (essa para se a tela travar).
+      </p>
+      <select id="gemini-voice-select-input" class="inp" style="width:100%;margin-bottom:8px">
+        ${GEMINI_TTS_VOICES.map(v=>`<option value="${v.id}" ${(db.preferredGeminiVoice||GEMINI_TTS_VOICE_DEFAULT)===v.id?'selected':''}>${v.label}</option>`).join('')}
+      </select>
+      <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-bottom:8px" onclick="testGeminiVoicePreview()"><i class="fa fa-microphone-lines"></i> Testar voz da IA</button>
+      <div id="gemini-voice-test-status" style="font-size:10px;color:var(--muted);text-align:center;margin-bottom:18px;min-height:14px"></div>
+
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveGeminiApiKey()">Salvar</button>
     </div>`);
+}
+async function testGeminiVoicePreview(){
+  const apiKey=(document.getElementById('gemini-key-input')?.value||db.geminiApiKey||'').trim();
+  const statusEl=document.getElementById('gemini-voice-test-status');
+  if(!apiKey){toast('⚠️ Cole sua chave de API do Gemini primeiro','var(--red)');return;}
+  const voiceSel=document.getElementById('gemini-voice-select-input');
+  const voiceName=voiceSel?voiceSel.value:GEMINI_TTS_VOICE_DEFAULT;
+  if(statusEl)statusEl.textContent='Gerando áudio de teste...';
+  try{
+    const{base64,sampleRate}=await callGeminiTTS(apiKey,'Essa é a voz da inteligência artificial que vai ler seus resumos, mesmo com a tela travada.',voiceName);
+    const blob=pcmBase64ToWavBlob(base64,sampleRate);
+    const url=URL.createObjectURL(blob);
+    const audio=new Audio(url);
+    audio.play();
+    if(statusEl)statusEl.textContent='✅ Funcionou! Essa voz vai ser usada no Resumo.';
+  }catch(e){
+    console.warn('Teste de voz da IA falhou:',e);
+    if(statusEl)statusEl.textContent='❌ Não consegui gerar áudio com essa chave agora — o Resumo vai cair pra voz do navegador automaticamente.';
+  }
 }
 // Recarrega a lista de vozes sem fechar o modal — útil quando o navegador demora
 // pra carregar as vozes (comum logo depois de abrir o app pela primeira vez).
@@ -10034,8 +10193,10 @@ function testVoicePreview(){
 function saveGeminiApiKey(){
   const v=(document.getElementById('gemini-key-input')?.value||'').trim();
   const voiceSel=document.getElementById('voice-select-input');
+  const geminiVoiceSel=document.getElementById('gemini-voice-select-input');
   db.geminiApiKey=v;
   if(voiceSel)db.preferredVoiceURI=voiceSel.value;
+  if(geminiVoiceSel)db.preferredGeminiVoice=geminiVoiceSel.value;
   saveDB();
   closeModal();
   toast(v?'✅ Configurações salvas!':'Chave removida.','var(--green)');
@@ -10127,6 +10288,92 @@ async function callGeminiGenerateSearch(apiKey,prompt){
   }catch(e){
     throw new Error(`Não foi possível gerar o resumo, nem com busca na internet nem sem ela. Tentativas com busca: ${attempts.join(' · ')||'nenhuma'}. Erro final: ${e.message}`);
   }
+}
+
+// ---- Text-to-Speech nativo do Gemini (áudio de verdade, não a voz do navegador) ----
+// Gera um arquivo de áudio real a partir de texto, usando a mesma chave de API do
+// Gemini já configurada. Vantagem sobre a voz do navegador (speechSynthesis): o
+// resultado é um <audio> de verdade, que o celular consegue continuar tocando com a
+// tela travada (a leitura por voz do navegador para nesse caso, na maioria dos
+// aparelhos). Se sua conta/chave não tiver esse recurso liberado, o app cai
+// automaticamente pra voz do navegador (ver resumoToggleSpeak).
+const GEMINI_TTS_MODEL_CANDIDATES=['gemini-2.5-flash-preview-tts','gemini-2.5-pro-preview-tts'];
+const GEMINI_TTS_VOICE_DEFAULT='Kore';
+// Só um recorte das vozes pré-prontas do Gemini TTS (a lista completa tem cerca de 30) —
+// escolhidas por soarem mais neutras/naturais em qualquer idioma, incluindo português.
+const GEMINI_TTS_VOICES=[
+  {id:'Kore',label:'Kore — firme'},
+  {id:'Puck',label:'Puck — animada'},
+  {id:'Charon',label:'Charon — grave/informativa'},
+  {id:'Leda',label:'Leda — jovem'},
+  {id:'Aoede',label:'Aoede — leve'},
+  {id:'Fenrir',label:'Fenrir — enérgica'},
+  {id:'Zephyr',label:'Zephyr — clara'},
+  {id:'Orus',label:'Orus — firme (grave)'}
+];
+async function tryGeminiTTS(apiKey,model,text,voiceName){
+  try{
+    const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        contents:[{parts:[{text}]}],
+        generationConfig:{
+          responseModalities:['AUDIO'],
+          speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voiceName||GEMINI_TTS_VOICE_DEFAULT}}}
+        }
+      })
+    });
+    if(!response.ok){
+      const err=await response.text();
+      let detail=err.slice(0,150);
+      try{detail=(JSON.parse(err)?.error?.message||detail).slice(0,150);}catch(e2){}
+      return{ok:false,reason:`${response.status} ${detail}`};
+    }
+    const data=await response.json();
+    const inline=data?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+    if(!inline||!inline.data)return{ok:false,reason:'sem áudio na resposta'};
+    const rateMatch=(inline.mimeType||'').match(/rate=(\d+)/);
+    return{ok:true,base64:inline.data,sampleRate:rateMatch?parseInt(rateMatch[1]):24000};
+  }catch(e){
+    return{ok:false,reason:e.message};
+  }
+}
+async function callGeminiTTS(apiKey,text,voiceName){
+  const attempts=[];
+  for(const model of GEMINI_TTS_MODEL_CANDIDATES){
+    const r=await tryGeminiTTS(apiKey,model,text,voiceName);
+    if(r.ok)return r;
+    attempts.push(`${model} (${r.reason})`);
+  }
+  const discovered=(await listGeminiModels(apiKey)).filter(m=>/tts/i.test(m)&&!GEMINI_TTS_MODEL_CANDIDATES.includes(m));
+  for(const model of discovered){
+    const r=await tryGeminiTTS(apiKey,model,text,voiceName);
+    if(r.ok)return r;
+    attempts.push(`${model} (${r.reason})`);
+  }
+  throw new Error(`Nenhum modelo de voz do Gemini respondeu. Tentativas: ${attempts.join(' · ')||'nenhuma'}.`);
+}
+// O Gemini TTS devolve PCM 16-bit cru (sem cabeçalho) em base64 — navegadores não tocam
+// isso direto num <audio>, precisa envolver num container WAV primeiro.
+function pcmBase64ToWavBlob(base64Data,sampleRate,numChannels,bitsPerSample){
+  sampleRate=sampleRate||24000;numChannels=numChannels||1;bitsPerSample=bitsPerSample||16;
+  const binary=atob(base64Data);
+  const len=binary.length;
+  const pcmBytes=new Uint8Array(len);
+  for(let i=0;i<len;i++)pcmBytes[i]=binary.charCodeAt(i);
+  const byteRate=sampleRate*numChannels*bitsPerSample/8;
+  const blockAlign=numChannels*bitsPerSample/8;
+  const buffer=new ArrayBuffer(44+len);
+  const view=new DataView(buffer);
+  const writeStr=(offset,str)=>{for(let i=0;i<str.length;i++)view.setUint8(offset+i,str.charCodeAt(i));};
+  writeStr(0,'RIFF');view.setUint32(4,36+len,true);writeStr(8,'WAVE');
+  writeStr(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);
+  view.setUint16(22,numChannels,true);view.setUint32(24,sampleRate,true);
+  view.setUint32(28,byteRate,true);view.setUint16(32,blockAlign,true);view.setUint16(34,bitsPerSample,true);
+  writeStr(36,'data');view.setUint32(40,len,true);
+  new Uint8Array(buffer,44).set(pcmBytes);
+  return new Blob([buffer],{type:'audio/wav'});
 }
 
 // Extrai JSON de uma resposta de IA de forma tolerante (parse direto -> acha objeto/array
