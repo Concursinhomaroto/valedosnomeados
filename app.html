@@ -7060,9 +7060,15 @@ function sm2Next(state,quality){
     reps=0;
     interval=1;
   }else{
-    if(reps===0)interval=1;
-    else if(reps===1)interval=6;
-    else interval=Math.max(1,Math.round(interval*ef));
+    // O SM-2 clássico usa passos fixos (1 dia, depois 6 dias) só nas duas primeiras
+    // repetições, porque nesse algoritmo original a 1ª repetição já acontece 1 dia
+    // depois de estudar. Aqui a 1ª revisão de verdade só acontece 7 dias depois do
+    // estudo (ver linha que cria a 1ª revisão), então usar o "6 dias" fixo faria o
+    // intervalo REGREDIR (7 → 6) mesmo com boa lembrança. Por isso, assim que já
+    // existe pelo menos uma repetição de verdade (reps>=1), sempre multiplica o
+    // intervalo que já estava em uso pelo fator de facilidade, em vez de usar um
+    // valor fixo — cresce a partir de onde o aluno realmente está, não do zero.
+    interval=reps===0?1:Math.max(1,Math.round(interval*ef));
     reps+=1;
   }
   ef=ef+(0.1-(5-quality)*(0.08+(5-quality)*0.02));
@@ -7119,6 +7125,26 @@ function completeRev(subId,idx,mode,quality){
 
   if(pendentes===0){
     if(!sub.sm2)sub.sm2={ef:2.5,reps:0,interval:1};
+    // Antes de calcular o próximo intervalo, resincroniza sub.sm2 com o intervalo REAL
+    // que essa revisão concluída representa (mesmo cálculo do rótulo "Xd após a
+    // anterior" mostrado na tela: data desta revisão − data da anterior, ou da data do
+    // estudo se for a primeira). Sem isso, uma revisão concluída atrasada fazia o
+    // PRÓXIMO intervalo "regredir" pra só 1 dia — porque sub.sm2.interval nunca tinha
+    // sido de fato inicializado com o intervalo que já estava em uso (7 dias na
+    // primeira revisão), então a fórmula tratava como se fosse a primeiríssima
+    // repetição de todas, mesmo o aluno tendo lembrado bem e o intervalo anterior já
+    // sendo maior que isso.
+    const revsAtuais=db.revisions[subId].filter(r=>r.date&&typeof r.date==='string'&&r.date.length===10);
+    const doneEntry=db.revisions[subId][idx];
+    const doneIdx=revsAtuais.indexOf(doneEntry);
+    if(doneIdx>=0){
+      const prevDate=doneIdx===0?sub.studiedAt:revsAtuais[doneIdx-1].date;
+      const realInterval=prevDate?daysDiff(prevDate,doneEntry.date):null;
+      if(realInterval&&realInterval>0){
+        sub.sm2.interval=realInterval;
+        if(sub.sm2.reps===0)sub.sm2.reps=1; // já teve ao menos uma revisão de verdade nesse intervalo
+      }
+    }
     sub.sm2=sm2Next(sub.sm2,quality);
     const mastered=sub.sm2.reps>=3&&sub.sm2.interval>=90&&quality>=4;
     if(mastered){
