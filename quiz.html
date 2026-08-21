@@ -6,7 +6,7 @@
 <title>Descubra seu plano de estudos — Vale dos Nomeados</title>
 <meta name="description" content="Responda 3 perguntas rápidas e descubra como organizar seus estudos pra concurso público, no estilo Vale dos Nomeados.">
 <meta name="robots" content="noindex, follow">
-<link rel="icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/favicon32.png" sizes="32x32">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -25,39 +25,48 @@ body{
   color:var(--text);font-family:'Inter',system-ui,-apple-system,sans-serif;
   min-height:100vh;line-height:1.5;-webkit-font-smoothing:antialiased;
   display:flex;flex-direction:column;align-items:center;
-  padding:28px 18px 40px;
+  padding:26px 18px 40px;position:relative;
 }
 h1,h2{font-family:'Cinzel',serif;margin:0;}
-.wrap{width:100%;max-width:440px;}
+.wrap{width:100%;max-width:440px;position:relative;z-index:1;}
+img{max-width:100%;display:block;}
+
+/* Brilhos de fundo, só decoração (não interativo) */
+.bg-glow{position:fixed;border-radius:50%;filter:blur(70px);pointer-events:none;z-index:0;opacity:0.35;}
+.bg-glow-1{width:260px;height:260px;background:var(--accent2);top:-80px;left:-80px;}
+.bg-glow-2{width:220px;height:220px;background:var(--cyan);bottom:-60px;right:-60px;opacity:0.2;}
 
 /* ===== TOPO ===== */
-.top{display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:22px;}
+.top{display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:18px;}
 .logo-ring{
-  width:84px;height:84px;border-radius:50%;
+  width:76px;height:76px;border-radius:50%;
   background:var(--panel);
   border:2.5px solid var(--accent);
   box-shadow:0 0 0 5px rgba(167,139,250,0.12), 0 0 32px rgba(167,139,250,0.35);
-  display:flex;align-items:center;justify-content:center;font-size:38px;
-  margin-bottom:14px;
+  display:flex;align-items:center;justify-content:center;font-size:34px;
+  margin-bottom:12px;
   animation:pulseGlow 2.6s ease-in-out infinite;
 }
 @keyframes pulseGlow{
   0%,100%{box-shadow:0 0 0 5px rgba(167,139,250,0.12), 0 0 28px rgba(167,139,250,0.3);}
   50%{box-shadow:0 0 0 7px rgba(167,139,250,0.18), 0 0 42px rgba(167,139,250,0.55);}
 }
-.brand-name{font-family:'Cinzel',serif;font-weight:900;font-size:17px;letter-spacing:1px;display:flex;align-items:center;gap:6px;}
-.brand-sub{font-size:12px;color:var(--muted);font-weight:700;margin-top:4px;letter-spacing:0.3px;}
+.brand-name{font-family:'Cinzel',serif;font-weight:900;font-size:16px;letter-spacing:1px;}
+.brand-sub{font-size:11px;color:var(--muted);font-weight:700;margin-top:4px;letter-spacing:0.3px;}
 
 /* ===== PROGRESSO ===== */
-.progress-row{display:flex;gap:6px;width:100%;margin:20px 0 26px;}
+.progress-row{display:flex;align-items:center;gap:10px;width:100%;margin:16px 0 22px;visibility:hidden;height:0;overflow:hidden;transition:height .2s;}
+.progress-row.show{visibility:visible;height:auto;overflow:visible;}
+.progress-segs{display:flex;gap:6px;flex:1;}
 .progress-seg{flex:1;height:5px;border-radius:4px;background:var(--border);overflow:hidden;}
 .progress-seg i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--cyan));transition:width .5s ease;}
 .progress-seg.filled i{width:100%;}
+.progress-label{font-size:10.5px;color:var(--muted);font-weight:800;white-space:nowrap;}
 
 /* ===== CARD / STEPS ===== */
 .card{
   background:var(--panel);border:1.5px solid var(--border2);border-radius:var(--r-xl);
-  padding:28px 22px;box-shadow:0 18px 50px rgba(0,0,0,0.5);
+  padding:26px 20px;box-shadow:0 18px 50px rgba(0,0,0,0.5);
   width:100%;position:relative;overflow:hidden;
 }
 .step{display:none;animation:stepIn .35s ease both;}
@@ -83,6 +92,22 @@ h1,h2{font-family:'Cinzel',serif;margin:0;}
 .opt.picked .opt-radio{border-color:var(--accent);background:radial-gradient(circle,var(--accent) 0 40%,transparent 42%);}
 .back-link{display:block;text-align:center;margin-top:18px;font-size:12px;color:var(--muted);cursor:pointer;background:none;border:none;font-family:inherit;text-decoration:underline;padding:4px;}
 
+/* ===== CAPA (step 0) ===== */
+.cover-shot-wrap{position:relative;border-radius:16px;overflow:hidden;margin:4px 0 18px;box-shadow:0 14px 34px rgba(0,0,0,0.5);border:1.5px solid var(--border2);}
+.cover-shot-wrap img{width:100%;display:block;}
+.cover-shot-wrap::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%, var(--panel) 100%);}
+.cover-badge{
+  position:absolute;top:10px;left:10px;z-index:2;
+  background:rgba(15,14,26,0.85);backdrop-filter:blur(4px);
+  border:1px solid var(--border2);color:var(--gold);
+  font-size:10px;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;
+  padding:5px 10px;border-radius:999px;display:flex;align-items:center;gap:5px;
+}
+.cover-title{font-size:22px;text-align:center;line-height:1.28;margin-bottom:10px;}
+.cover-title .hl{background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.cover-sub{font-size:13px;color:var(--text2);text-align:center;margin-bottom:20px;line-height:1.55;}
+.cover-time{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;color:var(--muted);font-weight:700;margin-top:12px;}
+
 /* ===== TELA FINAL (reveal) ===== */
 .lock-badge{
   display:inline-flex;align-items:center;gap:7px;margin:0 auto 16px;
@@ -90,28 +115,53 @@ h1,h2{font-family:'Cinzel',serif;margin:0;}
   font-size:11px;font-weight:900;letter-spacing:1px;text-transform:uppercase;
   padding:7px 16px;border-radius:999px;
 }
-.reveal-title{font-size:21px;text-align:center;line-height:1.3;margin-bottom:14px;}
+.reveal-title{font-size:21px;text-align:center;line-height:1.3;margin-bottom:16px;}
 .reveal-title .hl{background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+
+.locked-preview{position:relative;border-radius:16px;overflow:hidden;margin-bottom:18px;border:1.5px solid var(--border2);}
+.locked-preview img{width:100%;display:block;filter:blur(6px) brightness(0.55) saturate(1.2);transform:scale(1.06);}
+.locked-preview-overlay{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  background:linear-gradient(180deg,rgba(15,14,26,0.2),rgba(15,14,26,0.65));
+}
+.locked-preview-lock{
+  width:46px;height:46px;border-radius:50%;background:rgba(15,14,26,0.75);border:1.5px solid var(--accent);
+  display:flex;align-items:center;justify-content:center;font-size:20px;
+  animation:pulseGlow 2.6s ease-in-out infinite;
+}
+.locked-preview-txt{font-size:11.5px;font-weight:900;color:#fff;letter-spacing:0.3px;text-align:center;text-shadow:0 2px 6px rgba(0,0,0,0.6);}
+
 .reveal-body{
   background:var(--bg2);border:1px solid var(--border);border-radius:14px;
-  padding:16px 18px;font-size:13.5px;color:var(--text2);line-height:1.65;margin-bottom:20px;
+  padding:16px 18px;font-size:13.5px;color:var(--text2);line-height:1.65;margin-bottom:18px;
 }
 .reveal-body b{color:var(--text);}
+
+.mini-gallery{display:flex;gap:8px;margin-bottom:20px;}
+.mini-gallery-item{flex:1;border-radius:10px;overflow:hidden;border:1px solid var(--border);position:relative;}
+.mini-gallery-item img{width:100%;height:64px;object-fit:cover;object-position:top;display:block;}
+.mini-gallery-cap{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(0deg,rgba(0,0,0,0.75),transparent);color:#fff;font-size:8.5px;font-weight:800;text-align:center;padding:3px 2px 4px;}
+
 .cta-btn{
   display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
   background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;
   border:none;border-radius:14px;padding:16px;font-size:15.5px;font-weight:900;
   cursor:pointer;box-shadow:0 10px 28px rgba(124,58,237,0.4);
   font-family:inherit;transition:transform .15s;
+  animation:ctaPulse 2.2s ease-in-out infinite;
 }
+@keyframes ctaPulse{0%,100%{box-shadow:0 10px 28px rgba(124,58,237,0.4);}50%{box-shadow:0 12px 36px rgba(124,58,237,0.62);}}
 .cta-btn:hover{transform:translateY(-2px);}
 .cta-note{text-align:center;font-size:11px;color:var(--muted);margin-top:12px;}
 
-.foot-link{margin-top:26px;text-align:center;font-size:12px;color:var(--muted);}
+.foot-link{margin-top:22px;text-align:center;font-size:12px;color:var(--muted);}
 .foot-link a{color:var(--accent2);text-decoration:underline;}
 </style>
 </head>
 <body>
+
+<div class="bg-glow bg-glow-1"></div>
+<div class="bg-glow bg-glow-2"></div>
 
 <div class="wrap">
   <div class="top">
@@ -121,16 +171,30 @@ h1,h2{font-family:'Cinzel',serif;margin:0;}
   </div>
 
   <div class="progress-row" id="progress-row">
-    <div class="progress-seg" id="pseg-0"><i></i></div>
-    <div class="progress-seg" id="pseg-1"><i></i></div>
-    <div class="progress-seg" id="pseg-2"><i></i></div>
-    <div class="progress-seg" id="pseg-3"><i></i></div>
+    <div class="progress-segs">
+      <div class="progress-seg" id="pseg-0"><i></i></div>
+      <div class="progress-seg" id="pseg-1"><i></i></div>
+      <div class="progress-seg" id="pseg-2"><i></i></div>
+    </div>
+    <div class="progress-label" id="progress-label">1 de 3</div>
   </div>
 
   <div class="card">
 
-    <!-- STEP 1 -->
+    <!-- STEP 0: CAPA -->
     <div class="step active" data-step="0">
+      <div class="cover-shot-wrap">
+        <span class="cover-badge">🗺️ mapa real do app</span>
+        <img src="landing-assets/mapa-reinos.png" alt="Mapa de Reinos do Vale dos Nomeados" loading="eager">
+      </div>
+      <h1 class="cover-title">Seu edital vira um <span class="hl">mapa</span>. Você vira o herói.</h1>
+      <div class="cover-sub">Responda 3 perguntas rápidas e veja exatamente como organizar seus estudos pra concurso — sem cronograma complicado, sem planilha.</div>
+      <button class="cta-btn" onclick="quizStart()">🚀 Começar meu diagnóstico</button>
+      <div class="cover-time"><i>⏱️</i> Leva menos de 30 segundos</div>
+    </div>
+
+    <!-- STEP 1 -->
+    <div class="step" data-step="1">
       <div class="step-icon">🗺️</div>
       <h2>Qual tipo de concurso você quer vencer?</h2>
       <div class="step-sub">Isso ajusta o exemplo do seu mapa de estudos.</div>
@@ -140,10 +204,11 @@ h1,h2{font-family:'Cinzel',serif;margin:0;}
         <button class="opt" data-q="concurso" data-v="Estadual/Municipal"><span class="opt-emoji">🏢</span> Estadual ou Municipal<span class="opt-radio"></span></button>
         <button class="opt" data-q="concurso" data-v="Ainda não decidi"><span class="opt-emoji">🤔</span> Ainda não decidi<span class="opt-radio"></span></button>
       </div>
+      <button class="back-link" onclick="quizBack()">← Voltar</button>
     </div>
 
     <!-- STEP 2 -->
-    <div class="step" data-step="1">
+    <div class="step" data-step="2">
       <div class="step-icon">⏳</div>
       <h2>Quantas horas por dia você consegue estudar?</h2>
       <div class="step-sub">Sem julgamento — o mapa se adapta ao seu tempo real.</div>
@@ -157,7 +222,7 @@ h1,h2{font-family:'Cinzel',serif;margin:0;}
     </div>
 
     <!-- STEP 3 -->
-    <div class="step" data-step="2">
+    <div class="step" data-step="3">
       <div class="step-icon">📚</div>
       <h2>Como você organiza os estudos hoje?</h2>
       <div class="step-sub">A maioria começa exatamente por aqui.</div>
@@ -171,16 +236,32 @@ h1,h2{font-family:'Cinzel',serif;margin:0;}
     </div>
 
     <!-- STEP 4: REVEAL -->
-    <div class="step" data-step="3">
+    <div class="step" data-step="4">
       <div style="text-align:center">
         <span class="lock-badge">🔓 seu mapa está pronto</span>
       </div>
       <h2 class="reveal-title">O <span class="hl">Vale dos Nomeados</span> monta seu mapa de estudos por você</h2>
+
+      <div class="locked-preview">
+        <img src="landing-assets/dashboard.png" alt="Painel do Herói do Vale dos Nomeados" loading="lazy">
+        <div class="locked-preview-overlay">
+          <div class="locked-preview-lock">🔒</div>
+          <div class="locked-preview-txt">SEU PAINEL DE HERÓI<br>ESTÁ AQUI DENTRO</div>
+        </div>
+      </div>
+
       <div class="reveal-body" id="reveal-body">
         Carregando seu diagnóstico...
       </div>
+
+      <div class="mini-gallery">
+        <div class="mini-gallery-item"><img src="landing-assets/flashcards.png" alt="Flashcards" loading="lazy"><div class="mini-gallery-cap">Flashcards</div></div>
+        <div class="mini-gallery-item"><img src="landing-assets/revisoes.png" alt="Revisão espaçada" loading="lazy"><div class="mini-gallery-cap">Revisões</div></div>
+        <div class="mini-gallery-item"><img src="landing-assets/conquistas.png" alt="Conquistas" loading="lazy"><div class="mini-gallery-cap">Conquistas</div></div>
+      </div>
+
       <button class="cta-btn" onclick="quizGoToApp()">🐉 Desbloquear meu mapa grátis</button>
-      <div class="cta-note">Teste grátis por 3 dias · cancele quando quiser</div>
+      <div class="cta-note">3 dias grátis, plataforma inteira liberada · cancele quando quiser</div>
     </div>
 
   </div>
@@ -191,12 +272,19 @@ h1,h2{font-family:'Cinzel',serif;margin:0;}
 <script>
 let quizStep=0;
 const quizAnswers={concurso:null,horas:null,organizacao:null};
-const TOTAL_STEPS=4;
+const TOTAL_STEPS=5; // 0=capa, 1-3=perguntas, 4=revelação
+const QUESTION_COUNT=3;
 
 function quizRenderProgress(){
-  for(let i=0;i<TOTAL_STEPS;i++){
-    document.getElementById('pseg-'+i).classList.toggle('filled', i<=quizStep);
+  const row=document.getElementById('progress-row');
+  row.classList.toggle('show', quizStep>0);
+  for(let i=0;i<QUESTION_COUNT;i++){
+    // segmento i corresponde à pergunta (data-step i+1) — preenchido quando já foi
+    // respondida ou é a atual (garante que a última pergunta também acenda ao concluir).
+    document.getElementById('pseg-'+i).classList.toggle('filled', quizStep>i);
   }
+  const label=document.getElementById('progress-label');
+  if(quizStep>=1&&quizStep<=QUESTION_COUNT)label.textContent=`${quizStep} de ${QUESTION_COUNT}`;
 }
 function quizShowStep(n){
   document.querySelectorAll('.step').forEach(el=>{
@@ -204,6 +292,10 @@ function quizShowStep(n){
   });
   quizStep=n;
   quizRenderProgress();
+}
+function quizStart(){
+  if(window.gtag)gtag('event','quiz_start');
+  quizShowStep(1);
 }
 function quizBack(){
   if(quizStep>0)quizShowStep(quizStep-1);
