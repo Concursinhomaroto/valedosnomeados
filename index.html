@@ -678,6 +678,12 @@ footer{border-top:1px solid var(--border);padding:28px 0;margin-top:20px;}
 </footer>
 
 <script>
+// Guarda a query string ORIGINAL antes de qualquer coisa — o goTab() logo abaixo faz
+// history.replaceState() pra limpar a URL, o que apaga parâmetros como ?abrirCadastro=1
+// da location.search bem antes do trecho que precisa ler esse parâmetro (lá embaixo,
+// perto do openAuthModal) rodar.
+const LP_INITIAL_QUERY=new URLSearchParams(location.search);
+
 // ===== NAVEGAÇÃO POR ABAS =====
 const TAB_NAMES=['home','sobre','plataforma','contato','precos'];
 const TAB_SECTIONS=Array.from(document.querySelectorAll('section[data-tab]'));
@@ -875,6 +881,17 @@ function authForgotPassword(){
     authShowError(authErrorMessage(e.code));
   });
 }
+
+// Abre o modal de cadastro sozinho quando a página chega com ?abrirCadastro=1 — usado por
+// landing pages externas (ex: o quiz de qualificação em quiz.html) que já levam a pessoa
+// direto pro cadastro, sem precisar clicar em nada de novo aqui.
+(function autoOpenAuthFromQuery(){
+  if(LP_INITIAL_QUERY.get('abrirCadastro')==='1'){
+    const origem=LP_INITIAL_QUERY.get('origem')||'';
+    const redirect='app.html'+(origem?('?origem='+encodeURIComponent(origem)):'');
+    setTimeout(()=>openAuthModal('signup',redirect),80);
+  }
+})();
 </script>
 
 </body>
