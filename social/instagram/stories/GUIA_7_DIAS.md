@@ -9,7 +9,9 @@
 6. `dia6-feature-gamificacao.png` — streak/XP/conquistas
 7. `dia7-cta-final.png` — chamada final pro cadastro
 
-## Como postar (IMPORTANTE)
+## Duas formas de postar — escolha uma por story
+
+### Opção A — manual pelo app (mantém o link clicável)
 O Instagram **não deixa** colocar link clicável na imagem em si — o "sticker de
 link" só dá pra adicionar na hora que você posta, direto no app:
 
@@ -20,9 +22,17 @@ link" só dá pra adicionar na hora que você posta, direto no app:
    na imagem, pra ficar visualmente alinhado
 5. Publica
 
-Sem esse passo manual, a imagem fica bonita mas ninguém consegue clicar em
-lugar nenhum — é a única parte que não dá pra deixar 100% pronta de antemão
-(limitação do Instagram, não nossa).
+### Opção B — automático pela fila (`admin-stories.html`), sem link clicável
+Agora existe uma fila separada de Stories no mesmo Worker (`vdn-instagram`),
+publicada sozinha nos mesmos 3 horários do dia configurados no Cron Trigger.
+Pra usar: abra `admin-stories.html`, adiciona a URL da imagem, clica em
+**"Aprovar"** — no próximo horário do Cron, ela publica sozinha.
+
+**Troca que você faz ao escolher essa opção**: publica sem precisar tocar em
+nada, mas o Instagram **não permite** adicionar o sticker de link por API —
+então esse story sai sem o "arrasta pra cima" clicável. Pra esses 7 primeiros
+(feitos pra converter gente pro quiz), a Opção A vale mais a pena. Pra stories
+futuros mais "de presença" (sem CTA direto), a automação é mais prática.
 
 ## Sugestão de sticker extra (opcional, mas ajuda MUITO a engajar)
 Nos dias 1, 4 e 6, dá pra adicionar em cima da imagem um sticker de
