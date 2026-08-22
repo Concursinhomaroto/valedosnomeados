@@ -110,6 +110,7 @@ function renderGrid(){
         <span class="status ${item.status}">${item.status}</span>
         ${item.mediaType==='VIDEO' ? `<span style="font-size:10px;color:#8b7db8">🎬 Reel</span>` : ''}
         <div class="cap">${(item.caption||'').replace(/</g,'&lt;')}</div>
+        ${item.status==='failed' && item.lastError ? `<div style="background:#4b1a1a;color:#fca5a5;font-size:10.5px;line-height:1.5;padding:8px 10px;border-radius:8px;word-break:break-word">⚠️ ${JSON.stringify(item.lastError).replace(/</g,'&lt;')}</div>` : ''}
         ${item.status==='pending' ? `
           <div class="actions">
             <button class="btn-approve" onclick="acao('approve','${item.id}')">✓ Aprovar</button>
