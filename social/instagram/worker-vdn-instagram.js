@@ -101,10 +101,16 @@ export default {
   },
 
   // Cron Trigger: publica o próximo item aprovado mais antigo de CADA fila
-  // (um de feed/reels + um de stories, a cada disparo).
+  // (um de feed/reels + um de stories, a cada disparo). Cada chamada tem seu
+  // próprio catch — se uma fila der erro, não derruba a outra, e o erro fica
+  // registrado nos Logs do Worker (Cloudflare → Observability → Registros).
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(publishNextApproved(env, 'queue', 'FEED'));
-    ctx.waitUntil(publishNextApproved(env, 'queueStories', 'STORIES'));
+    ctx.waitUntil(
+      publishNextApproved(env, 'queue', 'FEED').catch((e) => console.error('scheduled/queue falhou:', e))
+    );
+    ctx.waitUntil(
+      publishNextApproved(env, 'queueStories', 'STORIES').catch((e) => console.error('scheduled/queueStories falhou:', e))
+    );
   },
 };
 
@@ -180,8 +186,21 @@ async function handlePublishNow(request, env, cors, kvKey, target) {
   const queue = await loadQueue(env, kvKey);
   const item = queue.find((q) => q.id === body.id);
   if (!item) return json({ error: 'item não encontrado' }, 404, cors);
-  const result = await publishItem(item, env, target);
-  if (!result.ok) return json(result, 502, cors);
+  // Envolve em try/catch: se publishItem() lançar uma exceção (ex: falha de rede no
+  // fetch, sem resposta HTTP nenhuma), sem isso o item ficava travado silenciosamente
+  // em "approved"/"pending" pra sempre, sem nunca aparecer como "failed" na fila.
+  let result;
+  try {
+    result = await publishItem(item, env, target);
+  } catch (e) {
+    result = { ok: false, error: 'exceção ao publicar', detail: String((e && e.message) || e) };
+  }
+  if (!result.ok) {
+    item.status = 'failed';
+    item.lastError = result;
+    await saveQueue(env, kvKey, queue);
+    return json(result, 502, cors);
+  }
   item.status = 'published';
   item.mediaId = result.mediaId;
   item.publishedAt = new Date().toISOString();
@@ -196,7 +215,15 @@ async function publishNextApproved(env, kvKey, target) {
     .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   const next = approved[0];
   if (!next) return { ok: false, reason: `fila "${kvKey}" de aprovados vazia` };
-  const result = await publishItem(next, env, target);
+  // Mesma proteção do handlePublishNow: exceção não pode deixar o item travado sem
+  // status nenhum de erro — sempre marca "failed" com o motivo, mesmo em caso de
+  // exceção crua (não só de falha "esperada" da API).
+  let result;
+  try {
+    result = await publishItem(next, env, target);
+  } catch (e) {
+    result = { ok: false, error: 'exceção ao publicar', detail: String((e && e.message) || e) };
+  }
   if (result.ok) {
     next.status = 'published';
     next.mediaId = result.mediaId;
