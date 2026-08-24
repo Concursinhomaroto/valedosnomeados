@@ -8796,6 +8796,7 @@ let rdExpandedFeedback=new Set();
 let rdShowConectivos=false; // true = rd-main-content mostra o guia de conectivos em vez das redações do tópico
 let rdConectivosSecaoFiltro='todas';
 let rdConectivosModo='categorias'; // 'categorias' = lista por função | 'estrutura' = modelo de 4 parágrafos
+let rdEstruturaGenero='dissertativo'; // 'dissertativo' | 'especifico' | 'caso'
 
 function rdInit(){if(!db.redacoes)db.redacoes={topics:{},textos:{}};}
 
@@ -8927,44 +8928,133 @@ const RD_CONECTIVOS=[
     itens:['Portanto','Diante do exposto','Em suma','Dessa maneira','Conclui-se que','Fica evidente que','Torna-se necessário que','Logo','Em síntese','Desse modo','Assim sendo']},
 ];
 
-// Modelo de 4 parágrafos (padrão Cebraspe/ENEM): 1 introdução + 2 de desenvolvimento +
-// 1 conclusão, cada um com 1 a 4 frases — mapeando qual TIPO de conectivo entra em cada
-// frase. É um modelo padrão, mas adaptável: nem toda redação precisa das 4 frases em
-// todo parágrafo, e parágrafos com pedido específico da banca (itens a, b, c...) devem
-// seguir a estrutura que o enunciado pedir, não esse modelo genérico.
-const RD_ESTRUTURA_PARAGRAFOS=[
-  {numero:1,nome:'Introdução',objetivo:'Contextualizar o tema e apresentar a tese — o que você vai defender no texto.',
-    frases:[
-      {funcao:'Contextualizar o tema',categoriaId:'contextualizacao',exemplo:'Diante desse cenário, [tema] tornou-se pauta central no debate público brasileiro.'},
-      {funcao:'Desenvolver o contexto com um dado, fato ou marco histórico/legal',categoriaId:'explicacao',exemplo:'Isto é, [dado/fato que reforça a relevância do tema].'},
-      {funcao:'Apresentar a tese central (o que o texto vai defender)',categoriaId:null,exemplo:'Nesse sentido, é fundamental discutir [tese], considerando [ponto 1] e [ponto 2].'},
-      {funcao:'(opcional) Anunciar os dois eixos que o desenvolvimento vai tratar',categoriaId:null,exemplo:'Para tanto, serão analisados [fator 1] e [fator 2].'},
+// Esqueletos de redação por GÊNERO de prova discursiva Cebraspe — compilado a partir
+// de material de correção real da banca (espelhos de correção, critérios "Conceito 0-N"
+// por quesito) e de aulas de preparação (Gran Cursos). A Cebraspe não usa um único
+// modelo: um tema de atualidade/social pede estrutura dissertativo-argumentativa
+// (às vezes com posicionamento), um tema técnico do edital pede texto informativo por
+// tópico (sem introdução/conclusão obrigatórias), e um estudo de caso pede uma
+// estrutura fixa de aplicar a lei/teoria ao caso contado. Cada frase tem "opcoes" —
+// conectivos alternativos, no formato "opção; opção; ____" pra preencher.
+const RD_ESTRUTURA_GENEROS={
+  dissertativo:{
+    label:'Dissertativo-argumentativo',
+    quando:'Temas de atualidade, sociais ou éticos. A banca costuma pedir 2 a 3 aspectos e, às vezes, um posicionamento claro (a favor/contra).',
+    regras:[
+      'Siga a ORDEM exata dos tópicos do enunciado — um parágrafo por tópico, na sequência pedida (pode agrupar tópicos afins ou dividir um tópico extenso em mais de um parágrafo).',
+      'Se o enunciado pedir posicionamento, deixe-o explícito e objetivo já na introdução — faltar isso derruba 1,50 ponto inteiro sozinho, mesmo com o resto perfeito.',
+      'Cite pelo menos a quantidade pedida (ex.: "duas causas" = no mínimo duas, cada uma explicada — só citar sem explicar vale menos).',
+      'Cada parágrafo de desenvolvimento segue 3 partes: Tópico frasal (retoma o que a banca pediu) → Fundamentação (repertório: lei, dado, autor) → Acréscimo (exemplo, consequência ou detalhe extra).',
+      'Nunca copie literalmente o texto de apoio — interprete e use como referência, sem reproduzir frases prontas.',
+      'Evite gerúndio ("perpetuando" → "isso perpetua"), 1ª pessoa do plural ("nós", "nosso") e coloquialismos ("desde cedo" → "desde a tenra idade").',
+    ],
+    paragrafos:[
+      {nome:'Introdução',objetivo:'Contextualizar o tema e apresentar a tese — o que você vai defender no texto.',
+        frases:[
+          {funcao:'Contextualizar o tema',opcoes:['Na atualidade,','Diante desse cenário,','Nesse contexto,','Hodiernamente,']},
+          {funcao:'Reforçar com um dado, fato ou marco legal/histórico',opcoes:['Vale ressaltar que','Cumpre destacar que','Ou seja,','Segundo [fonte/lei],']},
+          {funcao:'Apresentar a tese central (o que o texto vai defender)',opcoes:['Nesse sentido,','Diante disso, defende-se que','É nesse viés que se torna necessário']},
+        ]},
+      {nome:'Desenvolvimento 1',objetivo:'Tópico frasal → Fundamentação → Acréscimo — primeiro aspecto pedido pela banca.',
+        frases:[
+          {funcao:'Tópico frasal (retoma o 1º aspecto pedido)',opcoes:['Inicialmente,','De início,','Em primeira análise,']},
+          {funcao:'Fundamentação (repertório: lei, dado, autor)',opcoes:['Isso porque','Segundo dados de [fonte],','De acordo com [lei/autor],']},
+          {funcao:'Acréscimo (exemplo, consequência ou detalhe extra)',opcoes:['Além disso,','Ademais,','Por exemplo,']},
+        ]},
+      {nome:'Desenvolvimento 2',objetivo:'Tópico frasal → Fundamentação → Acréscimo — segundo aspecto pedido pela banca.',
+        frases:[
+          {funcao:'Tópico frasal (retoma o 2º aspecto pedido)',opcoes:['Ademais,','Ainda sobre o tema,','Em segunda análise,']},
+          {funcao:'Fundamentação',opcoes:['Isso porque','Nesse viés,','Já que']},
+          {funcao:'Acréscimo',opcoes:['Vale acrescentar que','Não se pode esquecer de que','Outrossim,']},
+        ]},
+      {nome:'Conclusão',objetivo:'Retomar a tese e propor uma intervenção: agente + ação + modo/meio + finalidade.',
+        frases:[
+          {funcao:'Conectivo conclusivo + retomada da tese',opcoes:['Portanto,','Diante do exposto,','Por fim,']},
+          {funcao:'Propor a ação (agente + ação)',opcoes:['fica claro que é fundamental que','é imprescindível que','torna-se necessário que']},
+          {funcao:'Finalidade da ação proposta',opcoes:['a fim de que','para que','com vistas a']},
+        ]},
     ]},
-  {numero:2,nome:'Desenvolvimento 1',objetivo:'Primeiro argumento — geralmente a causa ou fator central do problema.',
-    frases:[
-      {funcao:'Abrir o parágrafo retomando o tema',categoriaId:'abrir_paragrafo',exemplo:'Em primeira análise, [retoma o recorte do parágrafo].'},
-      {funcao:'Apresentar a causa/argumento',categoriaId:'causa',exemplo:'Isso porque [explicação da causa].'},
-      {funcao:'Mostrar a consequência ou trazer um exemplo/dado',categoriaId:'consequencia',exemplo:'Como resultado, [consequência do problema].'},
-      {funcao:'(opcional) Reforçar com um exemplo concreto',categoriaId:'exemplificacao',exemplo:'Por exemplo, [caso, dado ou situação real].'},
+  especifico:{
+    label:'Tema específico do edital',
+    quando:'Perguntas técnicas do seu cargo (ex.: orçamento público, licitações, gestão de pessoas). Texto INFORMATIVO, sem opinião pessoal, a menos que a banca peça.',
+    regras:[
+      'NÃO precisa de introdução separada se o tópico 1 for conceitual — a resposta ao tópico 1 já funciona como abertura do texto.',
+      'Se o tópico 1 não for conceitual (precisar de uma lei/contexto antes), faça 1-2 frases de abertura antes de responder a ele.',
+      'Sem posicionamento pessoal — é texto técnico e objetivo, a menos que a banca peça explicitamente uma opinião.',
+      'Repita os TERMOS EXATOS do enunciado — mostra ao corretor que você está respondendo exatamente o que foi pedido.',
+      '1 parágrafo por tópico é o padrão, mas pode dividir um tópico extenso em vários parágrafos, ou juntar 2 tópicos afins num só — sempre deixando claro quando muda de assunto.',
+      'Conclusão é opcional — só faça se sobrar linha. Fórmula pronta: "Portanto, fica claro que [resumo]. Assim, é importante observar isso dentro do princípio de [ex.: legalidade, art. 37 da CF]."',
+    ],
+    paragrafos:[
+      {nome:'Abertura (só se o tópico 1 NÃO for conceitual)',objetivo:'1-2 frases de contexto antes de entrar no tópico 1 — pule esse parágrafo se o tópico 1 já for uma definição.',
+        frases:[
+          {funcao:'Contextualizar antes do tópico 1',opcoes:['A Constituição Federal de 1988 (CF/88) estabelece que','De acordo com a Lei nº [número],','Em virtude de [contexto],']},
+        ]},
+      {nome:'Resposta ao tópico 1',objetivo:'Responda exatamente o que foi pedido, repetindo os termos do enunciado.',
+        frases:[
+          {funcao:'Abrir a resposta do tópico 1',opcoes:['Inicialmente, é preciso entender/citar/apresentar','De início, cabe conceituar','[Termo exato da banca] refere-se a']},
+          {funcao:'Detalhar a resposta',opcoes:['Nesse processo,','De acordo com [lei/norma],','A primeira é... a segunda é...']},
+        ]},
+      {nome:'Resposta ao tópico 2',objetivo:'Um parágrafo novo por tópico, na ordem do enunciado.',
+        frases:[
+          {funcao:'Abrir a resposta do tópico 2',opcoes:['Ademais,','No que se refere a','Quanto a']},
+          {funcao:'Detalhar a resposta',opcoes:['é válido destacar','nota-se que','entende-se que']},
+        ]},
+      {nome:'Resposta ao tópico 3 / Conclusão (opcional)',objetivo:'Último tópico — a conclusão só entra se sobrar linha.',
+        frases:[
+          {funcao:'Abrir a resposta do último tópico',opcoes:['Por fim,','No que se refere ao/à último(a) aspecto,']},
+          {funcao:'(opcional) Fechar com um princípio',opcoes:['Portanto, fica claro que','Assim, é importante observar isso dentro do princípio de']},
+        ]},
     ]},
-  {numero:3,nome:'Desenvolvimento 2',objetivo:'Segundo argumento — outro fator do problema, ou um contraponto/agravante.',
-    frases:[
-      {funcao:'Abrir o parágrafo com continuidade',categoriaId:'abrir_paragrafo',exemplo:'Em segunda análise, [novo recorte do problema].'},
-      {funcao:'Apresentar o segundo argumento (pode contrastar com o parágrafo anterior)',categoriaId:'oposicao',exemplo:'Entretanto, [outro ângulo/agravante do problema].'},
-      {funcao:'Explicar ou justificar esse argumento',categoriaId:'causa',exemplo:'Isso se deve a [causa desse segundo fator].'},
-      {funcao:'(opcional) Consequência ou exemplo',categoriaId:'exemplificacao',exemplo:'Como se observa em [exemplo/dado que ilustra].'},
+  caso:{
+    label:'Estudo de caso',
+    quando:'A banca conta uma situação hipotética e pede pra você analisar à luz da lei ou de uma teoria.',
+    regras:[
+      'Estrutura fixa: 1º Apresentar o caso → 2º Fundamentar (lei/teoria) → 3º Relacionar o fundamento ao caso, respondendo diretamente → 4º Conclusão.',
+      'Fundamentar = citar o dispositivo legal ou a teoria que caracteriza a situação (ex.: artigo da CF, teoria jurídica) — é embasamento técnico, não opinião.',
+      'Sempre feche relacionando de volta ao caso específico contado no enunciado — nunca deixe a resposta genérica, sem citar os personagens/fatos do caso.',
+    ],
+    paragrafos:[
+      {nome:'Apresentação do caso',objetivo:'Retomar brevemente a situação hipotética contada no enunciado.',
+        frases:[
+          {funcao:'Retomar o caso',opcoes:['No caso em tela,','Na situação hipotética apresentada,','Consoante o caso narrado,']},
+          {funcao:'Anunciar a análise que vem a seguir',opcoes:['Sobre esse cenário,','A respeito dessa situação,','Diante disso,']},
+        ]},
+      {nome:'Fundamentação',objetivo:'Citar a lei ou teoria que caracteriza a situação — o embasamento técnico.',
+        frases:[
+          {funcao:'Citar o dispositivo/teoria',opcoes:['Inicialmente, é preciso citar','De acordo com [lei/teoria],','Segundo o disposto em [dispositivo],']},
+          {funcao:'Detalhar o fundamento',opcoes:['Nessa perspectiva,','Vale ressaltar que','Cumpre destacar que']},
+        ]},
+      {nome:'Relacionar o fundamento ao caso',objetivo:'Aplicar a lei/teoria à situação específica, respondendo diretamente à pergunta.',
+        frases:[
+          {funcao:'Aplicar o fundamento ao caso',opcoes:['Com isso,','Diante do exposto,','Aplicando-se esse entendimento ao caso,']},
+          {funcao:'Responder diretamente à pergunta',opcoes:['[personagem do caso] não poderia/deveria ter','conclui-se que a conduta foi/não foi']},
+        ]},
+      {nome:'Conclusão',objetivo:'Fechar retomando o que foi concluído sobre o caso.',
+        frases:[
+          {funcao:'Fechar a análise',opcoes:['Portanto, fica claro que','Diante do exposto, conclui-se que']},
+        ]},
     ]},
-  {numero:4,nome:'Conclusão',objetivo:'Retomar a tese e propor uma intervenção: agente + ação + modo/meio + finalidade + detalhamento.',
-    frases:[
-      {funcao:'Conectivo conclusivo + retomada da tese',categoriaId:'conclusao',exemplo:'Diante do exposto, fica evidente que [retoma a tese defendida].'},
-      {funcao:'Propor a ação: quem faz o quê',categoriaId:null,exemplo:'Para tanto, é imprescindível que [agente: Estado/Ministério/escolas/mídia] promova [ação].'},
-      {funcao:'Modo ou meio de execução',categoriaId:null,exemplo:'por meio de [mecanismo/programa/campanha concreto],'},
-      {funcao:'Finalidade + detalhamento da proposta',categoriaId:'finalidade',exemplo:'a fim de que [finalidade], garantindo assim [detalhamento/resultado esperado].'},
-    ]},
-];
-function rdConectivosSugeridos(categoriaId,n){
-  if(!categoriaId)return[];
-  return(RD_CONECTIVOS.find(c=>c.id===categoriaId)?.itens||[]).slice(0,n||4);
+};
+function rdEsqueletoTexto(genero){
+  const g=RD_ESTRUTURA_GENEROS[genero];if(!g)return'';
+  const linhas=[`ESQUELETO — ${g.label.toUpperCase()}`,''];
+  g.paragrafos.forEach((p,pi)=>{
+    linhas.push(`PARÁGRAFO ${pi+1} — ${p.nome}`);
+    p.frases.forEach(f=>{
+      linhas.push(`${f.opcoes.join('; ')}; ____________________________.`);
+    });
+    linhas.push('');
+  });
+  return linhas.join('\n');
+}
+function rdCopiarEsqueleto(){
+  const texto=rdEsqueletoTexto(rdEstruturaGenero);
+  navigator.clipboard.writeText(texto).then(()=>{
+    toast('✅ Esqueleto copiado! Cola no rascunho e preenche as lacunas.','var(--green)');
+  }).catch(()=>{
+    toast('⚠️ Não foi possível copiar. Selecione o texto manualmente.','var(--orange)');
+  });
 }
 
 function rdSecaoLabel(s){return{introducao:'Introdução',desenvolvimento:'Desenvolvimento',conclusao:'Conclusão'}[s]||s;}
@@ -8981,7 +9071,7 @@ function rdRenderConectivos(){
     </div>
     <div class="rd-conectivos-tabs" style="margin-bottom:14px">
       <button class="${rdConectivosModo==='categorias'?'active':''}" onclick="rdSetConectivosModo('categorias')"><i class="fa fa-list"></i> Por categoria</button>
-      <button class="${rdConectivosModo==='estrutura'?'active':''}" onclick="rdSetConectivosModo('estrutura')"><i class="fa fa-ruler-vertical"></i> Estrutura de 4 parágrafos</button>
+      <button class="${rdConectivosModo==='estrutura'?'active':''}" onclick="rdSetConectivosModo('estrutura')"><i class="fa fa-ruler-vertical"></i> Esqueleto de redação</button>
     </div>
     <div id="rd-conectivos-corpo"></div>
   `;
@@ -9009,24 +9099,39 @@ function rdSetConectivosSecao(s){
   rdRenderConectivosLista();
 }
 function rdRenderEstrutura(el){
+  const g=RD_ESTRUTURA_GENEROS[rdEstruturaGenero];
   el.innerHTML=`
-    <div class="legis-disclaimer" style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:16px"><i class="fa fa-circle-info"></i> Modelo padrão pra até 30 linhas (Cebraspe): 1 introdução + 2 parágrafos de desenvolvimento + 1 conclusão, com 1 a 4 frases cada. É adaptável — se a banca pedir itens específicos (a, b, c...), siga a estrutura que o enunciado exigir.</div>
-    ${RD_ESTRUTURA_PARAGRAFOS.map(rdParagrafoCardHTML).join('')}
+    <div class="rd-conectivos-tabs" id="rd-genero-tabs" style="margin-bottom:14px">
+      ${Object.keys(RD_ESTRUTURA_GENEROS).map(k=>`<button class="${rdEstruturaGenero===k?'active':''}" data-genero="${k}" onclick="rdSetEstruturaGenero('${k}')">${RD_ESTRUTURA_GENEROS[k].label}</button>`).join('')}
+    </div>
+    <div class="legis-disclaimer" style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px"><i class="fa fa-circle-info"></i> <b>Quando usar:</b> ${g.quando}</div>
+    <div class="rd-conectivo-card" style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:900;color:var(--text);margin-bottom:8px">📌 Regras dessa estrutura</div>
+      <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+        ${g.regras.map(r=>`<li style="font-size:11.5px;color:var(--text2);line-height:1.5">${r}</li>`).join('')}
+      </ul>
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-bottom:16px" onclick="rdCopiarEsqueleto()"><i class="fa fa-copy"></i> Copiar esqueleto completo</button>
+    <div id="rd-estrutura-paragrafos"></div>
   `;
+  document.getElementById('rd-estrutura-paragrafos').innerHTML=g.paragrafos.map(rdParagrafoCardHTML).join('');
 }
-function rdParagrafoCardHTML(p){
+function rdSetEstruturaGenero(k){
+  rdEstruturaGenero=k;
+  document.querySelectorAll('#rd-genero-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.genero===k));
+  const g=RD_ESTRUTURA_GENEROS[k];
+  const el=document.getElementById('rd-conectivos-corpo');
+  if(el)rdRenderEstrutura(el);
+}
+function rdParagrafoCardHTML(p,i){
   return`<div class="rd-conectivo-card" style="margin-bottom:16px">
-    <div style="font-size:14px;font-weight:900;color:var(--accent);margin-bottom:3px">Parágrafo ${p.numero} — ${p.nome}</div>
+    <div style="font-size:14px;font-weight:900;color:var(--accent);margin-bottom:3px">Parágrafo ${i+1} — ${p.nome}</div>
     <div style="font-size:11.5px;color:var(--text2);margin-bottom:12px;line-height:1.5">${p.objetivo}</div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      ${p.frases.map((f,i)=>{
-        const sugestoes=rdConectivosSugeridos(f.categoriaId,4);
-        return`<div style="background:var(--bg2);border-radius:10px;padding:10px 12px;border-left:3px solid var(--accent)">
-          <div style="font-size:11px;font-weight:800;color:var(--text)">Frase ${i+1} <span style="font-weight:600;color:var(--muted)">— ${f.funcao}</span></div>
-          ${sugestoes.length?`<div class="rep-tags-flow" style="margin-top:6px">${sugestoes.map(s=>`<span class="rep-tag">${s}</span>`).join('')}</div>`:''}
-          <div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:6px">Ex.: "${f.exemplo}"</div>
-        </div>`;
-      }).join('')}
+      ${p.frases.map((f,fi)=>`<div style="background:var(--bg2);border-radius:10px;padding:10px 12px;border-left:3px solid var(--accent)">
+          <div style="font-size:11px;font-weight:800;color:var(--text)">Frase ${fi+1} <span style="font-weight:600;color:var(--muted)">— ${f.funcao}</span></div>
+          <div style="font-size:12px;color:var(--text2);margin-top:7px;line-height:1.8">${f.opcoes.map(o=>`<b style="color:var(--accent)">${o}</b>`).join('; ')}; <span style="display:inline-block;min-width:170px;border-bottom:1.5px solid var(--muted)">&nbsp;</span>.</div>
+        </div>`).join('')}
     </div>
   </div>`;
 }
@@ -9456,7 +9561,7 @@ REGRAS DE AVALIAÇÃO (padrão Cebraspe):
   - gramatica: concordância verbal/nominal, regência, sintaxe, uso de crase.
   - acentuacao: acentos gráficos e ortografia conforme o Acordo Ortográfico vigente.
   - pontuacao: vírgulas, ponto final, ponto e vírgula — uso correto dos sinais.
-  - adequacao: registro formal, sem coloquialismos, gírias ou marcas de oralidade.
+  - adequacao: registro formal, sem coloquialismos, gírias ou marcas de oralidade — atenção especial a: excesso de gerúndio (ex: "perpetuando" deveria ser "isso perpetua"), uso de 1ª pessoa do plural ("nós", "nosso") e expressões coloquiais (ex: "desde cedo" deveria ser "desde a tenra idade").
 - erros: liste cada desvio encontrado com o trecho exato, o "tipo" (deve ser exatamente um destes valores: coesao, clareza, gramatica, acentuacao, pontuacao, adequacao) e uma sugestão de correção.
 - pontosFortes: o que o texto cobriu bem.
 - pontosFaltantes: o que faltou ou foi abordado de forma insuficiente.
