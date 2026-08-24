@@ -461,10 +461,18 @@ nav{
 .rd-criterio-comentario{font-size:10px;color:var(--muted);line-height:1.4;}
 
 /* ===== FOLHA DE REDAÇÃO SIMULADA (padrão Cebraspe, 30 linhas) ===== */
-.rd-folha-wrap{display:flex;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;background:var(--panel);transition:border-color .2s;}
+/* A largura da linha é fixada em "ch" (largura de 1 caractere na fonte monoespaçada),
+   não em % da tela — assim a quebra de linha não muda sozinha conforme o tamanho do
+   aparelho. Em telas estreitas, rola pro lado (overflow-x) em vez de espremer o texto,
+   que mudaria a contagem de linhas. O JS ajusta o width exato conforme o preset de
+   tamanho de letra escolhido (rdFolhaSetTamanhoLetra). */
+.rd-folha-wrap{display:flex;border:1.5px solid var(--border);border-radius:10px;overflow-x:auto;overflow-y:hidden;background:var(--panel);transition:border-color .2s;}
 .rd-folha-wrap:focus-within{border-color:var(--accent);}
-.rd-folha-gutter{flex-shrink:0;width:30px;background:var(--bg2);border-right:1px solid var(--border);font-size:10px;color:var(--muted);text-align:right;padding:12px 6px 12px 0;font-family:'Courier New',Courier,monospace;line-height:26px;overflow:hidden;height:468px;}
-.rd-textarea{width:100%;height:468px;border:none;padding:12px 14px;font-size:14px;font-family:'Courier New',Courier,monospace;line-height:26px;resize:none;outline:none;overflow-y:auto;background:repeating-linear-gradient(to bottom,transparent 0,transparent 25px,var(--border) 25px,var(--border) 26px);color:var(--text);}
+.rd-folha-gutter{flex-shrink:0;position:sticky;left:0;z-index:1;width:30px;background:var(--bg2);border-right:1px solid var(--border);font-size:10px;color:var(--muted);text-align:right;padding:12px 6px 12px 0;font-family:'Courier New',Courier,monospace;line-height:26px;overflow:hidden;height:468px;}
+.rd-textarea{flex-shrink:0;width:70ch;height:468px;border:none;padding:12px 14px;font-size:14px;font-family:'Courier New',Courier,monospace;line-height:26px;resize:none;outline:none;overflow-y:auto;background:repeating-linear-gradient(to bottom,transparent 0,transparent 25px,var(--border) 25px,var(--border) 26px);color:var(--text);}
+.rd-folha-letra{display:flex;gap:6px;margin-bottom:8px;}
+.rd-folha-letra button{padding:4px 11px;border-radius:99px;border:1px solid var(--border);background:var(--panel);color:var(--text2);font-size:10.5px;font-weight:700;cursor:pointer;}
+.rd-folha-letra button.active{background:var(--accent);color:#fff;border-color:var(--accent);}
 @media(max-width:600px){
   .rd-folha-gutter,.rd-textarea{height:416px;}
   .rd-folha-titulo-full{display:none;}
@@ -9319,29 +9327,35 @@ function rdToggleFeedback(id){
 // de verdade. A contagem de linhas usa o MESMO critério oficial da banca: só conta
 // como linha "cheia" quem tiver 3 palavras ou mais — texto que exceda 30 linhas não
 // seria corrigido na prova real, e o app avisa quando isso acontece.
+//
+// IMPORTANTE: não existe um número "oficial" de caracteres por linha da Cebraspe —
+// depende do tamanho da letra de cada pessoa. Por isso a largura da linha é calculada
+// em CARACTERES (não em pixels da tela), com um preset ajustável pra letra pequena/
+// média/grande — assim a simulação bate com a MESMA contagem em qualquer aparelho
+// (celular ou computador), calibrada pra sua letra, em vez de mudar sozinha conforme
+// o tamanho da tela.
 const RD_FOLHA_MAX_LINHAS=30;
 const RD_FOLHA_LINE_HEIGHT=26; // precisa bater com line-height do CSS .rd-textarea/.rd-folha-gutter
-let rdFolhaCanvas=null;
-function rdFolhaMedirTexto(texto,font){
-  if(!rdFolhaCanvas)rdFolhaCanvas=document.createElement('canvas');
-  const ctx=rdFolhaCanvas.getContext('2d');
-  ctx.font=font;
-  return ctx.measureText(texto).width;
+const RD_FOLHA_LETRA_PRESETS={pequena:{label:'Pequena',chars:90},media:{label:'Média',chars:70},grande:{label:'Grande',chars:55}};
+
+function rdFolhaCharsPorLinha(){
+  const preset=RD_FOLHA_LETRA_PRESETS[db.rdTamanhoLetra]?db.rdTamanhoLetra:'media';
+  return RD_FOLHA_LETRA_PRESETS[preset].chars;
 }
-// Quebra o texto em linhas visuais simulando o word-wrap real do textarea (mesma
-// fonte e mesma largura útil), pra que a contagem bata com o que a pessoa está vendo.
-function rdFolhaCalcularLinhas(textarea){
-  const cs=getComputedStyle(textarea);
-  const largura=textarea.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);
-  const font=`${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+// Quebra o texto em linhas por CONTAGEM DE CARACTERES (largura fixa, calibrada pelo
+// preset de tamanho de letra) — a mesma largura vira também a largura real do textarea
+// (via CSS "ch", que é o tamanho de 1 caractere na fonte monoespaçada), então a quebra
+// visual do navegador fica igual à contagem.
+function rdFolhaCalcularLinhas(texto,charsPorLinha){
+  const largura=charsPorLinha||rdFolhaCharsPorLinha();
   const linhas=[];
-  (textarea.value||'').split('\n').forEach(paragrafo=>{
+  (texto||'').split('\n').forEach(paragrafo=>{
     if(!paragrafo.trim()){linhas.push([]);return;}
     const palavras=paragrafo.split(' ');
     let atual=[];
     palavras.forEach(palavra=>{
       const teste=[...atual,palavra].join(' ');
-      if(atual.length&&rdFolhaMedirTexto(teste,font)>largura){
+      if(atual.length&&teste.length>largura){
         linhas.push(atual);
         atual=[palavra];
       }else{
@@ -9370,10 +9384,21 @@ function rdFolhaSyncScroll(){
   const gutter=document.getElementById('rd-folha-gutter');
   if(textarea&&gutter)gutter.scrollTop=textarea.scrollTop;
 }
+function rdFolhaSetTamanhoLetra(tam){
+  if(!RD_FOLHA_LETRA_PRESETS[tam])return;
+  db.rdTamanhoLetra=tam;
+  saveDB();
+  const textarea=document.getElementById('rd-inp-texto');
+  if(textarea)textarea.style.width=rdFolhaCharsPorLinha()+'ch';
+  document.querySelectorAll('#rd-folha-letra button').forEach(b=>b.classList.toggle('active',b.dataset.tam===tam));
+  rdFolhaUpdate();
+}
 function rdFolhaUpdate(){
   const textarea=document.getElementById('rd-inp-texto');
   if(!textarea)return;
-  const linhas=rdFolhaCalcularLinhas(textarea);
+  const charsPorLinha=rdFolhaCharsPorLinha();
+  textarea.style.width=charsPorLinha+'ch';
+  const linhas=rdFolhaCalcularLinhas(textarea.value,charsPorLinha);
   const linhasVisuais=linhas.length;
   const linhasValidas=linhas.filter(l=>l.length>=3).length; // regra oficial: só conta com 3+ palavras
   const excedeu=linhasVisuais>RD_FOLHA_MAX_LINHAS;
@@ -9450,6 +9475,11 @@ function rdOpenForm(id=null){
         <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase"><span class="rd-folha-titulo-full">Folha de redação simulada (padrão Cebraspe, 30 linhas)</span><span class="rd-folha-titulo-short">Folha simulada (Cebraspe)</span></div>
         <div id="rd-folha-contador" style="font-size:11px;font-weight:800;color:var(--muted)">0/${RD_FOLHA_MAX_LINHAS} linhas</div>
       </div>
+      <div class="rd-folha-letra" id="rd-folha-letra">
+        <span style="font-size:10px;color:var(--muted);align-self:center;margin-right:2px">Sua letra:</span>
+        ${Object.entries(RD_FOLHA_LETRA_PRESETS).map(([k,p])=>`<button class="${((db.rdTamanhoLetra||'media')===k)?'active':''}" data-tam="${k}" onclick="rdFolhaSetTamanhoLetra('${k}')">${p.label}</button>`).join('')}
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;line-height:1.5">Não existe um nº oficial de caracteres por linha — depende da sua letra. Ajuste acima até bater com o que você escreve à mão numa folha real.</div>
       <div class="rd-folha-wrap">
         <div class="rd-folha-gutter" id="rd-folha-gutter"></div>
         <textarea class="rd-textarea" id="rd-inp-texto" placeholder="Escreva sua redação aqui, como se fosse na folha da prova..." oninput="rdFolhaUpdate()">${r?.texto||''}</textarea>
