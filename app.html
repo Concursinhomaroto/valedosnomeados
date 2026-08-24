@@ -481,6 +481,15 @@ nav{
 @media(max-width:600px){
   .rd-folha-titulo-short{display:inline;}
 }
+/* Esqueleto de redação ao lado da folha — ocupa o espaço vazio à direita em
+   telas largas e some pra baixo (empilhado) em telas estreitas. */
+.rd-folha-row{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;}
+.rd-folha-col{flex-shrink:0;}
+.rd-esqueleto-col{flex:1 1 260px;min-width:260px;}
+.rd-esqueleto-mini{background:var(--bg2);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;height:468px;overflow-y:auto;}
+@media(max-width:600px){
+  .rd-esqueleto-mini{height:auto;max-height:320px;}
+}
 
 /* ===== GUIA DE CONECTIVOS ===== */
 .rd-conectivos-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
@@ -9065,6 +9074,46 @@ function rdCopiarEsqueleto(){
   });
 }
 
+// Painel compacto do esqueleto, exibido ao lado da folha de redação (dentro do
+// formulário de nova/editar redação) — reaproveita RD_ESTRUTURA_GENEROS pra não
+// deixar aquele espaço vazio do lado da folha e dar acesso rápido ao modelo
+// enquanto o aluno escreve, sem precisar sair pra aba de Conectivos.
+function rdEsqueletoMiniHTML(){
+  const g=RD_ESTRUTURA_GENEROS[rdEstruturaGenero];
+  return`
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+      <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">📐 Esqueleto</div>
+      <button class="btn btn-sm" style="padding:3px 9px;font-size:10px" onclick="rdInserirEsqueletoNoRascunho()"><i class="fa fa-file-import"></i> Inserir no rascunho</button>
+    </div>
+    <div class="rd-conectivos-tabs" id="rd-genero-tabs-mini" style="margin-bottom:9px;gap:5px">
+      ${Object.keys(RD_ESTRUTURA_GENEROS).map(k=>`<button style="padding:4px 9px;font-size:10px" class="${rdEstruturaGenero===k?'active':''}" data-genero="${k}" onclick="rdSetEstruturaGeneroForm('${k}')">${RD_ESTRUTURA_GENEROS[k].label}</button>`).join('')}
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-bottom:10px;line-height:1.5"><i class="fa fa-circle-info"></i> ${g.quando}</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${g.paragrafos.map((p,i)=>`
+        <div style="border-left:3px solid var(--accent);padding-left:9px">
+          <div style="font-size:11.5px;font-weight:900;color:var(--accent);margin-bottom:4px">Parágrafo ${i+1} — ${p.nome}</div>
+          ${p.frases.map(f=>`<div style="font-size:10.5px;color:var(--text2);line-height:1.6;margin-bottom:3px"><b style="color:var(--text)">${f.funcao}:</b> ${f.opcoes.join('; ')}...</div>`).join('')}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+function rdSetEstruturaGeneroForm(k){
+  if(!RD_ESTRUTURA_GENEROS[k])return;
+  rdEstruturaGenero=k;
+  const el=document.getElementById('rd-esqueleto-mini');
+  if(el)el.innerHTML=rdEsqueletoMiniHTML();
+}
+function rdInserirEsqueletoNoRascunho(){
+  const textarea=document.getElementById('rd-inp-texto');
+  if(!textarea)return;
+  if(textarea.value.trim()&&!confirm('Isso vai substituir o texto atual do rascunho pelo esqueleto. Continuar?'))return;
+  textarea.value=rdEsqueletoTexto(rdEstruturaGenero);
+  rdFolhaUpdate();
+  toast('✅ Esqueleto inserido — agora é só preencher as lacunas.','var(--green)');
+}
+
 function rdSecaoLabel(s){return{introducao:'Introdução',desenvolvimento:'Desenvolvimento',conclusao:'Conclusão'}[s]||s;}
 function rdSecaoColor(s){return{introducao:'#06b6d4',desenvolvimento:'#a78bfa',conclusao:'#16a34a'}[s]||'var(--accent)';}
 
@@ -9480,11 +9529,18 @@ function rdOpenForm(id=null){
         ${Object.entries(RD_FOLHA_LETRA_PRESETS).map(([k,p])=>`<button class="${((db.rdTamanhoLetra||'media')===k)?'active':''}" data-tam="${k}" onclick="rdFolhaSetTamanhoLetra('${k}')">${p.label}</button>`).join('')}
       </div>
       <div style="font-size:10px;color:var(--muted);margin-bottom:6px;line-height:1.5">Não existe um nº oficial de caracteres por linha — depende da sua letra. Ajuste acima até bater com o que você escreve à mão numa folha real.</div>
-      <div class="rd-folha-wrap">
-        <div class="rd-folha-gutter" id="rd-folha-gutter"></div>
-        <textarea class="rd-textarea" id="rd-inp-texto" placeholder="Escreva sua redação aqui, como se fosse na folha da prova..." oninput="rdFolhaUpdate()">${r?.texto||''}</textarea>
+      <div class="rd-folha-row">
+        <div class="rd-folha-col">
+          <div class="rd-folha-wrap">
+            <div class="rd-folha-gutter" id="rd-folha-gutter"></div>
+            <textarea class="rd-textarea" id="rd-inp-texto" placeholder="Escreva sua redação aqui, como se fosse na folha da prova..." oninput="rdFolhaUpdate()">${r?.texto||''}</textarea>
+          </div>
+          <div id="rd-folha-aviso" style="font-size:10.5px;margin-top:5px;color:var(--muted)"></div>
+        </div>
+        <div class="rd-esqueleto-col">
+          <div class="rd-esqueleto-mini" id="rd-esqueleto-mini">${rdEsqueletoMiniHTML()}</div>
+        </div>
       </div>
-      <div id="rd-folha-aviso" style="font-size:10.5px;margin-top:5px;color:var(--muted)"></div>
 
       <button class="btn btn-sm" style="background:rgba(108,71,255,0.08);color:var(--accent);border:1px solid var(--border);margin-top:10px" onclick="rdCorrigirComIA()" id="rd-ai-btn"><i class="fa fa-wand-magic-sparkles"></i> Corrigir com IA</button>
       <div id="rd-ai-feedback-wrap" style="margin-top:10px">${rdAiFeedbackHTML(rdPendingAiFeedback)}</div>
