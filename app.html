@@ -794,7 +794,8 @@ nav{
 
 /* Repertório especial */
 .rep-secao-rep{grid-column:1/-1;border-right:none;border-bottom:none;}
-.rep-tag{display:inline-block;background:rgba(108,71,255,0.08);color:var(--accent);border:1px solid rgba(108,71,255,0.2);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;margin:3px 3px 3px 0;cursor:default;}
+.rep-tags-flow{display:flex;flex-wrap:wrap;gap:6px;}
+.rep-tag{display:inline-block;background:rgba(108,71,255,0.08);color:var(--accent);border:1px solid rgba(108,71,255,0.2);border-radius:20px;padding:3px 9px;font-size:10.5px;font-weight:700;margin:0;cursor:default;white-space:nowrap;}
 .rep-tag.rep-tag-lei{background:rgba(22,163,74,0.08);color:var(--green);border-color:rgba(22,163,74,0.2);}
 .rep-tag.rep-tag-autor{background:rgba(234,88,12,0.08);color:var(--orange);border-color:rgba(234,88,12,0.2);}
 .rep-tag.rep-tag-dado{background:rgba(6,182,212,0.08);color:var(--cyan);border-color:rgba(6,182,212,0.2);}
@@ -8204,14 +8205,14 @@ const SECOES=[
   {id:'panorama',icon:'🌐',title:'Panorama Atual',color:'#06b6d4',placeholder:'Contexto atual no Brasil e no mundo. Dados recentes, situação presente, números relevantes...'},
   {id:'causas',icon:'⚠️',title:'Causas e Desafios',color:'#f59e0b',placeholder:'Raízes históricas, fatores estruturais, desafios principais que perpetuam o problema...'},
   {id:'consequencias',icon:'💥',title:'Consequências',color:'#ef4444',placeholder:'Impactos sociais, econômicos, políticos e humanos. O que acontece se nada for feito...'},
-  {id:'aspectosPositivos',icon:'➕',title:'Aspectos Positivos',color:'#22c55e',placeholder:'2 pontos positivos ou avanços relacionados ao tema...'},
-  {id:'aspectosNegativos',icon:'➖',title:'Aspectos Negativos',color:'#dc2626',placeholder:'2 pontos negativos ou riscos relacionados ao tema...'},
-  {id:'comparacao',icon:'⚖️',title:'Comparação',color:'#0ea5e9',placeholder:'2 comparações (outro país, outra época, outro contexto) que ajudem a contextualizar...'},
-  {id:'estatistica',icon:'📊',title:'Estatística',color:'#a855f7',placeholder:'2 dados numéricos reais e citáveis, com a fonte (ex: IBGE, 2022)...'},
-  {id:'solucoes',icon:'💡',title:'Possíveis Soluções',color:'#eab308',placeholder:'2 propostas de intervenção, de perspectivas diferentes (poder público / sociedade civil)...'},
   {id:'resolucoes',icon:'✅',title:'Resoluções e Políticas',color:'#16a34a',placeholder:'Políticas públicas existentes, leis, iniciativas de sucesso, o que já vem sendo feito...'},
-  {id:'exemplosAssociados',icon:'🧩',title:'Exemplos Associados',color:'#f97316',placeholder:'1 exemplo real positivo e 1 exemplo real negativo associados ao tema...'},
-  {id:'argumentoAutoridade',icon:'🎓',title:'Argumento de Autoridade',color:'#6366f1',placeholder:'2 menções a especialistas, instituições ou pensadores que sustentem argumentos sobre o tema...'},
+  {id:'aspectosPositivos',icon:'➕',title:'Aspectos Positivos',color:'#22c55e',placeholder:'4 pontos positivos ou avanços relacionados ao tema...'},
+  {id:'aspectosNegativos',icon:'➖',title:'Aspectos Negativos',color:'#dc2626',placeholder:'4 pontos negativos ou riscos relacionados ao tema...'},
+  {id:'comparacao',icon:'⚖️',title:'Comparação',color:'#0ea5e9',placeholder:'4 comparações (outro país, outra época, outro contexto) que ajudem a contextualizar...'},
+  {id:'estatistica',icon:'📊',title:'Estatística',color:'#a855f7',placeholder:'4 dados numéricos reais e citáveis, com a fonte (ex: IBGE, 2022)...'},
+  {id:'solucoes',icon:'💡',title:'Possíveis Soluções',color:'#eab308',placeholder:'4 propostas de intervenção, de perspectivas diferentes (poder público / sociedade civil)...'},
+  {id:'exemplosAssociados',icon:'🧩',title:'Exemplos Associados',color:'#f97316',placeholder:'2 exemplos reais positivos e 2 exemplos reais negativos associados ao tema...'},
+  {id:'argumentoAutoridade',icon:'🎓',title:'Argumento de Autoridade',color:'#6366f1',placeholder:'4 menções a especialistas, instituições ou pensadores que sustentem argumentos sobre o tema...'},
   {id:'repertorio',icon:'📚',title:'Repertório',color:'#8b5cf6',placeholder:'Artigos, leis, autores, dados estatísticos, conceitos técnicos, alusões históricas e literárias...',full:true},
 ];
 
@@ -8338,13 +8339,17 @@ function repRenderMain(){
 
 function repFormatRepertorio(texto,secaoId){
   if(secaoId!=='repertorio')return texto.replace(/\n/g,'<br>');
-  // Formatar tags especiais no repertório
-  return texto
+  // Formatar tags especiais no repertório como chips lado a lado (em vez de um por
+  // linha) — remove marcadores de lista ("- ") e achata quebras de linha, já que os
+  // próprios chips se bastam visualmente e fluem por conta do flex-wrap do container.
+  const tagged=texto
     .replace(/\[lei\](.*?)\[\/lei\]/gi,'<span class="rep-tag rep-tag-lei">⚖️ $1</span>')
     .replace(/\[autor\](.*?)\[\/autor\]/gi,'<span class="rep-tag rep-tag-autor">✍️ $1</span>')
     .replace(/\[dado\](.*?)\[\/dado\]/gi,'<span class="rep-tag rep-tag-dado">📊 $1</span>')
     .replace(/\[conceito\](.*?)\[\/conceito\]/gi,'<span class="rep-tag rep-tag-conceito">💡 $1</span>')
-    .replace(/\n/g,'<br>');
+    .replace(/^[ \t]*-[ \t]*/gm,'')
+    .replace(/\n+/g,' ');
+  return `<div class="rep-tags-flow">${tagged}</div>`;
 }
 
 function repToggleEdit(){
@@ -8395,20 +8400,20 @@ Preencha cada campo do JSON abaixo. Seja específico e factual — cite leis, da
 
 CAMPOS:
 - panorama: contexto atual no Brasil e no mundo, com dados/números recentes (2 a 4 linhas).
-- causas: 2 causas/raízes estruturais do problema/tema.
-- consequencias: 2 impactos/consequências (sociais, econômicos, humanos).
-- aspectosPositivos: 2 pontos positivos ou avanços relacionados ao tema.
-- aspectosNegativos: 2 pontos negativos ou riscos relacionados ao tema.
-- comparacao: 2 comparações (outro país, outra época ou outro contexto) que ajudem a contextualizar o tema.
-- estatistica: 2 dados estatísticos reais e citáveis, com a fonte entre parênteses (ex: "- 40 milhões de brasileiros sem acesso à internet (IBGE, 2022)").
-- solucoes: 2 possíveis soluções/propostas de intervenção, de perspectivas DIFERENTES entre si (ex: uma pelo poder público, outra pela sociedade civil/iniciativa privada/indivíduo).
+- causas: 4 causas/raízes estruturais do problema/tema.
+- consequencias: 4 impactos/consequências (sociais, econômicos, humanos).
 - resolucoes: políticas públicas, leis ou programas reais já existentes sobre o tema.
-- exemplosAssociados: 1 exemplo real positivo e 1 exemplo real negativo associados ao tema (um caso, campanha, cidade ou país).
-- argumentoAutoridade: 2 menções a especialistas, instituições, pensadores ou obras que sustentem argumentos sobre o tema (nome + o que defendem/dizem, resumido).
+- aspectosPositivos: 4 pontos positivos ou avanços relacionados ao tema.
+- aspectosNegativos: 4 pontos negativos ou riscos relacionados ao tema.
+- comparacao: 4 comparações (outro país, outra época ou outro contexto) que ajudem a contextualizar o tema.
+- estatistica: 4 dados estatísticos reais e citáveis, com a fonte entre parênteses (ex: "- 40 milhões de brasileiros sem acesso à internet (IBGE, 2022)").
+- solucoes: 4 possíveis soluções/propostas de intervenção, de perspectivas DIFERENTES entre si (ex: poder público, sociedade civil, iniciativa privada, indivíduo).
+- exemplosAssociados: 2 exemplos reais positivos e 2 exemplos reais negativos associados ao tema (casos, campanhas, cidades ou países).
+- argumentoAutoridade: 4 menções a especialistas, instituições, pensadores ou obras que sustentem argumentos sobre o tema (nome + o que defendem/dizem, resumido).
 - repertorio: referências soltas úteis (leis, autores, dados, conceitos), cada uma marcada com a tag correspondente: [lei]...[/lei], [autor]...[/autor], [dado]...[/dado], [conceito]...[/conceito]. Pelo menos 2 de cada tipo que você tiver certeza que existe.
 
 RESPONDA APENAS COM JSON, sem texto antes ou depois, sem markdown, no formato exato:
-{"panorama":"...","causas":"...","consequencias":"...","aspectosPositivos":"...","aspectosNegativos":"...","comparacao":"...","estatistica":"...","solucoes":"...","resolucoes":"...","exemplosAssociados":"...","argumentoAutoridade":"...","repertorio":"..."}`;
+{"panorama":"...","causas":"...","consequencias":"...","resolucoes":"...","aspectosPositivos":"...","aspectosNegativos":"...","comparacao":"...","estatistica":"...","solucoes":"...","exemplosAssociados":"...","argumentoAutoridade":"...","repertorio":"..."}`;
 }
 
 async function repGerarComIA(id){
