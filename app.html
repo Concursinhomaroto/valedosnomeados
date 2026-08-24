@@ -8200,6 +8200,7 @@ function renderEditais(){
 let repSelectedTema=null;
 let repEditMode=false;
 let repGerandoIA=false;
+let repGerandoIAStep=0;
 
 const SECOES=[
   {id:'panorama',icon:'🌐',title:'Panorama Atual',color:'#06b6d4',placeholder:'Contexto atual no Brasil e no mundo. Dados recentes, situação presente, números relevantes...'},
@@ -8315,8 +8316,8 @@ function repRenderMain(){
       ${repGerandoIA?`
       <div style="padding:50px 20px;text-align:center;color:var(--muted);border-top:1px solid var(--border)">
         <i class="fa fa-spinner fa-spin" style="font-size:22px;margin-bottom:10px;display:block"></i>
-        IA pesquisando e organizando o repertório sobre "${t.nome}"...
-        <div style="font-size:11px;margin-top:6px;opacity:.7">Isso pode levar até 1 minuto.</div>
+        IA pesquisando e organizando o repertório sobre "${t.nome}"...${repGerandoIAStep?` (parte ${repGerandoIAStep}/2)`:''}
+        <div style="font-size:11px;margin-top:6px;opacity:.7">Isso pode levar até 1 minuto por parte.</div>
       </div>`:`
       <!-- Seções -->
       <div class="rep-secoes">
@@ -8388,32 +8389,54 @@ function repVoltar(){
 }
 
 // ---- GERAR COM IA ----
-function repPromptGerarTema(nomeTema,nomeEixo){
+// Instrução de cada campo, reaproveitada nos dois lotes abaixo.
+const REP_CAMPO_INSTRUCOES={
+  panorama:'contexto atual no Brasil e no mundo, com dados/números recentes (2 a 4 linhas).',
+  causas:'4 causas/raízes estruturais do problema/tema.',
+  consequencias:'4 impactos/consequências (sociais, econômicos, humanos).',
+  resolucoes:'políticas públicas, leis ou programas reais já existentes sobre o tema.',
+  estatistica:'4 dados estatísticos reais e citáveis, com a fonte entre parênteses (ex: "- 40 milhões de brasileiros sem acesso à internet (IBGE, 2022)").',
+  repertorio:'referências soltas úteis (leis, autores, dados, conceitos), cada uma marcada com a tag correspondente: [lei]...[/lei], [autor]...[/autor], [dado]...[/dado], [conceito]...[/conceito]. Pelo menos 2 de cada tipo que você tiver certeza que existe.',
+  aspectosPositivos:'4 pontos positivos ou avanços relacionados ao tema.',
+  aspectosNegativos:'4 pontos negativos ou riscos relacionados ao tema.',
+  comparacao:'4 comparações (outro país, outra época ou outro contexto) que ajudem a contextualizar o tema.',
+  solucoes:'4 possíveis soluções/propostas de intervenção, de perspectivas DIFERENTES entre si (ex: poder público, sociedade civil, iniciativa privada, indivíduo).',
+  exemplosAssociados:'2 exemplos reais positivos e 2 exemplos reais negativos associados ao tema (casos, campanhas, cidades ou países).',
+  argumentoAutoridade:'4 menções a especialistas, instituições, pensadores ou obras que sustentem argumentos sobre o tema (nome + o que defendem/dizem, resumido).',
+};
+// Gerar tudo numa chamada só sobrecarregava o modelo (12 campos, até 4 pontos cada,
+// mais busca na internet) e o resultado saía com palavras inventadas e assuntos
+// misturados. Dividido em 2 lotes menores, cada chamada tem menos coisa pra acertar
+// de uma vez — mesma lógica já usada no Resumo por IA pra materiais grandes.
+const REP_IA_BATCHES=[
+  ['panorama','causas','consequencias','resolucoes','estatistica','repertorio'],
+  ['aspectosPositivos','aspectosNegativos','comparacao','solucoes','exemplosAssociados','argumentoAutoridade'],
+];
+
+function repPromptGerarBatch(nomeTema,nomeEixo,campoIds){
+  const camposTxt=campoIds.map(id=>`- ${id}: ${REP_CAMPO_INSTRUCOES[id]}`).join('\n');
+  const schema='{'+campoIds.map(id=>`"${id}":"..."`).join(',')+'}';
   return`Você é um professor especialista em preparar candidatos para concursos públicos brasileiros e redação dissertativa-argumentativa, montando material de repertório sociocultural sobre um tema.
 
-TAREFA: Pesquise na internet e monte um banco de repertório completo e ATUALIZADO sobre o tema abaixo, pronto pra ser usado numa redação ou resposta discursiva de concurso.
+TAREFA: Pesquise na internet e monte uma PARTE de um banco de repertório completo e ATUALIZADO sobre o tema abaixo, pronto pra ser usado numa redação ou resposta discursiva de concurso.
 
 EIXO TEMÁTICO: ${nomeEixo||'(não informado)'}
 TEMA: ${nomeTema}
 
-Preencha cada campo do JSON abaixo. Seja específico e factual — cite leis, dados, nomes e instituições reais que você souber ou encontrar na pesquisa; NUNCA invente lei, número, autor ou estatística sem ter certeza de que existe (prefira menos itens, mas corretos, a mais itens arriscando erro). Cada campo é uma string com quebras de linha (\\n) separando os pontos, no formato "- texto do ponto".
+REGRAS OBRIGATÓRIAS:
+- Seja específico e factual — cite leis, dados, nomes e instituições reais que você souber ou encontrar na pesquisa.
+- NUNCA invente lei, número, autor, estatística ou palavra que não exista em português. Se não tiver certeza de um dado, é preferível devolver menos itens (até 2, em vez de 4) do que arriscar inventar algo incorreto.
+- Nunca misture dois assuntos diferentes dentro do mesmo ponto — cada item deve conter uma ideia só, coerente e completa do início ao fim.
+- Não repita a mesma palavra ou expressão várias vezes seguidas.
+- Não inclua marcadores de citação como [1], [2] no meio do texto.
+- Escreva em português do Brasil claro, correto e natural — releia mentalmente cada frase antes de responder e descarte qualquer palavra que você não tenha certeza absoluta de que existe.
+- Cada campo é uma string com quebras de linha (\\n) separando os pontos, no formato "- texto do ponto".
 
-CAMPOS:
-- panorama: contexto atual no Brasil e no mundo, com dados/números recentes (2 a 4 linhas).
-- causas: 4 causas/raízes estruturais do problema/tema.
-- consequencias: 4 impactos/consequências (sociais, econômicos, humanos).
-- resolucoes: políticas públicas, leis ou programas reais já existentes sobre o tema.
-- aspectosPositivos: 4 pontos positivos ou avanços relacionados ao tema.
-- aspectosNegativos: 4 pontos negativos ou riscos relacionados ao tema.
-- comparacao: 4 comparações (outro país, outra época ou outro contexto) que ajudem a contextualizar o tema.
-- estatistica: 4 dados estatísticos reais e citáveis, com a fonte entre parênteses (ex: "- 40 milhões de brasileiros sem acesso à internet (IBGE, 2022)").
-- solucoes: 4 possíveis soluções/propostas de intervenção, de perspectivas DIFERENTES entre si (ex: poder público, sociedade civil, iniciativa privada, indivíduo).
-- exemplosAssociados: 2 exemplos reais positivos e 2 exemplos reais negativos associados ao tema (casos, campanhas, cidades ou países).
-- argumentoAutoridade: 4 menções a especialistas, instituições, pensadores ou obras que sustentem argumentos sobre o tema (nome + o que defendem/dizem, resumido).
-- repertorio: referências soltas úteis (leis, autores, dados, conceitos), cada uma marcada com a tag correspondente: [lei]...[/lei], [autor]...[/autor], [dado]...[/dado], [conceito]...[/conceito]. Pelo menos 2 de cada tipo que você tiver certeza que existe.
+CAMPOS DESSA PARTE:
+${camposTxt}
 
 RESPONDA APENAS COM JSON, sem texto antes ou depois, sem markdown, no formato exato:
-{"panorama":"...","causas":"...","consequencias":"...","resolucoes":"...","aspectosPositivos":"...","aspectosNegativos":"...","comparacao":"...","estatistica":"...","solucoes":"...","exemplosAssociados":"...","argumentoAutoridade":"...","repertorio":"..."}`;
+${schema}`;
 }
 
 async function repGerarComIA(id){
@@ -8431,26 +8454,37 @@ async function repGerarComIA(id){
   if(jaTemConteudo&&!confirm('Isso vai substituir o conteúdo já preenchido nas seções deste tema. Continuar?'))return;
 
   const eixo=(db.repertorio.eixos||[]).find(e=>e.id===t.eixoId);
-  repGerandoIA=true;
+  repGerandoIA=true;repGerandoIAStep=0;
   repSelectedTema=t;repEditMode=false;
   repRenderMain();
 
   try{
-    const{raw,grounded}=await callGeminiGenerateSearch(apiKey,repPromptGerarTema(t.nome,eixo?.nome||''));
-    const data=extractAIJson(raw);
-    SECOES.forEach(s=>{
-      if(typeof data[s.id]==='string'&&data[s.id].trim())t[s.id]=data[s.id].trim();
-    });
+    let algumGrounded=false,todosGrounded=true;
+    for(let i=0;i<REP_IA_BATCHES.length;i++){
+      repGerandoIAStep=i+1;
+      repRenderMain();
+      const campos=REP_IA_BATCHES[i];
+      const{raw,grounded}=await callGeminiGenerateSearch(apiKey,repPromptGerarBatch(t.nome,eixo?.nome||'',campos));
+      const data=extractAIJson(raw);
+      campos.forEach(cid=>{
+        if(typeof data[cid]==='string'&&data[cid].trim())t[cid]=data[cid].trim();
+      });
+      algumGrounded=algumGrounded||grounded;
+      todosGrounded=todosGrounded&&grounded;
+    }
     t.iaGerado=true;
     if(!db.temasFilledIds)db.temasFilledIds=[];
     if(!db.temasFilledIds.includes(t.id))db.temasFilledIds.push(t.id);
     markDailyActivity(todayStr(),null,'repertorio');
     saveDB();
-    toast(grounded?'🌐 Repertório gerado com pesquisa na internet! Revise antes de usar.':'🤖 Repertório gerado! Revise antes de usar (busca na internet indisponível agora).','var(--green)');
+    toast(todosGrounded
+      ?'🌐 Repertório gerado com pesquisa na internet! Revise antes de usar.'
+      :(algumGrounded?'🌐🤖 Parte gerada com pesquisa, parte sem — revise antes de usar.':'🤖 Repertório gerado! Revise antes de usar (busca na internet indisponível agora).')
+      ,'var(--green)');
   }catch(e){
     toast('❌ '+(e.message||'Erro ao gerar com IA'),'var(--red)');
   }finally{
-    repGerandoIA=false;
+    repGerandoIA=false;repGerandoIAStep=0;
     repRenderSidebar();repRenderMain();
   }
 }
@@ -10355,13 +10389,22 @@ async function tryGeminiModel(apiKey,model,prompt,opts){
       return{ok:false,reason:`${response.status} ${detail}`};
     }
     const data=await response.json();
-    const raw=(data?.candidates?.[0]?.content?.parts?.[0]?.text||'').trim();
+    // Concatena TODAS as partes de texto, não só parts[0] — com tools ativos (ex: busca)
+    // a resposta pode vir fatiada em mais de uma parte, e pegar só a primeira arriscava
+    // devolver um trecho incompleto/fora de contexto em vez da resposta final inteira.
+    const parts=data?.candidates?.[0]?.content?.parts||[];
+    const raw=parts.map(p=>p.text||'').join('').trim();
     const finishReason=data?.candidates?.[0]?.finishReason;
     if(!raw)return{ok:false,reason:'sem texto na resposta'};
     // MAX_TOKENS = resposta cortada no meio (JSON incompleto) — melhor já avisar
     // aqui do que deixar o parse falhar silenciosamente mais na frente.
     if(finishReason==='MAX_TOKENS')return{ok:false,reason:'resposta cortada por exceder o limite de tokens'};
-    return{ok:true,raw};
+    // grounded só é true se o modelo REALMENTE usou a busca (groundingMetadata com
+    // consultas/trechos) — antes, qualquer resposta com useSearch=true virava "grounded"
+    // mesmo quando o modelo só respondia do conhecimento treinado, sem pesquisar de fato.
+    const gm=data?.candidates?.[0]?.groundingMetadata;
+    const grounded=!!(gm&&(((gm.groundingChunks||[]).length)||((gm.webSearchQueries||[]).length)));
+    return{ok:true,raw,grounded};
   }catch(e){
     return{ok:false,reason:e.message};
   }
@@ -10407,7 +10450,7 @@ async function callGeminiGenerateSearch(apiKey,prompt){
   const attempts=[];
   for(const model of GEMINI_MODEL_CANDIDATES){
     const r=await tryGeminiModel(apiKey,model,prompt,{useSearch:true});
-    if(r.ok)return{raw:r.raw,grounded:true};
+    if(r.ok)return{raw:r.raw,grounded:!!r.grounded};
     attempts.push(`${model} (${r.reason})`);
   }
   try{
