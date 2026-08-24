@@ -8795,6 +8795,7 @@ let rdAiCorrecting=false;
 let rdExpandedFeedback=new Set();
 let rdShowConectivos=false; // true = rd-main-content mostra o guia de conectivos em vez das redações do tópico
 let rdConectivosSecaoFiltro='todas';
+let rdConectivosModo='categorias'; // 'categorias' = lista por função | 'estrutura' = modelo de 4 parágrafos
 
 function rdInit(){if(!db.redacoes)db.redacoes={topics:{},textos:{}};}
 
@@ -8919,9 +8920,53 @@ const RD_CONECTIVOS=[
     itens:['Isto é','Ou seja','Vale ressaltar','Cumpre destacar','Convém salientar','De fato']},
   {id:'tempo',icon:'⏱️',label:'Tempo / Sequência',secoes:['desenvolvimento'],
     itens:['Em seguida','Posteriormente','Concomitantemente','Paralelamente','Atualmente','Por fim']},
+  {id:'finalidade',icon:'🎯',label:'Finalidade (propósito de uma ação)',secoes:['desenvolvimento','conclusao'],
+    itens:['A fim de que','Com o intuito de','Com o objetivo de','Para que','Com vistas a','Com a finalidade de'],
+    nota:'Essencial na proposta de intervenção da conclusão — é o "para quê" da ação proposta.'},
   {id:'conclusao',icon:'🏁',label:'Conclusão / Fechamento',secoes:['conclusao'],
     itens:['Portanto','Diante do exposto','Em suma','Dessa maneira','Conclui-se que','Fica evidente que','Torna-se necessário que','Logo','Em síntese','Desse modo','Assim sendo']},
 ];
+
+// Modelo de 4 parágrafos (padrão Cebraspe/ENEM): 1 introdução + 2 de desenvolvimento +
+// 1 conclusão, cada um com 1 a 4 frases — mapeando qual TIPO de conectivo entra em cada
+// frase. É um modelo padrão, mas adaptável: nem toda redação precisa das 4 frases em
+// todo parágrafo, e parágrafos com pedido específico da banca (itens a, b, c...) devem
+// seguir a estrutura que o enunciado pedir, não esse modelo genérico.
+const RD_ESTRUTURA_PARAGRAFOS=[
+  {numero:1,nome:'Introdução',objetivo:'Contextualizar o tema e apresentar a tese — o que você vai defender no texto.',
+    frases:[
+      {funcao:'Contextualizar o tema',categoriaId:'contextualizacao',exemplo:'Diante desse cenário, [tema] tornou-se pauta central no debate público brasileiro.'},
+      {funcao:'Desenvolver o contexto com um dado, fato ou marco histórico/legal',categoriaId:'explicacao',exemplo:'Isto é, [dado/fato que reforça a relevância do tema].'},
+      {funcao:'Apresentar a tese central (o que o texto vai defender)',categoriaId:null,exemplo:'Nesse sentido, é fundamental discutir [tese], considerando [ponto 1] e [ponto 2].'},
+      {funcao:'(opcional) Anunciar os dois eixos que o desenvolvimento vai tratar',categoriaId:null,exemplo:'Para tanto, serão analisados [fator 1] e [fator 2].'},
+    ]},
+  {numero:2,nome:'Desenvolvimento 1',objetivo:'Primeiro argumento — geralmente a causa ou fator central do problema.',
+    frases:[
+      {funcao:'Abrir o parágrafo retomando o tema',categoriaId:'abrir_paragrafo',exemplo:'Em primeira análise, [retoma o recorte do parágrafo].'},
+      {funcao:'Apresentar a causa/argumento',categoriaId:'causa',exemplo:'Isso porque [explicação da causa].'},
+      {funcao:'Mostrar a consequência ou trazer um exemplo/dado',categoriaId:'consequencia',exemplo:'Como resultado, [consequência do problema].'},
+      {funcao:'(opcional) Reforçar com um exemplo concreto',categoriaId:'exemplificacao',exemplo:'Por exemplo, [caso, dado ou situação real].'},
+    ]},
+  {numero:3,nome:'Desenvolvimento 2',objetivo:'Segundo argumento — outro fator do problema, ou um contraponto/agravante.',
+    frases:[
+      {funcao:'Abrir o parágrafo com continuidade',categoriaId:'abrir_paragrafo',exemplo:'Em segunda análise, [novo recorte do problema].'},
+      {funcao:'Apresentar o segundo argumento (pode contrastar com o parágrafo anterior)',categoriaId:'oposicao',exemplo:'Entretanto, [outro ângulo/agravante do problema].'},
+      {funcao:'Explicar ou justificar esse argumento',categoriaId:'causa',exemplo:'Isso se deve a [causa desse segundo fator].'},
+      {funcao:'(opcional) Consequência ou exemplo',categoriaId:'exemplificacao',exemplo:'Como se observa em [exemplo/dado que ilustra].'},
+    ]},
+  {numero:4,nome:'Conclusão',objetivo:'Retomar a tese e propor uma intervenção: agente + ação + modo/meio + finalidade + detalhamento.',
+    frases:[
+      {funcao:'Conectivo conclusivo + retomada da tese',categoriaId:'conclusao',exemplo:'Diante do exposto, fica evidente que [retoma a tese defendida].'},
+      {funcao:'Propor a ação: quem faz o quê',categoriaId:null,exemplo:'Para tanto, é imprescindível que [agente: Estado/Ministério/escolas/mídia] promova [ação].'},
+      {funcao:'Modo ou meio de execução',categoriaId:null,exemplo:'por meio de [mecanismo/programa/campanha concreto],'},
+      {funcao:'Finalidade + detalhamento da proposta',categoriaId:'finalidade',exemplo:'a fim de que [finalidade], garantindo assim [detalhamento/resultado esperado].'},
+    ]},
+];
+function rdConectivosSugeridos(categoriaId,n){
+  if(!categoriaId)return[];
+  return(RD_CONECTIVOS.find(c=>c.id===categoriaId)?.itens||[]).slice(0,n||4);
+}
+
 function rdSecaoLabel(s){return{introducao:'Introdução',desenvolvimento:'Desenvolvimento',conclusao:'Conclusão'}[s]||s;}
 function rdSecaoColor(s){return{introducao:'#06b6d4',desenvolvimento:'#a78bfa',conclusao:'#16a34a'}[s]||'var(--accent)';}
 
@@ -8934,6 +8979,22 @@ function rdRenderConectivos(){
         <div style="font-size:11px;color:var(--muted);margin-top:2px">Guia por função — cada conjunção no parágrafo certo (padrão ENEM/Cebraspe)</div>
       </div>
     </div>
+    <div class="rd-conectivos-tabs" style="margin-bottom:14px">
+      <button class="${rdConectivosModo==='categorias'?'active':''}" onclick="rdSetConectivosModo('categorias')"><i class="fa fa-list"></i> Por categoria</button>
+      <button class="${rdConectivosModo==='estrutura'?'active':''}" onclick="rdSetConectivosModo('estrutura')"><i class="fa fa-ruler-vertical"></i> Estrutura de 4 parágrafos</button>
+    </div>
+    <div id="rd-conectivos-corpo"></div>
+  `;
+  rdRenderConectivosCorpo();
+}
+function rdSetConectivosModo(m){
+  rdConectivosModo=m;
+  rdRenderConectivos();
+}
+function rdRenderConectivosCorpo(){
+  const el=document.getElementById('rd-conectivos-corpo');if(!el)return;
+  if(rdConectivosModo==='estrutura'){rdRenderEstrutura(el);return;}
+  el.innerHTML=`
     <input class="inp" id="rd-conectivos-busca" placeholder="🔍 Buscar (ex: causa, portanto, embora...)" oninput="rdRenderConectivosLista()" style="margin-bottom:12px">
     <div class="rd-conectivos-tabs" id="rd-conectivos-tabs">
       ${['todas','introducao','desenvolvimento','conclusao'].map(s=>`<button class="${rdConectivosSecaoFiltro===s?'active':''}" data-secao="${s}" onclick="rdSetConectivosSecao('${s}')">${s==='todas'?'Todas':rdSecaoLabel(s)}</button>`).join('')}
@@ -8946,6 +9007,28 @@ function rdSetConectivosSecao(s){
   rdConectivosSecaoFiltro=s;
   document.querySelectorAll('#rd-conectivos-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.secao===s));
   rdRenderConectivosLista();
+}
+function rdRenderEstrutura(el){
+  el.innerHTML=`
+    <div class="legis-disclaimer" style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:16px"><i class="fa fa-circle-info"></i> Modelo padrão pra até 30 linhas (Cebraspe): 1 introdução + 2 parágrafos de desenvolvimento + 1 conclusão, com 1 a 4 frases cada. É adaptável — se a banca pedir itens específicos (a, b, c...), siga a estrutura que o enunciado exigir.</div>
+    ${RD_ESTRUTURA_PARAGRAFOS.map(rdParagrafoCardHTML).join('')}
+  `;
+}
+function rdParagrafoCardHTML(p){
+  return`<div class="rd-conectivo-card" style="margin-bottom:16px">
+    <div style="font-size:14px;font-weight:900;color:var(--accent);margin-bottom:3px">Parágrafo ${p.numero} — ${p.nome}</div>
+    <div style="font-size:11.5px;color:var(--text2);margin-bottom:12px;line-height:1.5">${p.objetivo}</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${p.frases.map((f,i)=>{
+        const sugestoes=rdConectivosSugeridos(f.categoriaId,4);
+        return`<div style="background:var(--bg2);border-radius:10px;padding:10px 12px;border-left:3px solid var(--accent)">
+          <div style="font-size:11px;font-weight:800;color:var(--text)">Frase ${i+1} <span style="font-weight:600;color:var(--muted)">— ${f.funcao}</span></div>
+          ${sugestoes.length?`<div class="rep-tags-flow" style="margin-top:6px">${sugestoes.map(s=>`<span class="rep-tag">${s}</span>`).join('')}</div>`:''}
+          <div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:6px">Ex.: "${f.exemplo}"</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
 }
 function rdConectivoCardHTML(cat){
   const secaoBadges=cat.secoes.map(s=>`<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:99px;background:${rdSecaoColor(s)}15;color:${rdSecaoColor(s)};text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">${rdSecaoLabel(s)}</span>`).join(' ');
