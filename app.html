@@ -466,8 +466,19 @@ nav{
 .rd-folha-gutter{flex-shrink:0;width:30px;background:var(--bg2);border-right:1px solid var(--border);font-size:10px;color:var(--muted);text-align:right;padding:12px 6px 12px 0;font-family:'Courier New',Courier,monospace;line-height:26px;overflow:hidden;height:468px;}
 .rd-textarea{width:100%;height:468px;border:none;padding:12px 14px;font-size:14px;font-family:'Courier New',Courier,monospace;line-height:26px;resize:none;outline:none;overflow-y:auto;background:repeating-linear-gradient(to bottom,transparent 0,transparent 25px,var(--border) 25px,var(--border) 26px);color:var(--text);}
 @media(max-width:600px){
-  .rd-folha-gutter,.rd-textarea{height:338px;}
+  .rd-folha-gutter,.rd-textarea{height:416px;}
+  .rd-folha-titulo-full{display:none;}
 }
+.rd-folha-titulo-short{display:none;}
+@media(max-width:600px){
+  .rd-folha-titulo-short{display:inline;}
+}
+
+/* ===== GUIA DE CONECTIVOS ===== */
+.rd-conectivos-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.rd-conectivos-tabs button{padding:7px 14px;border-radius:99px;border:1px solid var(--border);background:var(--panel);color:var(--text2);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;}
+.rd-conectivos-tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.rd-conectivo-card{background:var(--panel);border:1.5px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:12px;}
 
 /* ===== RESUMO (IA a partir de arquivo) ===== */
 .resumo-badge-done{background:rgba(139,92,246,0.1);color:#8b5cf6;border:1.5px solid rgba(139,92,246,0.35);border-radius:8px;font-size:9px;padding:2px 8px;font-weight:900;cursor:pointer;transition:all 0.2s;}
@@ -1641,8 +1652,9 @@ nav{
       <div style="font-size:11px;font-weight:900;letter-spacing:1px;color:var(--accent);margin-bottom:12px;text-transform:uppercase">📝 Tópicos</div>
       <input class="inp" id="rd-search-topic" placeholder="🔍 Buscar tópico..." oninput="rdRenderTopics()" style="margin-bottom:10px;font-size:12px">
       <div id="rd-topics-list"></div>
-      <div style="margin-top:12px">
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">
         <button class="btn btn-primary" style="width:100%" onclick="rdOpenNewTopic()"><i class="fa fa-plus"></i> Novo Tópico</button>
+        <button class="btn" style="width:100%;font-size:11px;background:rgba(108,71,255,0.08);color:var(--accent);border:1px solid var(--border)" onclick="rdOpenConectivos()"><i class="fa fa-link"></i> Conectivos</button>
       </div>
     </div>
 
@@ -8781,6 +8793,8 @@ let rdExpandedTexts=new Set();
 let rdPendingAiFeedback=null; // feedback da IA carregado/gerado pro formulário aberto no momento
 let rdAiCorrecting=false;
 let rdExpandedFeedback=new Set();
+let rdShowConectivos=false; // true = rd-main-content mostra o guia de conectivos em vez das redações do tópico
+let rdConectivosSecaoFiltro='todas';
 
 function rdInit(){if(!db.redacoes)db.redacoes={topics:{},textos:{}};}
 
@@ -8813,7 +8827,7 @@ function rdRenderTopics(){
     const count=Object.values(db.redacoes.textos||{}).filter(r=>r.topicId===t.id).length;
     const aprovadas=Object.values(db.redacoes.textos||{}).filter(r=>r.topicId===t.id&&rdStatus(r.npd)==='aprovado').length;
     const borderColor=aprovadas>0?'var(--green)':count>0?'var(--accent)':'var(--border)';
-    return`<div class="rd-topic-item${rdSelectedTopic?.id===t.id?' active':''}${count===0?' rd-topic-empty':''}" style="border-left-color:${borderColor}" onclick="rdSelectTopic('${t.id}')">
+    return`<div class="rd-topic-item${rdSelectedTopic?.id===t.id&&!rdShowConectivos?' active':''}${count===0?' rd-topic-empty':''}" style="border-left-color:${borderColor}" onclick="rdSelectTopic('${t.id}')">
       <span class="rd-topic-icon">📝</span>
       <div style="flex:1;min-width:0">
         <div class="rd-topic-name">${t.name}</div>
@@ -8864,13 +8878,111 @@ function rdSelectTopic(id){
   rdInit();
   const t=db.redacoes.topics[id];
   if(!t)return;
-  rdSelectedTopic=t;rdEditingId=null;
+  rdSelectedTopic=t;rdEditingId=null;rdShowConectivos=false;
   rdRenderTopics();rdRenderMain();
+}
+
+function rdOpenConectivos(){
+  rdShowConectivos=true;
+  rdRenderTopics();rdRenderMain();
+}
+
+// ---- GUIA DE CONECTIVOS ----
+// Compilado com base em várias gramáticas e materiais de redação dissertativa-
+// argumentativa (padrão ENEM/Cebraspe), cruzando classificação tradicional com o
+// uso real mais comum. "secoes" indica em qual(is) parte(s) da redação o grupo
+// costuma ser usado — é o "lugar" de cada conjunção que a gente queria mapear.
+const RD_CONECTIVOS=[
+  {id:'contextualizacao',icon:'🎬',label:'Contextualização (abrir a introdução)',secoes:['introducao'],
+    itens:['Diante desse cenário','Nesse contexto','Na atualidade','Hodiernamente','Na contemporaneidade','Sob essa ótica','Tendo em vista','É inegável que','Torna-se relevante discorrer sobre']},
+  {id:'abrir_paragrafo',icon:'🧭',label:'Abrir um parágrafo / retomar o tema',secoes:['desenvolvimento'],
+    itens:['Em primeira análise','Primeiramente','Em um primeiro momento','Nesse sentido','Sob esse viés','Sob essa perspectiva','Com efeito','Nesse ínterim']},
+  {id:'adicao',icon:'➕',label:'Adição (somar ideias)',secoes:['desenvolvimento'],
+    itens:['Além disso','Ademais','Outrossim','Não só... mas também','Bem como','Do mesmo modo','Igualmente','Inclusive','Também','Da mesma forma']},
+  {id:'oposicao',icon:'⚖️',label:'Oposição / Contraste (adversativa)',secoes:['desenvolvimento'],
+    itens:['Entretanto','Contudo','Todavia','No entanto','Porém','Por outro lado','Em contrapartida'],
+    nota:'"Não obstante" é muito usado como adversativo na prática, mas gramaticalmente é concessivo — veja o grupo Concessão.'},
+  {id:'concessao',icon:'🔄',label:'Concessão (admitir um ponto contrário sem anular o argumento)',secoes:['desenvolvimento'],
+    itens:['Embora','Ainda que','Mesmo que','Conquanto','Apesar de','Por mais que','Se bem que','Não obstante']},
+  {id:'causa',icon:'🔥',label:'Causa',secoes:['desenvolvimento'],
+    itens:['Isso porque','Uma vez que','Visto que','Já que','Devido a','Em virtude de','Haja vista','Porquanto'],
+    nota:'"Posto que" é usado por muita gente como causal, mas na norma culta ele é concessivo (equivale a "embora") — evite usar como causa numa prova.'},
+  {id:'consequencia',icon:'➡️',label:'Consequência / Efeito',secoes:['desenvolvimento'],
+    itens:['Dessa forma','Sendo assim','Por conseguinte','Como resultado','Em decorrência disso','Consequentemente','De modo que','Assim']},
+  {id:'condicao',icon:'❔',label:'Condição / Hipótese',secoes:['desenvolvimento'],
+    itens:['Se','Caso','Desde que','Contanto que','A menos que','A não ser que']},
+  {id:'exemplificacao',icon:'📌',label:'Exemplificação',secoes:['desenvolvimento'],
+    itens:['Por exemplo','A exemplo disso','Como pode-se observar','A título de exemplo','Tal como','Como ilustra']},
+  {id:'comparacao',icon:'🔍',label:'Comparação',secoes:['desenvolvimento'],
+    itens:['Assim como','Tal qual','Da mesma maneira que','Tanto quanto','Comparativamente','Analogamente']},
+  {id:'explicacao',icon:'💬',label:'Explicação / Confirmação',secoes:['desenvolvimento'],
+    itens:['Isto é','Ou seja','Vale ressaltar','Cumpre destacar','Convém salientar','De fato']},
+  {id:'tempo',icon:'⏱️',label:'Tempo / Sequência',secoes:['desenvolvimento'],
+    itens:['Em seguida','Posteriormente','Concomitantemente','Paralelamente','Atualmente','Por fim']},
+  {id:'conclusao',icon:'🏁',label:'Conclusão / Fechamento',secoes:['conclusao'],
+    itens:['Portanto','Diante do exposto','Em suma','Dessa maneira','Conclui-se que','Fica evidente que','Torna-se necessário que','Logo','Em síntese','Desse modo','Assim sendo']},
+];
+function rdSecaoLabel(s){return{introducao:'Introdução',desenvolvimento:'Desenvolvimento',conclusao:'Conclusão'}[s]||s;}
+function rdSecaoColor(s){return{introducao:'#06b6d4',desenvolvimento:'#a78bfa',conclusao:'#16a34a'}[s]||'var(--accent)';}
+
+function rdRenderConectivos(){
+  const el=document.getElementById('rd-main-content');if(!el)return;
+  el.innerHTML=`
+    <div class="rd-header">
+      <div>
+        <div class="rd-title">🔗 Conectivos para Redação</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Guia por função — cada conjunção no parágrafo certo (padrão ENEM/Cebraspe)</div>
+      </div>
+    </div>
+    <input class="inp" id="rd-conectivos-busca" placeholder="🔍 Buscar (ex: causa, portanto, embora...)" oninput="rdRenderConectivosLista()" style="margin-bottom:12px">
+    <div class="rd-conectivos-tabs" id="rd-conectivos-tabs">
+      ${['todas','introducao','desenvolvimento','conclusao'].map(s=>`<button class="${rdConectivosSecaoFiltro===s?'active':''}" data-secao="${s}" onclick="rdSetConectivosSecao('${s}')">${s==='todas'?'Todas':rdSecaoLabel(s)}</button>`).join('')}
+    </div>
+    <div id="rd-conectivos-lista"></div>
+  `;
+  rdRenderConectivosLista();
+}
+function rdSetConectivosSecao(s){
+  rdConectivosSecaoFiltro=s;
+  document.querySelectorAll('#rd-conectivos-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.secao===s));
+  rdRenderConectivosLista();
+}
+function rdConectivoCardHTML(cat){
+  const secaoBadges=cat.secoes.map(s=>`<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:99px;background:${rdSecaoColor(s)}15;color:${rdSecaoColor(s)};text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">${rdSecaoLabel(s)}</span>`).join(' ');
+  const chips=cat.itens.map(it=>`<span class="rep-tag">${it}</span>`).join('');
+  return`<div class="rd-conectivo-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;flex-wrap:wrap">
+      <div style="font-size:13px;font-weight:900;color:var(--text)">${cat.icon} ${cat.label}</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">${secaoBadges}</div>
+    </div>
+    <div class="rep-tags-flow">${chips}</div>
+    ${cat.nota?`<div style="font-size:10.5px;color:var(--orange);margin-top:9px;line-height:1.5"><i class="fa fa-circle-info"></i> ${cat.nota}</div>`:''}
+  </div>`;
+}
+function rdRenderConectivosLista(){
+  const el=document.getElementById('rd-conectivos-lista');if(!el)return;
+  const q=(document.getElementById('rd-conectivos-busca')?.value||'').trim().toLowerCase();
+  const secao=rdConectivosSecaoFiltro;
+  const filtradas=RD_CONECTIVOS
+    .filter(cat=>secao==='todas'||cat.secoes.includes(secao))
+    .map(cat=>{
+      // se a busca bate no NOME da categoria (ex: "causa"), mostra todos os itens dela —
+      // senão filtra só os itens individuais que batem (ex: "portanto")
+      const labelBate=cat.label.toLowerCase().includes(q);
+      return{...cat,itens:(!q||labelBate)?cat.itens:cat.itens.filter(i=>i.toLowerCase().includes(q))};
+    })
+    .filter(cat=>!q||cat.itens.length);
+  if(!filtradas.length){
+    el.innerHTML='<div class="empty" style="padding:40px 0"><p style="color:var(--muted);font-size:13px">Nenhum conectivo encontrado pra essa busca.</p></div>';
+    return;
+  }
+  el.innerHTML=filtradas.map(rdConectivoCardHTML).join('');
 }
 
 // ---- MAIN ----
 function rdRenderMain(){
   const el=document.getElementById('rd-main-content');if(!el)return;
+  if(rdShowConectivos){rdRenderConectivos();return;}
   if(!rdSelectedTopic){
     el.innerHTML='<div class="empty" style="margin-top:80px"><div style="font-size:56px">📝</div><p style="color:var(--muted);margin-top:16px;font-size:14px;font-weight:700">Selecione um tópico<br>para ver suas redações</p></div>';
     return;
@@ -9147,7 +9259,7 @@ function rdOpenForm(id=null){
       <textarea class="inp" id="rd-inp-padrao" style="width:100%;min-height:60px;resize:vertical;margin-bottom:10px" placeholder="Cole aqui o espelho de correção da banca, se você tiver...">${r?.padrao||''}</textarea>
 
       <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:4px">
-        <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">Folha de redação simulada (padrão Cebraspe, 30 linhas)</div>
+        <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase"><span class="rd-folha-titulo-full">Folha de redação simulada (padrão Cebraspe, 30 linhas)</span><span class="rd-folha-titulo-short">Folha simulada (Cebraspe)</span></div>
         <div id="rd-folha-contador" style="font-size:11px;font-weight:800;color:var(--muted)">0/${RD_FOLHA_MAX_LINHAS} linhas</div>
       </div>
       <div class="rd-folha-wrap">
