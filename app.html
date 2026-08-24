@@ -453,6 +453,21 @@ nav{
 .rd-ai-erro{background:var(--bg2);border-radius:10px;padding:8px 10px;font-size:11.5px;}
 .rd-ai-erro-trecho{color:var(--red);font-weight:700;font-style:italic;}
 .rd-ai-erro-sugestao{color:var(--text2);margin-top:3px;}
+.rd-criterios-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px;}
+.rd-criterio{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;}
+.rd-criterio-head{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:10.5px;font-weight:800;color:var(--text2);margin-bottom:5px;}
+.rd-criterio-bar{height:5px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:5px;}
+.rd-criterio-fill{height:100%;border-radius:99px;transition:width .3s;}
+.rd-criterio-comentario{font-size:10px;color:var(--muted);line-height:1.4;}
+
+/* ===== FOLHA DE REDAÇÃO SIMULADA (padrão Cebraspe, 30 linhas) ===== */
+.rd-folha-wrap{display:flex;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;background:var(--panel);transition:border-color .2s;}
+.rd-folha-wrap:focus-within{border-color:var(--accent);}
+.rd-folha-gutter{flex-shrink:0;width:30px;background:var(--bg2);border-right:1px solid var(--border);font-size:10px;color:var(--muted);text-align:right;padding:12px 6px 12px 0;font-family:'Courier New',Courier,monospace;line-height:26px;overflow:hidden;height:468px;}
+.rd-textarea{width:100%;height:468px;border:none;padding:12px 14px;font-size:14px;font-family:'Courier New',Courier,monospace;line-height:26px;resize:none;outline:none;overflow-y:auto;background:repeating-linear-gradient(to bottom,transparent 0,transparent 25px,var(--border) 25px,var(--border) 26px);color:var(--text);}
+@media(max-width:600px){
+  .rd-folha-gutter,.rd-textarea{height:338px;}
+}
 
 /* ===== RESUMO (IA a partir de arquivo) ===== */
 .resumo-badge-done{background:rgba(139,92,246,0.1);color:#8b5cf6;border:1.5px solid rgba(139,92,246,0.35);border-radius:8px;font-size:9px;padding:2px 8px;font-weight:900;cursor:pointer;transition:all 0.2s;}
@@ -8998,6 +9013,96 @@ function rdToggleFeedback(id){
   rdRenderMain();
 }
 
+// ---- FOLHA DE REDAÇÃO SIMULADA ----
+// Simula visualmente a folha de resposta discursiva da Cebraspe: fundo com pautas
+// (linhas horizontais) + numeração de 1 a 30 na margem, igual a uma folha de prova
+// de verdade. A contagem de linhas usa o MESMO critério oficial da banca: só conta
+// como linha "cheia" quem tiver 3 palavras ou mais — texto que exceda 30 linhas não
+// seria corrigido na prova real, e o app avisa quando isso acontece.
+const RD_FOLHA_MAX_LINHAS=30;
+const RD_FOLHA_LINE_HEIGHT=26; // precisa bater com line-height do CSS .rd-textarea/.rd-folha-gutter
+let rdFolhaCanvas=null;
+function rdFolhaMedirTexto(texto,font){
+  if(!rdFolhaCanvas)rdFolhaCanvas=document.createElement('canvas');
+  const ctx=rdFolhaCanvas.getContext('2d');
+  ctx.font=font;
+  return ctx.measureText(texto).width;
+}
+// Quebra o texto em linhas visuais simulando o word-wrap real do textarea (mesma
+// fonte e mesma largura útil), pra que a contagem bata com o que a pessoa está vendo.
+function rdFolhaCalcularLinhas(textarea){
+  const cs=getComputedStyle(textarea);
+  const largura=textarea.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);
+  const font=`${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const linhas=[];
+  (textarea.value||'').split('\n').forEach(paragrafo=>{
+    if(!paragrafo.trim()){linhas.push([]);return;}
+    const palavras=paragrafo.split(' ');
+    let atual=[];
+    palavras.forEach(palavra=>{
+      const teste=[...atual,palavra].join(' ');
+      if(atual.length&&rdFolhaMedirTexto(teste,font)>largura){
+        linhas.push(atual);
+        atual=[palavra];
+      }else{
+        atual.push(palavra);
+      }
+    });
+    linhas.push(atual);
+  });
+  // remove parágrafos vazios do fim (não contam como linha usada)
+  while(linhas.length&&linhas[linhas.length-1].length===0)linhas.pop();
+  return linhas;
+}
+function rdFolhaRenderGutter(linhasUsadas){
+  const gutter=document.getElementById('rd-folha-gutter');
+  if(!gutter)return;
+  const total=Math.max(RD_FOLHA_MAX_LINHAS,linhasUsadas);
+  let html='';
+  for(let i=1;i<=total;i++){
+    const excedeu=i>RD_FOLHA_MAX_LINHAS;
+    html+=`<div style="height:${RD_FOLHA_LINE_HEIGHT}px;${excedeu?'color:var(--red);font-weight:800':(i<=linhasUsadas?'color:var(--accent);font-weight:800':'')}">${i}</div>`;
+  }
+  gutter.innerHTML=html;
+}
+function rdFolhaSyncScroll(){
+  const textarea=document.getElementById('rd-inp-texto');
+  const gutter=document.getElementById('rd-folha-gutter');
+  if(textarea&&gutter)gutter.scrollTop=textarea.scrollTop;
+}
+function rdFolhaUpdate(){
+  const textarea=document.getElementById('rd-inp-texto');
+  if(!textarea)return;
+  const linhas=rdFolhaCalcularLinhas(textarea);
+  const linhasVisuais=linhas.length;
+  const linhasValidas=linhas.filter(l=>l.length>=3).length; // regra oficial: só conta com 3+ palavras
+  const excedeu=linhasVisuais>RD_FOLHA_MAX_LINHAS;
+
+  const contador=document.getElementById('rd-folha-contador');
+  if(contador){
+    contador.textContent=`${linhasVisuais}/${RD_FOLHA_MAX_LINHAS} linhas`;
+    contador.style.color=excedeu?'var(--red)':(linhasVisuais>=RD_FOLHA_MAX_LINHAS-3?'var(--orange)':'var(--muted)');
+  }
+  const aviso=document.getElementById('rd-folha-aviso');
+  if(aviso){
+    if(excedeu){
+      aviso.innerHTML='⚠️ Passou de 30 linhas — na prova real, o que exceder a folha normalmente não é corrigido.';
+      aviso.style.color='var(--red)';
+    }else{
+      aviso.innerHTML=`TL pela regra da banca (linha só conta com 3+ palavras): <b>${linhasValidas}</b>`;
+      aviso.style.color='var(--muted)';
+    }
+  }
+  rdFolhaRenderGutter(linhasVisuais);
+
+  // sincroniza o TL automaticamente — só se a pessoa não tiver digitado nele na mão
+  const tlField=document.getElementById('rd-inp-tl');
+  if(tlField&&!tlField.dataset.userEdited){
+    tlField.value=linhasValidas||'';
+    rdCalcLive();
+  }
+}
+
 function rdOpenForm(id=null){
   rdEditingId=id;
   const wrap=document.getElementById('rd-form-wrap');if(!wrap)return;
@@ -9028,8 +9133,8 @@ function rdOpenForm(id=null){
           <input class="rd-input-field inp" id="rd-inp-ne" type="number" min="0" placeholder="0,1,2..." value="${r?.ne??''}" oninput="rdCalcLive()">
         </div>
         <div class="rd-input-group">
-          <label class="rd-input-label">TL — Total de Linhas</label>
-          <input class="rd-input-field inp" id="rd-inp-tl" type="number" min="1" placeholder="ex: 25" value="${r?.tl??''}" oninput="rdCalcLive()">
+          <label class="rd-input-label">TL — Total de Linhas <span style="font-weight:400;text-transform:none;color:var(--muted)">(calculado pela folha ↓)</span></label>
+          <input class="rd-input-field inp" id="rd-inp-tl" type="number" min="1" placeholder="ex: 25" value="${r?.tl??''}" oninput="this.dataset.userEdited='1';rdCalcLive()">
         </div>
       </div>
 
@@ -9041,8 +9146,15 @@ function rdOpenForm(id=null){
       <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Padrão de resposta / gabarito (opcional — melhora a precisão da correção por IA)</div>
       <textarea class="inp" id="rd-inp-padrao" style="width:100%;min-height:60px;resize:vertical;margin-bottom:10px" placeholder="Cole aqui o espelho de correção da banca, se você tiver...">${r?.padrao||''}</textarea>
 
-      <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Texto da redação (opcional)</div>
-      <textarea class="rd-textarea" id="rd-inp-texto" placeholder="Cole ou escreva sua redação aqui...">${r?.texto||''}</textarea>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:4px">
+        <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">Folha de redação simulada (padrão Cebraspe, 30 linhas)</div>
+        <div id="rd-folha-contador" style="font-size:11px;font-weight:800;color:var(--muted)">0/${RD_FOLHA_MAX_LINHAS} linhas</div>
+      </div>
+      <div class="rd-folha-wrap">
+        <div class="rd-folha-gutter" id="rd-folha-gutter"></div>
+        <textarea class="rd-textarea" id="rd-inp-texto" placeholder="Escreva sua redação aqui, como se fosse na folha da prova..." oninput="rdFolhaUpdate()">${r?.texto||''}</textarea>
+      </div>
+      <div id="rd-folha-aviso" style="font-size:10.5px;margin-top:5px;color:var(--muted)"></div>
 
       <button class="btn btn-sm" style="background:rgba(108,71,255,0.08);color:var(--accent);border:1px solid var(--border);margin-top:10px" onclick="rdCorrigirComIA()" id="rd-ai-btn"><i class="fa fa-wand-magic-sparkles"></i> Corrigir com IA</button>
       <div id="rd-ai-feedback-wrap" style="margin-top:10px">${rdAiFeedbackHTML(rdPendingAiFeedback)}</div>
@@ -9058,6 +9170,33 @@ function rdOpenForm(id=null){
   `;
   wrap.scrollIntoView({behavior:'smooth',block:'nearest'});
   document.getElementById('rd-inp-titulo')?.focus();
+  rdFolhaUpdate();
+  document.getElementById('rd-inp-texto')?.addEventListener('scroll',rdFolhaSyncScroll);
+}
+
+// Critérios linguísticos avaliados separadamente pela IA — cada um vira uma barrinha
+// própria no feedback, em vez de só um "número de erros" genérico.
+const RD_CRITERIOS=[
+  {id:'coesao',icon:'🔗',label:'Coesão'},
+  {id:'clareza',icon:'💡',label:'Clareza'},
+  {id:'gramatica',icon:'📐',label:'Gramática'},
+  {id:'acentuacao',icon:'✒️',label:'Acentuação/Ortografia'},
+  {id:'pontuacao',icon:'❓',label:'Pontuação'},
+  {id:'adequacao',icon:'🎓',label:'Norma Culta'},
+];
+function rdCriterioLabel(tipo){
+  return RD_CRITERIOS.find(c=>c.id===tipo)?.label||tipo;
+}
+function rdCriterioBarHTML(c,dado){
+  if(!dado)return'';
+  const nota=typeof dado.nota==='number'?dado.nota:null;
+  const pct=nota!==null?Math.max(0,Math.min(100,nota*10)):0;
+  const cor=nota===null?'var(--muted)':nota>=8?'var(--green)':nota>=5?'var(--orange)':'var(--red)';
+  return`<div class="rd-criterio">
+    <div class="rd-criterio-head"><span>${c.icon} ${c.label}</span><span style="color:${cor};font-weight:900">${nota!==null?nota.toFixed(1):'—'}</span></div>
+    <div class="rd-criterio-bar"><div class="rd-criterio-fill" style="width:${pct}%;background:${cor}"></div></div>
+    ${dado.comentario?`<div class="rd-criterio-comentario">${dado.comentario}</div>`:''}
+  </div>`;
 }
 
 function rdAiFeedbackLoadingHTML(){
@@ -9067,10 +9206,12 @@ function rdAiFeedbackHTML(fb){
   if(!fb)return'';
   const fortes=(fb.pontosFortes||[]).map(p=>`<li style="color:var(--green)">${p}</li>`).join('');
   const faltantes=(fb.pontosFaltantes||[]).map(p=>`<li style="color:var(--orange)">${p}</li>`).join('');
-  const erros=(fb.erros||[]).map(e=>`<div class="rd-ai-erro"><span class="rd-ai-erro-trecho">"${e.trecho||''}"</span>${e.tipo?` <span style="color:var(--muted)">(${e.tipo})</span>`:''}${e.sugestao?`<div class="rd-ai-erro-sugestao">→ ${e.sugestao}</div>`:''}</div>`).join('');
+  const erros=(fb.erros||[]).map(e=>`<div class="rd-ai-erro"><span class="rd-ai-erro-trecho">"${e.trecho||''}"</span>${e.tipo?` <span style="color:var(--muted)">(${rdCriterioLabel(e.tipo)})</span>`:''}${e.sugestao?`<div class="rd-ai-erro-sugestao">→ ${e.sugestao}</div>`:''}</div>`).join('');
+  const criterios=fb.criterios?RD_CRITERIOS.map(c=>rdCriterioBarHTML(c,fb.criterios[c.id])).join(''):'';
   return`<div class="rd-ai-panel">
     <div class="rd-ai-title"><i class="fa fa-wand-magic-sparkles"></i> Feedback da IA ${typeof fb.nc==='number'?`· sugestão NC: ${fb.nc}`:''} ${typeof fb.ne==='number'?`· sugestão NE: ${fb.ne}`:''}</div>
     ${fb.comentario?`<div class="rd-ai-comment">${fb.comentario}</div>`:''}
+    ${criterios?`<div class="rd-criterios-grid">${criterios}</div>`:''}
     ${(fortes||faltantes)?`<div class="rd-ai-cols">
       <div><div class="rd-ai-col-title" style="color:var(--green)">✅ Pontos fortes</div><ul class="rd-ai-list">${fortes||'<li style="color:var(--muted)">—</li>'}</ul></div>
       <div><div class="rd-ai-col-title" style="color:var(--orange)">⚠️ Faltou / insuficiente</div><ul class="rd-ai-list">${faltantes||'<li style="color:var(--muted)">—</li>'}</ul></div>
@@ -9113,14 +9254,21 @@ ${texto}
 
 REGRAS DE AVALIAÇÃO (padrão Cebraspe):
 - nc (nota de conteúdo): número de 0 a 30, avaliando cobertura do tema, estrutura, desenvolvimento argumentativo e aderência ao padrão de resposta (se fornecido).
-- ne (número de erros): conte desvios gramaticais, de coesão, coerência, ortografia e coloquialismo — cada desvio conta 1 erro.
-- erros: liste cada desvio encontrado com o trecho exato, o tipo (ex: "concordância", "coesão", "ortografia") e uma sugestão de correção.
+- ne (número de erros): conte cada desvio linguístico encontrado no texto (gramática, coesão, clareza, acentuação/ortografia, pontuação, adequação à norma culta) — cada desvio conta 1 erro.
+- criterios: avalie separadamente, cada um com nota de 0 a 10 (10 = impecável) e um comentário curto (1 frase, específico do texto, não genérico):
+  - coesao: conectivos, transições entre frases e parágrafos, uso correto de pronomes/referências.
+  - clareza: ideias bem explicadas, sem ambiguidade, fáceis de entender numa leitura só.
+  - gramatica: concordância verbal/nominal, regência, sintaxe, uso de crase.
+  - acentuacao: acentos gráficos e ortografia conforme o Acordo Ortográfico vigente.
+  - pontuacao: vírgulas, ponto final, ponto e vírgula — uso correto dos sinais.
+  - adequacao: registro formal, sem coloquialismos, gírias ou marcas de oralidade.
+- erros: liste cada desvio encontrado com o trecho exato, o "tipo" (deve ser exatamente um destes valores: coesao, clareza, gramatica, acentuacao, pontuacao, adequacao) e uma sugestão de correção.
 - pontosFortes: o que o texto cobriu bem.
 - pontosFaltantes: o que faltou ou foi abordado de forma insuficiente.
 - comentario: um parágrafo curto resumindo a avaliação.
 
 RESPONDA APENAS COM JSON, sem texto antes ou depois, sem markdown, no formato exato:
-{"nc":0,"ne":0,"comentario":"...","pontosFortes":["..."],"pontosFaltantes":["..."],"erros":[{"trecho":"...","tipo":"...","sugestao":"..."}]}`;
+{"nc":0,"ne":0,"comentario":"...","criterios":{"coesao":{"nota":0,"comentario":"..."},"clareza":{"nota":0,"comentario":"..."},"gramatica":{"nota":0,"comentario":"..."},"acentuacao":{"nota":0,"comentario":"..."},"pontuacao":{"nota":0,"comentario":"..."},"adequacao":{"nota":0,"comentario":"..."}},"pontosFortes":["..."],"pontosFaltantes":["..."],"erros":[{"trecho":"...","tipo":"...","sugestao":"..."}]}`;
 
     const raw=await callGeminiGenerate(apiKey,prompt);
     const fb=extractAIJson(raw);
