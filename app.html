@@ -8483,12 +8483,13 @@ function repPromptGerarBatch(nomeTema,nomeEixo,campoIds){
   const schema='{'+campoIds.map(id=>`"${id}":"..."`).join(',')+'}';
   return`Você é um professor especialista em preparar candidatos para concursos públicos brasileiros e redação dissertativa-argumentativa, montando material de repertório sociocultural sobre um tema.
 
-TAREFA: Pesquise na internet e monte uma PARTE de um banco de repertório completo e ATUALIZADO sobre o tema abaixo, pronto pra ser usado numa redação ou resposta discursiva de concurso.
+TAREFA: Use a ferramenta de busca do Google AGORA, antes de escrever qualquer coisa, mesmo que ache que já sabe a resposta — o objetivo é confirmar leis, números e decisões atualizados, não só recitar o que você já tem de treino. Depois de pesquisar, monte uma PARTE de um banco de repertório completo e ATUALIZADO sobre o tema abaixo, pronto pra ser usado numa redação ou resposta discursiva de concurso.
 
 EIXO TEMÁTICO: ${nomeEixo||'(não informado)'}
 TEMA: ${nomeTema}
 
 REGRAS OBRIGATÓRIAS:
+- Pesquise na internet antes de responder — não pule essa etapa.
 - Seja específico e factual — cite leis, dados, nomes e instituições reais que você souber ou encontrar na pesquisa.
 - NUNCA invente lei, número, autor, estatística ou palavra que não exista em português. Se não tiver certeza de um dado, é preferível devolver menos itens (até 2, em vez de 4) do que arriscar inventar algo incorreto.
 - Nunca misture dois assuntos diferentes dentro do mesmo ponto — cada item deve conter uma ideia só, coerente e completa do início ao fim.
@@ -8560,7 +8561,7 @@ async function repGerarComIA(id){
 function repPromptVerificar(nomeTema,nomeEixo,conteudoAtual){
   return`Você é um revisor factual especialista em concursos públicos brasileiros.
 
-TAREFA: Pesquise na internet e VERIFIQUE cada afirmação factual (leis, números, datas, nomes, decisões judiciais) do texto abaixo, que é um repertório de redação sobre o tema informado. Aponte especificamente o que está errado, desatualizado, inventado ou sem confirmação — e sugira a correção quando souber.
+TAREFA: Use a ferramenta de busca do Google AGORA, antes de responder — essa verificação só tem valor se você realmente pesquisar, não recitar o que já sabe de treino. Depois de pesquisar, VERIFIQUE cada afirmação factual (leis, números, datas, nomes, decisões judiciais) do texto abaixo, que é um repertório de redação sobre o tema informado. Aponte especificamente o que está errado, desatualizado, inventado ou sem confirmação — e sugira a correção quando souber.
 
 EIXO TEMÁTICO: ${nomeEixo||'(não informado)'}
 TEMA: ${nomeTema}
@@ -10567,17 +10568,26 @@ async function callGeminiGenerate(apiKey,prompt){
   throw new Error(`Nenhum modelo do Gemini respondeu. Tentativas: ${attempts.join(' · ')||'nenhuma'}. Verifique se sua chave em aistudio.google.com/apikey está válida.`);
 }
 // Igual ao callGeminiGenerate, mas pedindo pra IA pesquisar na internet antes de responder
-// (grounding). Nem toda chave/modelo tem esse recurso liberado (algumas contas do Google
-// exigem faturamento ativado pra grounding) — se todas as tentativas com busca falharem,
-// cai pro modo normal (sem busca, só o conhecimento já treinado da IA) em vez de falhar
-// a geração inteira. `grounded` no retorno diz se a busca realmente rolou ou não.
+// (grounding). A ferramenta de busca é OPCIONAL do ponto de vista do modelo — ele decide
+// sozinho se pesquisa ou não, mesmo com a ferramenta disponível — então uma resposta "ok"
+// não garante que buscou de verdade. Por isso: tenta os modelos candidatos em ordem e, se
+// um deles responder SEM ter buscado, guarda como reserva mas continua tentando o próximo,
+// na esperança de achar algum que busque de fato; só desiste de buscar (usa a reserva, ou
+// cai pro modo sem busca) depois de esgotar a lista. `grounded` no retorno diz se a busca
+// realmente rolou ou não — nunca inventado.
 async function callGeminiGenerateSearch(apiKey,prompt){
   const attempts=[];
+  let fallback=null; // primeira resposta que funcionou mas sem confirmar busca real
   for(const model of GEMINI_MODEL_CANDIDATES){
     const r=await tryGeminiModel(apiKey,model,prompt,{useSearch:true});
-    if(r.ok)return{raw:r.raw,grounded:!!r.grounded};
+    if(r.ok){
+      if(r.grounded)return{raw:r.raw,grounded:true};
+      if(!fallback)fallback={raw:r.raw,grounded:false};
+      continue;
+    }
     attempts.push(`${model} (${r.reason})`);
   }
+  if(fallback)return fallback;
   try{
     const raw=await callGeminiGenerate(apiKey,prompt);
     return{raw,grounded:false};
