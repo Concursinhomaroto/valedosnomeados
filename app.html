@@ -785,6 +785,10 @@ nav{
 .rep-secoes{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--border);}
 .rep-secao{padding:18px 20px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
 .rep-secao:nth-child(even){border-right:none;}
+.rep-secao-dominada{background:rgba(34,197,94,0.045);}
+.rep-dominado-btn{font-size:15px;cursor:pointer;opacity:.5;transition:opacity .15s;line-height:1;}
+.rep-dominado-btn:hover{opacity:.85;}
+.rep-dominado-btn.active{opacity:1;}
 .rep-secao-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
 .rep-secao-icon{font-size:16px;}
 .rep-secao-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;}
@@ -6287,6 +6291,11 @@ function countTemasPreenchidos(){
     SECOES.some(s=>t[s.id]&&t[s.id].trim())
   ).length;
 }
+function countSecoesRepertorioDominadas(){
+  return Object.values(db.repertorio?.temas||{}).reduce((n,t)=>
+    n+Object.values(t.dominado||{}).filter(Boolean).length,0
+  );
+}
 
 // ===== HELPERS DERIVADOS (calculados sobre o histórico já salvo — sem novas fontes de dado) =====
 function countPerfectWeeks(){
@@ -6479,6 +6488,7 @@ const ACHIEVEMENTS_REGISTRY=[
   {id:'combo',categoria:'dominio',titulo:'Combo Perfeito',descricao:'Maior sequência de acertos consecutivos em flashcards.',icone:'💯',dificuldade:'dificil',getValue:()=>db.fcLongestStreak||0,tiers:[20,50,100,250,500]},
   {id:'npd_alto',categoria:'dominio',titulo:'Redator Nota Mil',descricao:'Redações com NPD no topo da faixa (≥25).',icone:'🏅',dificuldade:'dificilimo',getValue:()=>countRedacoesNPDAlto(25),tiers:[1,5,15,30]},
   {id:'reino_dominado',categoria:'dominio',titulo:'Reino Dominado',descricao:'Um reino inteiro com 100% dos cards maduros.',icone:'👑',dificuldade:'dificilimo',getValue:()=>countReinosDominados(),tiers:reinoDominadoTiers},
+  {id:'repertorio_dominado',categoria:'dominio',titulo:'Repertório na Ponta da Língua',descricao:'Seções do repertório marcadas como dominadas — o que você já sabe de cor pra prova.',icone:'🧠',dificuldade:'dificil',getValue:()=>countSecoesRepertorioDominadas(),tiers:[10,30,75,150,300]},
 
   // --- D) AMPLITUDE / EXPLORAÇÃO ---
   {id:'senhor_reinos',categoria:'amplitude',titulo:'Senhor dos Reinos',descricao:'Cobrir todos os reinos com pelo menos um estudo.',icone:'🌍',dificuldade:'medio',getValue:()=>countReinosCobertura(),tiers:[50,75,100]},
@@ -8201,12 +8211,15 @@ let repSelectedTema=null;
 let repEditMode=false;
 let repGerandoIA=false;
 let repGerandoIAStep=0;
+let repVerificando=false;
+let repCollapsedIds=new Set(); // seções recolhidas no tema atualmente aberto (não persiste)
 
 const SECOES=[
   {id:'panorama',icon:'🌐',title:'Panorama Atual',color:'#06b6d4',placeholder:'Contexto atual no Brasil e no mundo. Dados recentes, situação presente, números relevantes...'},
   {id:'causas',icon:'⚠️',title:'Causas e Desafios',color:'#f59e0b',placeholder:'Raízes históricas, fatores estruturais, desafios principais que perpetuam o problema...'},
   {id:'consequencias',icon:'💥',title:'Consequências',color:'#ef4444',placeholder:'Impactos sociais, econômicos, políticos e humanos. O que acontece se nada for feito...'},
   {id:'resolucoes',icon:'✅',title:'Resoluções e Políticas',color:'#16a34a',placeholder:'Políticas públicas existentes, leis, iniciativas de sucesso, o que já vem sendo feito...'},
+  {id:'jurisprudencia',icon:'🏛️',title:'Jurisprudência (STF/STJ)',color:'#0891b2',placeholder:'4 decisões/entendimentos de tribunal superior (STF, STJ) relevantes pro tema, com o nome do caso/súmula...'},
   {id:'aspectosPositivos',icon:'➕',title:'Aspectos Positivos',color:'#22c55e',placeholder:'4 pontos positivos ou avanços relacionados ao tema...'},
   {id:'aspectosNegativos',icon:'➖',title:'Aspectos Negativos',color:'#dc2626',placeholder:'4 pontos negativos ou riscos relacionados ao tema...'},
   {id:'comparacao',icon:'⚖️',title:'Comparação',color:'#0ea5e9',placeholder:'4 comparações (outro país, outra época, outro contexto) que ajudem a contextualizar...'},
@@ -8271,6 +8284,25 @@ function repSelectTema(id){
   repInit();
   const t=db.repertorio.temas[id];if(!t)return;
   repSelectedTema=t;repEditMode=false;
+  repCollapsedIds=new Set();
+  repRenderSidebar();repRenderMain();
+}
+
+function repToggleColapso(secaoId){
+  if(repCollapsedIds.has(secaoId))repCollapsedIds.delete(secaoId);else repCollapsedIds.add(secaoId);
+  repRenderMain();
+}
+function repToggleColapsarTudo(){
+  const algumExpandido=SECOES.some(s=>!repCollapsedIds.has(s.id));
+  repCollapsedIds=algumExpandido?new Set(SECOES.map(s=>s.id)):new Set();
+  repRenderMain();
+}
+function repToggleDominado(temaId,secaoId){
+  repInit();
+  const t=db.repertorio.temas[temaId];if(!t)return;
+  if(!t.dominado)t.dominado={};
+  t.dominado[secaoId]=!t.dominado[secaoId];
+  saveDB();
   repRenderSidebar();repRenderMain();
 }
 
@@ -8280,9 +8312,13 @@ function repRenderMain(){
   if(!repSelectedTema){repRenderOverview();return;}
   repInit();
   const t=repSelectedTema;
+  if(!t.dominado)t.dominado={};
   const e=(db.repertorio.eixos||[]).find(x=>x.id===t.eixoId)||{nome:'Sem eixo',color:'var(--accent)',icon:'📌'};
   const pct=repCompletude(t);
   const pctColor=pct===100?'var(--green)':pct>=60?'var(--orange)':'var(--red)';
+  const diasDesdeGeracao=t.geradoEm?Math.floor((Date.now()-new Date(t.geradoEm).getTime())/86400000):null;
+  const desatualizado=diasDesdeGeracao!==null&&diasDesdeGeracao>90;
+  const algumExpandido=SECOES.some(s=>!repCollapsedIds.has(s.id));
 
   el.innerHTML=`
     <div class="rep-tema-card">
@@ -8294,6 +8330,9 @@ function repRenderMain(){
             <span class="rep-eixo-chip" style="background:${e.color}15;color:${e.color}">${e.icon} ${e.nome}</span>
           </div>
           <div class="rep-tema-titulo">${t.nome}</div>
+          ${t.geradoEm?`<div style="font-size:10.5px;color:${desatualizado?'var(--orange)':'var(--muted)'};margin-top:4px;font-weight:${desatualizado?'800':'400'}">
+            ${desatualizado?'⏰':'🕐'} Gerado por IA em ${repFormatDataCurta(t.geradoEm)}${desatualizado?` (${diasDesdeGeracao} dias atrás) — leis e dados podem ter mudado, considere gerar de novo`:''}
+          </div>`:''}
           <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
             <div style="flex:1;max-width:200px">
               <div class="rep-prog-bar"><div class="rep-prog-fill" style="width:${pct}%;background:${pctColor}"></div></div>
@@ -8302,9 +8341,13 @@ function repRenderMain(){
           </div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button onclick="repGerarComIA('${t.id}')" class="btn btn-ghost" style="font-size:12px" ${repGerandoIA?'disabled':''}>
+          <button onclick="repGerarComIA('${t.id}')" class="btn btn-ghost" style="font-size:12px" ${repGerandoIA||repVerificando?'disabled':''}>
             <i class="fa ${repGerandoIA?'fa-spinner fa-spin':'fa-wand-magic-sparkles'}"></i> ${repGerandoIA?'Gerando...':'Gerar com IA'}
           </button>
+          <button onclick="repVerificarComIA('${t.id}')" class="btn btn-ghost" style="font-size:12px" ${repGerandoIA||repVerificando?'disabled':''}>
+            <i class="fa ${repVerificando?'fa-spinner fa-spin':'fa-magnifying-glass'}"></i> ${repVerificando?'Verificando...':'Verificar'}
+          </button>
+          ${!repEditMode?`<button onclick="repToggleColapsarTudo()" class="btn btn-ghost" style="font-size:12px"><i class="fa fa-${algumExpandido?'compress':'expand'}"></i> ${algumExpandido?'Recolher tudo':'Expandir tudo'}</button>`:''}
           <button onclick="repToggleEdit()" class="btn ${repEditMode?'btn-primary':'btn-ghost'}" style="font-size:12px" ${repGerandoIA?'disabled':''}>
             <i class="fa fa-${repEditMode?'eye':'pen'}"></i> ${repEditMode?'Visualizar':'Editar'}
           </button>
@@ -8316,26 +8359,44 @@ function repRenderMain(){
       ${repGerandoIA?`
       <div style="padding:50px 20px;text-align:center;color:var(--muted);border-top:1px solid var(--border)">
         <i class="fa fa-spinner fa-spin" style="font-size:22px;margin-bottom:10px;display:block"></i>
-        IA pesquisando e organizando o repertório sobre "${t.nome}"...${repGerandoIAStep?` (parte ${repGerandoIAStep}/2)`:''}
+        IA pesquisando e organizando o repertório sobre "${t.nome}"...${repGerandoIAStep?` (parte ${repGerandoIAStep}/${REP_IA_BATCHES.length})`:''}
         <div style="font-size:11px;margin-top:6px;opacity:.7">Isso pode levar até 1 minuto por parte.</div>
       </div>`:`
+      ${t.verificacao?`
+      <div style="margin:16px 20px 0;background:rgba(8,145,178,0.06);border:1px solid rgba(8,145,178,0.25);border-radius:12px;padding:14px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:900;color:#0891b2;text-transform:uppercase;letter-spacing:.5px">🔍 Verificação ${t.verificacao.grounded?'(com pesquisa na internet)':'(sem pesquisa dessa vez)'} — ${repFormatDataCurta(t.verificacao.geradoEm)}</div>
+          <button onclick="repDescartarVerificacao('${t.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px" title="Descartar"><i class="fa fa-xmark"></i></button>
+        </div>
+        <div style="font-size:12.5px;color:var(--text2);line-height:1.7;white-space:pre-wrap">${t.verificacao.texto.replace(/</g,'&lt;')}</div>
+      </div>`:''}
       <!-- Seções -->
       <div class="rep-secoes">
-        ${SECOES.map(s=>`
-          <div class="rep-secao${s.full?' rep-secao-rep':''}">
-            <div class="rep-secao-header">
+        ${SECOES.map(s=>{
+          const dominado=!!t.dominado[s.id];
+          const colapsado=!repEditMode&&repCollapsedIds.has(s.id);
+          return`
+          <div class="rep-secao${s.full?' rep-secao-rep':''}${dominado?' rep-secao-dominada':''}">
+            <div class="rep-secao-header"${repEditMode?'':` onclick="repToggleColapso('${s.id}')" style="cursor:pointer"`}>
               <span class="rep-secao-icon">${s.icon}</span>
               <span class="rep-secao-title" style="color:${s.color}">${s.title}</span>
+              <span style="margin-left:auto;display:flex;align-items:center;gap:10px">
+                <span class="rep-dominado-btn${dominado?' active':''}" onclick="event.stopPropagation();repToggleDominado('${t.id}','${s.id}')" title="${dominado?'Marcado como dominado':'Marcar como dominado'}">${dominado?'✅':'⬜'}</span>
+                ${!repEditMode?`<i class="fa fa-chevron-${colapsado?'down':'up'}" style="font-size:10px;color:var(--muted)"></i>`:''}
+              </span>
             </div>
-            ${repEditMode
+            ${!colapsado?(repEditMode
               ?`<textarea class="rep-secao-edit" id="rep-inp-${s.id}" placeholder="${s.placeholder}">${t[s.id]||''}</textarea>`
               :`<div class="rep-secao-body">${t[s.id]?repFormatRepertorio(t[s.id],s.id):`<span style="color:var(--muted);font-style:italic;font-size:12px">${s.placeholder.slice(0,60)}...</span>`}</div>`
-            }
-          </div>`).join('')}
+            ):''}
+          </div>`;}).join('')}
       </div>
       ${t.iaGerado?`<div class="legis-disclaimer" style="margin:0 20px 18px"><i class="fa fa-triangle-exclamation"></i> Conteúdo gerado por IA pode conter erros — confira leis, dados e nomes antes de usar na prova.</div>`:''}
       `}
     </div>`;
+}
+function repFormatDataCurta(iso){
+  try{return new Date(iso).toLocaleDateString('pt-BR');}catch(e){return'';}
 }
 
 function repFormatRepertorio(texto,secaoId){
@@ -8389,12 +8450,13 @@ function repVoltar(){
 }
 
 // ---- GERAR COM IA ----
-// Instrução de cada campo, reaproveitada nos dois lotes abaixo.
+// Instrução de cada campo, reaproveitada nos lotes abaixo.
 const REP_CAMPO_INSTRUCOES={
   panorama:'contexto atual no Brasil e no mundo, com dados/números recentes (2 a 4 linhas).',
   causas:'4 causas/raízes estruturais do problema/tema.',
   consequencias:'4 impactos/consequências (sociais, econômicos, humanos).',
   resolucoes:'políticas públicas, leis ou programas reais já existentes sobre o tema.',
+  jurisprudencia:'4 decisões/entendimentos de tribunal superior (STF, STJ) relevantes pro tema — cite o nome do caso, súmula ou tese de repercussão geral quando houver, e o que ficou decidido, resumido em 1-2 linhas.',
   estatistica:'4 dados estatísticos reais e citáveis, com a fonte entre parênteses (ex: "- 40 milhões de brasileiros sem acesso à internet (IBGE, 2022)").',
   repertorio:'referências soltas úteis (leis, autores, dados, conceitos), cada uma marcada com a tag correspondente: [lei]...[/lei], [autor]...[/autor], [dado]...[/dado], [conceito]...[/conceito]. Pelo menos 2 de cada tipo que você tiver certeza que existe.',
   aspectosPositivos:'4 pontos positivos ou avanços relacionados ao tema.',
@@ -8404,13 +8466,16 @@ const REP_CAMPO_INSTRUCOES={
   exemplosAssociados:'2 exemplos reais positivos e 2 exemplos reais negativos associados ao tema (casos, campanhas, cidades ou países).',
   argumentoAutoridade:'4 menções a especialistas, instituições, pensadores ou obras que sustentem argumentos sobre o tema (nome + o que defendem/dizem, resumido).',
 };
-// Gerar tudo numa chamada só sobrecarregava o modelo (12 campos, até 4 pontos cada,
+// Gerar tudo numa chamada só sobrecarregava o modelo (muitos campos, até 4 pontos cada,
 // mais busca na internet) e o resultado saía com palavras inventadas e assuntos
-// misturados. Dividido em 2 lotes menores, cada chamada tem menos coisa pra acertar
-// de uma vez — mesma lógica já usada no Resumo por IA pra materiais grandes.
+// misturados. Dividido em lotes menores, cada chamada tem menos coisa pra acertar de
+// uma vez — mesma lógica já usada no Resumo por IA pra materiais grandes. 3 lotes
+// balanceados (~4 campos cada), agrupados por natureza (base geral / jurídico-factual /
+// argumentativo) pra manter o contexto de cada chamada mais coerente.
 const REP_IA_BATCHES=[
-  ['panorama','causas','consequencias','resolucoes','estatistica','repertorio'],
-  ['aspectosPositivos','aspectosNegativos','comparacao','solucoes','exemplosAssociados','argumentoAutoridade'],
+  ['panorama','causas','consequencias','resolucoes'],
+  ['jurisprudencia','estatistica','repertorio','argumentoAutoridade'],
+  ['aspectosPositivos','aspectosNegativos','comparacao','solucoes','exemplosAssociados'],
 ];
 
 function repPromptGerarBatch(nomeTema,nomeEixo,campoIds){
@@ -8473,6 +8538,8 @@ async function repGerarComIA(id){
       todosGrounded=todosGrounded&&grounded;
     }
     t.iaGerado=true;
+    t.geradoEm=new Date().toISOString();
+    delete t.verificacao; // conteúdo mudou, um relatório de verificação antigo não vale mais
     if(!db.temasFilledIds)db.temasFilledIds=[];
     if(!db.temasFilledIds.includes(t.id))db.temasFilledIds.push(t.id);
     markDailyActivity(todayStr(),null,'repertorio');
@@ -8487,6 +8554,64 @@ async function repGerarComIA(id){
     repGerandoIA=false;repGerandoIAStep=0;
     repRenderSidebar();repRenderMain();
   }
+}
+
+// ---- VERIFICAR (revisa o que já está escrito, sem regenerar nada) ----
+function repPromptVerificar(nomeTema,nomeEixo,conteudoAtual){
+  return`Você é um revisor factual especialista em concursos públicos brasileiros.
+
+TAREFA: Pesquise na internet e VERIFIQUE cada afirmação factual (leis, números, datas, nomes, decisões judiciais) do texto abaixo, que é um repertório de redação sobre o tema informado. Aponte especificamente o que está errado, desatualizado, inventado ou sem confirmação — e sugira a correção quando souber.
+
+EIXO TEMÁTICO: ${nomeEixo||'(não informado)'}
+TEMA: ${nomeTema}
+
+TEXTO A VERIFICAR:
+${conteudoAtual}
+
+Responda em português do Brasil, em bullets curtos ("- ..."), listando SÓ os problemas encontrados (não repita o que já está correto — isso deixaria a resposta longa demais). Pra cada problema, no formato: "- [seção] trecho questionável → o que parece errado/desatualizado → sugestão de correção (se souber)."
+
+Se não encontrar nenhum problema, responda exatamente esta frase, sem mais nada: "Nenhum problema encontrado — o conteúdo parece consistente com o que encontrei na pesquisa."`;
+}
+
+async function repVerificarComIA(id){
+  repInit();
+  const t=db.repertorio.temas[id];if(!t)return;
+  if(repVerificando||repGerandoIA)return;
+
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey){
+    toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');
+    openAISettingsModal();
+    return;
+  }
+  const conteudoAtual=SECOES.filter(s=>t[s.id]&&t[s.id].trim())
+    .map(s=>`[${s.title}]\n${t[s.id]}`).join('\n\n');
+  if(!conteudoAtual.trim()){
+    toast('⚠️ Esse tema ainda não tem conteúdo pra verificar','var(--red)');
+    return;
+  }
+
+  const eixo=(db.repertorio.eixos||[]).find(e=>e.id===t.eixoId);
+  repVerificando=true;
+  repRenderMain();
+
+  try{
+    const{raw,grounded}=await callGeminiGenerateSearch(apiKey,repPromptVerificar(t.nome,eixo?.nome||'',conteudoAtual));
+    t.verificacao={texto:raw.trim(),geradoEm:new Date().toISOString(),grounded};
+    saveDB();
+    toast(grounded?'🔍 Verificação concluída com pesquisa na internet.':'🔍 Verificação concluída (busca na internet indisponível dessa vez).','var(--green)');
+  }catch(e){
+    toast('❌ '+(e.message||'Erro ao verificar'),'var(--red)');
+  }finally{
+    repVerificando=false;
+    repRenderMain();
+  }
+}
+function repDescartarVerificacao(id){
+  repInit();
+  const t=db.repertorio.temas[id];if(!t)return;
+  delete t.verificacao;
+  saveDB();repRenderMain();
 }
 
 // ---- OVERVIEW ----
