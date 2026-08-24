@@ -785,7 +785,6 @@ nav{
 .rep-secoes{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--border);}
 .rep-secao{padding:18px 20px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
 .rep-secao:nth-child(even){border-right:none;}
-.rep-secao:nth-child(n+5){border-bottom:none;}
 .rep-secao-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
 .rep-secao-icon{font-size:16px;}
 .rep-secao-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:1px;}
@@ -794,7 +793,7 @@ nav{
 .rep-secao-edit:focus{border-color:var(--accent);}
 
 /* Repertório especial */
-.rep-secao-rep{grid-column:1/-1;border-right:none;}
+.rep-secao-rep{grid-column:1/-1;border-right:none;border-bottom:none;}
 .rep-tag{display:inline-block;background:rgba(108,71,255,0.08);color:var(--accent);border:1px solid rgba(108,71,255,0.2);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;margin:3px 3px 3px 0;cursor:default;}
 .rep-tag.rep-tag-lei{background:rgba(22,163,74,0.08);color:var(--green);border-color:rgba(22,163,74,0.2);}
 .rep-tag.rep-tag-autor{background:rgba(234,88,12,0.08);color:var(--orange);border-color:rgba(234,88,12,0.2);}
@@ -6284,7 +6283,7 @@ function computeTotalRevisionsDone(){
 }
 function countTemasPreenchidos(){
   return Object.values(db.repertorio?.temas||{}).filter(t=>
-    [t.panorama,t.causas,t.consequencias,t.resolucoes,t.repertorio].some(v=>v&&v.trim())
+    SECOES.some(s=>t[s.id]&&t[s.id].trim())
   ).length;
 }
 
@@ -8199,12 +8198,20 @@ function renderEditais(){
 // ===== REPERTÓRIO =====
 let repSelectedTema=null;
 let repEditMode=false;
+let repGerandoIA=false;
 
 const SECOES=[
   {id:'panorama',icon:'🌐',title:'Panorama Atual',color:'#06b6d4',placeholder:'Contexto atual no Brasil e no mundo. Dados recentes, situação presente, números relevantes...'},
   {id:'causas',icon:'⚠️',title:'Causas e Desafios',color:'#f59e0b',placeholder:'Raízes históricas, fatores estruturais, desafios principais que perpetuam o problema...'},
   {id:'consequencias',icon:'💥',title:'Consequências',color:'#ef4444',placeholder:'Impactos sociais, econômicos, políticos e humanos. O que acontece se nada for feito...'},
-  {id:'resolucoes',icon:'✅',title:'Resoluções e Políticas',color:'#16a34a',placeholder:'Políticas públicas existentes, soluções propostas, iniciativas de sucesso, o que pode ser feito...'},
+  {id:'aspectosPositivos',icon:'➕',title:'Aspectos Positivos',color:'#22c55e',placeholder:'2 pontos positivos ou avanços relacionados ao tema...'},
+  {id:'aspectosNegativos',icon:'➖',title:'Aspectos Negativos',color:'#dc2626',placeholder:'2 pontos negativos ou riscos relacionados ao tema...'},
+  {id:'comparacao',icon:'⚖️',title:'Comparação',color:'#0ea5e9',placeholder:'2 comparações (outro país, outra época, outro contexto) que ajudem a contextualizar...'},
+  {id:'estatistica',icon:'📊',title:'Estatística',color:'#a855f7',placeholder:'2 dados numéricos reais e citáveis, com a fonte (ex: IBGE, 2022)...'},
+  {id:'solucoes',icon:'💡',title:'Possíveis Soluções',color:'#eab308',placeholder:'2 propostas de intervenção, de perspectivas diferentes (poder público / sociedade civil)...'},
+  {id:'resolucoes',icon:'✅',title:'Resoluções e Políticas',color:'#16a34a',placeholder:'Políticas públicas existentes, leis, iniciativas de sucesso, o que já vem sendo feito...'},
+  {id:'exemplosAssociados',icon:'🧩',title:'Exemplos Associados',color:'#f97316',placeholder:'1 exemplo real positivo e 1 exemplo real negativo associados ao tema...'},
+  {id:'argumentoAutoridade',icon:'🎓',title:'Argumento de Autoridade',color:'#6366f1',placeholder:'2 menções a especialistas, instituições ou pensadores que sustentem argumentos sobre o tema...'},
   {id:'repertorio',icon:'📚',title:'Repertório',color:'#8b5cf6',placeholder:'Artigos, leis, autores, dados estatísticos, conceitos técnicos, alusões históricas e literárias...',full:true},
 ];
 
@@ -8293,14 +8300,23 @@ function repRenderMain(){
           </div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button onclick="repToggleEdit()" class="btn ${repEditMode?'btn-primary':'btn-ghost'}" style="font-size:12px">
+          <button onclick="repGerarComIA('${t.id}')" class="btn btn-ghost" style="font-size:12px" ${repGerandoIA?'disabled':''}>
+            <i class="fa ${repGerandoIA?'fa-spinner fa-spin':'fa-wand-magic-sparkles'}"></i> ${repGerandoIA?'Gerando...':'Gerar com IA'}
+          </button>
+          <button onclick="repToggleEdit()" class="btn ${repEditMode?'btn-primary':'btn-ghost'}" style="font-size:12px" ${repGerandoIA?'disabled':''}>
             <i class="fa fa-${repEditMode?'eye':'pen'}"></i> ${repEditMode?'Visualizar':'Editar'}
           </button>
           ${repEditMode?`<button onclick="repSaveTema()" class="btn btn-success" style="font-size:12px"><i class="fa fa-floppy-disk"></i> Salvar</button>`:''}
-          <button onclick="repDeleteTema('${t.id}')" class="btn btn-danger" style="font-size:12px"><i class="fa fa-trash"></i></button>
+          <button onclick="repDeleteTema('${t.id}')" class="btn btn-danger" style="font-size:12px" ${repGerandoIA?'disabled':''}><i class="fa fa-trash"></i></button>
         </div>
       </div>
 
+      ${repGerandoIA?`
+      <div style="padding:50px 20px;text-align:center;color:var(--muted);border-top:1px solid var(--border)">
+        <i class="fa fa-spinner fa-spin" style="font-size:22px;margin-bottom:10px;display:block"></i>
+        IA pesquisando e organizando o repertório sobre "${t.nome}"...
+        <div style="font-size:11px;margin-top:6px;opacity:.7">Isso pode levar até 1 minuto.</div>
+      </div>`:`
       <!-- Seções -->
       <div class="rep-secoes">
         ${SECOES.map(s=>`
@@ -8315,6 +8331,8 @@ function repRenderMain(){
             }
           </div>`).join('')}
       </div>
+      ${t.iaGerado?`<div class="legis-disclaimer" style="margin:0 20px 18px"><i class="fa fa-triangle-exclamation"></i> Conteúdo gerado por IA pode conter erros — confira leis, dados e nomes antes de usar na prova.</div>`:''}
+      `}
     </div>`;
 }
 
@@ -8342,7 +8360,7 @@ function repSaveTema(){
     if(el)t[s.id]=el.value;
   });
   repSelectedTema=t;
-  if([t.panorama,t.causas,t.consequencias,t.resolucoes,t.repertorio].some(v=>v&&v.trim())){
+  if(SECOES.some(s=>t[s.id]&&t[s.id].trim())){
     if(!db.temasFilledIds)db.temasFilledIds=[];
     if(!db.temasFilledIds.includes(t.id))db.temasFilledIds.push(t.id);
   }
@@ -8362,6 +8380,74 @@ function repDeleteTema(id){
 function repVoltar(){
   repSelectedTema=null;repEditMode=false;
   repRenderSidebar();repRenderMain();
+}
+
+// ---- GERAR COM IA ----
+function repPromptGerarTema(nomeTema,nomeEixo){
+  return`Você é um professor especialista em preparar candidatos para concursos públicos brasileiros e redação dissertativa-argumentativa, montando material de repertório sociocultural sobre um tema.
+
+TAREFA: Pesquise na internet e monte um banco de repertório completo e ATUALIZADO sobre o tema abaixo, pronto pra ser usado numa redação ou resposta discursiva de concurso.
+
+EIXO TEMÁTICO: ${nomeEixo||'(não informado)'}
+TEMA: ${nomeTema}
+
+Preencha cada campo do JSON abaixo. Seja específico e factual — cite leis, dados, nomes e instituições reais que você souber ou encontrar na pesquisa; NUNCA invente lei, número, autor ou estatística sem ter certeza de que existe (prefira menos itens, mas corretos, a mais itens arriscando erro). Cada campo é uma string com quebras de linha (\\n) separando os pontos, no formato "- texto do ponto".
+
+CAMPOS:
+- panorama: contexto atual no Brasil e no mundo, com dados/números recentes (2 a 4 linhas).
+- causas: 2 causas/raízes estruturais do problema/tema.
+- consequencias: 2 impactos/consequências (sociais, econômicos, humanos).
+- aspectosPositivos: 2 pontos positivos ou avanços relacionados ao tema.
+- aspectosNegativos: 2 pontos negativos ou riscos relacionados ao tema.
+- comparacao: 2 comparações (outro país, outra época ou outro contexto) que ajudem a contextualizar o tema.
+- estatistica: 2 dados estatísticos reais e citáveis, com a fonte entre parênteses (ex: "- 40 milhões de brasileiros sem acesso à internet (IBGE, 2022)").
+- solucoes: 2 possíveis soluções/propostas de intervenção, de perspectivas DIFERENTES entre si (ex: uma pelo poder público, outra pela sociedade civil/iniciativa privada/indivíduo).
+- resolucoes: políticas públicas, leis ou programas reais já existentes sobre o tema.
+- exemplosAssociados: 1 exemplo real positivo e 1 exemplo real negativo associados ao tema (um caso, campanha, cidade ou país).
+- argumentoAutoridade: 2 menções a especialistas, instituições, pensadores ou obras que sustentem argumentos sobre o tema (nome + o que defendem/dizem, resumido).
+- repertorio: referências soltas úteis (leis, autores, dados, conceitos), cada uma marcada com a tag correspondente: [lei]...[/lei], [autor]...[/autor], [dado]...[/dado], [conceito]...[/conceito]. Pelo menos 2 de cada tipo que você tiver certeza que existe.
+
+RESPONDA APENAS COM JSON, sem texto antes ou depois, sem markdown, no formato exato:
+{"panorama":"...","causas":"...","consequencias":"...","aspectosPositivos":"...","aspectosNegativos":"...","comparacao":"...","estatistica":"...","solucoes":"...","resolucoes":"...","exemplosAssociados":"...","argumentoAutoridade":"...","repertorio":"..."}`;
+}
+
+async function repGerarComIA(id){
+  repInit();
+  const t=db.repertorio.temas[id];if(!t)return;
+  if(repGerandoIA)return;
+
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey){
+    toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');
+    openAISettingsModal();
+    return;
+  }
+  const jaTemConteudo=SECOES.some(s=>t[s.id]&&t[s.id].trim());
+  if(jaTemConteudo&&!confirm('Isso vai substituir o conteúdo já preenchido nas seções deste tema. Continuar?'))return;
+
+  const eixo=(db.repertorio.eixos||[]).find(e=>e.id===t.eixoId);
+  repGerandoIA=true;
+  repSelectedTema=t;repEditMode=false;
+  repRenderMain();
+
+  try{
+    const{raw,grounded}=await callGeminiGenerateSearch(apiKey,repPromptGerarTema(t.nome,eixo?.nome||''));
+    const data=extractAIJson(raw);
+    SECOES.forEach(s=>{
+      if(typeof data[s.id]==='string'&&data[s.id].trim())t[s.id]=data[s.id].trim();
+    });
+    t.iaGerado=true;
+    if(!db.temasFilledIds)db.temasFilledIds=[];
+    if(!db.temasFilledIds.includes(t.id))db.temasFilledIds.push(t.id);
+    markDailyActivity(todayStr(),null,'repertorio');
+    saveDB();
+    toast(grounded?'🌐 Repertório gerado com pesquisa na internet! Revise antes de usar.':'🤖 Repertório gerado! Revise antes de usar (busca na internet indisponível agora).','var(--green)');
+  }catch(e){
+    toast('❌ '+(e.message||'Erro ao gerar com IA'),'var(--red)');
+  }finally{
+    repGerandoIA=false;
+    repRenderSidebar();repRenderMain();
+  }
 }
 
 // ---- OVERVIEW ----
@@ -8448,6 +8534,10 @@ function repOpenNewTema(eixoId=''){
         ${eixos.map(e=>`<option value="${e.id}"${e.id===eixoId?' selected':''}>${e.icon} ${e.nome}</option>`).join('')}
       </select>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:12.5px;color:var(--text2);cursor:pointer">
+      <input type="checkbox" id="rep-new-gerar-ia" ${db.geminiApiKey?'checked':''} style="width:auto">
+      ✨ Gerar conteúdo com IA automaticamente
+    </label>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="repSaveNewTema()"><i class="fa fa-plus"></i> Criar Tema</button>
@@ -8459,13 +8549,20 @@ function repOpenNewTema(eixoId=''){
 function repSaveNewTema(){
   const nome=(document.getElementById('rep-new-nome')?.value||'').trim();
   const eixoId=document.getElementById('rep-new-eixo')?.value||'';
+  const gerarIA=!!document.getElementById('rep-new-gerar-ia')?.checked;
   if(!nome){toast('⚠️ Digite o nome do tema','var(--red)');return;}
   repInit();
   const id='rep_'+genId();
-  db.repertorio.temas[id]={id,nome,eixoId,panorama:'',causas:'',consequencias:'',resolucoes:'',repertorio:'',criacao:new Date().toISOString()};
+  const tema={id,nome,eixoId,criacao:new Date().toISOString()};
+  SECOES.forEach(s=>tema[s.id]='');
+  db.repertorio.temas[id]=tema;
   saveDB();closeModal();repRenderSidebar();
   repSelectTema(id);
-  toast('✅ Tema criado! Agora preencha as seções.','var(--green)');
+  if(gerarIA){
+    repGerarComIA(id);
+  }else{
+    toast('✅ Tema criado! Agora preencha as seções.','var(--green)');
+  }
 }
 
 function repOpenNewEixo(){
