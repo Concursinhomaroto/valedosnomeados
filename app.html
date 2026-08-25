@@ -8832,7 +8832,14 @@ let rdConectivosSecaoFiltro='todas';
 let rdConectivosModo='categorias'; // 'categorias' = lista por função | 'estrutura' = modelo de 4 parágrafos
 let rdEstruturaGenero='dissertativo'; // 'dissertativo' | 'especifico' | 'caso'
 
-function rdInit(){if(!db.redacoes)db.redacoes={topics:{},textos:{}};}
+// Garante topics/textos separadamente (não só db.redacoes como um todo) — uma conta com
+// db.redacoes já existente mas sem o campo "textos" (dado antigo/parcial) travava o Salvar
+// com "Cannot set properties of undefined (setting '...')" na hora de criar a redação.
+function rdInit(){
+  if(!db.redacoes)db.redacoes={};
+  if(!db.redacoes.topics)db.redacoes.topics={};
+  if(!db.redacoes.textos)db.redacoes.textos={};
+}
 
 // Calcular NPD: NC – 6 × NE ÷ TL
 function calcNPD(nc,ne,tl){
@@ -9773,9 +9780,7 @@ function rdSaveRedacao(){
     saveDB();rdCloseForm();rdRenderTopics();rdRenderMain();
   }catch(e){
     console.error('Falha ao salvar redação:',e);
-    // Mostra o motivo real (temporário, pra diagnosticar o bug relatado por usuários —
-    // sem isso a mensagem genérica não dava nenhuma pista do que estava quebrando).
-    toast('❌ Não foi possível salvar: '+(e?.message||e)+' — seu texto continua aqui no formulário.','var(--red)');
+    toast('❌ Não foi possível salvar. Seu texto continua aqui no formulário — tente de novo.','var(--red)');
   }
 }
 
