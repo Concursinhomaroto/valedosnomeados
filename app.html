@@ -1315,7 +1315,7 @@ nav{
     </div>
     <div class="xp-pill" id="xp-pill-btn">
       <div class="x-num" id="total-xp">0</div>
-      <div class="x-lbl">⭐ XP TOTAL</div>
+      <div class="x-lbl" id="xp-level-lbl">🌱 NÍVEL 1 · APRENDIZ DO VALE</div>
     </div>
   </div>
 
@@ -3287,7 +3287,7 @@ window.addEventListener('focus',()=>tickTimers());
 
 // ===== HEADER =====
 function renderHeader(){
-  document.getElementById('total-xp').textContent=(db.xp||0).toLocaleString();
+  updateXPDisplay();
   if(db.examDate){document.getElementById('exam-date').value=db.examDate;updateDaysLeft();}
   const adminBtn=document.getElementById('nav-admin');
   if(adminBtn)adminBtn.style.display=isAdmin()?'flex':'none';
@@ -5568,13 +5568,15 @@ function simCorrigir(subId){
   sub.simHistorico=sub.simHistorico.slice(0,5);
   db.simSessionsCount=(db.simSessionsCount||0)+1;
   active.questoes.filter(q=>q.userAnswer!==q.correta).forEach(q=>criarFlashcardDeQuestaoErrada(subId,q));
+  const simXp=total+acertos*2; // 1 XP por questão respondida + 2 XP extra por questão certa
+  gainXP(simXp);
   saveDB();
   updateErrosBadge();
   const btn=document.getElementById('sim-btn-'+subId);
   if(btn)btn.className='btn btn-sm btn-pink';
   const wrap=document.getElementById('sim-'+subId);
   if(wrap)wrap.innerHTML=simPanelHTML(sub);
-  toast(`🎯 ${acertos}/${total} acertos!`,acertos/total>=0.6?'var(--green)':'var(--red)');
+  toast(`🎯 ${acertos}/${total} acertos! +${simXp} XP`,acertos/total>=0.6?'var(--green)':'var(--red)');
 }
 function simNovoSimulado(subId){
   delete simActive[subId];
@@ -5993,11 +5995,17 @@ function simGeralCorrigir(){
   db.simGeral.historico=db.simGeral.historico.slice(0,20);
 
   db.simSessionsCount=(db.simSessionsCount||0)+1;
+  db.simGeralSessionsCount=(db.simGeralSessionsCount||0)+1;
+
+  // 1 XP por questão respondida + 2 XP extra por questão certa + bônus por terminar
+  // o simulado inteiro (maior que o do simulado rápido por miniboss — é o "prova cheia").
+  const simGeralXp=totalQuestoes+totalAcertos*2+20;
+  gainXP(simGeralXp);
 
   saveDB();
   updateErrosBadge();
   renderSimGeralScreen();
-  toast(`🏁 Simulado geral finalizado! ${totalAcertos}/${simGeralActive.questoes.length} acertos`,'var(--accent)');
+  toast(`🏁 Simulado geral finalizado! ${totalAcertos}/${simGeralActive.questoes.length} acertos · +${simGeralXp} XP`,'var(--accent)');
 }
 function simGeralResultsHTML(){
   const active=simGeralActive;
@@ -6155,7 +6163,9 @@ function toggleTimer(subId,topicId){
         if(!db.revisions[sub.id]||!db.revisions[sub.id].length){
           db.revisions[sub.id]=[{date:addDays(sub.studiedAt,7),completed:false}];
         }
-        const xpGain=sub.priority===100?150:sub.priority===70?80:50;
+        // Bônus de "abrir a porta" pra um assunto novo — menor que o de estudar de
+        // verdade (1 XP/min no cronômetro), pra não ofuscar sessões longas de estudo.
+        const xpGain=sub.priority===100?40:sub.priority===70?25:15;
         gainXP(xpGain);
         saveDB();
         toast(`🎯 Primeiro estudo! Primeira revisão agendada em 7 dias — as próximas se ajustam à sua dificuldade. +${xpGain} XP!`,'var(--green)');
@@ -6236,7 +6246,10 @@ function saveTimer(subId,topicId){
   if(t){t.running=false;t.startedAt=0;t.opened=false;}
 
   saveDB();
-  gainXP(5);toast(`⏱️ ${fmtTime(secondsToBank)} salvos! +5 XP`,'var(--cyan)');
+  // 1 XP/min, igual ao cronômetro livre e ao Pomodoro — antes era +5 fixo, o que fazia
+  // uma sessão longa aqui valer menos que poucos minutos em qualquer outro cronômetro.
+  const minibossXp=Math.max(1,Math.floor(secondsToBank/60));
+  gainXP(minibossXp);toast(`⏱️ ${fmtTime(secondsToBank)} salvos! +${minibossXp} XP`,'var(--cyan)');
   const topic=(db.topics[currentKingdom?.id||'']||[]).find(tp=>tp.subtopics?.some(s=>s.id===subId))
     || (function(){for(const k of db.kingdoms){const f=(db.topics[k.id]||[]).find(tp=>tp.subtopics?.some(s=>s.id===subId));if(f){currentKingdom=k;return f;}}return null;})();
   if(topic)refreshSubs(topic,topicId);
@@ -6540,6 +6553,9 @@ const ACHIEVEMENTS_REGISTRY=[
   {id:'repertorio_preenchido',categoria:'volume',titulo:'Arquiteto do Repertório',descricao:'Cada tema preenchido é munição pra redação.',icone:'🏗️',dificuldade:'dificil',getValue:()=>(db.temasFilledIds||[]).length,tiers:[3,10,25,50,100,175,300]},
   {id:'assuntos_cadastrados',categoria:'volume',titulo:'Cartógrafo do Edital',descricao:'Mapear o edital inteiro é meio caminho andado.',icone:'🗺️',dificuldade:'dificil',getValue:()=>db.subtopicsCreatedTotal||0,tiers:[5,25,60,120,250,500,1000]},
   {id:'horas_totais',categoria:'volume',titulo:'Guardião das Horas',descricao:'Tempo investido nunca é tempo perdido.',icone:'⏳',dificuldade:'dificil',getValue:()=>Math.floor((db.lifetimeSeconds||0)/3600),tiers:[5,30,100,300,600,1000,2000]},
+  {id:'colecionador_xp',categoria:'volume',titulo:'Colecionador de XP',descricao:'XP total acumulado em toda a plataforma.',icone:'⭐',dificuldade:'dificil',getValue:()=>db.xp||0,tiers:[500,2000,6000,15000,35000,70000]},
+  {id:'ascensao',categoria:'volume',titulo:'Ascensão do Nomeado',descricao:'Subir de nível — cada faixa é um título novo no Vale.',icone:'🐉',dificuldade:'dificilimo',getValue:()=>xpLevelInfo(db.xp||0).level,tiers:[6,13,23,36]},
+  {id:'estrategista_provas',categoria:'volume',titulo:'Estrategista de Provas',descricao:'Simulados gerais completos — treino de prova cheia, contra o relógio.',icone:'🎓',dificuldade:'medio',getValue:()=>db.simGeralSessionsCount||0,tiers:[1,5,15,30,60]},
 
   // --- B) CONSISTÊNCIA / DISCIPLINA ---
   {id:'streak',categoria:'consistencia',titulo:'Chama Eterna',descricao:'A ofensiva que separa aprovado de desistente.',icone:'🔥',dificuldade:'dificil',getValue:()=>db.longestStreak||0,tiers:[3,7,30,60,100,180,365]},
@@ -6639,6 +6655,9 @@ function achievementRarity(a){
 
 // Compara o nível atual de cada conquista com o último salvo — dispara toast de
 // desbloqueio em tempo real e persiste o novo estado (unlockedAt implícito, nunca regride).
+// XP base por raridade da conquista (o "gamerscore" das conquistas era uma moeda
+// paralela que nunca virava XP de verdade — agora todo desbloqueio alimenta o XP também).
+const ACHIEVEMENT_XP_BASE={Comum:10,Incomum:20,Rara:35,'Épica':60,'Lendária':100};
 function checkAchievementUnlocks(){
   if(!db.achievementsState)db.achievementsState={};
   let changed=false;
@@ -6648,11 +6667,18 @@ function checkAchievementUnlocks(){
     if(st.tierIdx>prevTier){
       db.achievementsState[a.id]=st.tierIdx;
       changed=true;
+      // Soma XP de cada tier cruzado (pode ser mais de um, se o valor pulou vários
+      // níveis entre uma checagem e outra) — tiers mais altos da mesma conquista valem
+      // um pouco mais que os iniciais.
+      const base=ACHIEVEMENT_XP_BASE[achievementRarity(a)]||10;
+      let xpGanho=0;
+      for(let i=prevTier+1;i<=st.tierIdx;i++)xpGanho+=base+i*5;
+      gainXP(xpGanho);
       if(a.secreta){
-        toast(`🔓 Conquista secreta revelada: ${a.titulo}!`,'var(--gold)');
+        toast(`🔓 Conquista secreta revelada: ${a.titulo}! +${xpGanho} XP`,'var(--gold)');
       } else {
         const label=TIER_LABELS[st.tierIdx]||'';
-        toast(`🏆 ${a.titulo} — Nível ${label}!`,'var(--gold)');
+        toast(`🏆 ${a.titulo} — Nível ${label}! +${xpGanho} XP`,'var(--gold)');
       }
     }
   });
@@ -7226,15 +7252,21 @@ function completeRev(subId,idx,mode,quality){
     }
     sub.sm2=sm2Next(sub.sm2,quality);
     const mastered=sub.sm2.reps>=3&&sub.sm2.interval>=90&&quality>=4;
+    // Recall ativo vale mais que tempo passivo, mas escalado pela qualidade do
+    // lembrete — antes era 100 XP fixo tanto pra "esqueci tudo" quanto pra "sabia de
+    // cor", o que valia 3-6x uma hora inteira de estudo livre, desbalanceando tudo.
+    const revXp={1:15,3:25,4:35,5:40}[quality]||20;
     if(mastered){
       sub.revMastered=true;
-      toast(`🎉 Domínio total! Você lembrou bem várias vezes seguidas — sem mais revisões agendadas por agora. +100 XP`,'var(--green)');
+      toast(`🎉 Domínio total! Você lembrou bem várias vezes seguidas — sem mais revisões agendadas por agora. +${revXp} XP`,'var(--green)');
     }else{
       db.revisions[subId].push({date:addDays(todayStr(),sub.sm2.interval),completed:false});
-      toast(`✅ Revisão concluída! +100 XP · Próxima em ${sub.sm2.interval} dia${sub.sm2.interval>1?'s':''} 📅`,'var(--green)');
+      toast(`✅ Revisão concluída! +${revXp} XP · Próxima em ${sub.sm2.interval} dia${sub.sm2.interval>1?'s':''} 📅`,'var(--green)');
     }
+    gainXP(revXp);
   } else {
-    toast('✅ Revisão concluída! +100 XP','var(--green)');
+    gainXP(15);
+    toast('✅ Revisão concluída! +15 XP','var(--green)');
   }
 
   // Contador diário de revisões concluídas (usado por conquistas secretas: "Centurião", "Fila Zerada")
@@ -7249,7 +7281,7 @@ function completeRev(subId,idx,mode,quality){
     db.secretsUnlocked.fila_zerada=true;
   }
 
-  gainXP(100);saveDB();
+  saveDB();
   updateRevBadge();renderMap();renderHeader();
   if(subTopic)refreshSubs(subTopic,subTopic.id);
   if(mode==='list')renderRevisions();
@@ -7887,7 +7919,16 @@ function renderDashboard(){
   if(streak>(db.longestStreak||0)){db.longestStreak=streak;achievementsDirty=true;}
   if(goalPct>=100){
     if(!db.goalHitDays)db.goalHitDays=[];
-    if(!db.goalHitDays.includes(today)){db.goalHitDays.push(today);achievementsDirty=true;}
+    if(!db.goalHitDays.includes(today)){
+      db.goalHitDays.push(today);achievementsDirty=true;
+      gainXP(20);toast('🎯 Meta diária batida! +20 XP','var(--green)');
+    }
+  }
+  // Marco de streak a cada 7 dias seguidos — só uma vez por marco novo (não regride
+  // se o streak cair e subir de novo até o mesmo número).
+  if(streak>0&&streak%7===0&&streak>(db.streakXpMilestone||0)){
+    db.streakXpMilestone=streak;achievementsDirty=true;
+    gainXP(50);toast(`🔥 ${streak} dias seguidos! +50 XP`,'var(--gold)');
   }
   // "Colecionador de Chamas": recuperar o streak até 30 depois de tê-lo perdido.
   if(streak===0&&(db.longestStreak||0)>0&&!db.streakHadDrop){db.streakHadDrop=true;achievementsDirty=true;}
@@ -7895,13 +7936,14 @@ function renderDashboard(){
   if(achievementsDirty)saveDB();
 
   // Stats
+  const dashLvl=xpLevelInfo(db.xp||0);
   document.getElementById('dash-stats').innerHTML=[
     {icon:'⚔️',val:totBoss,lbl:'Chefões',color:'var(--accent)'},
     {icon:'👾',val:totMini,lbl:'Minibosses',color:'var(--cyan)'},
     {icon:'⏱️',val:fmtTime(totTime),lbl:'Tempo total',color:'#8b5cf6'},
     {icon:'✅',val:totRevDone,lbl:'Revisões feitas',color:'var(--green)'},
     {icon:'⚠️',val:totRevOver,lbl:'Rev. atrasadas',color:totRevOver>0?'var(--red)':'var(--green)'},
-    {icon:'⭐',val:(db.xp||0).toLocaleString(),lbl:'XP Total',color:'var(--gold)'},
+    {icon:dashLvl.icon,val:(db.xp||0).toLocaleString(),lbl:`Nível ${dashLvl.level} · ${dashLvl.titulo}`,color:'var(--gold)'},
   ].map(s=>`<div class="stat-card"><span class="stat-icon">${s.icon}</span><div class="stat-val" style="color:${s.color}">${s.val}</div><div class="stat-lbl">${s.lbl}</div></div>`).join('');
 
   // Overdue revisions (dashboard — only truly late, respeitando encadeamento)
@@ -8136,9 +8178,45 @@ function initPhrase(){
   if(el){el.textContent=PHRASES[phraseIdx];el.style.transition='opacity 0.2s';}
 }
 
+// ===== SISTEMA DE NÍVEL =====
+// Curva de raiz quadrada: xp_para_nivel(N) = 50*(N-1)². Os primeiros níveis vêm rápido
+// (motivação imediata), os últimos exigem bem mais XP (jogo de longo prazo, meses de uso).
+// Nível 6 ≈ 1.250 XP · Nível 13 ≈ 7.200 XP · Nível 23 ≈ 24.200 XP · Nível 36 ≈ 61.250 XP.
+const LEVEL_TITLES=[
+  {min:1,nome:'Aprendiz do Vale',icon:'🌱'},
+  {min:6,nome:'Andarilho',icon:'🥾'},
+  {min:13,nome:'Guardião',icon:'🛡️'},
+  {min:23,nome:'Nomeado',icon:'⚔️'},
+  {min:36,nome:'Lenda do Vale',icon:'🐉'},
+];
+function xpForLevel(level){return 50*Math.pow(Math.max(1,level)-1,2);}
+function xpLevelInfo(xp){
+  xp=Math.max(0,xp||0);
+  const level=Math.floor(Math.sqrt(xp/50))+1;
+  const xpAtLevel=xpForLevel(level);
+  const xpNext=xpForLevel(level+1);
+  const pct=xpNext>xpAtLevel?Math.max(0,Math.min(100,Math.round((xp-xpAtLevel)/(xpNext-xpAtLevel)*100))):100;
+  let titulo=LEVEL_TITLES[0].nome,icon=LEVEL_TITLES[0].icon;
+  for(const t of LEVEL_TITLES){if(level>=t.min){titulo=t.nome;icon=t.icon;}}
+  return{level,titulo,icon,xp,xpAtLevel,xpNext,xpFalta:Math.max(0,xpNext-xp),pct};
+}
+function updateXPDisplay(){
+  const info=xpLevelInfo(db.xp||0);
+  const numEl=document.getElementById('total-xp');
+  if(numEl)numEl.textContent=(db.xp||0).toLocaleString();
+  const lvlEl=document.getElementById('xp-level-lbl');
+  if(lvlEl)lvlEl.textContent=`${info.icon} NÍVEL ${info.level} · ${info.titulo.toUpperCase()}`;
+}
 function gainXP(n){
-  db.xp=(db.xp||0)+n;saveDB();
-  document.getElementById('total-xp').textContent=(db.xp||0).toLocaleString();
+  if(!n)return;
+  const before=xpLevelInfo(db.xp||0).level;
+  db.xp=(db.xp||0)+n;
+  saveDB();
+  updateXPDisplay();
+  const after=xpLevelInfo(db.xp||0);
+  if(after.level>before){
+    toast(`🎉 Subiu de nível! Agora você é ${after.icon} Nível ${after.level} · ${after.titulo}`,'var(--gold)');
+  }
 }
 
 // ===== EDITAIS =====
@@ -8377,7 +8455,9 @@ function repToggleDominado(temaId,secaoId){
   repInit();
   const t=db.repertorio.temas[temaId];if(!t)return;
   if(!t.dominado)t.dominado={};
-  t.dominado[secaoId]=!t.dominado[secaoId];
+  const novoDominado=!t.dominado[secaoId];
+  t.dominado[secaoId]=novoDominado;
+  if(novoDominado)gainXP(10); // só ao marcar como dominado, não ao desmarcar
   saveDB();
   repRenderSidebar();repRenderMain();
 }
@@ -8498,6 +8578,10 @@ function repSaveTema(){
   if(!repSelectedTema)return;
   repInit();
   const t=db.repertorio.temas[repSelectedTema.id];if(!t)return;
+  // XP por seção NOVA preenchida (compara antes/depois do save) — evita dar XP de novo
+  // só por reeditar/ajustar uma seção que já estava preenchida.
+  const preenchidasAntes=new Set(SECOES.filter(s=>t[s.id]&&t[s.id].trim()).map(s=>s.id));
+  const completudeAntes=repCompletude(t);
   SECOES.forEach(s=>{
     const el=document.getElementById('rep-inp-'+s.id);
     if(el)t[s.id]=el.value;
@@ -8507,9 +8591,19 @@ function repSaveTema(){
     if(!db.temasFilledIds)db.temasFilledIds=[];
     if(!db.temasFilledIds.includes(t.id))db.temasFilledIds.push(t.id);
   }
+  const novasSecoes=SECOES.filter(s=>t[s.id]&&t[s.id].trim()&&!preenchidasAntes.has(s.id)).length;
+  let xpMsg='';
+  if(novasSecoes>0){
+    gainXP(novasSecoes*5);
+    xpMsg=` +${novasSecoes*5} XP`;
+  }
+  if(completudeAntes<100&&repCompletude(t)===100){
+    gainXP(30);
+    xpMsg+=' · +30 XP (tema completo!)';
+  }
   markDailyActivity(todayStr(),null,'repertorio');
   saveDB();repEditMode=false;repRenderSidebar();repRenderMain();
-  toast('✅ Tema salvo!','var(--green)');
+  toast(`✅ Tema salvo!${xpMsg}`,'var(--green)');
 }
 
 function repDeleteTema(id){
@@ -9786,7 +9880,8 @@ RESPONDA APENAS COM JSON, sem texto antes ou depois, sem markdown, no formato ex
       tlField.value=tl;
     }
     rdCalcLive();
-    toast('🤖 Correção da IA pronta! Revise os valores sugeridos.','var(--accent)');
+    gainXP(10);
+    toast('🤖 Correção da IA pronta! Revise os valores sugeridos. +10 XP','var(--accent)');
   }catch(e){
     toast('❌ '+(e.message||'Erro ao corrigir com IA'),'var(--red)');
     rdPendingAiFeedback=null;
@@ -9857,17 +9952,27 @@ function rdSaveRedacao(){
     const npd=(ncN!==null&&neN!==null&&tlN!==null&&tlN>0)?calcNPD(ncN,neN,tlN):null;
 
     rdInit();
+    let rec;
     if(rdEditingId&&db.redacoes.textos[rdEditingId]){
-      Object.assign(db.redacoes.textos[rdEditingId],{titulo,nc:ncN,ne:neN,tl:tlN,npd,texto,obs,padrao,quesitos,aiFeedback});
+      rec=db.redacoes.textos[rdEditingId];
+      Object.assign(rec,{titulo,nc:ncN,ne:neN,tl:tlN,npd,texto,obs,padrao,quesitos,aiFeedback});
       toast('✅ Redação atualizada!','var(--green)');
     } else {
       const id='rd_'+genId();
-      db.redacoes.textos[id]={id,topicId:rdSelectedTopic.id,titulo,nc:ncN,ne:neN,tl:tlN,npd,texto,obs,padrao,quesitos,aiFeedback,criacao:new Date().toISOString()};
+      rec=db.redacoes.textos[id]={id,topicId:rdSelectedTopic.id,titulo,nc:ncN,ne:neN,tl:tlN,npd,texto,obs,padrao,quesitos,aiFeedback,criacao:new Date().toISOString()};
       db.redacoesCreatedTotal=(db.redacoesCreatedTotal||0)+1;
       const rtd=todayStr();
       if(!db.redacoesPerDay)db.redacoesPerDay={};
       db.redacoesPerDay[rtd]=(db.redacoesPerDay[rtd]||0)+1;
-      toast(`📝 Redação salva!${npd!==null?' NPD: '+npd.toFixed(2):''}`,npd===null?'var(--accent)':npd>=15?'var(--green)':'var(--red)');
+      gainXP(15);
+      toast(`📝 Redação salva! +15 XP${npd!==null?' · NPD: '+npd.toFixed(2):''}`,npd===null?'var(--accent)':npd>=15?'var(--green)':'var(--red)');
+    }
+    // Bônus só na primeira vez que ESSA redação cruza NPD ≥ 15 — não repete a cada
+    // reedição de uma redação que já tinha sido aprovada antes.
+    if(npd!==null&&npd>=15&&!rec.xpAprovadoAwarded){
+      rec.xpAprovadoAwarded=true;
+      gainXP(50);
+      toast('🏆 Redação aprovada! +50 XP de bônus','var(--gold)');
     }
     markDailyActivity(todayStr(),null,'redacao');
     saveDB();rdCloseForm();rdRenderTopics();rdRenderMain();
@@ -10482,6 +10587,22 @@ function logFCReview(ok){
   if(db.fcReviewLog.length>500)db.fcReviewLog=db.fcReviewLog.slice(-500);
 }
 
+// XP por flashcard revisado: acertar um card "de baixo domínio" (mais errado que
+// acertado historicamente) vale mais — recompensa atacar o que você mais esquece, não
+// só bater recorde de clique. Trava diária: depois de ~50 revisões premiadas no dia, a
+// revisão continua contando pra tudo (SM-2, conquistas, streak), só para de dar XP —
+// pra não virar "fica clicando certo/errado" só pelo número subir.
+const FC_XP_DAILY_CAP=50;
+function fcAwardReviewXP(cardId,ok){
+  const td=todayStr();
+  if(!db.fcXpToday||db.fcXpToday.date!==td)db.fcXpToday={date:td,count:0};
+  if(db.fcXpToday.count>=FC_XP_DAILY_CAP)return;
+  db.fcXpToday.count++;
+  const c=db.flashcards?.[cardId];
+  const baixoDominio=!!(c&&(c.erros||0)>(c.acertos||0));
+  gainXP(ok?(baixoDominio?4:2):1);
+}
+
 // Combo de acertos e maturidade de cards — usados pelas conquistas "Combo Perfeito"
 // e "Cards Blindados" (nunca regridem: uma vez maduro, o card conta pra sempre).
 function trackFCReviewOutcome(cardId,ok,prevTouch){
@@ -10518,6 +10639,7 @@ function fcGridMark(cardId,acertou){
   c.sm2=sm2Next(c.sm2,acertou?4:1);
   c.ultimaRevisao=new Date().toISOString();
   trackFCReviewOutcome(cardId,acertou,prevTouch);
+  fcAwardReviewXP(cardId,acertou);
   saveDB();
   // Feedback visual no card
   const card=document.getElementById('fccard-'+cardId);
@@ -10830,6 +10952,7 @@ function fcStudyConf(cardId,conf){
   if(!c.sm2)c.sm2={ef:2.5,reps:0,interval:1};
   c.sm2=sm2Next(c.sm2,quality);
   trackFCReviewOutcome(cardId,conf>=3,prevTouch);
+  fcAwardReviewXP(cardId,conf>=3);
   saveDB();
   fcStudyIdx=(fcStudyIdx+1)%fcStudyCards.length;
   fcStudyFlipped=false;
