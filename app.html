@@ -9637,11 +9637,23 @@ function rdQuesitosHTML(fb){
     ${rescale}
   </div>`;
 }
+// A IA às vezes lista o mesmo trecho errado mais de uma vez (ex: quando a mesma palavra
+// aparece repetida no texto do candidato) — dedup por trecho+tipo normalizados, mantendo
+// a primeira ocorrência, independente do prompt já pedir pra não repetir.
+function rdDedupErros(erros){
+  const vistos=new Set();
+  return(erros||[]).filter(e=>{
+    const chave=(e.trecho||'').trim().toLowerCase()+'|'+(e.tipo||'');
+    if(vistos.has(chave))return false;
+    vistos.add(chave);
+    return true;
+  });
+}
 function rdAiFeedbackHTML(fb){
   if(!fb)return'';
   const fortes=(fb.pontosFortes||[]).map(p=>`<li style="color:var(--green)">${p}</li>`).join('');
   const faltantes=(fb.pontosFaltantes||[]).map(p=>`<li style="color:var(--orange)">${p}</li>`).join('');
-  const erros=(fb.erros||[]).map(e=>`<div class="rd-ai-erro"><span class="rd-ai-erro-trecho">"${e.trecho||''}"</span>${e.tipo?` <span style="color:var(--muted)">(${rdCriterioLabel(e.tipo)})</span>`:''}${e.sugestao?`<div class="rd-ai-erro-sugestao">→ ${e.sugestao}</div>`:''}</div>`).join('');
+  const erros=rdDedupErros(fb.erros).map(e=>`<div class="rd-ai-erro"><span class="rd-ai-erro-trecho">"${e.trecho||''}"</span>${e.tipo?` <span style="color:var(--muted)">(${rdCriterioLabel(e.tipo)})</span>`:''}${e.sugestao?`<div class="rd-ai-erro-sugestao">→ ${e.sugestao}</div>`:''}</div>`).join('');
   const criterios=fb.criterios?RD_CRITERIOS.map(c=>rdCriterioBarHTML(c,fb.criterios[c.id])).join(''):'';
   return`<div class="rd-ai-panel">
     <div class="rd-ai-title"><i class="fa fa-wand-magic-sparkles"></i> Feedback da IA ${typeof fb.nc==='number'?`· sugestão NC: ${fb.nc}`:''} ${typeof fb.ne==='number'?`· sugestão NE: ${fb.ne}`:''}</div>
@@ -9715,7 +9727,7 @@ ${ncInstrucao}
   - acentuacao: acentos gráficos e ortografia conforme o Acordo Ortográfico vigente.
   - pontuacao: vírgulas, ponto final, ponto e vírgula — uso correto dos sinais.
   - adequacao: registro formal, sem coloquialismos, gírias ou marcas de oralidade — atenção especial a: excesso de gerúndio (ex: "perpetuando" deveria ser "isso perpetua"), uso de 1ª pessoa do plural ("nós", "nosso") e expressões coloquiais (ex: "desde cedo" deveria ser "desde a tenra idade").
-- erros: liste cada desvio encontrado com o trecho exato, o "tipo" (deve ser exatamente um destes valores: coesao, clareza, gramatica, acentuacao, pontuacao, adequacao) e uma sugestão de correção.
+- erros: liste cada desvio encontrado com o trecho exato, o "tipo" (deve ser exatamente um destes valores: coesao, clareza, gramatica, acentuacao, pontuacao, adequacao) e uma sugestão de correção. Se a MESMA palavra/expressão errada aparecer repetida em vários pontos do texto (ex: "vazios assistencias" usado 2 vezes), liste-a UMA ÚNICA VEZ na lista de erros — não repita o mesmo trecho+correção mais de uma vez.
 - pontosFortes: o que o texto cobriu bem.
 - pontosFaltantes: o que faltou ou foi abordado de forma insuficiente.
 - comentario: um parágrafo curto resumindo a avaliação${quesitos?' — inclua um resumo de como chegou na nc a partir dos quesitos':''}.
