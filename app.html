@@ -449,7 +449,7 @@ nav{
 .rd-ai-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:5px;}
 .rd-ai-list li{font-size:11.5px;color:var(--text2);line-height:1.5;padding-left:14px;position:relative;}
 .rd-ai-list li::before{content:'';position:absolute;left:0;top:7px;width:5px;height:5px;border-radius:50%;}
-.rd-ai-erros{display:flex;flex-direction:column;gap:6px;}
+.rd-ai-erros{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px;align-items:start;}
 .rd-ai-erro{background:var(--bg2);border-radius:10px;padding:8px 10px;font-size:11.5px;}
 .rd-ai-erro-trecho{color:var(--red);font-weight:700;font-style:italic;}
 .rd-ai-erro-sugestao{color:var(--text2);margin-top:3px;}
@@ -9637,6 +9637,18 @@ function rdQuesitosHTML(fb){
     ${rescale}
   </div>`;
 }
+// Destila, dos quesitos avaliados, só os que perderam ponto — pra não precisar caçar
+// a justificativa espalhada nos cards acima quando a única dúvida é "o que faltou".
+function rdMotivoNaoMaximaHTML(fb){
+  if(!fb?.quesitosAvaliados?.length)return'';
+  const perdidos=fb.quesitosAvaliados.filter(q=>(Number(q.pontos)||0)<(Number(q.max)||0));
+  if(!perdidos.length)return'';
+  const itens=perdidos.map(q=>`<li style="color:var(--text2)"><b style="color:var(--red)">${q.id||''}</b> <span style="color:var(--muted);font-weight:700">(${q.pontos??0}/${q.max??0})</span> — ${q.justificativa||'sem justificativa detalhada.'}</li>`).join('');
+  return`<div style="margin-bottom:12px">
+    <div class="rd-ai-col-title" style="color:var(--red)">📉 Por que a NC não foi máxima</div>
+    <ul class="rd-ai-list">${itens}</ul>
+  </div>`;
+}
 // A IA às vezes lista o mesmo trecho errado mais de uma vez (ex: quando a mesma palavra
 // aparece repetida no texto do candidato) — dedup por trecho+tipo normalizados, mantendo
 // a primeira ocorrência, independente do prompt já pedir pra não repetir.
@@ -9659,6 +9671,7 @@ function rdAiFeedbackHTML(fb){
     <div class="rd-ai-title"><i class="fa fa-wand-magic-sparkles"></i> Feedback da IA ${typeof fb.nc==='number'?`· sugestão NC: ${fb.nc}`:''} ${typeof fb.ne==='number'?`· sugestão NE: ${fb.ne}`:''}</div>
     ${fb.comentario?`<div class="rd-ai-comment">${fb.comentario}</div>`:''}
     ${rdQuesitosHTML(fb)}
+    ${rdMotivoNaoMaximaHTML(fb)}
     ${criterios?`<div class="rd-criterios-grid">${criterios}</div>`:''}
     ${(fortes||faltantes)?`<div class="rd-ai-cols">
       <div><div class="rd-ai-col-title" style="color:var(--green)">✅ Pontos fortes</div><ul class="rd-ai-list">${fortes||'<li style="color:var(--muted)">—</li>'}</ul></div>
@@ -9698,11 +9711,18 @@ async function rdCorrigirComIA(){
 QUESITOS AVALIADOS (critérios oficiais de pontuação da NC, colados pelo usuário — use isso pra CALCULAR a nc, não estime livremente):
 ${quesitos}
 
-Como calcular a nc a partir dos quesitos acima:
-1. Para CADA quesito listado, releia o texto do candidato e decida em qual nível de pontuação (0, 1, 2, 3... conforme os níveis descritos em cada quesito) ele se encaixa, com base no que foi de fato escrito — não dê o benefício da dúvida.
-2. Some os pontos obtidos em todos os quesitos = pontuação bruta obtida. Some também o máximo de cada quesito = pontuação máxima bruta possível (pode ser diferente de 30 — ex: uma prova que vale 10 pontos no total desses quesitos).
-3. Se a pontuação máxima bruta for diferente de 30, CONVERTA proporcionalmente pra escala de 0 a 30 usada nesse app: nc = (pontuação obtida ÷ pontuação máxima bruta) × 30. Se a máxima já for 30, use a pontuação obtida direto.
-4. Preencha "quesitosAvaliados" no JSON com um item por quesito (id, pontos obtidos NA ESCALA ORIGINAL do quesito, máximo NA ESCALA ORIGINAL, e uma justificativa curta e específica do texto). Preencha "quesitosMaxOriginal" com a soma das pontuações máximas originais (ex: 10).
+Os quesitos acima podem vir em DOIS formatos — identifique qual é e aplique a regra certa:
+
+FORMATO A — níveis de pontuação explícitos (ex: "Quesito 2.1: 0 – Não abordou... 1 – Mencionou de forma vaga... 2 – Abordou de forma inconsistente... 3 – Abordou, articulando adequadamente..."):
+Releia o texto do candidato e decida em qual nível (0, 1, 2, 3...) ele se encaixa, com base no que foi de fato escrito — não dê o benefício da dúvida.
+
+FORMATO B — lista simples de aspectos a cobrir dentro de um quesito, sem níveis numéricos (ex: "Quesito 2 [valor: 9,50 pontos]: contextualização, consequências, benefícios e estratégias de melhoria"):
+A nota máxima do quesito (9,50 no exemplo) só é dada se TODOS os aspectos listados forem abordados de forma completa e não superficial. Para cada aspecto ausente ou tratado de forma superficial, desconte proporcionalmente (ex: 4 aspectos de peso igual, 1 ausente = ~75% da nota máxima do quesito; 1 superficial = desconto menor que ausente, mas ainda perceptível). Trate cada aspecto como um "subitem" dentro do quesito — no "id" do item em quesitosAvaliados, use "quesito – aspecto" (ex: "2 – contextualização") pra deixar claro qual aspecto está sendo pontuado, com pontos/max relativos a esse aspecto dentro do quesito (ex: cada aspecto vale 1/4 do quesito).
+
+Regras gerais (valem pros dois formatos):
+1. Some os pontos obtidos em todos os itens = pontuação bruta obtida. Some também o máximo de cada item = pontuação máxima bruta possível (pode ser diferente de 30 — ex: uma prova que vale 10 pontos no total desses quesitos).
+2. Se a pontuação máxima bruta for diferente de 30, CONVERTA proporcionalmente pra escala de 0 a 30 usada nesse app: nc = (pontuação obtida ÷ pontuação máxima bruta) × 30. Se a máxima já for 30, use a pontuação obtida direto.
+3. Preencha "quesitosAvaliados" no JSON com um item por quesito (ou por aspecto, no formato B), cada um com id, pontos obtidos NA ESCALA ORIGINAL, máximo NA ESCALA ORIGINAL, e uma "justificativa" que — sempre que pontos < max — explique ESPECIFICAMENTE o que faltou ou foi insuficiente nesse trecho, citando o que o texto deveria ter e não teve (não apenas "poderia ser melhor"). Quando pontos===max, a justificativa pode ser curta (ex: "abordado por completo"). Preencha "quesitosMaxOriginal" com a soma das pontuações máximas originais (ex: 10).
 `:`
 - nc (nota de conteúdo): como o usuário não informou os quesitos oficiais de pontuação, estime de 0 a 30 avaliando cobertura do tema, estrutura, desenvolvimento argumentativo e aderência ao padrão de resposta (se fornecido).`;
 
