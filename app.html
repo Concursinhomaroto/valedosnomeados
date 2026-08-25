@@ -9523,7 +9523,7 @@ function rdOpenForm(id=null){
       <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Notas e métricas</div>
       <div class="rd-input-row">
         <div class="rd-input-group">
-          <label class="rd-input-label">NC — Nota Conteúdo (0–30)</label>
+          <label class="rd-input-label">NC — Nota Conteúdo (0–30) <span style="font-weight:400;text-transform:none;color:var(--muted)">(a IA calcula ↓)</span></label>
           <input class="rd-input-field inp" id="rd-inp-nc" type="number" min="0" max="30" step="0.5" placeholder="0–30" value="${r?.nc??''}" oninput="rdCalcLive()">
         </div>
         <div class="rd-input-group">
@@ -9543,6 +9543,10 @@ function rdOpenForm(id=null){
 
       <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Padrão de resposta / gabarito (opcional — melhora a precisão da correção por IA)</div>
       <textarea class="inp" id="rd-inp-padrao" style="width:100%;min-height:60px;resize:vertical;margin-bottom:10px" placeholder="Cole aqui o espelho de correção da banca, se você tiver...">${r?.padrao||''}</textarea>
+
+      <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Quesitos avaliados — critérios oficiais de pontuação da NC (opcional)</div>
+      <div style="font-size:10.5px;color:var(--muted);margin-bottom:6px;line-height:1.5">Cole aqui a tabela de "Quesitos avaliados" do espelho de correção (aquela com "Quesito 2.1: 0 – Não abordou... 1 – Mencionou de forma vaga... 2 –...", etc). Com isso a <b>IA calcula a NC quesito por quesito</b> — você não precisa mais estimar a nota sozinho.</div>
+      <textarea class="inp" id="rd-inp-quesitos" style="width:100%;min-height:80px;resize:vertical;margin-bottom:10px;font-family:'Courier New',Courier,monospace;font-size:12px" placeholder="Quesito 2.1&#10;0 – Não abordou o aspecto.&#10;1 – Apenas mencionou de forma vaga, sem desenvolver.&#10;2 – Abordou de forma inconsistente ou desconectada.&#10;3 – Abordou, articulando adequadamente com o tema.&#10;&#10;Quesito 2.2&#10;...">${r?.quesitos||''}</textarea>
 
       <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:4px">
         <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase"><span class="rd-folha-titulo-full">Folha de redação simulada (padrão Cebraspe, 30 linhas)</span><span class="rd-folha-titulo-short">Folha simulada (Cebraspe)</span></div>
@@ -9612,6 +9616,27 @@ function rdCriterioBarHTML(c,dado){
 function rdAiFeedbackLoadingHTML(){
   return`<div class="rd-ai-panel" style="text-align:center;color:var(--muted)"><i class="fa fa-spinner fa-spin"></i> IA analisando sua redação...</div>`;
 }
+function rdQuesitosHTML(fb){
+  if(!fb?.quesitosAvaliados?.length)return'';
+  const maxOriginal=fb.quesitosMaxOriginal||fb.quesitosAvaliados.reduce((a,q)=>a+(Number(q.max)||0),0);
+  const obtido=fb.quesitosAvaliados.reduce((a,q)=>a+(Number(q.pontos)||0),0);
+  const itens=fb.quesitosAvaliados.map(q=>{
+    const max=Number(q.max)||0,pontos=Number(q.pontos)||0;
+    const pct=max?Math.max(0,Math.min(100,(pontos/max)*100)):0;
+    const cor=pct>=100?'var(--green)':pct>=50?'var(--orange)':'var(--red)';
+    return`<div class="rd-criterio">
+      <div class="rd-criterio-head"><span>Quesito ${q.id||''}</span><span style="color:${cor};font-weight:900">${pontos}/${max}</span></div>
+      <div class="rd-criterio-bar"><div class="rd-criterio-fill" style="width:${pct}%;background:${cor}"></div></div>
+      ${q.justificativa?`<div class="rd-criterio-comentario">${q.justificativa}</div>`:''}
+    </div>`;
+  }).join('');
+  const rescale=maxOriginal&&maxOriginal!==30?`<div style="font-size:10.5px;color:var(--muted);margin-top:4px">${obtido}/${maxOriginal} pontos na escala original do edital → convertido para ${typeof fb.nc==='number'?fb.nc:'—'}/30 (escala usada nesse app).</div>`:'';
+  return`<div style="margin-bottom:12px">
+    <div class="rd-ai-title" style="margin-bottom:8px"><i class="fa fa-list-check"></i> Pontuação por quesito (como a IA chegou na NC)</div>
+    <div class="rd-criterios-grid">${itens}</div>
+    ${rescale}
+  </div>`;
+}
 function rdAiFeedbackHTML(fb){
   if(!fb)return'';
   const fortes=(fb.pontosFortes||[]).map(p=>`<li style="color:var(--green)">${p}</li>`).join('');
@@ -9621,6 +9646,7 @@ function rdAiFeedbackHTML(fb){
   return`<div class="rd-ai-panel">
     <div class="rd-ai-title"><i class="fa fa-wand-magic-sparkles"></i> Feedback da IA ${typeof fb.nc==='number'?`· sugestão NC: ${fb.nc}`:''} ${typeof fb.ne==='number'?`· sugestão NE: ${fb.ne}`:''}</div>
     ${fb.comentario?`<div class="rd-ai-comment">${fb.comentario}</div>`:''}
+    ${rdQuesitosHTML(fb)}
     ${criterios?`<div class="rd-criterios-grid">${criterios}</div>`:''}
     ${(fortes||faltantes)?`<div class="rd-ai-cols">
       <div><div class="rd-ai-col-title" style="color:var(--green)">✅ Pontos fortes</div><ul class="rd-ai-list">${fortes||'<li style="color:var(--muted)">—</li>'}</ul></div>
@@ -9645,12 +9671,29 @@ async function rdCorrigirComIA(){
 
   const titulo=(document.getElementById('rd-inp-titulo')?.value||'').trim()||'(sem título)';
   const padrao=(document.getElementById('rd-inp-padrao')?.value||'').trim();
+  const quesitos=(document.getElementById('rd-inp-quesitos')?.value||'').trim();
 
   rdAiCorrecting=true;
   const fbWrap=document.getElementById('rd-ai-feedback-wrap');
   if(fbWrap)fbWrap.innerHTML=rdAiFeedbackLoadingHTML();
 
   try{
+    // Quando o usuário cola os "quesitos avaliados" oficiais (a tabela de pontuação
+    // por aspecto que a banca publica no espelho de correção), a NC deixa de ser uma
+    // estimativa geral e passa a ser CALCULADA quesito por quesito, exatamente como o
+    // Cebraspe pontua de verdade — o usuário não precisa mais chutar/estimar a nota.
+    const ncInstrucao=quesitos?`
+QUESITOS AVALIADOS (critérios oficiais de pontuação da NC, colados pelo usuário — use isso pra CALCULAR a nc, não estime livremente):
+${quesitos}
+
+Como calcular a nc a partir dos quesitos acima:
+1. Para CADA quesito listado, releia o texto do candidato e decida em qual nível de pontuação (0, 1, 2, 3... conforme os níveis descritos em cada quesito) ele se encaixa, com base no que foi de fato escrito — não dê o benefício da dúvida.
+2. Some os pontos obtidos em todos os quesitos = pontuação bruta obtida. Some também o máximo de cada quesito = pontuação máxima bruta possível (pode ser diferente de 30 — ex: uma prova que vale 10 pontos no total desses quesitos).
+3. Se a pontuação máxima bruta for diferente de 30, CONVERTA proporcionalmente pra escala de 0 a 30 usada nesse app: nc = (pontuação obtida ÷ pontuação máxima bruta) × 30. Se a máxima já for 30, use a pontuação obtida direto.
+4. Preencha "quesitosAvaliados" no JSON com um item por quesito (id, pontos obtidos NA ESCALA ORIGINAL do quesito, máximo NA ESCALA ORIGINAL, e uma justificativa curta e específica do texto). Preencha "quesitosMaxOriginal" com a soma das pontuações máximas originais (ex: 10).
+`:`
+- nc (nota de conteúdo): como o usuário não informou os quesitos oficiais de pontuação, estime de 0 a 30 avaliando cobertura do tema, estrutura, desenvolvimento argumentativo e aderência ao padrão de resposta (se fornecido).`;
+
     const prompt=`Você é um corretor especializado em questões discursivas de concursos públicos brasileiros (padrão Cebraspe/Cespe).
 
 TAREFA: Avalie a resposta discursiva abaixo e devolva feedback estruturado.
@@ -9663,7 +9706,7 @@ TEXTO DO CANDIDATO:
 ${texto}
 
 REGRAS DE AVALIAÇÃO (padrão Cebraspe):
-- nc (nota de conteúdo): número de 0 a 30, avaliando cobertura do tema, estrutura, desenvolvimento argumentativo e aderência ao padrão de resposta (se fornecido).
+${ncInstrucao}
 - ne (número de erros): conte cada desvio linguístico encontrado no texto (gramática, coesão, clareza, acentuação/ortografia, pontuação, adequação à norma culta) — cada desvio conta 1 erro.
 - criterios: avalie separadamente, cada um com nota de 0 a 10 (10 = impecável) e um comentário curto (1 frase, específico do texto, não genérico):
   - coesao: conectivos, transições entre frases e parágrafos, uso correto de pronomes/referências.
@@ -9675,10 +9718,10 @@ REGRAS DE AVALIAÇÃO (padrão Cebraspe):
 - erros: liste cada desvio encontrado com o trecho exato, o "tipo" (deve ser exatamente um destes valores: coesao, clareza, gramatica, acentuacao, pontuacao, adequacao) e uma sugestão de correção.
 - pontosFortes: o que o texto cobriu bem.
 - pontosFaltantes: o que faltou ou foi abordado de forma insuficiente.
-- comentario: um parágrafo curto resumindo a avaliação.
+- comentario: um parágrafo curto resumindo a avaliação${quesitos?' — inclua um resumo de como chegou na nc a partir dos quesitos':''}.
 
-RESPONDA APENAS COM JSON, sem texto antes ou depois, sem markdown, no formato exato:
-{"nc":0,"ne":0,"comentario":"...","criterios":{"coesao":{"nota":0,"comentario":"..."},"clareza":{"nota":0,"comentario":"..."},"gramatica":{"nota":0,"comentario":"..."},"acentuacao":{"nota":0,"comentario":"..."},"pontuacao":{"nota":0,"comentario":"..."},"adequacao":{"nota":0,"comentario":"..."}},"pontosFortes":["..."],"pontosFaltantes":["..."],"erros":[{"trecho":"...","tipo":"...","sugestao":"..."}]}`;
+RESPONDA APENAS COM JSON, sem texto antes ou depois, sem markdown, no formato exato${quesitos?' (inclua quesitosAvaliados e quesitosMaxOriginal já que os quesitos foram informados)':''}:
+{"nc":0,"ne":0,"comentario":"...","criterios":{"coesao":{"nota":0,"comentario":"..."},"clareza":{"nota":0,"comentario":"..."},"gramatica":{"nota":0,"comentario":"..."},"acentuacao":{"nota":0,"comentario":"..."},"pontuacao":{"nota":0,"comentario":"..."},"adequacao":{"nota":0,"comentario":"..."}},"pontosFortes":["..."],"pontosFaltantes":["..."],"erros":[{"trecho":"...","tipo":"...","sugestao":"..."}]${quesitos?',"quesitosAvaliados":[{"id":"2.1","pontos":0,"max":3,"justificativa":"..."}],"quesitosMaxOriginal":10':''}}`;
 
     const raw=await callGeminiGenerate(apiKey,prompt);
     const fb=extractAIJson(raw);
@@ -9751,6 +9794,7 @@ function rdSaveRedacao(){
     const texto=(document.getElementById('rd-inp-texto')?.value||'').trim();
     const obs=(document.getElementById('rd-inp-obs')?.value||'').trim();
     const padrao=(document.getElementById('rd-inp-padrao')?.value||'').trim();
+    const quesitos=(document.getElementById('rd-inp-quesitos')?.value||'').trim();
     const aiFeedback=rdPendingAiFeedback||null;
 
     const ncN=nc!==''?Number(nc):null;
@@ -9765,11 +9809,11 @@ function rdSaveRedacao(){
 
     rdInit();
     if(rdEditingId&&db.redacoes.textos[rdEditingId]){
-      Object.assign(db.redacoes.textos[rdEditingId],{titulo,nc:ncN,ne:neN,tl:tlN,npd,texto,obs,padrao,aiFeedback});
+      Object.assign(db.redacoes.textos[rdEditingId],{titulo,nc:ncN,ne:neN,tl:tlN,npd,texto,obs,padrao,quesitos,aiFeedback});
       toast('✅ Redação atualizada!','var(--green)');
     } else {
       const id='rd_'+genId();
-      db.redacoes.textos[id]={id,topicId:rdSelectedTopic.id,titulo,nc:ncN,ne:neN,tl:tlN,npd,texto,obs,padrao,aiFeedback,criacao:new Date().toISOString()};
+      db.redacoes.textos[id]={id,topicId:rdSelectedTopic.id,titulo,nc:ncN,ne:neN,tl:tlN,npd,texto,obs,padrao,quesitos,aiFeedback,criacao:new Date().toISOString()};
       db.redacoesCreatedTotal=(db.redacoesCreatedTotal||0)+1;
       const rtd=todayStr();
       if(!db.redacoesPerDay)db.redacoesPerDay={};
