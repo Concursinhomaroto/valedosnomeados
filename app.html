@@ -9773,7 +9773,9 @@ function rdSaveRedacao(){
     saveDB();rdCloseForm();rdRenderTopics();rdRenderMain();
   }catch(e){
     console.error('Falha ao salvar redação:',e);
-    toast('❌ Não foi possível salvar. Seu texto continua aqui no formulário — tente de novo.','var(--red)');
+    // Mostra o motivo real (temporário, pra diagnosticar o bug relatado por usuários —
+    // sem isso a mensagem genérica não dava nenhuma pista do que estava quebrando).
+    toast('❌ Não foi possível salvar: '+(e?.message||e)+' — seu texto continua aqui no formulário.','var(--red)');
   }
 }
 
