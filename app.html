@@ -11875,6 +11875,33 @@ function pmdReset(){
   const btn=document.getElementById('pmd-btn-play');if(btn)btn.textContent='▶ Iniciar';
   const st=document.getElementById('pmd-status');if(st)st.textContent='25min foco · 5min pausa · pausa longa a cada 4';
 }
+
+// Mostra a contagem do Pomodoro/cronômetro livre direto no título da aba do
+// navegador — assim dá pra ver quanto falta sem precisar voltar pra aba do
+// app (ex: enquanto se estuda em outra aba/material). Roda num intervalo
+// próprio, independente do painel do cronômetro estar aberto/minimizado/
+// fechado, porque o tempo em si continua contando em segundo plano de
+// qualquer forma (pmdRunning/ftRunning). Some sozinho quando nenhum
+// cronômetro está rodando, voltando pro título padrão da página.
+const APP_TAB_TITLE=document.title;
+function updateTabTitle(){
+  if(typeof pmdRunning!=='undefined'&&pmdRunning){
+    const rem=pmdGetRemaining();
+    const mm=String(Math.floor(rem/60)).padStart(2,'0'),ss=String(rem%60).padStart(2,'0');
+    const emoji=pmdPhase==='focus'?'🎯':'☕';
+    const fase=pmdPhase==='focus'?'Foco':pmdPhase==='break'?'Pausa':'Pausa longa';
+    document.title=`${emoji} ${mm}:${ss} · ${fase}`;
+  }else if(typeof ftRunning!=='undefined'&&ftRunning){
+    const total=ftGetElapsed();
+    const h=Math.floor(total/3600);
+    const time=(h?String(h).padStart(2,'0')+':':'')+String(Math.floor((total%3600)/60)).padStart(2,'0')+':'+String(total%60).padStart(2,'0');
+    document.title=`⏱️ ${time} · Cronômetro`;
+  }else if(document.title!==APP_TAB_TITLE){
+    document.title=APP_TAB_TITLE;
+  }
+}
+setInterval(updateTabTitle,1000);
+
 // ===== HISTÓRICO DE SESSÕES =====
 let histTab='day';
 function setHistTab(tab,el){
