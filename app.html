@@ -1348,10 +1348,7 @@ nav{
       <span class="nav-icon">🃏</span><span class="nav-label">FLASHCARDS</span>
     </button>
     <button class="nav-btn" id="nav-redacoes">
-      <span class="nav-icon">📝</span><span class="nav-label">REDAÇÕES</span>
-    </button>
-    <button class="nav-btn" id="nav-repertorio">
-      <span class="nav-icon">🧠</span><span class="nav-label">REPERTÓRIO</span>
+      <span class="nav-icon">📝</span><span class="nav-label">REDAÇÃO</span>
     </button>
     <button class="nav-btn" id="nav-conquistas">
       <span class="nav-icon">🏅</span><span class="nav-label">CONQUISTAS</span>
@@ -1664,6 +1661,10 @@ nav{
 
 <!-- ===== REDAÇÕES ===== -->
 <div class="screen" id="screen-redacoes">
+  <div class="rd-conectivos-tabs" style="margin-bottom:14px">
+    <button class="active"><i class="fa fa-pen-nib"></i> Minhas Redações</button>
+    <button onclick="showScreen('repertorio')"><i class="fa fa-book"></i> Banco de Repertório</button>
+  </div>
   <div class="rd-layout">
     <!-- Sidebar: tópicos -->
     <div class="rd-sidebar">
@@ -1690,6 +1691,10 @@ nav{
 
 <!-- ===== REPERTÓRIO ===== -->
 <div class="screen" id="screen-repertorio">
+  <div class="rd-conectivos-tabs" style="margin-bottom:14px">
+    <button onclick="showScreen('redacoes')"><i class="fa fa-pen-nib"></i> Minhas Redações</button>
+    <button class="active"><i class="fa fa-book"></i> Banco de Repertório</button>
+  </div>
   <div class="rep-layout">
 
     <!-- SIDEBAR: Eixos temáticos -->
@@ -3779,11 +3784,14 @@ function openRenewalScreen(reason){
 function showScreen(name){
   if(name!=='flashcards'&&typeof fcVoiceStop==='function')fcVoiceStop();
   if(name==='admin'&&!isAdmin())name='dashboard'; // proteção extra, além do item ficar oculto no menu
+  // Repertório não tem botão próprio no menu — é uma aba dentro de Redação (nav-redacoes)
+  // desde a fusão das duas telas, então o destaque do menu segue apontando pra lá.
+  const navName=name==='repertorio'?'redacoes':name;
   if(LOCKED_SCREENS.includes(name)&&!hasFullAccess()){
     document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
     document.getElementById('screen-locked').classList.add('active');
-    const nb=document.getElementById('nav-'+name);if(nb)nb.classList.add('active');
+    const nb=document.getElementById('nav-'+navName);if(nb)nb.classList.add('active');
     renderLockedScreen(name);
     return;
   }
@@ -3791,7 +3799,7 @@ function showScreen(name){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('screen-'+name).classList.add('active');
-  const nb=document.getElementById('nav-'+name);if(nb)nb.classList.add('active');
+  const nb=document.getElementById('nav-'+navName);if(nb)nb.classList.add('active');
   if(name==='revisions')renderRevisions();
   if(name==='dashboard')renderDashboard();
   if(name==='editais'){renderEditais();updateEditaisBadge();}
@@ -8309,16 +8317,21 @@ function repRenderSidebar(){
   const eixos=db.repertorio.eixos||[];
   const temas=db.repertorio.temas||{};
 
+  // Fora de uma busca, o eixo fica compacto — só ícone, nome e contador. A lista de
+  // temas em si já aparece como cards no Banco de Repertório (área principal, mesmo
+  // layout de sempre), então repetir tudo em texto na lateral só ocupava espaço à
+  // toa. Clicar no eixo leva direto pra essa área. Com busca ativa, mostra os temas
+  // que batem ali mesmo, pra selecionar sem precisar rolar até o card.
   el.innerHTML=eixos.map(e=>{
     const temasList=Object.values(temas).filter(t=>t.eixoId===e.id&&(!q||t.nome.toLowerCase().includes(q)));
     if(q&&!temasList.length)return'';
     return`<div class="rep-eixo-group">
-      <div class="rep-eixo-header" onclick="repToggleEixo('${e.id}')">
+      <div class="rep-eixo-header" onclick="repShowEixoOverview('${e.id}')">
         <span class="rep-eixo-icon">${e.icon}</span>
         <span style="flex:1;color:${e.color}">${e.nome}</span>
         <span style="font-size:10px;color:var(--muted)">${temasList.length}</span>
       </div>
-      <div class="rep-tema-list" id="rep-eixo-${e.id}">
+      ${q?`<div class="rep-tema-list">
         ${temasList.map(t=>{
           const pct=repCompletude(t);
           const dotColor=pct===100?'var(--green)':pct>=60?'var(--orange)':'var(--red)';
@@ -8327,17 +8340,19 @@ function repRenderSidebar(){
             <span class="rep-tema-name">${t.nome}</span>
           </div>`;
         }).join('')}
-        <div class="rep-tema-item" style="opacity:0.5;border-style:dashed;border-color:var(--border)" onclick="repOpenNewTema('${e.id}')">
-          <span style="font-size:11px;color:var(--muted)">+ Adicionar tema</span>
-        </div>
-      </div>
+      </div>`:''}
     </div>`;
   }).join('');
 }
 
-function repToggleEixo(id){
-  const el=document.getElementById('rep-eixo-'+id);
-  if(el)el.style.display=el.style.display==='none'?'block':'none';
+// Clicar num eixo na lateral não expande mais uma lista de texto ali mesmo — volta
+// pro Banco de Repertório (que já mostra tudo em cards, agrupado por eixo) e rola até
+// a seção daquele eixo.
+function repShowEixoOverview(eixoId){
+  repSelectedTema=null;
+  repRenderSidebar();
+  repRenderMain();
+  setTimeout(()=>document.getElementById('rep-eixo-section-'+eixoId)?.scrollIntoView({behavior:'smooth',block:'start'}),60);
 }
 
 // ---- SELECIONAR TEMA ----
@@ -8712,13 +8727,13 @@ function repRenderOverview(){
     ${eixos.map(e=>{
       const temaEixo=temas.filter(t=>t.eixoId===e.id);
       if(!temaEixo.length)return`
-        <div style="background:var(--panel);border:1.5px dashed var(--border);border-radius:16px;padding:16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;cursor:pointer;opacity:0.6" onclick="repOpenNewTema('${e.id}')">
+        <div id="rep-eixo-section-${e.id}" style="background:var(--panel);border:1.5px dashed var(--border);border-radius:16px;padding:16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;cursor:pointer;opacity:0.6" onclick="repOpenNewTema('${e.id}')">
           <span style="font-size:24px">${e.icon}</span>
           <div><div style="font-size:13px;font-weight:800;color:${e.color}">${e.nome}</div>
           <div style="font-size:11px;color:var(--muted)">Nenhum tema ainda — clique para adicionar</div></div>
         </div>`;
       return`
-        <div style="margin-bottom:16px">
+        <div id="rep-eixo-section-${e.id}" style="margin-bottom:16px">
           <div style="font-size:11px;font-weight:900;color:${e.color};text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:flex;align-items:center;gap:6px">
             ${e.icon} ${e.nome} <span style="font-size:10px;color:var(--muted);font-weight:600">${temaEixo.length} tema${temaEixo.length!==1?'s':''}</span>
           </div>
@@ -11771,7 +11786,6 @@ function bindStaticEvents(){
   document.getElementById('nav-editais')?.addEventListener('click',()=>showScreen('editais'));
   document.getElementById('nav-flashcards')?.addEventListener('click',()=>showScreen('flashcards'));
   document.getElementById('nav-redacoes')?.addEventListener('click',()=>showScreen('redacoes'));
-  document.getElementById('nav-repertorio')?.addEventListener('click',()=>showScreen('repertorio'));
   document.getElementById('nav-conquistas')?.addEventListener('click',()=>showScreen('conquistas'));
   document.getElementById('nav-admin')?.addEventListener('click',()=>showScreen('admin'));
   document.getElementById('xp-pill-btn')?.addEventListener('click',()=>showScreen('dashboard'));
@@ -11850,7 +11864,7 @@ window.fcHandlePDF=fcHandlePDF;
 window.loadPDFjs=loadPDFjs;
 window.extractPDFText=extractPDFText;
 window.repRenderSidebar=repRenderSidebar;
-window.repToggleEixo=repToggleEixo;
+window.repShowEixoOverview=repShowEixoOverview;
 window.repSelectTema=repSelectTema;
 window.repVoltar=repVoltar;
 window.repToggleEdit=repToggleEdit;
