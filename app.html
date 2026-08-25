@@ -3107,16 +3107,32 @@ function checkOverdueNotifications(force){
 
 function saveDB(){
   db.lastModified=Date.now();
-  try{localStorage.setItem(LS_KEY,JSON.stringify(sanitizeForFirebase(db)));}catch(e){}
+  try{
+    localStorage.setItem(LS_KEY,JSON.stringify(sanitizeForFirebase(db)));
+  }catch(e){
+    // Não deixa esse erro sumir silenciosamente — se o dado não é serializável (ex: uma
+    // referência circular que entrou em algum campo), nem o backup local funciona, e o
+    // usuário precisa ao menos ver um aviso em vez de achar que salvou.
+    console.warn('Falha ao salvar localmente (localStorage):',e);
+    warnSyncIssue('⚠️ Não foi possível salvar. Tente novamente — se persistir, recarregue a página.');
+  }
   if(useLocalFallback||!DB_REF)return;
   isSaving=true;
   clearTimeout(saveTimeout);
   saveTimeout=setTimeout(()=>{
-    DB_REF.set(sanitizeForFirebase(db)).catch(e=>{
-      console.warn('Firebase save error:',e);
+    try{
+      DB_REF.set(sanitizeForFirebase(db)).catch(e=>{
+        console.warn('Firebase save error:',e);
+        isSaving=false;
+        warnSyncIssue('⚠️ Não foi possível salvar na nuvem agora. Seus dados estão seguros neste dispositivo.');
+      });
+    }catch(e){
+      // sanitizeForFirebase (ou o .set em si) pode lançar de forma síncrona — sem esse
+      // try/catch isso derrubava a página inteira com o aviso genérico de "algo deu errado".
+      console.warn('Falha síncrona ao preparar salvamento na nuvem:',e);
       isSaving=false;
       warnSyncIssue('⚠️ Não foi possível salvar na nuvem agora. Seus dados estão seguros neste dispositivo.');
-    });
+    }
   },800);
 }
 
@@ -9715,38 +9731,50 @@ function rdCloseForm(){
 
 function rdSaveRedacao(){
   if(!rdSelectedTopic){toast('⚠️ Selecione um tópico','var(--red)');return;}
-  const titulo=(document.getElementById('rd-inp-titulo')?.value||'').trim();
-  const nc=document.getElementById('rd-inp-nc')?.value;
-  const ne=document.getElementById('rd-inp-ne')?.value;
-  const tl=document.getElementById('rd-inp-tl')?.value;
-  const texto=(document.getElementById('rd-inp-texto')?.value||'').trim();
-  const obs=(document.getElementById('rd-inp-obs')?.value||'').trim();
-  const padrao=(document.getElementById('rd-inp-padrao')?.value||'').trim();
-  const aiFeedback=rdPendingAiFeedback||null;
+  // Corpo inteiro protegido: se algo aqui lançar (ex: um valor não serializável que
+  // escapou pro aiFeedback), o usuário via só o aviso genérico de "algo deu errado"
+  // sem entender o que houve com o texto que acabou de escrever — e o formulário nem
+  // fechava, então parecia que "não salva nada". Agora sempre sobra um aviso claro,
+  // o texto digitado não é perdido, e o erro real fica no console pra investigar.
+  try{
+    const titulo=(document.getElementById('rd-inp-titulo')?.value||'').trim();
+    const nc=document.getElementById('rd-inp-nc')?.value;
+    const ne=document.getElementById('rd-inp-ne')?.value;
+    const tl=document.getElementById('rd-inp-tl')?.value;
+    const texto=(document.getElementById('rd-inp-texto')?.value||'').trim();
+    const obs=(document.getElementById('rd-inp-obs')?.value||'').trim();
+    const padrao=(document.getElementById('rd-inp-padrao')?.value||'').trim();
+    const aiFeedback=rdPendingAiFeedback||null;
 
-  const ncN=nc!==''?Number(nc):null;
-  const neN=ne!==''?Number(ne):null;
-  const tlN=tl!==''?Number(tl):null;
+    const ncN=nc!==''?Number(nc):null;
+    const neN=ne!==''?Number(ne):null;
+    const tlN=tl!==''?Number(tl):null;
 
-  // Validações
-  if(ncN!==null&&(ncN<0||ncN>30)){toast('⚠️ NC deve ser entre 0 e 30','var(--red)');return;}
-  const npd=(ncN!==null&&neN!==null&&tlN!==null&&tlN>0)?calcNPD(ncN,neN,tlN):null;
+    // Validações
+    if(ncN!==null&&(Number.isNaN(ncN)||ncN<0||ncN>30)){toast('⚠️ NC deve ser um número entre 0 e 30','var(--red)');return;}
+    if(neN!==null&&Number.isNaN(neN)){toast('⚠️ NE deve ser um número','var(--red)');return;}
+    if(tlN!==null&&Number.isNaN(tlN)){toast('⚠️ TL deve ser um número','var(--red)');return;}
+    const npd=(ncN!==null&&neN!==null&&tlN!==null&&tlN>0)?calcNPD(ncN,neN,tlN):null;
 
-  rdInit();
-  if(rdEditingId&&db.redacoes.textos[rdEditingId]){
-    Object.assign(db.redacoes.textos[rdEditingId],{titulo,nc:ncN,ne:neN,tl:tlN,npd,texto,obs,padrao,aiFeedback});
-    toast('✅ Redação atualizada!','var(--green)');
-  } else {
-    const id='rd_'+genId();
-    db.redacoes.textos[id]={id,topicId:rdSelectedTopic.id,titulo,nc:ncN,ne:neN,tl:tlN,npd,texto,obs,padrao,aiFeedback,criacao:new Date().toISOString()};
-    db.redacoesCreatedTotal=(db.redacoesCreatedTotal||0)+1;
-    const rtd=todayStr();
-    if(!db.redacoesPerDay)db.redacoesPerDay={};
-    db.redacoesPerDay[rtd]=(db.redacoesPerDay[rtd]||0)+1;
-    toast(`📝 Redação salva!${npd!==null?' NPD: '+npd.toFixed(2):''}`,npd===null?'var(--accent)':npd>=15?'var(--green)':'var(--red)');
+    rdInit();
+    if(rdEditingId&&db.redacoes.textos[rdEditingId]){
+      Object.assign(db.redacoes.textos[rdEditingId],{titulo,nc:ncN,ne:neN,tl:tlN,npd,texto,obs,padrao,aiFeedback});
+      toast('✅ Redação atualizada!','var(--green)');
+    } else {
+      const id='rd_'+genId();
+      db.redacoes.textos[id]={id,topicId:rdSelectedTopic.id,titulo,nc:ncN,ne:neN,tl:tlN,npd,texto,obs,padrao,aiFeedback,criacao:new Date().toISOString()};
+      db.redacoesCreatedTotal=(db.redacoesCreatedTotal||0)+1;
+      const rtd=todayStr();
+      if(!db.redacoesPerDay)db.redacoesPerDay={};
+      db.redacoesPerDay[rtd]=(db.redacoesPerDay[rtd]||0)+1;
+      toast(`📝 Redação salva!${npd!==null?' NPD: '+npd.toFixed(2):''}`,npd===null?'var(--accent)':npd>=15?'var(--green)':'var(--red)');
+    }
+    markDailyActivity(todayStr(),null,'redacao');
+    saveDB();rdCloseForm();rdRenderTopics();rdRenderMain();
+  }catch(e){
+    console.error('Falha ao salvar redação:',e);
+    toast('❌ Não foi possível salvar. Seu texto continua aqui no formulário — tente de novo.','var(--red)');
   }
-  markDailyActivity(todayStr(),null,'redacao');
-  saveDB();rdCloseForm();rdRenderTopics();rdRenderMain();
 }
 
 function rdEditRedacao(id){rdOpenForm(id);}
