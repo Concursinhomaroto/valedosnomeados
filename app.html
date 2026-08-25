@@ -8839,6 +8839,7 @@ function renderRepertorioScreen(){
 let rdSelectedTopic=null;
 let rdEditingId=null;
 let rdExpandedTexts=new Set();
+let rdExpandedCards=new Set(); // ids das redações com o card aberto (mostrando NC/NE/TL/obs/ações) — por padrão só título/nota/status/data aparecem
 let rdPendingAiFeedback=null; // feedback da IA carregado/gerado pro formulário aberto no momento
 let rdAiCorrecting=false;
 let rdExpandedFeedback=new Set();
@@ -9329,22 +9330,30 @@ function rdCardHTML(r){
   const st=rdStatus(r.npd);
   const npd=r.npd!==null&&r.npd!==undefined?r.npd.toFixed(2):null;
   const expanded=rdExpandedTexts.has(r.id);
+  const cardOpen=rdExpandedCards.has(r.id);
+  // Por padrão o card mostra só título, nota, status e data — o resto (NC/NE/TL,
+  // observações, texto, feedback da IA, editar/excluir) só aparece expandido, pra não
+  // virar uma lista enorme de rolar quando o tópico tem várias redações.
   return`<div class="rd-card rd-${st}" id="rdc-${r.id}">
-    <div class="rd-card-header">
+    <div class="rd-card-header" style="cursor:pointer" onclick="rdToggleCard('${r.id}')">
       <div>
         <div class="rd-card-title">${r.titulo||'Redação sem título'}</div>
         <div class="rd-card-date">${new Date(r.criacao).toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})}</div>
       </div>
-      <div style="text-align:center">
-        <div class="rd-npd-badge ${st}">
-          ${npd!==null?`NPD: ${npd}`:' Rascunho'}
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="text-align:center">
+          <div class="rd-npd-badge ${st}">
+            ${npd!==null?`NPD: ${npd}`:' Rascunho'}
+          </div>
+          <div style="font-size:10px;font-weight:800;margin-top:4px;color:${st==='aprovado'?'var(--green)':st==='reprovado'?'var(--red)':'var(--muted)'}">
+            ${st==='aprovado'?'✅ APROVADO':st==='reprovado'?'❌ REPROVADO':'📝 RASCUNHO'}
+          </div>
         </div>
-        <div style="font-size:10px;font-weight:800;margin-top:4px;color:${st==='aprovado'?'var(--green)':st==='reprovado'?'var(--red)':'var(--muted)'}">
-          ${st==='aprovado'?'✅ APROVADO':st==='reprovado'?'❌ REPROVADO':'📝 RASCUNHO'}
-        </div>
+        <i class="fa fa-chevron-${cardOpen?'up':'down'}" style="color:var(--muted);font-size:12px"></i>
       </div>
     </div>
 
+    ${cardOpen?`
     <!-- Competências -->
     <div class="rd-comp-grid">
       <div class="rd-comp-item">
@@ -9395,7 +9404,13 @@ function rdCardHTML(r){
       <button class="btn btn-sm" style="background:rgba(108,71,255,0.08);color:var(--accent);border:1px solid var(--border)" onclick="rdEditRedacao('${r.id}')"><i class="fa fa-pen"></i> Editar</button>
       <button class="btn btn-sm btn-danger" onclick="rdDeleteRedacao('${r.id}')"><i class="fa fa-trash"></i></button>
     </div>
+    `:''}
   </div>`;
+}
+function rdToggleCard(id){
+  if(rdExpandedCards.has(id))rdExpandedCards.delete(id);
+  else rdExpandedCards.add(id);
+  rdRenderMain();
 }
 
 function rdToggleText(id){
@@ -9652,18 +9667,6 @@ function rdQuesitosHTML(fb){
     ${rescale}
   </div>`;
 }
-// Destila, dos quesitos avaliados, só os que perderam ponto — pra não precisar caçar
-// a justificativa espalhada nos cards acima quando a única dúvida é "o que faltou".
-function rdMotivoNaoMaximaHTML(fb){
-  if(!fb?.quesitosAvaliados?.length)return'';
-  const perdidos=fb.quesitosAvaliados.filter(q=>(Number(q.pontos)||0)<(Number(q.max)||0));
-  if(!perdidos.length)return'';
-  const itens=perdidos.map(q=>`<li style="color:var(--text2)"><b style="color:var(--red)">${q.id||''}</b> <span style="color:var(--muted);font-weight:700">(${q.pontos??0}/${q.max??0})</span> — ${q.justificativa||'sem justificativa detalhada.'}</li>`).join('');
-  return`<div style="margin-bottom:12px">
-    <div class="rd-ai-col-title" style="color:var(--red)">📉 Por que a NC não foi máxima</div>
-    <ul class="rd-ai-list">${itens}</ul>
-  </div>`;
-}
 // A IA às vezes lista o mesmo trecho errado mais de uma vez (ex: quando a mesma palavra
 // aparece repetida no texto do candidato) — dedup por trecho+tipo normalizados, mantendo
 // a primeira ocorrência, independente do prompt já pedir pra não repetir.
@@ -9686,7 +9689,6 @@ function rdAiFeedbackHTML(fb){
     <div class="rd-ai-title"><i class="fa fa-wand-magic-sparkles"></i> Feedback da IA ${typeof fb.nc==='number'?`· sugestão NC: ${fb.nc}`:''} ${typeof fb.ne==='number'?`· sugestão NE: ${fb.ne}`:''}</div>
     ${fb.comentario?`<div class="rd-ai-comment">${fb.comentario}</div>`:''}
     ${rdQuesitosHTML(fb)}
-    ${rdMotivoNaoMaximaHTML(fb)}
     ${criterios?`<div class="rd-criterios-grid">${criterios}</div>`:''}
     ${(fortes||faltantes)?`<div class="rd-ai-cols">
       <div><div class="rd-ai-col-title" style="color:var(--green)">✅ Pontos fortes</div><ul class="rd-ai-list">${fortes||'<li style="color:var(--muted)">—</li>'}</ul></div>
