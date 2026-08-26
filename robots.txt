@@ -2,6 +2,7 @@ User-agent: *
 Allow: /index.html
 Allow: /landing-assets/
 Allow: /icons/
+Disallow: /app/
 Disallow: /app.html
 
 Sitemap: https://concursinhomaroto.github.io/valedosnomeados/sitemap.xml

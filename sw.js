@@ -2,11 +2,11 @@
 // (HTML/manifest/ícones). NUNCA intercepta o Firebase Realtime Database:
 // os dados em tempo real trafegam por WebSocket, que passa por fora do
 // evento 'fetch' de qualquer forma, então a sincronização não é afetada.
-const CACHE_NAME = 'vdn-shell-v4';
+const CACHE_NAME = 'vdn-shell-v5';
 const PRECACHE_URLS = [
   './',
   './index.html',
-  './app.html',
+  './app/',
   './manifest.json',
   './icons/icon192.png',
   './icons/icon512.png',
@@ -41,7 +41,7 @@ self.addEventListener('fetch', (event) => {
   // o navegador lidar com elas normalmente, sem passar pelo cache.
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
   const isSameOrigin = url.origin === self.location.origin;
-  const isAppDoc = req.mode === 'navigate' || url.pathname.endsWith('index.html') || url.pathname.endsWith('app.html') || url.pathname.endsWith('/');
+  const isAppDoc = req.mode === 'navigate' || url.pathname.endsWith('index.html') || url.pathname.endsWith('/');
 
   if (isSameOrigin && isAppDoc) {
     // HTML do app: rede primeiro, com o cache só como fallback offline. Cache-first

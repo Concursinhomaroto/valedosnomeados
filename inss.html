@@ -6,7 +6,7 @@
 <script>
 // Rastreia todo clique em CTA que leva pro app (Teste grátis, Garantir vaga, planos, etc.)
 document.addEventListener('click', function(e){
-  var a = e.target.closest && e.target.closest('a[href*="app.html"]');
+  var a = e.target.closest && e.target.closest('a[href*="app/"]');
   if(a && window.gtag){
     gtag('event', 'cta_click', {
       link_text: (a.textContent||'').trim().slice(0,80),
@@ -203,7 +203,7 @@ footer .container{display:flex;flex-direction:column;gap:8px}
           <a href="professor.html">🍎 Professor</a>
         </div>
       </details>
-      <a class="btn btn-primario" href="app.html?origem=inss">Começar grátis</a>
+      <a class="btn btn-primario" href="app/?origem=inss">Começar grátis</a>
     </div>
   </nav>
 </header>
@@ -215,7 +215,7 @@ footer .container{display:flex;flex-direction:column;gap:8px}
     <h1>O edital do INSS ainda não saiu.<br><em>É exatamente por isso</em> que você começa agora.</h1>
     <p class="lede">Quando o edital sair, milhares vão começar do zero. Você não: 50 flashcards de Direito Previdenciário já prontos, revisão espaçada calculada sozinha e um cronograma de 6 meses pra chegar na prova com a matéria fixada — não decorada na véspera.</p>
     <div class="hero-ctas">
-      <a class="btn btn-primario" href="app.html?origem=inss">Começar teste grátis de 3 dias</a>
+      <a class="btn btn-primario" href="app/?origem=inss">Começar teste grátis de 3 dias</a>
       <a class="btn btn-fantasma" href="#kit">Baixar o kit gratuito</a>
     </div>
     <p class="hero-nota">3 dias grátis, plataforma inteira liberada. Depois, R$ 19,90/mês. Cancele quando quiser.</p>
@@ -329,7 +329,7 @@ footer .container{display:flex;flex-direction:column;gap:8px}
           <li>Acesso completo à plataforma</li>
           <li>Cancele quando quiser, sem multa</li>
         </ul>
-        <a class="btn btn-fantasma" style="border-color:var(--roxo);color:var(--roxo)" href="app.html?plano=mensal&origem=inss">Começar teste grátis</a>
+        <a class="btn btn-fantasma" style="border-color:var(--roxo);color:var(--roxo)" href="app/?plano=mensal&origem=inss">Começar teste grátis</a>
       </article>
       <article class="plano destaque revela">
         <span class="selo">Pra quem vai até a prova</span>
@@ -341,7 +341,7 @@ footer .container{display:flex;flex-direction:column;gap:8px}
           <li>Cobre toda a jornada pré-edital até a prova</li>
           <li>Preço travado por 12 meses</li>
         </ul>
-        <a class="btn btn-primario" href="app.html?plano=anual&origem=inss">Começar teste grátis</a>
+        <a class="btn btn-primario" href="app/?plano=anual&origem=inss">Começar teste grátis</a>
       </article>
       <article class="plano revela" id="plano-vitalicio" style="display:none;border-color:var(--ouro)">
         <span class="olho" style="margin-bottom:8px">🔥 Lançamento: restam poucas vagas</span>
@@ -354,7 +354,7 @@ footer .container{display:flex;flex-direction:column;gap:8px}
           <li>Acesso a todas as atualizações futuras da plataforma</li>
           <li>Prioridade no suporte e nas sugestões de novos recursos</li>
         </ul>
-        <a class="btn btn-ouro" href="app.html?plano=vitalicio&origem=inss">Garantir minha vaga</a>
+        <a class="btn btn-ouro" href="app/?plano=vitalicio&origem=inss">Garantir minha vaga</a>
       </article>
     </div>
   </div>
@@ -392,14 +392,14 @@ footer .container{display:flex;flex-direction:column;gap:8px}
   <div class="container">
     <h2>Quando o edital sair, em qual grupo você quer estar?</h2>
     <p class="sub" style="margin:0 auto 28px">No dos que vão começar a estudar — ou no dos que já têm meses de revisões acumuladas. A missão começa com 10 cards, hoje.</p>
-    <a class="btn btn-primario" href="app.html?origem=inss">Começar teste grátis de 3 dias</a>
+    <a class="btn btn-primario" href="app/?origem=inss">Começar teste grátis de 3 dias</a>
   </div>
 </section>
 </main>
 
 <footer>
   <div class="container">
-    <p>🐉 Vale dos Nomeados — Concurso Federal Quest · <a href="index.html">Página principal</a> · <a href="app.html">Ir para o app</a></p>
+    <p>🐉 Vale dos Nomeados — Concurso Federal Quest · <a href="index.html">Página principal</a> · <a href="app/">Ir para o app</a></p>
     <p>© <span id="ano"></span> Vale dos Nomeados. O Vale dos Nomeados é uma plataforma de estudos independente, sem vínculo com o INSS ou com o Governo Federal. Informações sobre o certame têm caráter informativo; consulte sempre as fontes oficiais.</p>
   </div>
 </footer>
