@@ -9512,6 +9512,7 @@ function rdCardHTML(r){
 
     <!-- Ações -->
     <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm" style="background:rgba(8,145,178,0.08);color:#0891b2;border:1px solid var(--border)" onclick="rdMoverTopicoModal('${r.id}')" title="Mover para outro tópico"><i class="fa fa-arrow-right-arrow-left"></i> Mover</button>
       <button class="btn btn-sm" style="background:rgba(108,71,255,0.08);color:var(--accent);border:1px solid var(--border)" onclick="rdEditRedacao('${r.id}')"><i class="fa fa-pen"></i> Editar</button>
       <button class="btn btn-sm btn-danger" onclick="rdDeleteRedacao('${r.id}')"><i class="fa fa-trash"></i></button>
     </div>
@@ -10006,6 +10007,39 @@ function rdDeleteRedacao(id){
   if(db.redacoes?.textos)delete db.redacoes.textos[id];
   saveDB();rdRenderTopics();rdRenderMain();
   toast('🗑️ Redação excluída','var(--red)');
+}
+
+// Corrige o caso de registrar a redação no tópico errado sem precisar excluir e
+// recriar do zero (perdendo NC/NE/TL, texto e feedback da IA já salvos).
+function rdMoverTopicoModal(id){
+  const r=db.redacoes?.textos?.[id];if(!r)return;
+  const outros=Object.values(db.redacoes.topics||{})
+    .filter(t=>t.id!==r.topicId)
+    .sort((a,b)=>a.name.localeCompare(b.name));
+  if(!outros.length){
+    openModal('📂 Mover para outro tópico',`<p style="font-size:13px;color:var(--text2);line-height:1.6">Ainda não existe outro tópico pra mover essa redação. Crie um novo tópico primeiro (botão <b>+ Novo Tópico</b> na barra lateral) e volte aqui.</p>`);
+    return;
+  }
+  openModal('📂 Mover para outro tópico',`
+    <p style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">"<b>${r.titulo||'Redação sem título'}</b>" será movida pra qual tópico?</p>
+    <div style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto">
+      ${outros.map(t=>{
+        const count=Object.values(db.redacoes.textos||{}).filter(x=>x.topicId===t.id).length;
+        return`<button class="btn btn-sm" style="justify-content:flex-start;text-align:left;background:rgba(108,71,255,0.06);border:1.5px solid var(--border);color:var(--text)" onclick="rdMoverTopico('${id}','${t.id}')">
+          <span style="font-size:15px">📝</span>&nbsp; <b>${t.name}</b> <span style="opacity:0.65;font-weight:600">— ${count} redaç${count!==1?'ões':'ão'}</span>
+        </button>`;
+      }).join('')}
+    </div>`);
+}
+function rdMoverTopico(id,newTopicId){
+  const r=db.redacoes?.textos?.[id];if(!r)return;
+  const destino=db.redacoes.topics?.[newTopicId];if(!destino)return;
+  if(r.topicId===newTopicId){closeModal();return;}
+  r.topicId=newTopicId;
+  saveDB();
+  closeModal();
+  rdRenderTopics();rdRenderMain();
+  toast(`📂 Redação movida para "${destino.name}"`,'var(--green)');
 }
 
 function renderRedacoesScreen(){
