@@ -9816,10 +9816,9 @@ async function rdCorrigirComIA(){
   if(!texto){toast('⚠️ Escreva ou cole o texto da redação primeiro','var(--red)');return;}
   if(rdAiCorrecting)return;
 
-  const aiProvider=aiActiveProvider();
-  const apiKeyOk=aiProvider==='claude'?!!(db.claudeApiKey||'').trim():!!(db.geminiApiKey||'').trim();
-  if(!apiKeyOk){
-    toast(`⚠️ Configure sua chave de API do ${aiProvider==='claude'?'Claude':'Gemini'} primeiro`,'var(--red)');
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey){
+    toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');
     openAISettingsModal();
     return;
   }
@@ -9885,7 +9884,7 @@ ${ncInstrucao}
 RESPONDA APENAS COM JSON, sem texto antes ou depois, sem markdown, no formato exato${quesitos?' (inclua quesitosAvaliados e quesitosMaxOriginal já que os quesitos foram informados)':''}:
 {"nc":0,"ne":0,"comentario":"...","criterios":{"coesao":{"nota":0,"comentario":"..."},"clareza":{"nota":0,"comentario":"..."},"gramatica":{"nota":0,"comentario":"..."},"acentuacao":{"nota":0,"comentario":"..."},"pontuacao":{"nota":0,"comentario":"..."},"adequacao":{"nota":0,"comentario":"..."}},"pontosFortes":["..."],"pontosFaltantes":["..."],"erros":[{"trecho":"...","tipo":"...","sugestao":"..."}]${quesitos?',"quesitosAvaliados":[{"id":"2.1","pontos":0,"max":3,"justificativa":"..."}],"quesitosMaxOriginal":10':''}}`;
 
-    const raw=await callAIGenerate(prompt);
+    const raw=await callGeminiGenerate(apiKey,prompt);
     const fb=extractAIJson(raw);
     rdPendingAiFeedback=fb;
 
@@ -9900,7 +9899,7 @@ RESPONDA APENAS COM JSON, sem texto antes ou depois, sem markdown, no formato ex
     }
     rdCalcLive();
     gainXP(10);
-    toast(`🤖 Correção da IA pronta${aiProvider==='claude'?' (Claude)':''}! Revise os valores sugeridos. +10 XP`,'var(--accent)');
+    toast('🤖 Correção da IA pronta! Revise os valores sugeridos. +10 XP','var(--accent)');
   }catch(e){
     toast('❌ '+(e.message||'Erro ao corrigir com IA'),'var(--red)');
     rdPendingAiFeedback=null;
@@ -11247,21 +11246,6 @@ function openAISettingsModal(){
       <input type="password" id="gemini-key-input" class="inp" placeholder="Cole sua chave de API do Gemini" value="${hasKey?db.geminiApiKey:''}" style="width:100%;margin-bottom:6px">
       <div style="font-size:10px;color:var(--muted);margin-bottom:18px">${hasKey?'✅ Chave configurada':'⚠️ Nenhuma chave configurada ainda'} — fica salva só no seu banco de dados, nunca no código do app.</div>
 
-      ${isAdmin()?`
-      <div style="border-top:1.5px solid var(--border);margin-bottom:18px;padding-top:16px">
-        <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">🧪 IA alternativa (só nesta conta)</div>
-        <p style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
-          Por enquanto só a <b>correção de redação</b> usa isso — o resto do app (flashcards, simulados, resumos, repertório) continua no Gemini normalmente, pra todo mundo. Claude Opus 5 custa bem mais por uso que o Gemini Flash.
-        </p>
-        <select id="ai-provider-input" class="inp" style="width:100%;margin-bottom:8px">
-          <option value="gemini" ${db.aiProvider!=='claude'?'selected':''}>Gemini (padrão)</option>
-          <option value="claude" ${db.aiProvider==='claude'?'selected':''}>Claude Opus 5 (análise mais cuidadosa)</option>
-        </select>
-        <input type="password" id="claude-key-input" class="inp" placeholder="Cole sua chave de API da Anthropic (console.anthropic.com)" value="${db.claudeApiKey||''}" style="width:100%;margin-bottom:6px">
-        <div style="font-size:10px;color:var(--muted)">${(db.claudeApiKey||'').trim()?'✅ Chave da Anthropic configurada':'⚠️ Nenhuma chave da Anthropic configurada ainda'} — mesma regra: fica salva só no seu banco de dados.</div>
-      </div>
-      `:''}
-
       <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">🔊 Voz da leitura (flashcards e resumos)</div>
       <p style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
         Escolha qual voz o navegador deve usar pra ler em voz alta. As vozes disponíveis dependem do seu aparelho, não do site — se a voz estiver lendo errado (com sotaque de outro idioma), o mais comum é o aparelho não ter nenhuma voz em português instalada (veja a dica abaixo).
@@ -11338,12 +11322,6 @@ function saveGeminiApiKey(){
   db.geminiApiKey=v;
   if(voiceSel)db.preferredVoiceURI=voiceSel.value;
   if(geminiVoiceSel)db.preferredGeminiVoice=geminiVoiceSel.value;
-  if(isAdmin()){
-    const providerSel=document.getElementById('ai-provider-input');
-    const claudeKeyInput=document.getElementById('claude-key-input');
-    if(providerSel)db.aiProvider=providerSel.value;
-    if(claudeKeyInput)db.claudeApiKey=claudeKeyInput.value.trim();
-  }
   saveDB();
   closeModal();
   toast(v?'✅ Configurações salvas!':'Chave removida.','var(--green)');
@@ -11426,50 +11404,6 @@ async function callGeminiGenerate(apiKey,prompt){
   }
   throw new Error(`Nenhum modelo do Gemini respondeu. Tentativas: ${attempts.join(' · ')||'nenhuma'}. Verifique se sua chave em aistudio.google.com/apikey está válida.`);
 }
-
-// ===== CLAUDE (Anthropic) — opção alternativa, só pra conta admin por enquanto (ver
-// openAISettingsModal). A API da Anthropic bloqueia chamada direta do navegador por
-// padrão, diferente da do Gemini — o header abaixo libera isso. Como cada conta usaria
-// a PRÓPRIA chave (mesmo modelo "cole sua chave" já usado pro Gemini), a exposição da
-// chave no navegador não é um risco novo, é o mesmo que já existe hoje pra outro provedor.
-const CLAUDE_MODEL='claude-opus-5';
-async function callClaudeGenerate(apiKey,prompt){
-  const response=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'x-api-key':apiKey,
-      'anthropic-version':'2023-06-01',
-      'anthropic-dangerous-direct-browser-access':'true'
-    },
-    body:JSON.stringify({
-      model:CLAUDE_MODEL,
-      max_tokens:8192,
-      messages:[{role:'user',content:prompt}]
-    })
-  });
-  if(!response.ok){
-    const err=await response.text();
-    let detail=err.slice(0,150);
-    try{detail=(JSON.parse(err)?.error?.message||detail).slice(0,150);}catch(e2){}
-    throw new Error(`Claude (${response.status}): ${detail}`);
-  }
-  const data=await response.json();
-  const raw=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text||'').join('').trim();
-  if(!raw)throw new Error('Claude não retornou texto na resposta.');
-  return raw;
-}
-// Decide qual provedor usar numa chamada de texto simples (sem busca na internet) — hoje
-// só a conta admin pode ligar o Claude (ver openAISettingsModal); todo mundo mais
-// continua no Gemini, sem nenhuma mudança de comportamento.
-function aiActiveProvider(){
-  return (isAdmin()&&db.aiProvider==='claude'&&(db.claudeApiKey||'').trim())?'claude':'gemini';
-}
-async function callAIGenerate(prompt){
-  if(aiActiveProvider()==='claude')return callClaudeGenerate((db.claudeApiKey||'').trim(),prompt);
-  return callGeminiGenerate((db.geminiApiKey||'').trim(),prompt);
-}
-
 // Igual ao callGeminiGenerate, mas pedindo pra IA pesquisar na internet antes de responder
 // (grounding). A ferramenta de busca é OPCIONAL do ponto de vista do modelo — ele decide
 // sozinho se pesquisa ou não, mesmo com a ferramenta disponível — então uma resposta "ok"
