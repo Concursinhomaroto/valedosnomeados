@@ -1350,12 +1350,9 @@ nav{
       <span class="nav-icon">🔔</span><span class="nav-label">REVISÕES</span>
       <span class="nav-badge" id="rev-badge" style="display:none">0</span>
     </button>
-    <button class="nav-btn" id="nav-erros">
-      <span class="nav-icon">📕</span><span class="nav-label">BANCO DE ERROS</span>
-      <span class="nav-badge" id="erros-badge" style="display:none">0</span>
-    </button>
     <button class="nav-btn" id="nav-simgeral">
       <span class="nav-icon">🏛️</span><span class="nav-label">SIMULADO GERAL</span>
+      <span class="nav-badge" id="erros-badge" style="display:none">0</span>
     </button>
     <button class="nav-btn" id="nav-editais">
       <span class="nav-icon">📋</span><span class="nav-label">EDITAIS</span>
@@ -1450,6 +1447,10 @@ nav{
 
 <!-- ===== BANCO DE ERROS ===== -->
 <div class="screen" id="screen-erros">
+  <div class="rd-conectivos-tabs" style="margin-bottom:14px">
+    <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
+    <button class="active"><i class="fa fa-book-skull"></i> Banco de Erros</button>
+  </div>
   <div class="sec-title">📕 Banco de Erros</div>
   <div style="font-size:11px;color:var(--muted);margin-bottom:14px;font-weight:600">Questões que você errou nos simulados, reunidas aqui pra você bater de novo até acertar.</div>
   <div class="filter-row">
@@ -1462,6 +1463,10 @@ nav{
 
 <!-- ===== SIMULADO GERAL ===== -->
 <div class="screen" id="screen-simgeral">
+  <div class="rd-conectivos-tabs" style="margin-bottom:14px">
+    <button class="active"><i class="fa fa-landmark"></i> Simulado Geral</button>
+    <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
+  </div>
   <div id="simgeral-content"></div>
 </div>
 
@@ -3801,9 +3806,10 @@ function openRenewalScreen(reason){
 function showScreen(name){
   if(name!=='flashcards'&&typeof fcVoiceStop==='function')fcVoiceStop();
   if(name==='admin'&&!isAdmin())name='dashboard'; // proteção extra, além do item ficar oculto no menu
-  // Repertório não tem botão próprio no menu — é uma aba dentro de Redação (nav-redacoes)
-  // desde a fusão das duas telas, então o destaque do menu segue apontando pra lá.
-  const navName=name==='repertorio'?'redacoes':name;
+  // Repertório e Banco de Erros não têm botão próprio no menu — viraram abas dentro de
+  // Redação e Simulado Geral, respectivamente, desde a fusão das telas relacionadas, então
+  // o destaque do menu segue apontando pro botão "pai" de cada uma.
+  const navName=name==='repertorio'?'redacoes':(name==='erros'?'simgeral':name);
   if(LOCKED_SCREENS.includes(name)&&!hasFullAccess()){
     document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -11983,7 +11989,6 @@ function removeRevFromPlan(subId,revIdx,ds){
 function bindStaticEvents(){
   document.getElementById('nav-map')?.addEventListener('click',()=>showScreen('map'));
   document.getElementById('nav-revisions')?.addEventListener('click',()=>showScreen('revisions'));
-  document.getElementById('nav-erros')?.addEventListener('click',()=>showScreen('erros'));
   document.getElementById('nav-simgeral')?.addEventListener('click',()=>showScreen('simgeral'));
   document.getElementById('nav-dashboard')?.addEventListener('click',()=>showScreen('dashboard'));
   document.getElementById('nav-editais')?.addEventListener('click',()=>showScreen('editais'));
