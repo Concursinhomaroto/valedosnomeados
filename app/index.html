@@ -973,10 +973,15 @@ nav{
 .fc-card-3d{width:100%;height:min(62vh,520px);min-height:300px;position:relative;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.4,0,.2,1);cursor:pointer;}
 .fc-card-3d.flipped{transform:rotateY(180deg);}
 /* Pergunta/resposta longa (ex: artigo de lei inteiro) não pode estourar o card por cima dos
-   outros elementos da tela — .fc-face vira a área rolável, e o "margin:auto" no wrapper
+   outros elementos da tela — .fc-face-scroll vira a área rolável, e o "margin:auto" no wrapper
    interno centraliza texto curto normalmente mas ainda deixa o topo do texto longo acessível
-   ao rolar (diferente de só usar justify-content:center, que corta o início do overflow). */
-.fc-face{position:absolute;inset:0;backface-visibility:hidden;border-radius:20px;display:flex;padding:28px 24px;overflow-y:auto;}
+   ao rolar (diferente de só usar justify-content:center, que corta o início do overflow).
+   O scroll fica num DIV SEPARADO de .fc-face (que só cuida do arredondamento/3D) porque o
+   Safari tem um bug conhecido: overflow não recorta direito num elemento que também tem
+   backface-visibility/transform-style (precisos aqui pro efeito de "virar o card") — o texto
+   vazava pra fora do card, cortado, no iPad, mesmo com border-radius/overflow certos. */
+.fc-face{position:absolute;inset:0;backface-visibility:hidden;border-radius:20px;overflow:hidden;}
+.fc-face-scroll{position:absolute;inset:0;display:flex;padding:28px 24px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .fc-face-inner{margin:auto;width:100%;text-align:center;}
 .fc-front{background:linear-gradient(135deg,var(--accent) 0%,#4f46e5 100%);box-shadow:0 8px 32px rgba(108,71,255,0.3);}
 .fc-back{background:var(--panel);border:2px solid var(--border);transform:rotateY(180deg);box-shadow:0 8px 32px rgba(0,0,0,0.08);}
@@ -1001,7 +1006,7 @@ nav{
 @keyframes fcScrollCueBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
 @media(max-width:480px){
   .fc-card-3d{height:min(72vh,640px);}
-  .fc-face{padding:22px 18px;}
+  .fc-face-scroll{padding:22px 18px;}
   .fc-face-text{font-size:16px;line-height:1.45;}
 }
 .fc-diff-dots{display:flex;gap:4px;margin-top:14px;}
@@ -10801,20 +10806,24 @@ function fcStudyHTML(cards){
     <div class="fc-study-wrap" onclick="fcStudyFlip()">
       <div class="fc-card-3d${fcStudyFlipped?' flipped':''}" id="fc-study-card">
         <div class="fc-face fc-front">
-          <div class="fc-face-inner">
-            <div class="fc-face-hint">📋 Pergunta · clique para ver a resposta</div>
-            <div class="fc-face-text" style="white-space:pre-wrap">${c.pergunta}</div>
-            <div style="margin-top:12px;font-size:9px;font-weight:800;color:rgba(255,255,255,0.6)">${fcStatusLabel(st,c)}</div>
-            <div class="fc-diff-dots">${[1,2,3,4,5].map(n=>`<div class="fc-diff-dot" style="background:${n<=(c.dificuldade||3)?DIFF_COLORS[c.dificuldade||3]:'rgba(255,255,255,0.2)'}"></div>`).join('')}</div>
-            <div class="fc-scroll-cue"><span>role pra ler mais ⌄</span></div>
+          <div class="fc-face-scroll">
+            <div class="fc-face-inner">
+              <div class="fc-face-hint">📋 Pergunta · clique para ver a resposta</div>
+              <div class="fc-face-text" style="white-space:pre-wrap">${c.pergunta}</div>
+              <div style="margin-top:12px;font-size:9px;font-weight:800;color:rgba(255,255,255,0.6)">${fcStatusLabel(st,c)}</div>
+              <div class="fc-diff-dots">${[1,2,3,4,5].map(n=>`<div class="fc-diff-dot" style="background:${n<=(c.dificuldade||3)?DIFF_COLORS[c.dificuldade||3]:'rgba(255,255,255,0.2)'}"></div>`).join('')}</div>
+              <div class="fc-scroll-cue"><span>role pra ler mais ⌄</span></div>
+            </div>
           </div>
         </div>
         <div class="fc-face fc-back">
-          <div class="fc-face-inner">
-            <div class="fc-face-hint">💡 Resposta</div>
-            <div class="fc-face-text" style="white-space:pre-wrap">${c.resposta}</div>
-            ${c.tags?`<div style="margin-top:12px;display:flex;gap:4px;flex-wrap:wrap;justify-content:center">${c.tags.split(',').filter(t=>t.trim()).map(t=>`<span class="fc-card-tag">#${t.trim()}</span>`).join('')}</div>`:''}
-            <div class="fc-scroll-cue"><span>role pra ler mais ⌄</span></div>
+          <div class="fc-face-scroll">
+            <div class="fc-face-inner">
+              <div class="fc-face-hint">💡 Resposta</div>
+              <div class="fc-face-text" style="white-space:pre-wrap">${c.resposta}</div>
+              ${c.tags?`<div style="margin-top:12px;display:flex;gap:4px;flex-wrap:wrap;justify-content:center">${c.tags.split(',').filter(t=>t.trim()).map(t=>`<span class="fc-card-tag">#${t.trim()}</span>`).join('')}</div>`:''}
+              <div class="fc-scroll-cue"><span>role pra ler mais ⌄</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -10968,18 +10977,18 @@ function fcVoiceMaybeSpeak(){
 // altura do card (comum em cards gerados por PDF, com trechos de lei longos).
 // Reage também ao scroll dentro do card, pra sumir assim que chegar no fim.
 function fcCheckOverflow(){
-  document.querySelectorAll('#fc-study-card .fc-face').forEach(face=>{
-    const inner=face.querySelector('.fc-face-inner');
+  document.querySelectorAll('#fc-study-card .fc-face-scroll').forEach(scroll=>{
+    const inner=scroll.querySelector('.fc-face-inner');
     if(!inner)return;
     const update=()=>{
-      const overflowing=face.scrollHeight>face.clientHeight+4;
-      const nearBottom=face.scrollTop+face.clientHeight>=face.scrollHeight-4;
+      const overflowing=scroll.scrollHeight>scroll.clientHeight+4;
+      const nearBottom=scroll.scrollTop+scroll.clientHeight>=scroll.scrollHeight-4;
       inner.classList.toggle('fc-has-more',overflowing&&!nearBottom);
     };
     update();
-    if(!face.dataset.fcScrollBound){
-      face.dataset.fcScrollBound='1';
-      face.addEventListener('scroll',update);
+    if(!scroll.dataset.fcScrollBound){
+      scroll.dataset.fcScrollBound='1';
+      scroll.addEventListener('scroll',update);
     }
   });
 }
