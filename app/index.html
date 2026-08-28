@@ -797,7 +797,7 @@ nav{
 
 /* ===== REPERTÓRIO ===== */
 .rep-layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:18px;min-height:70vh;}
-@media(max-width:700px){
+@media(max-width:900px){
   .rep-layout{grid-template-columns:1fr!important;}
   .rep-secoes{grid-template-columns:1fr!important;}
 }
@@ -808,7 +808,7 @@ nav{
    se ficasse antes (como estava) a regra base sempre ganhava no mobile e o sidebar
    continuava com position:sticky + max-height:85vh, "grudando" no topo da tela e se
    misturando visualmente com os cards do Banco de Repertório ao rolar a página. */
-@media(max-width:700px){
+@media(max-width:900px){
   .rep-sidebar{position:static;max-height:260px;}
 }
 .rep-main{min-height:200px;}
@@ -937,7 +937,7 @@ nav{
 .rd-text-preview::after{content:'';position:absolute;bottom:0;left:0;right:0;height:40px;background:linear-gradient(transparent,var(--bg2));pointer-events:none;}
 .rd-text-preview.expanded::after{display:none;}
 
-@media(max-width:700px){
+@media(max-width:900px){
   .rd-layout{grid-template-columns:1fr!important;}
   .rd-sidebar{position:static;max-height:200px;}
   .rd-comp-grid{grid-template-columns:1fr!important;}
@@ -1104,7 +1104,7 @@ nav{
 .fc-score-val{font-size:20px;font-weight:900;}
 .fc-score-lbl{font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
 
-@media(max-width:700px){
+@media(max-width:900px){
   .fc-layout{grid-template-columns:1fr!important;}
   .fc-sidebar{position:relative;max-height:340px;}
   .fc-form-row{grid-template-columns:1fr!important;}
