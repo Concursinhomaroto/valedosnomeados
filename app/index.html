@@ -1303,223 +1303,6 @@ nav{
   .theme-toggle-btn{width:34px;height:34px;font-size:14px;background:rgba(124,58,237,0.85);border:1px solid rgba(255,255,255,0.3);box-shadow:0 2px 10px rgba(0,0,0,0.2);}
 }
 
-/* ===== MEU DRAGÃO (mascote de estimação, evolui com o nível do herói) ===== */
-.drg-hero{
-  position:relative; border-radius:18px; padding:30px 20px 26px;
-  background:var(--bg2); border:1px solid var(--border);
-  display:flex; flex-direction:column; align-items:center; overflow:hidden;
-  min-height:380px; justify-content:center;
-}
-.drg-hero-glow{
-  position:absolute; inset:0; pointer-events:none;
-  background:radial-gradient(48% 55% at 50% 42%, var(--glow-color,#f59e0b) 0%, transparent 72%);
-  opacity:.35; transition:background 0.6s ease;
-  animation:drgGlowPulse 3.4s ease-in-out infinite;
-}
-@keyframes drgGlowPulse{ 0%,100%{ opacity:.28; } 50%{ opacity:.48; } }
-
-.dragon-wrap{ width:min(300px, 70vw); position:relative; z-index:1; margin:0 auto; }
-/* Balanço de peso independente do flutuar (dragonFloat) — dois movimentos com
-   períodos diferentes (8.5s vs 5s) raramente se alinham, então o resultado
-   não parece um "loop" óbvio de boneco, parece peso real se acomodando. */
-.dragon-sway{ animation:dragonSway 8.5s ease-in-out infinite; }
-@keyframes dragonSway{
-  0%,100%{ transform:rotate(0deg) translateX(0); }
-  32%{ transform:rotate(-1.1deg) translateX(-3px); }
-  68%{ transform:rotate(0.9deg) translateX(2px); }
-}
-.dragon-frame{ position:relative; animation:dragonFloat 5s ease-in-out infinite; }
-@keyframes dragonFloat{ 0%,100%{ transform:translateY(0) rotate(0deg) scale(1); } 50%{ transform:translateY(-11px) rotate(-0.6deg) scale(1.018); } }
-.dragon-img{
-  width:100%; height:auto; display:block;
-  filter:url(#dragonWarp);
-  transition:opacity .35s ease;
-}
-.dragon-img.switching{ opacity:0; }
-/* Sombra de contato só na camada do corpo — se repetisse na camada da cabeça
-   também, criaria uma segunda sombra "fantasma" bem em cima do pescoço toda
-   vez que a cabeça girasse um pouco. */
-#dragonBodyImg{ filter:drop-shadow(0 18px 20px rgba(0,0,0,0.28)) url(#dragonWarp); }
-/* A arte é separada em 2 camadas — corpo (fixo) e cabeça+pescoço (recorte com
-   degradê de transparência na "junta" do pescoço, pra colar sem emenda visível
-   no corpo por baixo). A cabeça gira sozinha, independente do corpo — é o que
-   dá a sensação de "olhando ao redor" em vez de só a pintura inteira boiando. */
-.dragon-head-layer{ position:absolute; inset:0; transform-origin:48% 38%; animation:headLook 6.2s ease-in-out infinite; }
-.dragon-head-img{ width:100%; height:auto; display:block; }
-@keyframes headLook{
-  0%,100%{ transform:rotate(0deg) translateY(0); }
-  15%{ transform:rotate(-3.5deg) translateY(-1px); }
-  35%{ transform:rotate(1.5deg) translateY(0); }
-  55%{ transform:rotate(-1deg) translateY(1px); }
-  75%{ transform:rotate(3deg) translateY(-1px); }
-  90%{ transform:rotate(-2deg) translateY(0); }
-}
-/* Olho que pisca sozinho — posição calibrada em cada uma das 5 artes (JS seta
-   left/top). scaleY fica quase 0 (aberto/invisível) quase todo o tempo, só
-   fecha por um instante curto — igual piscada de verdade. */
-.dragon-eye{
-  position:absolute; width:5.6%; aspect-ratio:2.15/1;
-  border-radius:50%; pointer-events:none;
-  background:radial-gradient(ellipse at center, rgba(15,8,4,0.94) 0%, rgba(15,8,4,0.78) 55%, transparent 78%);
-  filter:blur(0.4px);
-  animation:dragonBlink 5.4s ease-in-out infinite;
-}
-@keyframes dragonBlink{
-  0%,91%,100%{ transform:translate(-50%,-50%) scaleY(0.04); }
-  93%{ transform:translate(-50%,-50%) scaleY(1); }
-  95.5%{ transform:translate(-50%,-50%) scaleY(1); }
-  97.5%{ transform:translate(-50%,-50%) scaleY(0.04); }
-}
-/* Piscada "de carinho" — mais longa e suave, disparada só quando o usuário faz
-   carinho. Pausa a piscada normal e força o olho quase fechado por um instante. */
-.dragon-eye.content{
-  animation-play-state:paused !important;
-  transition:transform .35s ease;
-  transform:translate(-50%,-50%) scaleY(0.82) !important;
-}
-/* Boca — usada nas 3 reações pra simular "aconteceu alguma coisa ali" (mordida,
-   sopro de fogo) em vez de só filtro/spin na arte inteira. */
-.dragon-mouth{
-  position:absolute; width:9%; aspect-ratio:1.35/1; border-radius:50%;
-  background:radial-gradient(circle, rgba(255,224,150,0.95) 0%, rgba(255,140,40,0.55) 45%, transparent 75%);
-  transform:translate(-50%,-50%) scale(0.25); opacity:0; pointer-events:none;
-}
-.dragon-mouth.burst{ animation:mouthBurst .45s cubic-bezier(.2,.8,.3,1); }
-@keyframes mouthBurst{
-  0%{ opacity:0; transform:translate(-50%,-50%) scale(0.25); }
-  35%{ opacity:1; transform:translate(-50%,-50%) scale(1.5); }
-  100%{ opacity:0; transform:translate(-50%,-50%) scale(1.9); }
-}
-/* Comidinha caindo até a boca antes da mordida acontecer. */
-.food-drop{ position:absolute; font-size:22px; z-index:3; pointer-events:none; opacity:0; transform:translate(-50%,-50%); }
-.food-drop.go{ animation:foodDrop .48s cubic-bezier(.55,0,.85,0.1) forwards; }
-@keyframes foodDrop{
-  0%{ opacity:1; transform:translate(-50%,-50%) translateY(-46px) scale(1) rotate(0deg); }
-  100%{ opacity:0; transform:translate(-50%,-50%) translateY(0) scale(.35) rotate(-25deg); }
-}
-/* Rajada de fogo do truque — sai da boca de verdade, voando pra fora. */
-.fire-burst{ position:absolute; border-radius:50%; pointer-events:none; background:radial-gradient(circle, #fff3c4 0%, #f97316 45%, transparent 75%); }
-.fire-burst.go{ animation:fireBurstFly .55s cubic-bezier(.15,.7,.3,1) forwards; }
-@keyframes fireBurstFly{
-  0%{ opacity:1; transform:translate(-50%,-50%) scale(0.5); }
-  100%{ opacity:0; transform:translate(calc(-50% + var(--fx,-46px)), calc(-50% + var(--fy,-8px))) scale(1.3); }
-}
-/* Onda de calor no carinho — wash morno cobrindo o dragão inteiro por um instante. */
-.warm-wash{
-  position:absolute; inset:-8%; border-radius:50%; pointer-events:none; opacity:0;
-  background:radial-gradient(circle at 50% 45%, rgba(255,180,110,0.65), transparent 68%);
-  mix-blend-mode:soft-light;
-}
-.warm-wash.on{ animation:warmPulse 1.15s ease; }
-@keyframes warmPulse{ 0%{opacity:0;} 30%{opacity:1;} 100%{opacity:0;} }
-/* Tremor leve no palco inteiro no truque, dá impacto ao soprar fogo. */
-.dragon-wrap.shake{ animation:wrapShake .45s ease; }
-@keyframes wrapShake{
-  0%,100%{ transform:translateX(0); }
-  20%{ transform:translateX(-3px); }
-  40%{ transform:translateX(3px); }
-  60%{ transform:translateX(-2px); }
-  80%{ transform:translateX(1px); }
-}
-/* Chamas "vivas" — brilho quente pulsando por cima (mix-blend screen realça sem tampar o traço). */
-.flame-flicker-layer{ position:absolute; inset:0; pointer-events:none; z-index:1; mix-blend-mode:screen; overflow:visible; }
-.flame-blob{
-  position:absolute; border-radius:50%; transform:translate(-50%,-50%);
-  background:radial-gradient(circle, rgba(255,186,84,0.6) 0%, rgba(255,110,30,0.28) 45%, transparent 75%);
-  animation:flameFlicker ease-in-out infinite;
-}
-@keyframes flameFlicker{ 0%,100%{ opacity:.45; transform:translate(-50%,-50%) scale(1); } 50%{ opacity:.85; transform:translate(-50%,-50%) scale(1.18); } }
-/* Sombra de contato no "chão" do palco. */
-.dragon-wrap::after{
-  content:''; position:absolute; left:50%; bottom:-6px; transform:translateX(-50%);
-  width:60%; height:16px; border-radius:50%;
-  background:radial-gradient(closest-side, rgba(0,0,0,0.28), transparent 75%);
-  animation:shadowPulse 5s ease-in-out infinite;
-}
-@keyframes shadowPulse{ 0%,100%{ opacity:.7; transform:translateX(-50%) scale(1); } 50%{ opacity:.4; transform:translateX(-50%) scale(0.85); } }
-/* Brasas ambiente — sobem sozinhas o tempo todo, saindo de onde ficam as chamas
-   na própria pintura. Mais braseiro nos estágios mais altos. */
-.ember-layer{ position:absolute; inset:0; pointer-events:none; z-index:1; overflow:visible; }
-.ember{
-  position:absolute; border-radius:50%;
-  background:radial-gradient(circle, #fff7d6 0%, var(--gold) 45%, transparent 75%);
-  opacity:0; animation:emberRise linear infinite;
-}
-@keyframes emberRise{
-  0%{ opacity:0; transform:translateY(0) translateX(0) scale(0.6); }
-  12%{ opacity:.9; }
-  85%{ opacity:.35; }
-  100%{ opacity:0; transform:translateY(-90px) translateX(var(--drift,10px)) scale(1.1); }
-}
-
-.drg-stage-row{ display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:22px;}
-.drg-stage-name{ font-family:'Cinzel',serif; font-weight:800; font-size:19px; color:var(--text); }
-.drg-stage-lore{ font-style:italic; font-size:12.5px; color:var(--muted); margin-top:2px;}
-
-.drg-stage-progress-wrap{ width:min(320px,80%); margin-top:14px; position:relative; z-index:1; }
-.drg-stage-progress-lbl{ display:flex; justify-content:space-between; font-size:10.5px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:6px;}
-.drg-stage-progress-track{ height:7px; border-radius:99px; background:var(--border); overflow:hidden; }
-.drg-stage-progress-fill{ height:100%; border-radius:99px; background:linear-gradient(90deg,var(--accent2),var(--gold)); transition:width .5s ease; }
-
-.drg-particle-layer{ position:absolute; inset:0; pointer-events:none; z-index:2; }
-.drg-particle{ position:absolute; font-size:18px; opacity:0; left:50%; top:42%; transform:translate(-50%,-50%); }
-.drg-particle.go{ animation:drgRise 1.1s ease-out forwards; }
-@keyframes drgRise{
-  0%{ opacity:0; transform:translate(-50%,-50%) translateY(0) scale(.6); }
-  15%{ opacity:1; }
-  100%{ opacity:0; transform:translate(-50%,-50%) translateY(-70px) scale(1.15); }
-}
-.dragon-frame.react-feed{ animation:chomp .5s ease 2; }
-@keyframes chomp{ 0%,100%{ transform:scale(1) translateY(0);} 50%{ transform:scale(1.05) translateY(4px);} }
-.dragon-frame.react-pet{ animation:petLean 1.1s ease; filter:brightness(1.1); }
-@keyframes petLean{
-  0%{ transform:rotate(0deg) translateY(0); }
-  30%{ transform:rotate(-2.2deg) translateY(3px) scale(1.015); }
-  62%{ transform:rotate(1deg) translateY(1px); }
-  100%{ transform:rotate(0deg) translateY(0); }
-}
-.dragon-frame.react-trick{ animation:trickSpin .7s ease; }
-@keyframes trickSpin{ 0%{ transform:scale(1) rotate(0);} 50%{ transform:scale(1.08) rotate(-4deg);} 100%{ transform:scale(1) rotate(0);} }
-
-.drg-bond-block{ margin-top:26px; max-width:520px; margin-left:auto; margin-right:auto; }
-.drg-bond-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
-.drg-bond-lbl{ font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); }
-.drg-bond-val{ font-size:12px; font-weight:800; color:var(--accent); font-variant-numeric:tabular-nums; }
-.drg-bond-track{ height:10px; border-radius:99px; background:var(--bg2); border:1px solid var(--border); overflow:hidden; }
-.drg-bond-fill{ height:100%; border-radius:99px; background:linear-gradient(90deg,#ea580c,var(--gold)); transition:width .45s cubic-bezier(.2,.9,.3,1.2); }
-
-.drg-actions{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:16px; }
-.drg-action-btn{ display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 8px 12px; border-radius:14px; border:1.5px solid var(--border); background:var(--panel2); cursor:pointer; transition:all .15s; font-family:inherit; }
-.drg-action-btn:hover:not(:disabled){ border-color:var(--accent2); transform:translateY(-2px); box-shadow:var(--shadow); }
-.drg-action-btn:active:not(:disabled){ transform:translateY(0); }
-.drg-action-btn:disabled{ opacity:.4; cursor:not-allowed; }
-.drg-action-icon{ font-size:22px; }
-.drg-action-lbl{ font-size:11.5px; font-weight:800; color:var(--text); }
-.drg-action-count{ font-size:9.5px; font-weight:700; color:var(--muted); font-variant-numeric:tabular-nums; }
-
-.drg-daily-note{ margin-top:12px; font-size:11px; color:var(--muted); text-align:center; line-height:1.5; }
-
-.drg-tricks-block{ margin-top:28px; max-width:520px; margin-left:auto; margin-right:auto; }
-.drg-tricks-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px; }
-.drg-tricks-title{ font-family:'Cinzel',serif; font-weight:800; font-size:15px; color:var(--text); }
-.drg-tricks-count{ font-size:11px; font-weight:700; color:var(--muted); font-variant-numeric:tabular-nums; }
-.drg-tricks-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
-.drg-trick-card{ border:1.5px solid var(--border); border-radius:14px; padding:12px 14px; background:var(--panel2); display:flex; flex-direction:column; gap:4px; position:relative; }
-.drg-trick-card.locked{ opacity:.5; }
-.drg-trick-card.unlocked{ border-color:color-mix(in srgb, var(--gold) 55%, var(--border)); background:color-mix(in srgb, var(--gold) 6%, var(--panel2)); }
-.drg-trick-icon{ font-size:18px; }
-.drg-trick-name{ font-size:12px; font-weight:800; color:var(--text); }
-.drg-trick-cost{ font-size:10px; font-weight:700; color:var(--muted); }
-.drg-trick-check{ position:absolute; top:10px; right:10px; font-size:12px; color:var(--gold2); }
-
-@media (max-width:640px){
-  .drg-actions{ gap:8px; }
-  .drg-action-icon{ font-size:19px; }
-}
-@media (prefers-reduced-motion: reduce){
-  .dragon-frame, .drg-hero-glow, .dragon-sway, .dragon-eye, .flame-blob,
-  .dragon-mouth, .warm-wash, .dragon-wrap, .dragon-head-layer{ animation:none !important; }
-}
 </style>
 <script>
 // Aplica o tema salvo antes do primeiro paint, pra não "piscar" o tema errado.
@@ -1586,9 +1369,6 @@ nav{
     </button>
     <button class="nav-btn" id="nav-redacoes">
       <span class="nav-icon">📝</span><span class="nav-label">REDAÇÃO</span>
-    </button>
-    <button class="nav-btn" id="nav-dragao">
-      <span class="nav-icon">🐉</span><span class="nav-label">MEU DRAGÃO</span>
     </button>
     <button class="nav-btn" id="nav-conquistas">
       <span class="nav-icon">🏅</span><span class="nav-label">CONQUISTAS</span>
@@ -1661,6 +1441,20 @@ nav{
 <!-- ===== REVISIONS ===== -->
 <div class="screen" id="screen-revisions">
   <div class="sec-title">🔔 Câmara de Revisões</div>
+
+  <div class="section-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+      <div style="font-size:13px;font-weight:900;color:var(--text)">🎯 Assuntos que mais erro em questões</div>
+      <span style="font-size:10.5px;color:var(--muted);font-weight:700" id="err-assuntos-count"></span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5">Toda vez que errar uma questão de um assunto, digita o nome aqui — ele sobe pro topo da lista com a contagem de quantas vezes já errou, pra você saber o que revisar primeiro.</div>
+    <div class="add-form" style="margin-bottom:0">
+      <input class="inp" id="err-assunto-input" placeholder="Ex: Prazos processuais, Regência verbal..." style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addErroAssunto();}">
+      <button class="btn btn-primary" onclick="addErroAssunto()"><i class="fa fa-plus"></i> Registrar erro</button>
+    </div>
+    <div id="err-assuntos-list" style="margin-top:14px"></div>
+  </div>
+
   <div class="filter-row">
     <button class="chip active" onclick="filterRevs('overdue',this)">🔴 Atrasadas</button>
     <button class="chip" onclick="filterRevs('today',this)">🔥 Hoje</button>
@@ -1974,85 +1768,6 @@ nav{
     <p id="conquistas-summary" class="conq-summary-text"></p>
   </div>
   <div id="conquistas-grid"></div>
-</div>
-
-<!-- ===== MEU DRAGÃO (mascote de estimação — evolui com o nível do herói) ===== -->
-<div class="screen" id="screen-dragao">
-  <div class="drg-stage-row">
-    <div>
-      <div class="drg-stage-name" id="dragaoStageName">Aprendiz do Vale</div>
-      <div class="drg-stage-lore" id="dragaoStageLore"></div>
-    </div>
-  </div>
-
-  <div class="drg-hero">
-    <svg width="0" height="0" style="position:absolute">
-      <filter id="dragonWarp" x="-20%" y="-20%" width="140%" height="140%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.012 0.018" numOctaves="2" seed="3" result="turb">
-          <animate attributeName="baseFrequency" values="0.012 0.018;0.017 0.012;0.012 0.018" dur="6s" repeatCount="indefinite"/>
-        </feTurbulence>
-        <feDisplacementMap in="SourceGraphic" in2="turb" scale="13" xChannelSelector="R" yChannelSelector="G"/>
-      </filter>
-    </svg>
-    <div class="drg-hero-glow" id="heroGlow"></div>
-    <div class="dragon-wrap">
-      <div class="dragon-sway">
-        <div class="dragon-frame" id="dragonFrame">
-          <img class="dragon-img" id="dragonBodyImg" src="" alt="Dragão">
-          <div class="dragon-head-layer" id="dragonHeadLayer">
-            <img class="dragon-img dragon-head-img" id="dragonHeadImg" src="" alt="">
-            <div class="dragon-eye" id="dragonEye"></div>
-            <div class="dragon-mouth" id="dragonMouth"></div>
-          </div>
-          <div class="warm-wash" id="warmWash"></div>
-        </div>
-      </div>
-      <div class="flame-flicker-layer" id="flameLayer"></div>
-      <div class="ember-layer" id="emberLayer"></div>
-      <div id="dragonFxLayer" style="position:absolute;inset:0;pointer-events:none;z-index:3;"></div>
-    </div>
-    <div class="drg-particle-layer" id="dragaoParticleLayer"></div>
-
-    <div class="drg-stage-progress-wrap">
-      <div class="drg-stage-progress-lbl"><span id="dragaoLevelLbl">Nível 1 · Aprendiz do Vale</span><span id="dragaoPct">0%</span></div>
-      <div class="drg-stage-progress-track"><div class="drg-stage-progress-fill" id="dragaoFill" style="width:0%"></div></div>
-    </div>
-  </div>
-
-  <div class="drg-bond-block">
-    <div class="drg-bond-head">
-      <span class="drg-bond-lbl">Vínculo de hoje</span>
-      <span class="drg-bond-val" id="dragaoBondVal">0 / 100</span>
-    </div>
-    <div class="drg-bond-track"><div class="drg-bond-fill" id="dragaoBondFill" style="width:0%"></div></div>
-
-    <div class="drg-actions">
-      <button class="drg-action-btn" id="dragaoBtnFeed" onclick="dragaoAction('feed')">
-        <span class="drg-action-icon">🍗</span>
-        <span class="drg-action-lbl">Alimentar</span>
-        <span class="drg-action-count" id="dragaoCntFeed">3 restantes hoje</span>
-      </button>
-      <button class="drg-action-btn" id="dragaoBtnPet" onclick="dragaoAction('pet')">
-        <span class="drg-action-icon">✋</span>
-        <span class="drg-action-lbl">Fazer carinho</span>
-        <span class="drg-action-count" id="dragaoCntPet">3 restantes hoje</span>
-      </button>
-      <button class="drg-action-btn" id="dragaoBtnTrick" onclick="dragaoAction('trick')">
-        <span class="drg-action-icon">🎪</span>
-        <span class="drg-action-lbl">Ensinar truque</span>
-        <span class="drg-action-count" id="dragaoCntTrick">3 restantes hoje</span>
-      </button>
-    </div>
-    <div class="drg-daily-note">3 interações grátis de cada tipo por dia — renovam à meia-noite.</div>
-  </div>
-
-  <div class="drg-tricks-block">
-    <div class="drg-tricks-head">
-      <span class="drg-tricks-title">Truques ensinados</span>
-      <span class="drg-tricks-count" id="dragaoTricksCount">0 / 4</span>
-    </div>
-    <div class="drg-tricks-grid" id="dragaoTricksGrid"></div>
-  </div>
 </div>
 
 <!-- ===== PAINEL ADMIN (só visível pra ADMIN_EMAIL) ===== -->
@@ -2890,7 +2605,7 @@ function applyDefaults(){
   if(!db.fcReviewLog)db.fcReviewLog=[];
   if(typeof db.longestStreak!=='number')db.longestStreak=0;
   if(!db.goalHitDays)db.goalHitDays=[];
-  if(!db.dragao)db.dragao={date:'',bond:0,used:{feed:0,pet:0,trick:0},tricksUnlocked:[]};
+  if(!db.erroAssuntos)db.erroAssuntos=[];
 
   // ===== Contadores para o sistema de conquistas (v2) =====
   if(!db.createdAt)db.createdAt=todayStr();
@@ -3637,7 +3352,7 @@ function isAfterExam(dateStr){return db.examDate&&dateStr>db.examDate;}
 // Depois de expirar, tudo trava (ver LOCKED_SCREENS) exceto o Painel do Herói
 // (dashboard), que continua visível pra pessoa lembrar do progresso e ser convidada a
 // assinar. Ver applyDefaults() pra como db.plan/db.trialStartedAt são definidos.
-const LOCKED_SCREENS=['map','revisions','erros','simgeral','editais','flashcards','redacoes','repertorio','conquistas','dragao'];
+const LOCKED_SCREENS=['map','revisions','erros','simgeral','editais','flashcards','redacoes','repertorio','conquistas'];
 const LOCKED_SCREEN_INFO={
   map:{icon:'🗺️',title:'Mapa dos Reinos é um recurso do plano completo',desc:'O mapa de progresso por reino/chefão libera junto com o plano completo.'},
   revisions:{icon:'🔔',title:'Revisões é um recurso do plano completo',desc:'A fila de revisões espaçadas (SM-2) — atrasadas, de hoje e dos próximos dias — libera junto com o plano completo.'},
@@ -4136,7 +3851,6 @@ function showScreen(name){
   if(name==='redacoes')renderRedacoesScreen();
   if(name==='repertorio')renderRepertorioScreen();
   if(name==='conquistas')renderConquistasScreen();
-  if(name==='dragao')renderDragaoScreen();
   if(name==='admin')adminSearchUsers();
   if(name==='map')renderMap();
   // 'vale' (Mapa do Vale, D3+GeoJSON) fica suprimido da navegação por enquanto — mais
@@ -7968,7 +7682,70 @@ function goToSubtopic(subId){
   },80);
 }
 
+// ===== ASSUNTOS QUE MAIS ERRO (registro manual, dentro de Revisões) =====
+// Não é ligado ao sistema de miniboss/subtópico — é um bloco de notas rápido
+// pro usuário digitar o NOME do assunto toda vez que errar uma questão sobre
+// ele (ex: "Prazos processuais"), sem precisar que esse assunto já exista
+// como chefão/miniboss cadastrado no Vale.
+function addErroAssunto(){
+  const input=document.getElementById('err-assunto-input');
+  const nome=input.value.trim();
+  if(!nome){toast('⚠️ Digite o assunto que você errou','var(--red)');return;}
+  if(!db.erroAssuntos)db.erroAssuntos=[];
+  const nomeNorm=nome.toLowerCase();
+  const existing=db.erroAssuntos.find(a=>a.nome.toLowerCase()===nomeNorm);
+  const today=todayStr();
+  if(existing){
+    existing.count++;
+    existing.lastAt=today;
+  }else{
+    db.erroAssuntos.push({id:genId(),nome,count:1,createdAt:today,lastAt:today});
+  }
+  saveDB();
+  input.value='';
+  input.focus();
+  renderErroAssuntos();
+  toast(existing?`🔁 "${nome}" — ${existing.count}x errado`:`✅ "${nome}" adicionado à lista`,'var(--orange)');
+}
+function renderErroAssuntos(){
+  const el=document.getElementById('err-assuntos-list');
+  if(!el)return;
+  const list=(db.erroAssuntos||[]).slice().sort((a,b)=>b.count-a.count||b.lastAt.localeCompare(a.lastAt));
+  const countEl=document.getElementById('err-assuntos-count');
+  if(countEl)countEl.textContent=list.length?`${list.length} registrado${list.length===1?'':'s'}`:'';
+  if(!list.length){
+    el.innerHTML=`<div class="empty" style="padding:16px 0"><i class="fa fa-clipboard-list"></i><p>Nenhum assunto registrado ainda.</p></div>`;
+    return;
+  }
+  el.innerHTML=list.map(a=>{
+    const heat=a.count>=5?'var(--red)':a.count>=3?'var(--orange)':'var(--accent)';
+    return`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--border);border-radius:12px;margin-bottom:8px;background:var(--panel2)">
+      <div style="width:32px;height:32px;border-radius:50%;background:${heat}15;color:${heat};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12.5px;flex-shrink:0">${a.count}x</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:800;color:var(--text)">${a.nome}</div>
+        <div style="font-size:10px;color:var(--muted)">última vez: ${fmtDateBR(a.lastAt)}</div>
+      </div>
+      <button class="btn btn-xs btn-ghost" title="Marcar como revisado (zera a contagem)" onclick="resetErroAssunto('${a.id}')"><i class="fa fa-rotate"></i></button>
+      <button class="btn btn-xs btn-ghost" title="Remover" onclick="removeErroAssunto('${a.id}')"><i class="fa fa-trash"></i></button>
+    </div>`;
+  }).join('');
+}
+function resetErroAssunto(id){
+  const a=(db.erroAssuntos||[]).find(x=>x.id===id);
+  if(!a)return;
+  a.count=0;
+  saveDB();
+  renderErroAssuntos();
+  toast('✅ Marcado como revisado — contagem zerada','var(--green)');
+}
+function removeErroAssunto(id){
+  db.erroAssuntos=(db.erroAssuntos||[]).filter(x=>x.id!==id);
+  saveDB();
+  renderErroAssuntos();
+}
+
 function renderRevisions(){
+  renderErroAssuntos();
   const container=document.getElementById('revisions-list');
   const today=todayStr();const in7=addDays(today,7);
   let items=getAllRevItems();
@@ -8548,330 +8325,6 @@ function gainXP(n){
     toast(`🎉 Subiu de nível! Agora você é ${after.icon} Nível ${after.level} · ${after.titulo}`,'var(--gold)');
   }
 }
-
-// ===== MEU DRAGÃO (mascote de estimação) =====
-// Reaproveita LEVEL_TITLES/xpLevelInfo do sistema de nível — os 5 estágios do
-// dragão são os mesmos 5 títulos que o herói já ganha subindo de nível (só
-// que com arte própria pra cada um). A arte de cada estágio vem em 2 camadas
-// (corpo fixo + cabeça independente, que gira sozinha) — ver comentários no
-// CSS de "MEU DRAGÃO" pra entender a técnica.
-const DRAGON_STAGES=[
-  {n:1, name:'Aprendiz do Vale', lore:'"Um dragão ainda testando as próprias chamas."', glow:'#fbbf24'},
-  {n:2, name:'Andarilho',        lore:'"Já sai explorando sozinho — só não avisa quando volta."', glow:'#f59e0b'},
-  {n:3, name:'Guardião',         lore:'"Já reconhece seus passos no corredor."', glow:'#ea580c'},
-  {n:4, name:'Nomeado',          lore:'"Rosna pra notificação de prova adiada."', glow:'#dc2626'},
-  {n:5, name:'Lenda do Vale',    lore:'"As cortinas tremem quando ele boceja."', glow:'#f97316'}
-];
-const DRAGON_BODY_IMAGES={1:'/icons/dragon/lv1_body.png',2:'/icons/dragon/lv2_body.png',3:'/icons/dragon/lv3_body.png',4:'/icons/dragon/lv4_body.png',5:'/icons/dragon/lv5_body.png'};
-const DRAGON_HEAD_IMAGES={1:'/icons/dragon/lv1_head.png',2:'/icons/dragon/lv2_head.png',3:'/icons/dragon/lv3_head.png',4:'/icons/dragon/lv4_head.png',5:'/icons/dragon/lv5_head.png'};
-// Posição do olho/boca e eixo de giro da cabeça, calibrados visualmente em
-// cada uma das 5 artes (% da largura/altura da imagem).
-const DRAGON_EYE_POS={1:[35.8,26.5],2:[33.2,23.5],3:[33.2,23.5],4:[34.0,24.3],5:[33.0,23.3]};
-const DRAGON_MOUTH_POS={1:[26.3,34.5],2:[23.7,31.5],3:[23.7,31.5],4:[24.5,32.3],5:[23.5,31.3]};
-const DRAGON_HEAD_PIVOT_X={1:50,2:48,3:48,4:48,5:46};
-const DRAGON_TRICKS=[
-  {id:'sentar',  icon:'🪑', name:'Sentar',        cost:20},
-  {id:'buscar',  icon:'📎', name:'Buscar',        cost:35},
-  {id:'fogo',    icon:'🔥', name:'Soprar fogo',   cost:55},
-  {id:'voar',    icon:'🌀', name:'Rodopio no ar', cost:80}
-];
-const DRAGON_DAILY_LIMIT=3;
-
-// Em qual dos 5 estágios o dragão está, a partir do NÍVEL REAL do herói —
-// mesma tabela de corte que LEVEL_TITLES usa pros títulos (min:1/6/13/23/36).
-function dragaoStageIdx(){
-  const level=xpLevelInfo(db.xp||0).level;
-  let idx=0;
-  LEVEL_TITLES.forEach((t,i)=>{ if(level>=t.min)idx=i; });
-  return idx;
-}
-// Progresso (%) dentro do estágio atual, olhando pro nível que falta pro
-// PRÓXIMO ESTÁGIO (não pro próximo nível — cada estágio cobre vários níveis).
-function dragaoStagePct(idx,level){
-  if(idx>=LEVEL_TITLES.length-1)return 100;
-  const cur=LEVEL_TITLES[idx].min, next=LEVEL_TITLES[idx+1].min;
-  return Math.max(0,Math.min(100,Math.round((level-cur)/(next-cur)*100)));
-}
-
-function dragaoCheckNewDay(){
-  const today=todayStr();
-  if(db.dragao.date!==today){
-    db.dragao.date=today;
-    db.dragao.bond=0;
-    db.dragao.used={feed:0,pet:0,trick:0};
-    // tricksUnlocked NÃO reseta — truque ensinado é permanente.
-    saveDB();
-  }
-}
-
-function renderDragaoScreen(){
-  dragaoCheckNewDay();
-  const idx=dragaoStageIdx();
-  const s=DRAGON_STAGES[idx];
-  const level=xpLevelInfo(db.xp||0).level;
-  const pct=dragaoStagePct(idx,level);
-
-  document.getElementById('dragaoStageName').textContent=s.name;
-  document.getElementById('dragaoStageLore').textContent=s.lore;
-  document.getElementById('dragaoLevelLbl').textContent='Nível '+level+' · '+s.name;
-  document.getElementById('dragaoPct').textContent=pct+'%';
-  document.getElementById('dragaoFill').style.width=pct+'%';
-  document.getElementById('heroGlow').style.setProperty('--glow-color',s.glow);
-
-  const bodyImg=document.getElementById('dragonBodyImg');
-  const headImg=document.getElementById('dragonHeadImg');
-  if(bodyImg.dataset.stage!==String(s.n)){
-    const isFirst=!bodyImg.dataset.stage;
-    const swap=function(){
-      bodyImg.src=DRAGON_BODY_IMAGES[s.n];
-      headImg.src=DRAGON_HEAD_IMAGES[s.n];
-      bodyImg.dataset.stage=String(s.n);
-      bodyImg.classList.remove('switching');
-      headImg.classList.remove('switching');
-    };
-    if(isFirst){
-      swap();
-    } else {
-      bodyImg.classList.add('switching');
-      headImg.classList.add('switching');
-      setTimeout(swap,180);
-    }
-  }
-
-  const headLayer=document.getElementById('dragonHeadLayer');
-  headLayer.style.transformOrigin=DRAGON_HEAD_PIVOT_X[s.n]+'% 38%';
-  // pequena variação no ritmo do "olhar ao redor" pra não sincronizar sempre
-  // igual toda vez que a tela abre — reforça o "tem vida própria".
-  headLayer.style.animationDelay=(Math.random()*-6).toFixed(2)+'s';
-
-  const eyePos=DRAGON_EYE_POS[s.n];
-  const eyeEl=document.getElementById('dragonEye');
-  eyeEl.style.left=eyePos[0]+'%';
-  eyeEl.style.top=eyePos[1]+'%';
-  eyeEl.style.animationDelay=(Math.random()*-5).toFixed(2)+'s';
-
-  const mouthPos=DRAGON_MOUTH_POS[s.n];
-  const mouthEl=document.getElementById('dragonMouth');
-  mouthEl.style.left=mouthPos[0]+'%';
-  mouthEl.style.top=mouthPos[1]+'%';
-
-  dragaoRenderFlames(idx);
-  dragaoRenderEmbers(idx,s);
-  dragaoRenderBond();
-  dragaoRenderTricks();
-}
-
-// Brilho quente pulsando por cima da região da chama (mix-blend screen) —
-// a pintura em si é estática, isso dá a sensação de fogo "respirando".
-function dragaoRenderFlames(idx){
-  const layer=document.getElementById('flameLayer');
-  if(!layer)return;
-  layer.innerHTML='';
-  const spots=[[68,26],[80,52],[58,64]];
-  spots.forEach(function(spot,i){
-    const b=document.createElement('div');
-    b.className='flame-blob';
-    const size=26+i*6+idx*2;
-    b.style.width=size+'%';
-    b.style.height=size+'%';
-    b.style.left=spot[0]+'%';
-    b.style.top=spot[1]+'%';
-    b.style.animationDuration=(1.6+Math.random()*1.4)+'s';
-    b.style.animationDelay=(Math.random()*-2.5)+'s';
-    layer.appendChild(b);
-  });
-}
-
-// Brasas subindo sozinhas o tempo todo, saindo de onde ficam as chamas na
-// própria pintura — mais braseiro nos estágios mais altos.
-function dragaoRenderEmbers(idx,s){
-  const layer=document.getElementById('emberLayer');
-  if(!layer)return;
-  layer.innerHTML='';
-  const count=3+idx;
-  const spots=[DRAGON_MOUTH_POS[s.n],[79,79]];
-  for(let i=0;i<count;i++){
-    const spot=spots[i%2];
-    const e=document.createElement('div');
-    e.className='ember';
-    const size=3+Math.random()*3;
-    e.style.width=size+'px';
-    e.style.height=size+'px';
-    e.style.left=(spot[0]+(Math.random()*10-5))+'%';
-    e.style.top=(spot[1]+(Math.random()*6-3))+'%';
-    e.style.setProperty('--drift',(Math.random()*24-12)+'px');
-    e.style.animationDuration=(2.4+Math.random()*1.8)+'s';
-    e.style.animationDelay=(Math.random()*-3.5)+'s';
-    layer.appendChild(e);
-  }
-}
-
-function dragaoRenderBond(){
-  document.getElementById('dragaoBondVal').textContent=db.dragao.bond+' / 100';
-  document.getElementById('dragaoBondFill').style.width=Math.min(100,db.dragao.bond)+'%';
-  ['feed','pet','trick'].forEach(function(k){
-    const left=DRAGON_DAILY_LIMIT-db.dragao.used[k];
-    const cap=k.charAt(0).toUpperCase()+k.slice(1);
-    document.getElementById('dragaoCnt'+cap).textContent=left>0?(left+' restante'+(left===1?'':'s')+' hoje'):'volta amanhã';
-    document.getElementById('dragaoBtn'+cap).disabled=left<=0;
-  });
-}
-
-function dragaoRenderTricks(){
-  const grid=document.getElementById('dragaoTricksGrid');
-  grid.innerHTML='';
-  DRAGON_TRICKS.forEach(function(t){
-    const unlocked=db.dragao.tricksUnlocked.indexOf(t.id)>-1;
-    const div=document.createElement('div');
-    div.className='drg-trick-card '+(unlocked?'unlocked':'locked');
-    div.innerHTML='<span class="drg-trick-icon">'+t.icon+'</span>'+
-      '<span class="drg-trick-name">'+t.name+'</span>'+
-      '<span class="drg-trick-cost">'+(unlocked?'Aprendido':'precisa '+t.cost+' de vínculo')+'</span>'+
-      (unlocked?'<span class="drg-trick-check">✓</span>':'');
-    grid.appendChild(div);
-  });
-  document.getElementById('dragaoTricksCount').textContent=db.dragao.tricksUnlocked.length+' / '+DRAGON_TRICKS.length;
-}
-
-function dragaoSpawnParticles(emoji,count,atPos){
-  const layer=document.getElementById('dragaoParticleLayer');
-  if(!layer)return;
-  const baseLeft=atPos?atPos[0]:53;
-  const baseTop=atPos?atPos[1]:42;
-  for(let i=0;i<count;i++){
-    (function(i){
-      const p=document.createElement('div');
-      p.className='drg-particle';
-      p.textContent=emoji;
-      p.style.left=(baseLeft+(Math.random()*14-7))+'%';
-      p.style.top=baseTop+'%';
-      layer.appendChild(p);
-      setTimeout(function(){
-        p.classList.add('go');
-        setTimeout(function(){ p.remove(); },1200);
-      },i*90);
-    })(i);
-  }
-}
-
-function dragaoMouthPos(){ return DRAGON_MOUTH_POS[DRAGON_STAGES[dragaoStageIdx()].n]; }
-
-// Flash luminoso na boca — usado na mordida e no sopro de fogo, pra marcar
-// "aconteceu uma ação ali" em vez de só a arte inteira brilhando/girando.
-function dragaoBurstMouth(){
-  const m=document.getElementById('dragonMouth');
-  m.classList.remove('burst'); void m.offsetWidth; m.classList.add('burst');
-}
-
-// Comidinha caindo até a boca antes da mordida acontecer.
-function dragaoSpawnFoodDrop(){
-  const layer=document.getElementById('dragonFxLayer');
-  if(!layer)return;
-  const mp=dragaoMouthPos();
-  const f=document.createElement('div');
-  f.className='food-drop';
-  f.textContent='🍖';
-  f.style.left=mp[0]+'%';
-  f.style.top=mp[1]+'%';
-  layer.appendChild(f);
-  requestAnimationFrame(function(){ f.classList.add('go'); });
-  setTimeout(function(){ f.remove(); },550);
-}
-
-// Rajada de fogo saindo da boca de verdade no truque — voa pra fora, some rápido.
-function dragaoSpawnFireBurst(){
-  const layer=document.getElementById('dragonFxLayer');
-  if(!layer)return;
-  const mp=dragaoMouthPos();
-  for(let i=0;i<7;i++){
-    (function(i){
-      const p=document.createElement('div');
-      p.className='fire-burst';
-      const size=5+Math.random()*6;
-      p.style.width=size+'px';
-      p.style.height=size+'px';
-      p.style.left=mp[0]+'%';
-      p.style.top=mp[1]+'%';
-      const dist=30+Math.random()*30;
-      const ang=Math.PI*(0.75+Math.random()*0.5); // pra esquerda/baixo, onde a boca aponta
-      p.style.setProperty('--fx',(Math.cos(ang)*dist)+'px');
-      p.style.setProperty('--fy',(Math.sin(ang)*dist*0.5)+'px');
-      layer.appendChild(p);
-      setTimeout(function(){
-        p.classList.add('go');
-        setTimeout(function(){ p.remove(); },650);
-      },i*35);
-    })(i);
-  }
-}
-
-// Piscada longa de contentamento no carinho.
-function dragaoEyeContentClose(){
-  const eye=document.getElementById('dragonEye');
-  eye.classList.add('content');
-  setTimeout(function(){ eye.classList.remove('content'); },850);
-}
-
-function dragaoWarmWashPulse(){
-  const w=document.getElementById('warmWash');
-  w.classList.remove('on'); void w.offsetWidth; w.classList.add('on');
-}
-
-function dragaoShakeStage(){
-  const wrap=document.querySelector('#screen-dragao .dragon-wrap');
-  if(!wrap)return;
-  wrap.classList.remove('shake'); void wrap.offsetWidth; wrap.classList.add('shake');
-}
-
-window.dragaoAction=function(kind){
-  dragaoCheckNewDay();
-  if(db.dragao.used[kind]>=DRAGON_DAILY_LIMIT)return;
-  db.dragao.used[kind]++;
-  const df=document.getElementById('dragonFrame');
-  df.classList.remove('react-feed','react-pet','react-trick');
-  void df.offsetWidth;
-  const mp=dragaoMouthPos();
-
-  if(kind==='feed'){
-    db.dragao.bond=Math.min(100,db.dragao.bond+8);
-    // a comida cai até a boca, só DEPOIS disso a mordida acontece.
-    dragaoSpawnFoodDrop();
-    setTimeout(function(){
-      df.classList.add('react-feed');
-      dragaoBurstMouth();
-      dragaoSpawnParticles('✨',4,mp);
-      setTimeout(function(){ df.classList.remove('react-feed'); },1100);
-    },460);
-  } else if(kind==='pet'){
-    db.dragao.bond=Math.min(100,db.dragao.bond+5);
-    df.classList.add('react-pet');
-    dragaoEyeContentClose();
-    dragaoWarmWashPulse();
-    dragaoSpawnParticles('💜',4);
-    setTimeout(function(){ df.classList.remove('react-pet'); },1150);
-  } else if(kind==='trick'){
-    df.classList.add('react-trick');
-    dragaoSpawnFireBurst();
-    dragaoBurstMouth();
-    dragaoShakeStage();
-    const next=DRAGON_TRICKS.find(function(t){ return db.dragao.tricksUnlocked.indexOf(t.id)===-1; });
-    if(next && db.dragao.bond>=next.cost){
-      db.dragao.tricksUnlocked.push(next.id);
-      db.dragao.bond-=next.cost;
-      dragaoSpawnParticles('🎉',5);
-      toast('🎪 Seu dragão aprendeu "'+next.name+'"!','var(--gold)');
-    } else if(next){
-      dragaoSpawnParticles('💭',2);
-    } else {
-      dragaoSpawnParticles('🏆',4);
-    }
-    setTimeout(function(){ df.classList.remove('react-trick'); },900);
-  }
-
-  saveDB();
-  dragaoRenderBond();
-  dragaoRenderTricks();
-};
 
 // ===== EDITAIS =====
 let edFilter='all';
@@ -12687,7 +12140,6 @@ function bindStaticEvents(){
   document.getElementById('nav-editais')?.addEventListener('click',()=>showScreen('editais'));
   document.getElementById('nav-flashcards')?.addEventListener('click',()=>showScreen('flashcards'));
   document.getElementById('nav-redacoes')?.addEventListener('click',()=>showScreen('redacoes'));
-  document.getElementById('nav-dragao')?.addEventListener('click',()=>showScreen('dragao'));
   document.getElementById('nav-conquistas')?.addEventListener('click',()=>showScreen('conquistas'));
   document.getElementById('nav-admin')?.addEventListener('click',()=>showScreen('admin'));
   document.getElementById('xp-pill-btn')?.addEventListener('click',()=>showScreen('dashboard'));
