@@ -560,8 +560,9 @@ nav{
 .rn-4{background:rgba(220,38,38,0.15);color:var(--red);border:1.5px solid rgba(220,38,38,0.35);}
 
 /* ===== FILTER CHIPS ===== */
-.filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;}
-.chip{padding:5px 14px;border-radius:20px;font-size:11px;font-weight:800;cursor:pointer;border:1.5px solid var(--border);background:var(--panel);color:var(--muted);transition:all 0.2s;}
+.filter-row{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:16px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.filter-row::-webkit-scrollbar{display:none;}
+.chip{padding:5px 14px;border-radius:20px;font-size:11px;font-weight:800;cursor:pointer;border:1.5px solid var(--border);background:var(--panel);color:var(--muted);transition:all 0.2s;white-space:nowrap;flex-shrink:0;}
 .chip:hover{border-color:var(--accent);color:var(--accent);}
 .chip.active{background:linear-gradient(135deg,var(--accent),#4f46e5);border-color:var(--accent);color:#fff;box-shadow:0 4px 12px rgba(108,71,255,0.25);}
 
