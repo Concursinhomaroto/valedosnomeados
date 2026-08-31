@@ -518,6 +518,37 @@ nav{
 .resumo-drop-sub{font-size:9.5px;color:var(--muted);margin-top:3px;}
 .resumo-status{font-size:11px;color:#8b5cf6;text-align:center;padding:10px 0;display:flex;align-items:center;justify-content:center;gap:8px;}
 
+/* ===== FLUXOGRAMA DO MINIBOSS (IA a partir do Resumo, editável à mão depois) ===== */
+.fluxo-badge-done{background:rgba(217,119,6,0.12);color:#d97706;border:1.5px solid rgba(217,119,6,0.35);border-radius:8px;font-size:9px;padding:2px 8px;font-weight:900;cursor:pointer;transition:all 0.2s;}
+.fluxo-badge-done:hover{background:rgba(217,119,6,0.22);}
+.fluxo-badge-todo{background:rgba(107,114,128,0.08);color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:9px;padding:2px 8px;font-weight:700;cursor:pointer;transition:all 0.2s;}
+.fluxo-badge-todo:hover{background:rgba(217,119,6,0.08);color:#d97706;border-color:#d97706;}
+.fluxo-wrap{background:rgba(217,119,6,0.05);border:1.5px solid rgba(217,119,6,0.25);border-radius:14px;padding:14px;margin-top:10px;display:none;overflow-x:auto;}
+.fluxo-wrap.fluxo-open{display:block;}
+.fluxo-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+.fluxo-title{font-size:11px;font-weight:900;color:#d97706;text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;}
+.fluxo-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.fluxo-empty{font-size:12px;color:var(--muted);text-align:center;padding:2px 0 10px;}
+.fluxo-status{font-size:11px;color:#d97706;text-align:center;padding:10px 0;display:flex;align-items:center;justify-content:center;gap:8px;}
+.fluxo-disclaimer{font-size:9.5px;color:var(--muted);margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);display:flex;align-items:center;gap:5px;}
+.fluxo-textarea-wrap{margin-top:10px;}
+/* Visualização (modo leitura) */
+.fluxo-chart{display:flex;flex-direction:column;align-items:center;padding:8px 4px 4px;min-width:min-content;}
+.fluxo-node{border-radius:12px;padding:10px 16px;font-size:12px;font-weight:700;text-align:center;max-width:230px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+.fluxo-node-inicio{background:linear-gradient(135deg,var(--accent),#4f46e5);color:#fff;border-radius:24px;}
+.fluxo-node-acao{background:var(--panel2);border:1.5px solid var(--border);color:var(--text);}
+.fluxo-node-decisao{background:rgba(217,119,6,0.12);border:1.5px solid rgba(217,119,6,0.4);color:#d97706;border-radius:8px;}
+.fluxo-node-fim{background:linear-gradient(135deg,var(--green),#15803d);color:#fff;border-radius:24px;}
+.fluxo-connector{width:2px;height:16px;background:var(--border);}
+.fluxo-arrow{color:var(--muted);font-size:11px;line-height:1;margin:-3px 0 1px;}
+.fluxo-branches{display:flex;gap:22px;align-items:flex-start;justify-content:center;}
+.fluxo-branch{display:flex;flex-direction:column;align-items:center;padding-top:2px;}
+.fluxo-branch-label{font-size:9.5px;font-weight:900;color:#d97706;background:rgba(217,119,6,0.12);border-radius:20px;padding:2px 10px;margin-bottom:6px;white-space:nowrap;}
+/* Edição */
+.fluxo-edit-node{border:1.5px dashed var(--border);border-radius:12px;padding:10px;margin-bottom:8px;background:var(--panel2);}
+.fluxo-edit-row{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;align-items:center;}
+.fluxo-edit-branch{border-left:2px solid rgba(217,119,6,0.3);padding-left:12px;margin-top:8px;margin-left:6px;}
+
 /* ===== TOTAL TIME CHIP ===== */
 .total-time-chip{background:rgba(139,92,246,0.1);border:1.5px solid rgba(139,92,246,0.3);color:#8b5cf6;border-radius:8px;padding:2px 8px;font-size:10px;font-weight:800;}
 
@@ -3294,6 +3325,9 @@ let openSim=new Set(); // subIds com painel de simulado aberto
 let simGenerating=new Set(); // subIds com geração de simulado em andamento
 let openResumo=new Set(); // subIds cujo painel de resumo (IA a partir de arquivo) está aberto
 let resumoGenerating=new Map(); // subId -> 'arquivo'|'web', enquanto a geração está em andamento
+let openFluxo=new Set(); // subIds cujo painel de fluxograma está aberto
+let fluxoGenerating=new Set(); // subIds com geração de fluxograma por IA em andamento
+let fluxoEditing=new Set(); // subIds cujo fluxograma está em modo de edição manual
 let resumoSpeakSubId=null; // subId cujo resumo está sendo lido em voz agora (ou null se nenhum)
 let resumoSpeakMode=null; // 'audio' (áudio real gerado pela IA — sobrevive à tela bloqueada), 'browser' (voz do navegador — para se a tela travar) ou 'loading' (gerando o áudio)
 let resumoSpeakQueue=[]; // pedaços de texto do resumo atual, na ordem de leitura (modo 'browser')
@@ -4794,6 +4828,7 @@ function subItemHTML(s,topicId){
   const hasNote=s.note&&s.note.trim().length>0;
   const noteOpen=openNotes.has(s.id);
   const hasResumo=!!(s.resumo&&s.resumo.texto);
+  const hasFluxo=!!(s.fluxograma&&s.fluxograma.arvore);
   // Current session display time
   let displayTime=time;
   if(running) displayTime=time+Math.floor((Date.now()-t.startedAt)/1000);
@@ -4828,12 +4863,16 @@ function subItemHTML(s,topicId){
       </button>
       <button class="btn btn-sm ${s.legislacao?'btn-cyan':'btn-ghost'}" onclick="toggleLegis('${s.id}')" id="legis-btn-${s.id}"><i class="fa fa-scale-balanced"></i> ${s.legislacao?'Base Legal':'Base Legal'}</button>
       <button class="btn btn-sm ${s.simStats?'btn-pink':'btn-ghost'}" onclick="toggleSim('${s.id}')" id="sim-btn-${s.id}"><i class="fa fa-list-check"></i> Simulado</button>
+      <button class="${hasFluxo?'fluxo-badge-done':'fluxo-badge-todo'}" onclick="toggleFluxo('${s.id}')" id="fluxo-btn-${s.id}" title="Resumo visual em forma de fluxograma — a IA gera um rascunho e você pode editar depois">
+        ${hasFluxo?'✅ Fluxograma':'🔀 Fluxograma'}
+      </button>
       <button class="btn btn-sm" onclick="renameSubtopic('${topicId}','${s.id}')" title="Renomear miniboss"><i class="fa fa-pen"></i></button>
       <button class="btn btn-sm btn-danger" onclick="deleteSub('${topicId}','${s.id}')"><i class="fa fa-trash"></i></button>
     </div>
     <div class="resumo-wrap${openResumo.has(s.id)?' resumo-open':''}" id="resumo-${s.id}">${resumoPanelHTML(s)}</div>
     <div class="legis-wrap${openLegis.has(s.id)?' legis-open':''}" id="legis-${s.id}">${legisPanelHTML(s)}</div>
     <div class="sim-wrap${openSim.has(s.id)?' sim-open':''}" id="sim-${s.id}">${simPanelHTML(s)}</div>
+    <div class="fluxo-wrap${openFluxo.has(s.id)?' fluxo-open':''}" id="fluxo-${s.id}">${fluxoPanelHTML(s)}</div>
     <div class="timer-wrap" id="tw-${s.id}" ${panelOpen?'style="display:block"':''}>
       <div class="timer-display" id="td-${s.id}">${fmtHMS(displayTime)}</div>
       <div style="text-align:center;font-size:10px;color:rgba(196,181,253,0.6);margin-bottom:8px">
@@ -5402,6 +5441,298 @@ function saveNote(subId,topicId){
   saveDB();
   toast('📝 Anotação salva!','var(--accent)');
   if(topic)refreshSubs(topic,topicId);
+}
+
+// ===== FLUXOGRAMA DO MINIBOSS =====
+// Resumo visual em passos e decisões pra cada miniboss — ótimo pra protocolos ("se sim,
+// faz X; se não, faz Y"). A IA gera um rascunho a partir do Resumo já existente (ou de um
+// texto colado) e depois dá pra editar à mão, ou criar o fluxograma do zero manualmente.
+//
+// Estrutura da árvore, sempre a mesma forma (recursiva), salva em s.fluxograma.arvore:
+//   {texto, tipo:'inicio'|'acao'|'decisao'|'fim', ramos:[{rotulo, no:{...mesma forma...}}]}
+// Nós que NÃO são decisão têm no máximo 1 item em "ramos" (rotulo sempre null) — é só o
+// próximo passo da sequência. Nós de decisão têm 2+ ramos, cada um com um rótulo (ex:
+// "Sim"/"Não") descrevendo aquele caminho. Um nó vira "folha" quando ramos.length===0.
+//
+// Cada nó é endereçado por um "path": a sequência de índices de ramo percorridos desde a
+// raiz (ex: [0,1] = ramo 0 da raiz, depois ramo 1 desse). Codificado como string
+// "0,1" nos onclick/onchange do HTML, porque atributo não aceita array direto.
+const FLUXO_TIPOS={inicio:'🟣 Início',acao:'⬜ Ação',decisao:'🔶 Decisão',fim:'🏁 Fim'};
+const FLUXO_TIPOS_VALIDOS=new Set(Object.keys(FLUXO_TIPOS));
+
+function fluxoPathStr(path){return path.join(',');}
+function fluxoPathArr(str){return str===''?[]:str.split(',').map(Number);}
+function fluxoGetNode(tree,path){
+  let node=tree;
+  for(const idx of path)node=node.ramos[idx].no;
+  return node;
+}
+// Pra remover/alterar um ramo precisa mexer no array "ramos" de quem é PAI do nó no fim
+// do path — retorna esse array + o índice do ramo em questão dentro dele.
+function fluxoGetParentRamos(tree,path){
+  if(!path.length)return null; // raiz não tem pai
+  const parent=fluxoGetNode(tree,path.slice(0,-1));
+  return{ramos:parent.ramos,idx:path[path.length-1]};
+}
+
+function fluxoRefreshPanel(subId){
+  const sub=simFindSub(subId);
+  if(!sub)return;
+  const wrap=document.getElementById('fluxo-'+subId);
+  if(wrap){wrap.innerHTML=fluxoPanelHTML(sub);wrap.classList.add('fluxo-open');wrap.style.display='';}
+  const btn=document.getElementById('fluxo-btn-'+subId);
+  if(btn){
+    const hasFluxo=!!(sub.fluxograma&&sub.fluxograma.arvore);
+    btn.className=hasFluxo?'fluxo-badge-done':'fluxo-badge-todo';
+    btn.innerHTML=hasFluxo?'✅ Fluxograma':'🔀 Fluxograma';
+  }
+}
+function toggleFluxo(subId){
+  if(openFluxo.has(subId))openFluxo.delete(subId);else openFluxo.add(subId);
+  const wrap=document.getElementById('fluxo-'+subId);
+  if(wrap){wrap.classList.toggle('fluxo-open',openFluxo.has(subId));wrap.style.display='';}
+}
+function closeFluxo(subId){
+  openFluxo.delete(subId);
+  const wrap=document.getElementById('fluxo-'+subId);
+  if(wrap){wrap.classList.remove('fluxo-open');wrap.style.display='';}
+}
+
+function fluxoPanelHTML(s){
+  if(fluxoGenerating.has(s.id)){
+    return`<div class="fluxo-header"><div class="fluxo-title"><i class="fa fa-diagram-project"></i> Fluxograma</div></div>
+      <div class="fluxo-status"><i class="fa fa-spinner fa-spin"></i> A IA está montando o fluxograma...</div>`;
+  }
+  if(fluxoEditing.has(s.id)&&s.fluxograma&&s.fluxograma.arvore){
+    return`
+      <div class="fluxo-header">
+        <div class="fluxo-title"><i class="fa fa-diagram-project"></i> Editando fluxograma</div>
+        <div class="fluxo-actions"><button class="btn btn-xs btn-primary" onclick="fluxoStopEditing('${s.id}')"><i class="fa fa-check"></i> Concluir edição</button></div>
+      </div>
+      ${fluxoEditNodeHTML(s.id,s.fluxograma.arvore,[])}
+      <div class="fluxo-disclaimer"><i class="fa fa-circle-info"></i> As alterações são salvas sozinhas a cada edição.</div>
+    `;
+  }
+  if(s.fluxograma&&s.fluxograma.arvore){
+    const geradoEm=s.fluxograma.geradoEm?new Date(s.fluxograma.geradoEm).toLocaleDateString('pt-BR'):'';
+    const origem=s.fluxograma.origem==='ia'?'Gerado por IA':'Criado manualmente';
+    return`
+      <div class="fluxo-header">
+        <div class="fluxo-title"><i class="fa fa-diagram-project"></i> Fluxograma</div>
+        <div class="fluxo-actions">
+          <button class="btn btn-xs btn-ghost" onclick="fluxoStartEditing('${s.id}')"><i class="fa fa-pen"></i> Editar</button>
+          <button class="btn btn-xs btn-ghost" onclick="fluxoRegenerar('${s.id}')" title="Gerar de novo com IA (substitui o atual)"><i class="fa fa-arrows-rotate"></i> Gerar de novo</button>
+        </div>
+      </div>
+      <div class="fluxo-chart">${fluxoRenderNode(s.fluxograma.arvore)}</div>
+      <div class="fluxo-disclaimer"><i class="fa fa-triangle-exclamation"></i> ${origem}${geradoEm?` em ${geradoEm}`:''} — confira sempre a fonte oficial antes de usar na prova.</div>
+    `;
+  }
+  const temResumo=!!(s.resumo&&s.resumo.texto);
+  return`
+    <div class="fluxo-header"><div class="fluxo-title"><i class="fa fa-diagram-project"></i> Fluxograma</div></div>
+    <div class="fluxo-empty">Um resumo visual em passos e decisões — ótimo pra protocolos com "se sim, se não". A IA gera um rascunho e você pode ajustar depois.</div>
+    <div class="fluxo-textarea-wrap">
+      <textarea class="inp" id="fluxo-texto-${s.id}" style="width:100%;min-height:80px;resize:vertical;margin-bottom:8px" placeholder="${temResumo?'Deixe em branco pra usar o Resumo já gerado deste miniboss, ou cole aqui outro texto/protocolo...':'Cole aqui o texto/protocolo que a IA deve transformar em fluxograma...'}"></textarea>
+      <button class="btn btn-sm btn-primary" style="width:100%;justify-content:center" onclick="generateFluxograma('${s.id}')"><i class="fa fa-wand-magic-sparkles"></i> Gerar com IA</button>
+    </div>
+    <div style="text-align:center;font-size:10px;color:var(--muted);margin:12px 0;display:flex;align-items:center;gap:8px">
+      <span style="flex:1;height:1px;background:var(--border)"></span>ou<span style="flex:1;height:1px;background:var(--border)"></span>
+    </div>
+    <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center" onclick="fluxoStartManual('${s.id}')"><i class="fa fa-pen"></i> Criar do zero, manualmente</button>
+  `;
+}
+
+// ---- Visualização (modo leitura) ----
+function fluxoRenderNode(node){
+  let html=`<div class="fluxo-node fluxo-node-${node.tipo||'acao'}">${escapeHtml(node.texto||'')}</div>`;
+  const ramos=node.ramos||[];
+  if(!ramos.length)return html;
+  if(ramos.length===1){
+    html+=`<div class="fluxo-connector"></div><div class="fluxo-arrow">▼</div>${fluxoRenderNode(ramos[0].no)}`;
+    return html;
+  }
+  html+=`<div class="fluxo-connector"></div><div class="fluxo-branches">${ramos.map(r=>`
+    <div class="fluxo-branch">
+      <div class="fluxo-branch-label">${escapeHtml(r.rotulo||'')}</div>
+      ${fluxoRenderNode(r.no)}
+    </div>`).join('')}</div>`;
+  return html;
+}
+
+// ---- Edição manual ----
+function fluxoEditNodeHTML(subId,node,path){
+  const pathStr=fluxoPathStr(path);
+  const isRoot=path.length===0;
+  const ramos=node.ramos||[];
+  const isDecisao=node.tipo==='decisao';
+  let html=`<div class="fluxo-edit-node">
+    <div class="fluxo-edit-row">
+      <select class="inp" style="max-width:130px" onchange="fluxoSetField('${subId}','${pathStr}','tipo',this.value)">
+        ${Object.entries(FLUXO_TIPOS).map(([v,lbl])=>`<option value="${v}"${node.tipo===v?' selected':''}>${lbl}</option>`).join('')}
+      </select>
+      <input class="inp" style="flex:1;min-width:160px" value="${escapeHtml(node.texto||'')}" placeholder="Texto deste passo..." onchange="fluxoSetField('${subId}','${pathStr}','texto',this.value)">
+      ${!isRoot?`<button class="btn btn-xs btn-danger" onclick="fluxoDeleteNode('${subId}','${pathStr}')" title="Remover este passo e tudo depois dele"><i class="fa fa-trash"></i></button>`:''}
+    </div>`;
+
+  if(isDecisao){
+    html+=ramos.map((r,i)=>`
+      <div class="fluxo-edit-branch">
+        <div class="fluxo-edit-row">
+          <input class="inp" style="max-width:160px" value="${escapeHtml(r.rotulo||'')}" placeholder="Rótulo (ex: Sim)" onchange="fluxoSetRamoRotulo('${subId}','${pathStr}',${i},this.value)">
+          <button class="btn btn-xs btn-ghost" onclick="fluxoRemoveRamo('${subId}','${pathStr}',${i})" title="Remover este ramo"><i class="fa fa-xmark"></i> Remover ramo</button>
+        </div>
+        ${fluxoEditNodeHTML(subId,r.no,[...path,i])}
+      </div>`).join('');
+    html+=`<button class="btn btn-xs btn-ghost" style="margin-top:4px" onclick="fluxoAddRamo('${subId}','${pathStr}')"><i class="fa fa-plus"></i> Adicionar ramo (ex: Sim/Não)</button>`;
+  }else if(ramos.length){
+    html+=fluxoEditNodeHTML(subId,ramos[0].no,[...path,0]);
+  }else if(node.tipo!=='fim'){
+    html+=`<button class="btn btn-xs btn-ghost" onclick="fluxoAddRamo('${subId}','${pathStr}')"><i class="fa fa-plus"></i> Adicionar próximo passo</button>`;
+  }
+
+  html+='</div>';
+  return html;
+}
+function fluxoSetField(subId,pathStr,field,value){
+  const sub=simFindSub(subId);
+  if(!sub||!sub.fluxograma)return;
+  const node=fluxoGetNode(sub.fluxograma.arvore,fluxoPathArr(pathStr));
+  node[field]=value;
+  saveDB();
+  // Mudar o tipo pode trocar decisão <-> linear, o que muda o HTML do editor inteiro —
+  // por isso sempre re-renderiza o painel todo em vez de só trocar o texto no lugar.
+  fluxoRefreshPanel(subId);
+}
+function fluxoSetRamoRotulo(subId,pathStr,idx,value){
+  const sub=simFindSub(subId);
+  if(!sub||!sub.fluxograma)return;
+  const node=fluxoGetNode(sub.fluxograma.arvore,fluxoPathArr(pathStr));
+  if(node.ramos[idx])node.ramos[idx].rotulo=value;
+  saveDB();
+}
+function fluxoAddRamo(subId,pathStr){
+  const sub=simFindSub(subId);
+  if(!sub||!sub.fluxograma)return;
+  const node=fluxoGetNode(sub.fluxograma.arvore,fluxoPathArr(pathStr));
+  if(!node.ramos)node.ramos=[];
+  node.ramos.push({rotulo:node.tipo==='decisao'?'Novo ramo':null,no:{texto:'Novo passo',tipo:'acao',ramos:[]}});
+  saveDB();
+  fluxoRefreshPanel(subId);
+}
+function fluxoRemoveRamo(subId,pathStr,idx){
+  const sub=simFindSub(subId);
+  if(!sub||!sub.fluxograma)return;
+  if(!confirm('Remover este ramo e tudo que vem depois dele?'))return;
+  const node=fluxoGetNode(sub.fluxograma.arvore,fluxoPathArr(pathStr));
+  node.ramos.splice(idx,1);
+  saveDB();
+  fluxoRefreshPanel(subId);
+}
+function fluxoDeleteNode(subId,pathStr){
+  const sub=simFindSub(subId);
+  if(!sub||!sub.fluxograma)return;
+  const path=fluxoPathArr(pathStr);
+  if(!path.length){toast('⚠️ Não dá pra remover o passo inicial — clique em "Gerar de novo" se quiser recomeçar do zero.','var(--red)');return;}
+  if(!confirm('Remover este passo e tudo que vem depois dele?'))return;
+  const info=fluxoGetParentRamos(sub.fluxograma.arvore,path);
+  info.ramos.splice(info.idx,1);
+  saveDB();
+  fluxoRefreshPanel(subId);
+}
+function fluxoStartEditing(subId){
+  fluxoEditing.add(subId);
+  fluxoRefreshPanel(subId);
+}
+function fluxoStopEditing(subId){
+  fluxoEditing.delete(subId);
+  fluxoRefreshPanel(subId);
+}
+function fluxoStartManual(subId){
+  const sub=simFindSub(subId);
+  if(!sub)return;
+  sub.fluxograma={arvore:{texto:'Início',tipo:'inicio',ramos:[]},origem:'manual',geradoEm:new Date().toISOString()};
+  saveDB();
+  fluxoEditing.add(subId);
+  fluxoRefreshPanel(subId);
+}
+function fluxoRegenerar(subId){
+  if(!confirm('Gerar de novo substitui o fluxograma atual (perde qualquer edição manual feita nele). Continuar?'))return;
+  const sub=simFindSub(subId);
+  if(sub)delete sub.fluxograma;
+  fluxoEditing.delete(subId);
+  saveDB();
+  fluxoRefreshPanel(subId);
+}
+
+// Sanitiza o JSON que veio da IA (ou de qualquer fonte): garante os campos certos, corta
+// tipos inválidos e limita profundidade/nº de ramos por nó — a IA às vezes devolve algo
+// mal formado ou grande demais, e isso nunca pode quebrar o app.
+function fluxoSanitizeNode(raw,depth){
+  if(!raw||typeof raw!=='object'||depth>25)return{texto:'Fim',tipo:'fim',ramos:[]};
+  const tipo=FLUXO_TIPOS_VALIDOS.has(raw.tipo)?raw.tipo:'acao';
+  const texto=String(raw.texto||raw.text||'').trim().slice(0,300)||'(sem texto)';
+  const ramosRaw=Array.isArray(raw.ramos)?raw.ramos:[];
+  const ramos=ramosRaw.slice(0,6).map(r=>({
+    rotulo:r&&r.rotulo?String(r.rotulo).trim().slice(0,40):null,
+    no:fluxoSanitizeNode(r&&(r.no||r.proximo),depth+1)
+  }));
+  return{texto,tipo,ramos};
+}
+function fluxoPrompt(texto){
+  return`Você é um especialista em transformar textos de protocolos, processos e procedimentos em fluxogramas de decisão, para material de estudo de concurso público no Brasil.
+
+TAREFA: Leia o texto abaixo e monte um fluxograma representando os passos e decisões descritos nele, no formato JSON abaixo. Responda APENAS com o JSON, sem texto antes ou depois, sem markdown, sem bloco de código.
+
+FORMATO EXATO (árvore recursiva):
+{"texto":"texto curto do passo","tipo":"inicio","ramos":[{"rotulo":null,"no":{"texto":"...","tipo":"acao","ramos":[]}}]}
+
+REGRAS:
+- "tipo" é sempre um de: "inicio" (só o primeiro nó), "acao" (um passo/procedimento), "decisao" (um ponto de decisão tipo sim/não ou múltipla escolha), "fim" (um desfecho, sem ramos depois).
+- Nós que NÃO são decisão têm no máximo 1 item em "ramos" (rotulo sempre null) — é só o próximo passo. Um nó "fim" tem "ramos":[].
+- Nós de tipo "decisao" têm 2 ou mais itens em "ramos", cada um com um "rotulo" curto (ex: "Sim", "Não", ou o nome da opção) descrevendo aquele caminho.
+- Textos de cada passo devem ser curtos e diretos (até uns 15 palavras), no nível de resumo de concurso — não copie o texto inteiro do material.
+- Cubra as decisões e desfechos principais do texto, mas não exagere no número de passos (até uns 15-20 nós no total é suficiente).
+- Não invente informação que não esteja no material.
+
+TEXTO:
+${texto}`;
+}
+async function generateFluxograma(subId){
+  const sub=simFindSub(subId);
+  if(!sub)return;
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey){
+    toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');
+    openAISettingsModal();
+    return;
+  }
+  const textoColado=(document.getElementById('fluxo-texto-'+subId)?.value||'').trim();
+  const texto=textoColado||(sub.resumo&&sub.resumo.texto)||'';
+  if(!texto){toast('⚠️ Cole um texto, ou gere primeiro o Resumo deste miniboss','var(--red)');return;}
+  if(fluxoGenerating.has(subId)){toast('Geração em andamento...','var(--orange)');return;}
+
+  fluxoGenerating.add(subId);
+  openFluxo.add(subId);
+  fluxoRefreshPanel(subId);
+
+  try{
+    // Sem chunking de propósito: a fonte aqui é o Resumo (já condensado) ou um trecho
+    // colado à mão, não o material bruto inteiro — um corte de segurança em 40k
+    // caracteres é mais que suficiente e evita estourar o teto de uma chamada só.
+    const raw=await callGeminiGenerate(apiKey,fluxoPrompt(texto.slice(0,40000)));
+    const parsed=extractAIJson(raw);
+    if(!parsed||typeof parsed!=='object')throw new Error('A IA não devolveu um fluxograma válido. Tente de novo.');
+    sub.fluxograma={arvore:fluxoSanitizeNode(parsed,0),origem:'ia',geradoEm:new Date().toISOString()};
+    saveDB();
+    toast('🔀 Fluxograma gerado!','var(--green)');
+  }catch(e){
+    console.error('Fluxograma error:',e);
+    toast('⚠️ '+e.message,'var(--red)');
+  }finally{
+    fluxoGenerating.delete(subId);
+    fluxoRefreshPanel(subId);
+  }
 }
 
 // ===== BASE LEGAL (legislação/jurisprudência gerada por IA, cross-linkada ao miniboss) =====
