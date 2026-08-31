@@ -2607,6 +2607,8 @@ function applyDefaults(){
   if(typeof db.longestStreak!=='number')db.longestStreak=0;
   if(!db.goalHitDays)db.goalHitDays=[];
   if(!db.erroAssuntos)db.erroAssuntos=[];
+  if(typeof db.erroAssuntosResolvidos!=='number')db.erroAssuntosResolvidos=0;
+  if(typeof db.fcGroupStudySessions!=='number')db.fcGroupStudySessions=0;
 
   // ===== Contadores para o sistema de conquistas (v2) =====
   if(!db.createdAt)db.createdAt=todayStr();
@@ -6601,6 +6603,8 @@ const ACHIEVEMENTS_REGISTRY=[
   {id:'colecionador_xp',categoria:'volume',titulo:'Colecionador de XP',descricao:'XP total acumulado em toda a plataforma.',icone:'⭐',dificuldade:'dificil',getValue:()=>db.xp||0,tiers:[500,2000,6000,15000,35000,70000]},
   {id:'ascensao',categoria:'volume',titulo:'Ascensão do Nomeado',descricao:'Subir de nível — cada faixa é um título novo no Vale.',icone:'🐉',dificuldade:'dificilimo',getValue:()=>xpLevelInfo(db.xp||0).level,tiers:[6,13,23,36]},
   {id:'estrategista_provas',categoria:'volume',titulo:'Estrategista de Provas',descricao:'Simulados gerais completos — treino de prova cheia, contra o relógio.',icone:'🎓',dificuldade:'medio',getValue:()=>db.simGeralSessionsCount||0,tiers:[1,5,15,30,60]},
+  {id:'editais_registrados',categoria:'volume',titulo:'Caçador de Editais',descricao:'Ficar de olho em todo concurso que aparece no radar.',icone:'📋',dificuldade:'facil',getValue:()=>(db.editais||[]).length,tiers:[1,3,6,10,15]},
+  {id:'provas_encaradas',categoria:'volume',titulo:'Guerreiro das Provas',descricao:'Concursos marcados como realizado — subiu na arena de verdade.',icone:'🛡️',dificuldade:'medio',getValue:()=>(db.editais||[]).filter(e=>e.status==='realizado').length,tiers:[1,3,6,12]},
 
   // --- B) CONSISTÊNCIA / DISCIPLINA ---
   {id:'streak',categoria:'consistencia',titulo:'Chama Eterna',descricao:'A ofensiva que separa aprovado de desistente.',icone:'🔥',dificuldade:'dificil',getValue:()=>db.longestStreak||0,tiers:[3,7,30,60,100,180,365]},
@@ -6619,12 +6623,15 @@ const ACHIEVEMENTS_REGISTRY=[
   {id:'npd_alto',categoria:'dominio',titulo:'Redator Nota Mil',descricao:'Redações com NPD no topo da faixa (≥25).',icone:'🏅',dificuldade:'dificilimo',getValue:()=>countRedacoesNPDAlto(25),tiers:[1,5,15,30]},
   {id:'reino_dominado',categoria:'dominio',titulo:'Reino Dominado',descricao:'Um reino inteiro com 100% dos cards maduros.',icone:'👑',dificuldade:'dificilimo',getValue:()=>countReinosDominados(),tiers:reinoDominadoTiers},
   {id:'repertorio_dominado',categoria:'dominio',titulo:'Repertório na Ponta da Língua',descricao:'Seções do repertório marcadas como dominadas — o que você já sabe de cor pra prova.',icone:'🧠',dificuldade:'dificil',getValue:()=>countSecoesRepertorioDominadas(),tiers:[10,30,75,150,300]},
+  {id:'assuntos_diagnosticados',categoria:'dominio',titulo:'Diagnóstico Certeiro',descricao:'Assuntos diferentes anotados na lista de "mais erro" — saber onde dói é o primeiro passo.',icone:'🎯',dificuldade:'facil',getValue:()=>(db.erroAssuntos||[]).length,tiers:[3,8,15,30,50]},
+  {id:'assuntos_superados',categoria:'dominio',titulo:'Ponto Fraco Virado Força',descricao:'Assuntos da lista de "mais erro" zerados depois de revisados.',icone:'💪',dificuldade:'medio',getValue:()=>db.erroAssuntosResolvidos||0,tiers:[1,5,15,30,60]},
 
   // --- D) AMPLITUDE / EXPLORAÇÃO ---
   {id:'senhor_reinos',categoria:'amplitude',titulo:'Senhor dos Reinos',descricao:'Cobrir todos os reinos com pelo menos um estudo.',icone:'🌍',dificuldade:'medio',getValue:()=>countReinosCobertura(),tiers:[50,75,100]},
   {id:'andarilho',categoria:'amplitude',titulo:'Andarilho dos Reinos',descricao:'Vários reinos diferentes estudados no mesmo dia.',icone:'🚶',dificuldade:'medio',getValue:()=>maxKingdomsInOneDay(),tiers:[2,3,5,8]},
   {id:'triade',categoria:'amplitude',titulo:'Tríade Completa',descricao:'Flashcard + redação + repertório no mesmo dia.',icone:'🔺',dificuldade:'medio',getValue:()=>countTriadeDays(),tiers:[1,7,21,50]},
   {id:'repertorio_universal',categoria:'amplitude',titulo:'Repertório Universal',descricao:'Cobrir todos os eixos temáticos do repertório.',icone:'🧭',dificuldade:'dificil',getValue:()=>countEixosCobertura(),tiers:[50,80,100]},
+  {id:'estudos_em_grupo',categoria:'amplitude',titulo:'Sessão Coletiva',descricao:'Revisar "Estudar tudo" ou "Estudar por Reino" — vários chefões numa fila só.',icone:'🌐',dificuldade:'facil',getValue:()=>db.fcGroupStudySessions||0,tiers:[5,20,50,100]},
 
   // --- E) TEMPO / MARATONA ---
   {id:'maratonista',categoria:'tempo',titulo:'Maratonista',descricao:'Sessão única contínua sem parar o cronômetro.',icone:'🏃',dificuldade:'dificil',getValue:()=>Math.floor((db.longestSingleSessionSec||0)/3600),tiers:[1,2,3,4,6]},
@@ -6679,6 +6686,7 @@ const ACHIEVEMENTS_REGISTRY=[
   {id:'enciclopedia_viva',categoria:'secreta',secreta:true,titulo:'Enciclopédia Viva',descricao:'Preencher o repertório em todos os eixos temáticos.',icone:'📚',dificuldade:'dificil',getValue:()=>countEixosCobertura()>=100?1:0,tiers:[1]},
   {id:'lendario_silencioso',categoria:'secreta',secreta:true,titulo:'Lendário Silencioso',descricao:'Destravar 10 conquistas secretas — a secreta das secretas.',icone:'🥷',dificuldade:'dificilimo',
     getValue:()=>ACHIEVEMENTS_REGISTRY.filter(a=>a.secreta&&a.id!=='lendario_silencioso').filter(a=>achievementStatus(a).tierIdx>=0).length,tiers:[10]},
+  {id:'autopsia_do_erro',categoria:'secreta',secreta:true,titulo:'Autópsia do Erro',descricao:'Errar o mesmo assunto 5+ vezes antes de finalmente dominá-lo.',icone:'🔬',dificuldade:'medio',getValue:()=>(db.erroAssuntos||[]).some(a=>a.count>=5)?1:0,tiers:[1]},
 ];
 
 function achievementStatus(a){
@@ -7556,7 +7564,11 @@ function computeStudyRecommendations(){
     });
   });
   items.sort((a,b)=>b.score-a.score);
-  return items.slice(0,5);
+  // 10 em vez de 5: no card "O que estudar agora" (lado a lado com "Desempenho em
+  // Simulados", que costuma ficar mais alto por causa do breakdown por reino), 5 itens
+  // deixava um vão vazio embaixo quando havia mais pendências pra mostrar — 10 preenche
+  // o espaço com recomendação de verdade em vez de ficar em branco.
+  return items.slice(0,10);
 }
 // Agrega s.simStats de todos os minibosses pra questões/acertos (esses somam certinho,
 // cada questão pertence a um assunto só). "Simulados feitos" NÃO pode vir dessa mesma
@@ -7734,6 +7746,9 @@ function renderErroAssuntos(){
 function resetErroAssunto(id){
   const a=(db.erroAssuntos||[]).find(x=>x.id===id);
   if(!a)return;
+  // Só conta pra conquista "Ponto Fraco Virado Força" quem realmente tinha erro
+  // acumulado — zerar um assunto que já estava em 0 não é ter virado o jogo em nada.
+  if(a.count>0)db.erroAssuntosResolvidos=(db.erroAssuntosResolvidos||0)+1;
   a.count=0;
   saveDB();
   renderErroAssuntos();
@@ -10291,6 +10306,26 @@ function getAllFCForTopic(topicId){
 function getAllFCEverywhere(){
   return Object.values(db.flashcards||{});
 }
+// Todos os flashcards de todos os chefões de UM reino só — junta os mbId (=topic.id)
+// que pertencem àquele reino. Usado por "Estudar por Reino" (meio-termo entre estudar
+// um chefão isolado e "Estudar tudo").
+function getAllFCForKingdom(kingdomId){
+  if(!db.flashcards)return[];
+  const topicIds=new Set((db.topics[kingdomId]||[]).map(t=>t.id));
+  return Object.values(db.flashcards).filter(c=>topicIds.has(c.mbId));
+}
+// Cards do "chefão selecionado" — que pode ser um chefão de verdade, o pseudo-chefão
+// '__ALL__' (todos os reinos) ou '__KINGDOM__<id>' (um reino inteiro). Centraliza a regra
+// pra não duplicar esse if/else em cada lugar que precisa da lista (render + exportar).
+function fcCardsForSelected(mb){
+  if(!mb)return[];
+  if(mb.id==='__ALL__')return getAllFCEverywhere();
+  if(typeof mb.id==='string'&&mb.id.startsWith('__KINGDOM__'))return getAllFCForKingdom(mb.id.slice('__KINGDOM__'.length));
+  return getAllFCForTopic(mb.id);
+}
+function fcIsGroupMode(mb){
+  return!!mb&&(mb.id==='__ALL__'||(typeof mb.id==='string'&&mb.id.startsWith('__KINGDOM__')));
+}
 // "Estudar tudo" — junta os cards de todos os reinos/chefões numa fila só, reaproveitando
 // a mesma tela de estudo de sempre (SM-2, filtros due/new/ok) via o pseudo-chefão '__ALL__'.
 function fcStudyAllKingdoms(){
@@ -10298,13 +10333,27 @@ function fcStudyAllKingdoms(){
   fcSelectedMb={id:'__ALL__',name:'Todos os Reinos',icon:'🌍',kIcon:'',kingdom:'Todos os reinos combinados'};
   fcStudyFilter='all';
   fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;
+  db.fcGroupStudySessions=(db.fcGroupStudySessions||0)+1;saveDB();
+  renderFCMbList();renderFCMain();
+}
+// "Estudar por Reino" — igual ao "Estudar tudo", só que junta os cards de todos os
+// chefões de UM reino só (pseudo-chefão '__KINGDOM__<id>'), pra quem quer revisar uma
+// matéria inteira sem trocar de chefão em chefão nem misturar com as outras matérias.
+function fcStudyKingdom(kingdomId){
+  const k=db.kingdoms.find(x=>x.id===kingdomId);
+  if(!k)return;
+  if(!getAllFCForKingdom(kingdomId).length){toast('Nenhum flashcard neste reino ainda.','var(--muted)');return;}
+  fcSelectedMb={id:'__KINGDOM__'+kingdomId,name:k.name,icon:k.icon||'🏰',kIcon:'',kingdom:k.name,kColor:k.color};
+  fcStudyFilter='all';
+  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;
+  db.fcGroupStudySessions=(db.fcGroupStudySessions||0)+1;saveDB();
   renderFCMbList();renderFCMain();
 }
 
 // ===== EXPORTAR / IMPORTAR DECK DE FLASHCARDS =====
 function fcExportDeck(){
   if(!fcSelectedMb)return;
-  const all=getAllFCForTopic(fcSelectedMb.id);
+  const all=fcCardsForSelected(fcSelectedMb);
   if(!all.length){toast('Nenhum flashcard pra exportar neste chefão.','var(--red)');return;}
   const deck={
     formato:'vale-dos-nomeados-deck-v1',
@@ -10460,6 +10509,14 @@ function renderFCMain(){
       todosChefoes=todosChefoes.filter(b=>b.kingdomId===filterKingdom.id);
     }
 
+    // "Estudar por Reino": um card por reino que já tem flashcard, com o total e os
+    // vencidos daquele reino inteiro — só aparece sem filtro de reino ativo e com 2+
+    // reinos com cards (com 1 só, "Estudar tudo" já cobre a mesma coisa).
+    const kingdomStudyRows=db.kingdoms
+      .map(k=>{const cards=getAllFCForKingdom(k.id);return cards.length?{kingdom:k,total:cards.length,due:cards.filter(c=>fcStatus(c)==='due').length}:null;})
+      .filter(Boolean)
+      .sort((a,b)=>b.due-a.due||b.total-a.total);
+
     el.innerHTML=`
       <div style="padding:4px 0">
         <!-- Título -->
@@ -10495,6 +10552,23 @@ function renderFCMain(){
             <div class="stat-lbl" style="color:var(--green)">Em dia</div>
           </div>
         </div>
+
+        <!-- Estudar por reino -->
+        ${(!filterKingdom&&kingdomStudyRows.length>1)?`
+        <div style="margin-bottom:20px">
+          <div style="font-size:12px;font-weight:900;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">🏰 Estudar por Reino</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${kingdomStudyRows.map(r=>`
+              <div onclick="fcStudyKingdom('${r.kingdom.id}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--panel);border:1.5px solid ${r.kingdom.color}30;border-left:4px solid ${r.kingdom.color};border-radius:12px;cursor:pointer;transition:all .15s" onmouseover="this.style.transform='translateX(4px)'" onmouseout="this.style.transform='translateX(0)'">
+                <span style="font-size:22px">${r.kingdom.icon||'🏰'}</span>
+                <div style="flex:1">
+                  <div style="font-size:13px;font-weight:800;color:${r.kingdom.color}">${r.kingdom.name}</div>
+                  <div style="font-size:10px;color:var(--muted)">${r.total} card${r.total!==1?'s':''}${r.due?` · ${r.due} vencido${r.due!==1?'s':''}`:''}</div>
+                </div>
+                <button class="btn btn-xs btn-primary" onclick="event.stopPropagation();fcStudyKingdom('${r.kingdom.id}')"><i class="fa fa-play"></i> Estudar</button>
+              </div>`).join('')}
+          </div>
+        </div>`:''}
 
         <!-- Urgentes para revisar -->
         ${urgentes.length?`
@@ -10541,7 +10615,8 @@ function renderFCMain(){
   }
   fcInit();
   const isAllKingdoms=fcSelectedMb.id==='__ALL__';
-  const all=isAllKingdoms?getAllFCEverywhere():getAllFCForTopic(fcSelectedMb.id);
+  const isGroupMode=fcIsGroupMode(fcSelectedMb);
+  const all=fcCardsForSelected(fcSelectedMb);
   const q=(document.getElementById('fc-filter-q')?.value||'').toLowerCase();
   let cards=q?all.filter(c=>c.pergunta.toLowerCase().includes(q)||(c.tags||'').toLowerCase().includes(q)):all;
   if(fcRevFilter==='due')cards=cards.filter(c=>fcStatus(c)==='due');
@@ -10572,8 +10647,8 @@ function renderFCMain(){
         </div>
         <button class="btn btn-sm${fcVoiceMode?' btn-primary':' btn-ghost'}" onclick="fcToggleVoiceMode()" title="Lê a pergunta em voz alta, espera 6s e vira o card sozinho lendo a resposta — pra estudar sem precisar olhar pra tela">${fcVoiceMode?'🔊':'🔇'} Voz</button>
         <button class="btn btn-sm${fcAutoMode?' btn-primary':' btn-ghost'}" onclick="fcToggleAutoMode()" title="Além de ler pergunta e resposta, pergunta 'Como foi?' e OUVE sua resposta falada (fácil/difícil/não lembrei) pra passar pro próximo card sozinho — 100% sem tocar na tela">${fcAutoMode?'🤖':'⚙️'} Automático</button>
-        <button class="btn btn-ghost btn-sm" onclick="fcExportDeck()" title="Baixar todos os cards ${isAllKingdoms?'de todos os reinos':'deste chefão'} em JSON"><i class="fa fa-download"></i> Exportar</button>
-        ${isAllKingdoms?'':`
+        <button class="btn btn-ghost btn-sm" onclick="fcExportDeck()" title="Baixar todos os cards ${isAllKingdoms?'de todos os reinos':isGroupMode?'deste reino':'deste chefão'} em JSON"><i class="fa fa-download"></i> Exportar</button>
+        ${isGroupMode?'':`
         <button class="btn btn-ghost btn-sm" onclick="fcImportDeckPrompt()" title="Importar cards de um arquivo JSON"><i class="fa fa-upload"></i> Importar</button>
         <input type="file" id="fc-import-input" accept="application/json" style="display:none" onchange="fcImportDeckFile(this)">
         <button class="btn btn-primary btn-sm" onclick="fcOpenForm()"><i class="fa fa-plus"></i> Novo card</button>`}
