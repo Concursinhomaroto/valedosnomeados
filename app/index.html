@@ -945,7 +945,13 @@ nav{
   .rd-input-row{grid-template-columns:1fr!important;}
 }
 .fc-layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:18px;}
-.fc-sidebar{background:var(--panel);border:1.5px solid var(--border);border-radius:18px;padding:18px;height:fit-content;max-height:80vh;overflow-y:auto;position:sticky;top:20px;}
+/* fc-sidebar-col empilha a lista de chefões + o resumo geral e é ESSA que gruda no
+   topo ao rolar (não mais o .fc-sidebar sozinho) — antes, com só a lista no grudado
+   e travada em 80vh, sobrava um vão vazio na coluna esquerda sempre que a lista
+   parava de rolar antes da coluna da direita (bem mais longa) acabar. O resumo
+   preenche esse vão com conteúdo de verdade em vez de deixar em branco. */
+.fc-sidebar-col{position:sticky;top:20px;display:flex;flex-direction:column;gap:14px;height:fit-content;}
+.fc-sidebar{background:var(--panel);border:1.5px solid var(--border);border-radius:18px;padding:18px;height:fit-content;max-height:58vh;overflow-y:auto;}
 .fc-mb-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;cursor:pointer;transition:all .15s;margin-bottom:4px;border:1.5px solid transparent;}
 .fc-mb-item:hover{background:var(--bg2);border-color:var(--border);}
 .fc-mb-item.active{background:linear-gradient(135deg,rgba(108,71,255,0.08),rgba(79,70,229,0.04));border-color:rgba(108,71,255,0.3);}
@@ -957,6 +963,12 @@ nav{
 .fc-due{background:rgba(234,88,12,0.12);color:var(--orange);}
 .fc-new{background:rgba(108,71,255,0.1);color:var(--accent);}
 .fc-ok{background:rgba(22,163,74,0.1);color:var(--green);}
+
+.fc-sidebar-summary{background:var(--panel);border:1.5px solid var(--border);border-radius:18px;padding:16px 18px;}
+.fc-sidebar-summary-title{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
+.fc-sidebar-stat-row{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:var(--text2);padding:5px 0;}
+.fc-sidebar-stat-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.fc-sidebar-stat-row b{margin-left:auto;font-size:13px;font-weight:900;color:var(--text);}
 
 .fc-main{min-height:200px;}
 .fc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
@@ -1107,7 +1119,8 @@ nav{
 
 @media(max-width:900px){
   .fc-layout{grid-template-columns:1fr!important;}
-  .fc-sidebar{position:relative;max-height:340px;}
+  .fc-sidebar-col{position:relative;top:0;}
+  .fc-sidebar{max-height:340px;}
   .fc-form-row{grid-template-columns:1fr!important;}
   .fc-search{width:100%!important;}
 }
@@ -1672,23 +1685,26 @@ nav{
 <!-- ===== FLASHCARDS ===== -->
 <div class="screen" id="screen-flashcards">
   <div class="fc-layout">
-    <!-- COLUNA ESQUERDA: Chefões -->
-    <div class="fc-sidebar">
-      <div style="font-size:11px;font-weight:900;letter-spacing:1px;color:var(--accent);margin-bottom:12px;text-transform:uppercase">⚔️ Chefões</div>
-      <input class="inp" id="fc-search-mb" placeholder="🔍 Buscar chefão..." oninput="renderFCMbList()" style="margin-bottom:10px;font-size:12px">
-      <!-- Filtro de revisão espaçada -->
-      <div style="margin-bottom:12px">
-        <div style="font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Filtrar por revisão</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px">
-          <button class="fc-rev-filter active" data-rev="all" onclick="fcSetRevFilter('all',this)">Todos</button>
-          <button class="fc-rev-filter" data-rev="due" onclick="fcSetRevFilter('due',this)">🔥 Vencidos</button>
-          <button class="fc-rev-filter" data-rev="7" onclick="fcSetRevFilter('7',this)">7d</button>
-          <button class="fc-rev-filter" data-rev="14" onclick="fcSetRevFilter('14',this)">14d</button>
-          <button class="fc-rev-filter" data-rev="21" onclick="fcSetRevFilter('21',this)">21d</button>
-          <button class="fc-rev-filter" data-rev="41" onclick="fcSetRevFilter('41',this)">41d</button>
+    <!-- COLUNA ESQUERDA: Chefões + Resumo Geral (grudam juntos ao rolar) -->
+    <div class="fc-sidebar-col">
+      <div class="fc-sidebar">
+        <div style="font-size:11px;font-weight:900;letter-spacing:1px;color:var(--accent);margin-bottom:12px;text-transform:uppercase">⚔️ Chefões</div>
+        <input class="inp" id="fc-search-mb" placeholder="🔍 Buscar chefão..." oninput="renderFCMbList()" style="margin-bottom:10px;font-size:12px">
+        <!-- Filtro de revisão espaçada -->
+        <div style="margin-bottom:12px">
+          <div style="font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Filtrar por revisão</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <button class="fc-rev-filter active" data-rev="all" onclick="fcSetRevFilter('all',this)">Todos</button>
+            <button class="fc-rev-filter" data-rev="due" onclick="fcSetRevFilter('due',this)">🔥 Vencidos</button>
+            <button class="fc-rev-filter" data-rev="7" onclick="fcSetRevFilter('7',this)">7d</button>
+            <button class="fc-rev-filter" data-rev="14" onclick="fcSetRevFilter('14',this)">14d</button>
+            <button class="fc-rev-filter" data-rev="21" onclick="fcSetRevFilter('21',this)">21d</button>
+            <button class="fc-rev-filter" data-rev="41" onclick="fcSetRevFilter('41',this)">41d</button>
+          </div>
         </div>
+        <div id="fc-mb-list"></div>
       </div>
-      <div id="fc-mb-list"></div>
+      <div class="fc-sidebar-summary" id="fc-sidebar-summary"></div>
     </div>
 
     <!-- COLUNA DIREITA -->
@@ -10423,6 +10439,7 @@ function fcSetRevFilter(f,el){
 
 // ---- SIDEBAR: Chefões ----
 function renderFCMbList(){
+  renderFCSidebarSummary();
   const el=document.getElementById('fc-mb-list');if(!el)return;
   fcInit();
   const q=(document.getElementById('fc-search-mb')?.value||'').toLowerCase();
@@ -10450,6 +10467,29 @@ function renderFCMbList(){
       </div>
       ${b.due>0?`<span class="fc-mb-badge fc-due">${b.due}🔥</span>`:b.novo>0&&b.total>0?`<span class="fc-mb-badge fc-new">${b.novo}✨</span>`:b.total>0?`<span class="fc-mb-badge fc-ok">✓</span>`:''}
     </div>`).join('');
+}
+
+// Card fixo embaixo da lista de chefões (dentro do mesmo bloco que gruda ao rolar) —
+// preenche com conteúdo de verdade o vão que sobrava na coluna esquerda quando a
+// lista de chefões (limitada em altura, com scroll próprio) terminava bem antes da
+// coluna da direita, bem mais longa. Totais são globais (ignoram a busca/filtro da
+// lista acima), pra servir de resumo geral sempre visível.
+function renderFCSidebarSummary(){
+  const el=document.getElementById('fc-sidebar-summary');
+  if(!el)return;
+  fcInit();
+  const all=getAllFCEverywhere();
+  if(!all.length){el.innerHTML='';return;}
+  const due=all.filter(c=>fcStatus(c)==='due').length;
+  const novo=all.filter(c=>fcStatus(c)==='new').length;
+  const emDia=all.length-due-novo;
+  el.innerHTML=`
+    <div class="fc-sidebar-summary-title">📊 Resumo Geral</div>
+    <div class="fc-sidebar-stat-row"><span class="fc-sidebar-stat-dot" style="background:var(--red)"></span>Revisar agora<b style="color:var(--red)">${due}</b></div>
+    <div class="fc-sidebar-stat-row"><span class="fc-sidebar-stat-dot" style="background:var(--accent)"></span>Novos<b style="color:var(--accent)">${novo}</b></div>
+    <div class="fc-sidebar-stat-row"><span class="fc-sidebar-stat-dot" style="background:var(--green)"></span>Em dia<b style="color:var(--green)">${emDia}</b></div>
+    <button class="btn btn-primary btn-sm" style="width:100%;margin-top:10px" onclick="fcStudyAllKingdoms()"><i class="fa fa-globe"></i> Estudar tudo</button>
+  `;
 }
 
 function selectFCBoss(topicId){
