@@ -655,7 +655,7 @@ nav{
 #goal-card.goal-complete .gamify-val,#goal-card.goal-complete .goal-ring-pct{color:#fff;}
 #goal-card.goal-complete .gamify-lbl{color:rgba(255,255,255,0.85);}
 
-.gamify-badges-card{display:flex;flex-direction:column;justify-content:center;cursor:pointer;transition:all 0.2s;}
+.gamify-badges-card{flex:3 1 420px;margin-bottom:0;display:flex;flex-direction:column;justify-content:center;cursor:pointer;transition:all 0.2s;}
 .gamify-badges-card:hover{transform:translateY(-2px);box-shadow:var(--shadow2);border-color:var(--border2);}
 .gamify-badges-title{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
 .gamify-badges-summary{font-size:9.5px;font-weight:700;color:var(--accent);text-transform:none;letter-spacing:0;}
@@ -674,7 +674,7 @@ nav{
 
 @media(max-width:768px){
   .dash-gamify-row{flex-direction:column;}
-  .gamify-card{flex:1 1 100%;}
+  .gamify-card,.gamify-badges-card{flex:1 1 100%;}
   .badges-row{gap:6px;}
   .badge-name{display:none;}
   .badge-chip{padding:8px;border-radius:50%;}
@@ -1516,7 +1516,9 @@ nav{
     <button class="btn btn-ghost btn-xs rb-btn" id="renewal-banner-btn" style="background:rgba(255,255,255,0.2);color:#fff;border-color:rgba(255,255,255,0.4)" onclick="openRenewalScreen(renewalBannerReason)">Renovar agora</button>
   </div>
 
-  <!-- Streak + Meta diária -->
+  <!-- Streak + Meta diária + Conquistas, na mesma linha (quebra sozinha em telas
+       estreitas, já que a badges-card tem largura mínima de 420px) — essa linha já
+       fica antes de "Desempenho em Simulados"/"O que estudar agora" logo abaixo. -->
   <div class="dash-gamify-row">
     <div class="section-card gamify-card" id="streak-card">
       <div class="gamify-icon streak-flame" id="streak-flame">🔥</div>
@@ -1532,12 +1534,10 @@ nav{
         <div class="gamify-lbl" id="goal-lbl">0 / 60 min</div>
       </div>
     </div>
-  </div>
-
-  <!-- Conquistas — em cima de "Desempenho em Simulados"/"O que estudar agora" -->
-  <div class="section-card gamify-badges-card" onclick="showScreen('conquistas')" title="Ver todas as conquistas">
-    <div class="gamify-badges-title">🏅 CONQUISTAS <span id="dash-badges-summary" class="gamify-badges-summary"></span></div>
-    <div class="badges-row" id="dash-badges"></div>
+    <div class="section-card gamify-badges-card" onclick="showScreen('conquistas')" title="Ver todas as conquistas">
+      <div class="gamify-badges-title">🏅 CONQUISTAS <span id="dash-badges-summary" class="gamify-badges-summary"></span></div>
+      <div class="badges-row" id="dash-badges"></div>
+    </div>
   </div>
 
   <!-- Desempenho em simulados + O que estudar agora, lado a lado -->
