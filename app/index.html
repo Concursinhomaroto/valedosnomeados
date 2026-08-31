@@ -3326,7 +3326,7 @@ let simGenerating=new Set(); // subIds com geração de simulado em andamento
 let openResumo=new Set(); // subIds cujo painel de resumo (IA a partir de arquivo) está aberto
 let resumoGenerating=new Map(); // subId -> 'arquivo'|'web', enquanto a geração está em andamento
 let openFluxo=new Set(); // subIds cujo painel de fluxograma está aberto
-let fluxoGenerating=new Set(); // subIds com geração de fluxograma por IA em andamento
+let fluxoGenerating=new Map(); // subId -> 'texto'|'web', enquanto a geração está em andamento
 let fluxoEditing=new Set(); // subIds cujo fluxograma está em modo de edição manual
 let resumoSpeakSubId=null; // subId cujo resumo está sendo lido em voz agora (ou null se nenhum)
 let resumoSpeakMode=null; // 'audio' (áudio real gerado pela IA — sobrevive à tela bloqueada), 'browser' (voz do navegador — para se a tela travar) ou 'loading' (gerando o áudio)
@@ -5500,8 +5500,9 @@ function closeFluxo(subId){
 
 function fluxoPanelHTML(s){
   if(fluxoGenerating.has(s.id)){
+    const modo=fluxoGenerating.get(s.id);
     return`<div class="fluxo-header"><div class="fluxo-title"><i class="fa fa-diagram-project"></i> Fluxograma</div></div>
-      <div class="fluxo-status"><i class="fa fa-spinner fa-spin"></i> A IA está montando o fluxograma...</div>`;
+      <div class="fluxo-status"><i class="fa fa-spinner fa-spin"></i> ${modo==='web'?'Pesquisando na internet e montando o fluxograma...':'A IA está montando o fluxograma...'}</div>`;
   }
   if(fluxoEditing.has(s.id)&&s.fluxograma&&s.fluxograma.arvore){
     return`
@@ -5515,10 +5516,13 @@ function fluxoPanelHTML(s){
   }
   if(s.fluxograma&&s.fluxograma.arvore){
     const geradoEm=s.fluxograma.geradoEm?new Date(s.fluxograma.geradoEm).toLocaleDateString('pt-BR'):'';
-    const origem=s.fluxograma.origem==='ia'?'Gerado por IA':'Criado manualmente';
+    const fg=s.fluxograma;
+    const origem=fg.origem==='manual'?'Criado manualmente'
+      :fg.origem==='web'?(fg.grounded?'Gerado por IA com pesquisa na internet':'Gerado por IA (busca indisponível — conhecimento já treinado do modelo)')
+      :'Gerado por IA a partir do texto';
     return`
       <div class="fluxo-header">
-        <div class="fluxo-title"><i class="fa fa-diagram-project"></i> Fluxograma</div>
+        <div class="fluxo-title"><i class="fa fa-diagram-project"></i> Fluxograma${fg.origem==='web'?' 🌐':''}</div>
         <div class="fluxo-actions">
           <button class="btn btn-xs btn-ghost" onclick="fluxoStartEditing('${s.id}')"><i class="fa fa-pen"></i> Editar</button>
           <button class="btn btn-xs btn-ghost" onclick="fluxoRegenerar('${s.id}')" title="Gerar de novo com IA (substitui o atual)"><i class="fa fa-arrows-rotate"></i> Gerar de novo</button>
@@ -5531,11 +5535,12 @@ function fluxoPanelHTML(s){
   const temResumo=!!(s.resumo&&s.resumo.texto);
   return`
     <div class="fluxo-header"><div class="fluxo-title"><i class="fa fa-diagram-project"></i> Fluxograma</div></div>
-    <div class="fluxo-empty">Um resumo visual em passos e decisões — ótimo pra protocolos com "se sim, se não". A IA gera um rascunho e você pode ajustar depois.</div>
+    <div class="fluxo-empty">Um resumo visual em pontos-chave, terminologias, prazos e classificações — pontos que se ramificam (tipos, exceções, decisões) viram caminhos separados. A IA gera um rascunho e você pode ajustar depois.</div>
     <div class="fluxo-textarea-wrap">
-      <textarea class="inp" id="fluxo-texto-${s.id}" style="width:100%;min-height:80px;resize:vertical;margin-bottom:8px" placeholder="${temResumo?'Deixe em branco pra usar o Resumo já gerado deste miniboss, ou cole aqui outro texto/protocolo...':'Cole aqui o texto/protocolo que a IA deve transformar em fluxograma...'}"></textarea>
+      <textarea class="inp" id="fluxo-texto-${s.id}" style="width:100%;min-height:80px;resize:vertical;margin-bottom:8px" placeholder="${temResumo?'Deixe em branco pra usar o Resumo já gerado deste miniboss, cole outro texto específico, ou clique em Gerar direto pra buscar na internet...':'Deixe em branco pra gerar buscando na internet, ou cole aqui um texto específico sobre o assunto...'}"></textarea>
       <button class="btn btn-sm btn-primary" style="width:100%;justify-content:center" onclick="generateFluxograma('${s.id}')"><i class="fa fa-wand-magic-sparkles"></i> Gerar com IA</button>
     </div>
+    <div style="font-size:9.5px;color:var(--muted);text-align:center;margin-top:6px">Sem texto, a IA pesquisa na internet pelo nome deste miniboss (fontes confiáveis: legislação oficial, doutrina consolidada, material de concurso reconhecido).</div>
     <div style="text-align:center;font-size:10px;color:var(--muted);margin:12px 0;display:flex;align-items:center;gap:8px">
       <span style="flex:1;height:1px;background:var(--border)"></span>ou<span style="flex:1;height:1px;background:var(--border)"></span>
     </div>
@@ -5679,53 +5684,84 @@ function fluxoSanitizeNode(raw,depth){
   }));
   return{texto,tipo,ramos};
 }
-function fluxoPrompt(texto){
-  return`Você é um especialista em transformar textos de protocolos, processos e procedimentos em fluxogramas de decisão, para material de estudo de concurso público no Brasil.
-
-TAREFA: Leia o texto abaixo e monte um fluxograma representando os passos e decisões descritos nele, no formato JSON abaixo. Responda APENAS com o JSON, sem texto antes ou depois, sem markdown, sem bloco de código.
-
-FORMATO EXATO (árvore recursiva):
+// Regras do JSON compartilhadas pelos dois modos de geração (a partir de texto e via
+// busca na internet) — só muda a TAREFA/fonte do conteúdo, o formato é sempre o mesmo.
+const FLUXO_JSON_REGRAS=`FORMATO EXATO (árvore recursiva):
 {"texto":"texto curto do passo","tipo":"inicio","ramos":[{"rotulo":null,"no":{"texto":"...","tipo":"acao","ramos":[]}}]}
 
 REGRAS:
-- "tipo" é sempre um de: "inicio" (só o primeiro nó), "acao" (um passo/procedimento), "decisao" (um ponto de decisão tipo sim/não ou múltipla escolha), "fim" (um desfecho, sem ramos depois).
-- Nós que NÃO são decisão têm no máximo 1 item em "ramos" (rotulo sempre null) — é só o próximo passo. Um nó "fim" tem "ramos":[].
-- Nós de tipo "decisao" têm 2 ou mais itens em "ramos", cada um com um "rotulo" curto (ex: "Sim", "Não", ou o nome da opção) descrevendo aquele caminho.
-- Textos de cada passo devem ser curtos e diretos (até uns 15 palavras), no nível de resumo de concurso — não copie o texto inteiro do material.
-- Cubra as decisões e desfechos principais do texto, mas não exagere no número de passos (até uns 15-20 nós no total é suficiente).
-- Não invente informação que não esteja no material.
+- "tipo" é sempre um de: "inicio" (só o primeiro nó), "acao" (um ponto-chave, conceito, definição, classificação ou etapa), "decisao" (um ponto onde o assunto se ramifica em 2+ caminhos — pode ser uma decisão sim/não, mas também uma classificação com vários tipos, hipóteses, exceções, ou qualquer "isso se divide em..."), "fim" (um desfecho/conclusão, sem ramos depois).
+- Nós que NÃO são de ramificação têm no máximo 1 item em "ramos" (rotulo sempre null) — é só o próximo passo da sequência. Um nó "fim" tem "ramos":[].
+- Nós de tipo "decisao" têm 2 ou mais itens em "ramos", cada um com um "rotulo" curto nomeando aquele caminho (ex: "Sim"/"Não", ou o nome de cada tipo/classe/exceção/hipótese).
+- Textos de cada passo devem ser curtos e diretos (até ~15 palavras), destacando terminologias, prazos, números, classificações e conceitos-chave — o que cai em prova, não o texto corrido inteiro.
+- O fluxo não precisa ser sequência de procedimento — pode ser a estrutura lógica do assunto (definição → classificações → características de cada uma → exceções → prazos), o que fizer mais sentido pro conteúdo.
+- Cubra os pontos principais do assunto, mas não exagere no número de passos (até uns 15-20 nós no total é suficiente).`;
+
+function fluxoPrompt(texto){
+  return`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil, especialista em transformar conteúdo de estudo em fluxogramas/mapas visuais de memorização.
+
+TAREFA: Leia o texto abaixo e monte um fluxograma representando a estrutura do assunto — pontos-chave, terminologias, classificações, prazos e o que mais for essencial pra decorar pra prova —, no formato JSON abaixo. Responda APENAS com o JSON, sem texto antes ou depois, sem markdown, sem bloco de código.
+
+${FLUXO_JSON_REGRAS}
+- Não invente informação que não esteja no material abaixo.
 
 TEXTO:
 ${texto}`;
 }
+function fluxoPromptWeb(contexto){
+  return`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil, especialista em transformar conteúdo de estudo em fluxogramas/mapas visuais de memorização.
+
+TAREFA: Pesquise na internet, em fontes confiáveis (legislação oficial, doutrina consolidada, material de concurso reconhecido), as informações mais importantes sobre o assunto abaixo, e monte um fluxograma cobrindo os pontos-chave que mais caem em prova — terminologias, classificações, prazos, números e conceitos essenciais —, no formato JSON abaixo. Responda APENAS com o JSON, sem texto antes ou depois, sem markdown, sem bloco de código.
+
+${contexto}
+
+${FLUXO_JSON_REGRAS}
+- Se não tiver certeza sobre uma informação específica (data exata, número de lei, prazo), prefira omitir a deixar algo errado no fluxograma.`;
+}
 async function generateFluxograma(subId){
   const sub=simFindSub(subId);
-  if(!sub)return;
+  let topic=null,kingdom=null;
+  for(const k of db.kingdoms){
+    (db.topics[k.id]||[]).forEach(t=>{if(t.subtopics?.some(x=>x.id===subId)){topic=t;kingdom=k;}});
+    if(topic)break;
+  }
+  if(!sub||!topic||!kingdom)return;
   const apiKey=(db.geminiApiKey||'').trim();
   if(!apiKey){
     toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');
     openAISettingsModal();
     return;
   }
-  const textoColado=(document.getElementById('fluxo-texto-'+subId)?.value||'').trim();
-  const texto=textoColado||(sub.resumo&&sub.resumo.texto)||'';
-  if(!texto){toast('⚠️ Cole um texto, ou gere primeiro o Resumo deste miniboss','var(--red)');return;}
   if(fluxoGenerating.has(subId)){toast('Geração em andamento...','var(--orange)');return;}
 
-  fluxoGenerating.add(subId);
+  const textoColado=(document.getElementById('fluxo-texto-'+subId)?.value||'').trim();
+  const texto=textoColado||(sub.resumo&&sub.resumo.texto)||'';
+  // Com texto (colado ou do Resumo já gerado): a IA trabalha em cima dele. Sem nenhum
+  // dos dois: busca na internet pelo nome do miniboss/chefão/reino, igual ao "Pesquisar"
+  // do Resumo — clicar em Gerar sempre produz alguma coisa, nunca só um aviso de erro.
+  const usarWeb=!texto;
+
+  fluxoGenerating.set(subId,usarWeb?'web':'texto');
   openFluxo.add(subId);
   fluxoRefreshPanel(subId);
 
   try{
-    // Sem chunking de propósito: a fonte aqui é o Resumo (já condensado) ou um trecho
-    // colado à mão, não o material bruto inteiro — um corte de segurança em 40k
-    // caracteres é mais que suficiente e evita estourar o teto de uma chamada só.
-    const raw=await callGeminiGenerate(apiKey,fluxoPrompt(texto.slice(0,40000)));
+    let raw,grounded=null;
+    if(usarWeb){
+      const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
+      const r=await callGeminiGenerateSearch(apiKey,fluxoPromptWeb(contexto));
+      raw=r.raw;grounded=r.grounded;
+    }else{
+      // Sem chunking de propósito: a fonte aqui é o Resumo (já condensado) ou um trecho
+      // colado à mão, não o material bruto inteiro — um corte de segurança em 40k
+      // caracteres é mais que suficiente e evita estourar o teto de uma chamada só.
+      raw=await callGeminiGenerate(apiKey,fluxoPrompt(texto.slice(0,40000)));
+    }
     const parsed=extractAIJson(raw);
     if(!parsed||typeof parsed!=='object')throw new Error('A IA não devolveu um fluxograma válido. Tente de novo.');
-    sub.fluxograma={arvore:fluxoSanitizeNode(parsed,0),origem:'ia',geradoEm:new Date().toISOString()};
+    sub.fluxograma={arvore:fluxoSanitizeNode(parsed,0),origem:usarWeb?'web':'ia',grounded,geradoEm:new Date().toISOString()};
     saveDB();
-    toast('🔀 Fluxograma gerado!','var(--green)');
+    toast(usarWeb?(grounded?'🌐 Fluxograma gerado com pesquisa na internet!':'🔀 Fluxograma gerado (busca na internet indisponível agora — usei o conhecimento da IA)'):'🔀 Fluxograma gerado!','var(--green)');
   }catch(e){
     console.error('Fluxograma error:',e);
     toast('⚠️ '+e.message,'var(--red)');
