@@ -655,7 +655,7 @@ nav{
 #goal-card.goal-complete .gamify-val,#goal-card.goal-complete .goal-ring-pct{color:#fff;}
 #goal-card.goal-complete .gamify-lbl{color:rgba(255,255,255,0.85);}
 
-.gamify-badges-card{flex:3 1 420px;margin-bottom:0;display:flex;flex-direction:column;justify-content:center;cursor:pointer;transition:all 0.2s;}
+.gamify-badges-card{display:flex;flex-direction:column;justify-content:center;cursor:pointer;transition:all 0.2s;}
 .gamify-badges-card:hover{transform:translateY(-2px);box-shadow:var(--shadow2);border-color:var(--border2);}
 .gamify-badges-title{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
 .gamify-badges-summary{font-size:9.5px;font-weight:700;color:var(--accent);text-transform:none;letter-spacing:0;}
@@ -674,7 +674,7 @@ nav{
 
 @media(max-width:768px){
   .dash-gamify-row{flex-direction:column;}
-  .gamify-card,.gamify-badges-card{flex:1 1 100%;}
+  .gamify-card{flex:1 1 100%;}
   .badges-row{gap:6px;}
   .badge-name{display:none;}
   .badge-chip{padding:8px;border-radius:50%;}
@@ -1157,7 +1157,6 @@ nav{
 .plan-item-text{font-size:11px;font-weight:700;color:var(--text);line-height:1.4;flex:1;}
 .plan-item-sub{font-size:9px;color:var(--muted);margin-top:2px;font-weight:600;}
 .plan-tag{font-size:9px;font-weight:900;padding:1px 6px;border-radius:20px;flex-shrink:0;}
-.plan-tag-rev{background:rgba(6,182,212,0.12);color:var(--cyan);}
 .plan-tag-new{background:rgba(220,38,38,0.1);color:var(--red);}
 .plan-tag-pend{background:rgba(234,88,12,0.1);color:var(--orange);}
 .plan-add-btn{background:rgba(108,71,255,0.08);border:1.5px dashed rgba(108,71,255,0.3);border-radius:8px;width:26px;height:26px;cursor:pointer;font-size:16px;color:var(--accent);display:flex;align-items:center;justify-content:center;transition:all 0.15s;flex-shrink:0;}
@@ -1504,7 +1503,7 @@ nav{
     <button class="btn btn-ghost btn-xs rb-btn" id="renewal-banner-btn" style="background:rgba(255,255,255,0.2);color:#fff;border-color:rgba(255,255,255,0.4)" onclick="openRenewalScreen(renewalBannerReason)">Renovar agora</button>
   </div>
 
-  <!-- Streak + Meta diária + Conquistas -->
+  <!-- Streak + Meta diária -->
   <div class="dash-gamify-row">
     <div class="section-card gamify-card" id="streak-card">
       <div class="gamify-icon streak-flame" id="streak-flame">🔥</div>
@@ -1520,10 +1519,12 @@ nav{
         <div class="gamify-lbl" id="goal-lbl">0 / 60 min</div>
       </div>
     </div>
-    <div class="section-card gamify-badges-card" onclick="showScreen('conquistas')" title="Ver todas as conquistas">
-      <div class="gamify-badges-title">🏅 CONQUISTAS <span id="dash-badges-summary" class="gamify-badges-summary"></span></div>
-      <div class="badges-row" id="dash-badges"></div>
-    </div>
+  </div>
+
+  <!-- Conquistas — em cima de "Desempenho em Simulados"/"O que estudar agora" -->
+  <div class="section-card gamify-badges-card" onclick="showScreen('conquistas')" title="Ver todas as conquistas">
+    <div class="gamify-badges-title">🏅 CONQUISTAS <span id="dash-badges-summary" class="gamify-badges-summary"></span></div>
+    <div class="badges-row" id="dash-badges"></div>
   </div>
 
   <!-- Desempenho em simulados + O que estudar agora, lado a lado -->
@@ -2613,6 +2614,9 @@ function applyDefaults(){
   // ===== Contadores para o sistema de conquistas (v2) =====
   if(!db.createdAt)db.createdAt=todayStr();
   if(typeof db.fcCreatedTotal!=='number')db.fcCreatedTotal=0;
+  if(typeof db.fcAIGeneratedTotal!=='number')db.fcAIGeneratedTotal=0;
+  if(typeof db.exportUsageCount!=='number')db.exportUsageCount=0;
+  if(typeof db.fcDeckIOCount!=='number')db.fcDeckIOCount=0;
   if(typeof db.redacoesCreatedTotal!=='number')db.redacoesCreatedTotal=0;
   if(typeof db.subtopicsCreatedTotal!=='number')db.subtopicsCreatedTotal=0;
   if(!db.temasFilledIds)db.temasFilledIds=[];
@@ -6538,6 +6542,17 @@ function studiedOnSignupAnniversary(){
   const sessions=db.sessions||{};
   return Object.keys(sessions).some(d=>(sessions[d]||0)>0&&d.slice(5)===md&&d!==db.createdAt);
 }
+// Estudar bem no dia que cai exatamente 7 dias antes de uma prova marcada em Editais
+// (que ainda não foi realizada) — a reta final de verdade, não o dia da prova em si.
+function hasStudied7DaysBeforeExam(){
+  const sessions=db.sessions||{};
+  return (db.editais||[]).some(e=>{
+    if(!e.data||e.status==='realizado')return false;
+    const d=new Date(e.data+'T00:00:00');d.setDate(d.getDate()-7);
+    const ds=d.toISOString().slice(0,10);
+    return (sessions[ds]||0)>0;
+  });
+}
 function hasAllNighter(){
   const byDate={};
   (db.sessionEvents||[]).forEach(e=>{(byDate[e.date]=byDate[e.date]||[]).push(e.hora);});
@@ -6605,6 +6620,9 @@ const ACHIEVEMENTS_REGISTRY=[
   {id:'estrategista_provas',categoria:'volume',titulo:'Estrategista de Provas',descricao:'Simulados gerais completos — treino de prova cheia, contra o relógio.',icone:'🎓',dificuldade:'medio',getValue:()=>db.simGeralSessionsCount||0,tiers:[1,5,15,30,60]},
   {id:'editais_registrados',categoria:'volume',titulo:'Caçador de Editais',descricao:'Ficar de olho em todo concurso que aparece no radar.',icone:'📋',dificuldade:'facil',getValue:()=>(db.editais||[]).length,tiers:[1,3,6,10,15]},
   {id:'provas_encaradas',categoria:'volume',titulo:'Guerreiro das Provas',descricao:'Concursos marcados como realizado — subiu na arena de verdade.',icone:'🛡️',dificuldade:'medio',getValue:()=>(db.editais||[]).filter(e=>e.status==='realizado').length,tiers:[1,3,6,12]},
+  {id:'questoes_chefao',categoria:'volume',titulo:'Caçador de Questões',descricao:'Simulados de chefão respondidos — treino questão por questão.',icone:'🏹',dificuldade:'medio',getValue:()=>db.simSessionsCount||0,tiers:[5,20,50,100,200]},
+  {id:'alquimista_ia',categoria:'volume',titulo:'Alquimista da IA',descricao:'Flashcards gerados automaticamente a partir de PDF — a IA lê, você revisa.',icone:'🧪',dificuldade:'medio',getValue:()=>db.fcAIGeneratedTotal||0,tiers:[10,50,150,400]},
+  {id:'flashcards_revisados',categoria:'volume',titulo:'Duelista de Flashcards',descricao:'Cada card virado é um duelo — acertando ou errando, você aprende.',icone:'⚔️',dificuldade:'dificil',getValue:()=>totalFlashcardReviews(),tiers:[50,200,600,1500,3500,7000]},
 
   // --- B) CONSISTÊNCIA / DISCIPLINA ---
   {id:'streak',categoria:'consistencia',titulo:'Chama Eterna',descricao:'A ofensiva que separa aprovado de desistente.',icone:'🔥',dificuldade:'dificil',getValue:()=>db.longestStreak||0,tiers:[3,7,30,60,100,180,365]},
@@ -6632,6 +6650,8 @@ const ACHIEVEMENTS_REGISTRY=[
   {id:'triade',categoria:'amplitude',titulo:'Tríade Completa',descricao:'Flashcard + redação + repertório no mesmo dia.',icone:'🔺',dificuldade:'medio',getValue:()=>countTriadeDays(),tiers:[1,7,21,50]},
   {id:'repertorio_universal',categoria:'amplitude',titulo:'Repertório Universal',descricao:'Cobrir todos os eixos temáticos do repertório.',icone:'🧭',dificuldade:'dificil',getValue:()=>countEixosCobertura(),tiers:[50,80,100]},
   {id:'estudos_em_grupo',categoria:'amplitude',titulo:'Sessão Coletiva',descricao:'Revisar "Estudar tudo" ou "Estudar por Reino" — vários chefões numa fila só.',icone:'🌐',dificuldade:'facil',getValue:()=>db.fcGroupStudySessions||0,tiers:[5,20,50,100]},
+  {id:'exportador_dados',categoria:'amplitude',titulo:'Analista de Dados',descricao:'Baixar o histórico de estudos em CSV ou PDF pra acompanhar sua evolução por fora.',icone:'📊',dificuldade:'facil',getValue:()=>db.exportUsageCount||0,tiers:[1,5,15,30]},
+  {id:'arquivista_decks',categoria:'amplitude',titulo:'Arquivista de Decks',descricao:'Exportar ou importar baralhos de flashcards em JSON.',icone:'🗄️',dificuldade:'facil',getValue:()=>db.fcDeckIOCount||0,tiers:[1,5,15,30,60]},
 
   // --- E) TEMPO / MARATONA ---
   {id:'maratonista',categoria:'tempo',titulo:'Maratonista',descricao:'Sessão única contínua sem parar o cronômetro.',icone:'🏃',dificuldade:'dificil',getValue:()=>Math.floor((db.longestSingleSessionSec||0)/3600),tiers:[1,2,3,4,6]},
@@ -6687,6 +6707,7 @@ const ACHIEVEMENTS_REGISTRY=[
   {id:'lendario_silencioso',categoria:'secreta',secreta:true,titulo:'Lendário Silencioso',descricao:'Destravar 10 conquistas secretas — a secreta das secretas.',icone:'🥷',dificuldade:'dificilimo',
     getValue:()=>ACHIEVEMENTS_REGISTRY.filter(a=>a.secreta&&a.id!=='lendario_silencioso').filter(a=>achievementStatus(a).tierIdx>=0).length,tiers:[10]},
   {id:'autopsia_do_erro',categoria:'secreta',secreta:true,titulo:'Autópsia do Erro',descricao:'Errar o mesmo assunto 5+ vezes antes de finalmente dominá-lo.',icone:'🔬',dificuldade:'medio',getValue:()=>(db.erroAssuntos||[]).some(a=>a.count>=5)?1:0,tiers:[1]},
+  {id:'contagem_regressiva',categoria:'secreta',secreta:true,titulo:'Contagem Regressiva',descricao:'Estudar no dia que cai exatamente 7 dias antes de uma prova marcada em Editais.',icone:'⏳',dificuldade:'medio',getValue:()=>hasStudied7DaysBeforeExam()?1:0,tiers:[1]},
 ];
 
 function achievementStatus(a){
@@ -7083,6 +7104,7 @@ function exportStudyCSV(){
   a.href=url;a.download=`vale-dos-nomeados-historico-${todayStr()}.csv`;
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  db.exportUsageCount=(db.exportUsageCount||0)+1;saveDB();
   toast('📥 CSV exportado!','var(--green)');
 }
 
@@ -7132,6 +7154,7 @@ function exportHistoryPDF(){
   const w=window.open('','_blank');
   if(!w){toast('⚠️ Permita pop-ups pra gerar o PDF.','var(--red)');return;}
   w.document.open();w.document.write(html);w.document.close();
+  db.exportUsageCount=(db.exportUsageCount||0)+1;saveDB();
 }
 
 // ===== REVISIONS =====
@@ -7564,11 +7587,7 @@ function computeStudyRecommendations(){
     });
   });
   items.sort((a,b)=>b.score-a.score);
-  // 10 em vez de 5: no card "O que estudar agora" (lado a lado com "Desempenho em
-  // Simulados", que costuma ficar mais alto por causa do breakdown por reino), 5 itens
-  // deixava um vão vazio embaixo quando havia mais pendências pra mostrar — 10 preenche
-  // o espaço com recomendação de verdade em vez de ficar em branco.
-  return items.slice(0,10);
+  return items.slice(0,7);
 }
 // Agrega s.simStats de todos os minibosses pra questões/acertos (esses somam certinho,
 // cada questão pertence a um assunto só). "Simulados feitos" NÃO pode vir dessa mesma
@@ -8139,38 +8158,20 @@ function renderWeeklyPlan(){
   const DAYS_FULL=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 
   // Gerar 7 dias
+  // A agenda semanal só mostra o que a pessoa mesma adicionou (db.weeklyPlan[ds]) — ela
+  // não injeta mais as revisões automáticas do SM-2 aqui (isso continua rodando normal
+  // em Revisões/Painel, só não aparece duplicado nesta grade que é 100% manual agora).
   const days=[];
   for(let i=0;i<7;i++){
     const d=new Date(today);d.setDate(today.getDate()+i);
     const ds=d.toISOString().slice(0,10);
     const dow=d.getDay();
-    // Revisões ativas neste dia
-    const revs=[];
-    db.kingdoms.forEach(k=>{
-      (db.topics[k.id]||[]).forEach(t=>{
-        (t.subtopics||[]).forEach(s=>{
-          const sRevs=db.revisions[s.id]||[];
-          sRevs.forEach((r,ri)=>{
-            if(!r.completed&&isRevActive(s,sRevs,ri)&&r.date===ds&&!(db.weeklyPlan&&db.weeklyPlan._hiddenRevs&&db.weeklyPlan._hiddenRevs[s.id+'_'+ri+'_'+ds])){
-              revs.push({name:s.name,topic:t.name,kColor:k.color,subId:s.id,revIdx:ri});
-            }
-          });
-        });
-      });
-    });
-    days.push({ds,dow,full:DAYS_FULL[dow],isToday:i===0,revs,items:db.weeklyPlan[ds]||[]});
+    days.push({ds,dow,full:DAYS_FULL[dow],isToday:i===0,items:db.weeklyPlan[ds]||[]});
   }
 
   el.innerHTML=`<div class="week-plan-grid">${days.map(day=>{
     const dateLabel=new Date(day.ds+'T00:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
     const isSun=day.dow===0;
-    const revHtml=day.revs.map((r,ri)=>`
-      <div class="plan-item" style="border-left:3px solid var(--cyan);align-items:center">
-        <div class="plan-item-dot" style="background:var(--cyan);flex-shrink:0"></div>
-        <div style="flex:1;min-width:0"><div class="plan-item-text" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}</div><div class="plan-item-sub">${r.topic}</div></div>
-        <span class="plan-tag plan-tag-rev" style="flex-shrink:0">REV</span>
-        <button onclick="removeRevFromPlan('${r.subId}',${r.revIdx},'${day.ds}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:2px 4px;flex-shrink:0">✕</button>
-      </div>`).join('');
     const itemsHtml=(day.items||[]).map((item,idx)=>`
       <div class="plan-item" style="border-left:3px solid ${item.kColor||'var(--accent)'}">
         <div class="plan-item-dot" style="background:${item.kColor||'var(--accent)'}"></div>
@@ -8188,14 +8189,10 @@ function renderWeeklyPlan(){
       </div>
       ${isSun
         ?`<div class="plan-empty-day">🌟 Descanso</div>`
-        :`${revHtml}${itemsHtml}${!revHtml&&!itemsHtml?'<div class="plan-empty-day" style="cursor:pointer" onclick="openAddPlanItem(\''+day.ds+'\')">＋ Adicionar assunto</div>':''}`
+        :`${itemsHtml}${!itemsHtml?'<div class="plan-empty-day" style="cursor:pointer" onclick="openAddPlanItem(\''+day.ds+'\')">＋ Adicionar assunto</div>':''}`
       }
     </div>`;
-  }).join('')}</div>
-  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
-    <span style="font-size:10px;color:var(--muted);font-weight:700;display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--cyan);display:inline-block"></span> Revisão agendada automaticamente</span>
-    <span style="font-size:10px;color:var(--muted);font-weight:700;display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span> Assunto escolhido por você</span>
-  </div>`;
+  }).join('')}</div>`;
 }
 
 function openAddPlanItem(ds){
@@ -10367,6 +10364,7 @@ function fcExportDeck(){
   a.href=url;a.download=`deck-${fcSelectedMb.name.toLowerCase().replace(/[^a-z0-9]+/g,'-')}.json`;
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  db.fcDeckIOCount=(db.fcDeckIOCount||0)+1;saveDB();
   toast(`📤 ${all.length} flashcards exportados!`,'var(--green)');
 }
 function fcImportDeckPrompt(){
@@ -10391,6 +10389,7 @@ function fcImportDeckFile(input){
         count++;
       });
       db.fcCreatedTotal=(db.fcCreatedTotal||0)+count;
+      db.fcDeckIOCount=(db.fcDeckIOCount||0)+1;
       saveDB();renderFCMbList();renderFCMain();updateFCBadge();
       toast(`📥 ${count} flashcards importados!`,'var(--green)');
     }catch(err){
@@ -11888,6 +11887,11 @@ LEMBRE: responda APENAS com o JSON array, comecando com [ e terminando com ]`;
       };
       count++;
     });
+    // fcCreatedTotal fica "O Forjador de Cartas" (qualquer origem) e fcAIGeneratedTotal
+    // é só o que a IA gerou a partir de PDF — antes desses dois contadores, cards vindos
+    // de PDF não somavam em NENHUMA conquista de volume de criação.
+    db.fcCreatedTotal=(db.fcCreatedTotal||0)+count;
+    db.fcAIGeneratedTotal=(db.fcAIGeneratedTotal||0)+count;
     saveDB();
     renderFCMbList();renderFCMain();updateFCBadge();
     if(!count&&duplicadas){
@@ -12200,13 +12204,6 @@ function renderHistorico(){
   if(totEl)totEl.textContent='Total: '+fmtTime(total)+' '+(histTab==='day'?'hoje':histTab==='week'?'esta semana':'este mês');
 }
 
-function removeRevFromPlan(subId,revIdx,ds){
-  if(!db.weeklyPlan)db.weeklyPlan={};
-  if(!db.weeklyPlan._hiddenRevs)db.weeklyPlan._hiddenRevs={};
-  db.weeklyPlan._hiddenRevs[subId+'_'+revIdx+'_'+ds]=true;
-  saveDB();renderWeeklyPlan();toast('Revisão ocultada','var(--muted)');
-}
-
 // ===== BIND STATIC HTML EVENTS (module scripts are isolated from onclick) =====
 function bindStaticEvents(){
   document.getElementById('nav-map')?.addEventListener('click',()=>showScreen('map'));
@@ -12264,7 +12261,6 @@ window.floatTimerSave=floatTimerSave;
 window.floatTimerReset=floatTimerReset;
 window.setHistTab=setHistTab;
 window.setChartTab=setChartTab;
-window.removeRevFromPlan=removeRevFromPlan;
 window.addEdital=addEdital;
 window.deleteEdital=deleteEdital;
 window.changeEditalStatus=changeEditalStatus;
