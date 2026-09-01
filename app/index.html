@@ -5716,7 +5716,15 @@ function fluxoEditNodeHTML(subId,nos,id,isRoot){
   const node=nos[id];
   if(!node)return'';
   const ramos=node.ramos||[];
-  const isDecisao=node.tipo==='decisao';
+  // A visualização (fluxoRenderNode) desenha ramos separados sempre que ramos.length>1,
+  // independente do "tipo" do nó — "Decisão" é só o estilo visual (losango), a IA às vezes
+  // gera um nó "Ação" que já ramifica direto (ex: uma etiologia levando a 5 tópicos
+  // diferentes). Usar só tipo==='decisao' aqui fazia o editor entrar apenas no PRIMEIRO
+  // ramo (ramos[0]) e sumir com os outros da tela de edição — davam pra ver no fluxograma,
+  // mas não tinha como editar/remover. Por isso qualquer nó com mais de um ramo entra no
+  // mesmo modo de edição "com ramos", e um nó tipo="decisao" continua nesse modo mesmo com
+  // só 1 ramo (pra quem acabou de trocar o tipo e ainda vai clicar em "Adicionar ramo").
+  const temRamos=node.tipo==='decisao'||ramos.length>1;
   let html=`<div class="fluxo-edit-node">
     <div class="fluxo-edit-row">
       <select class="inp" style="max-width:130px" onchange="fluxoSetField('${subId}','${id}','tipo',this.value)">
@@ -5726,7 +5734,7 @@ function fluxoEditNodeHTML(subId,nos,id,isRoot){
       ${!isRoot?`<button class="btn btn-xs btn-danger" onclick="fluxoDeleteNode('${subId}','${id}')" title="Remover este passo e tudo depois dele"><i class="fa fa-trash"></i></button>`:''}
     </div>`;
 
-  if(isDecisao){
+  if(temRamos){
     html+=ramos.map((r,i)=>`
       <div class="fluxo-edit-branch">
         <div class="fluxo-edit-row">
