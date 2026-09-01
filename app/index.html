@@ -1445,6 +1445,9 @@ nav{
     <button class="nav-btn" id="nav-conquistas">
       <span class="nav-icon">🏅</span><span class="nav-label">CONQUISTAS</span>
     </button>
+    <button class="nav-btn" id="nav-sala">
+      <span class="nav-icon">👥</span><span class="nav-label">SALA DE ESTUDO</span>
+    </button>
     <button class="nav-btn" id="nav-admin" style="display:none">
       <span class="nav-icon">🛠️</span><span class="nav-label">ADMIN</span>
     </button>
@@ -2057,6 +2060,32 @@ nav{
     <div id="modal-body"></div>
   </div>
 </div>
+<style>
+/* ===== SALA DE ESTUDO (presença compartilhada, sem vídeo/chat) =====
+   Aberta como modal pelo botão "Sala de Estudo" do menu lateral (function salaOpenModal)
+   — não é uma tela própria, é só um conteúdo carregado no modal genérico do app
+   (openModal/closeModal, logo acima). Estrutura e medidas espelham de propósito o
+   pacote de referência que deu origem a essa feature (mesmos paddings/proporções),
+   com as cores mapeadas pros tokens de tema que este app já usa. Tudo sob o prefixo
+   sala-/SALA_, pra ficar fácil de tirar inteiro se precisar. */
+.sala-desc{font-size:12.5px;color:var(--text2);line-height:1.6;margin-top:2px;}
+.sala-input{display:block;width:100%;height:45px;padding:0 12px;margin-top:16px;color:var(--text);background:var(--panel2);border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;outline:none;}
+.sala-input::placeholder{color:var(--muted);}
+.sala-summary{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin-top:16px;background:linear-gradient(var(--panel2),var(--panel));border:1px solid var(--border);border-radius:8px;}
+.sala-count{display:flex;column-gap:8px;align-items:center;font-size:15px;font-weight:600;color:var(--text);}
+.sala-status{font-size:11px;color:var(--muted);}
+.sala-list{display:flex;flex-direction:column;max-height:260px;margin:12px 0 0;padding:0;overflow-y:auto;list-style:none;}
+.sala-peer{display:flex;column-gap:10px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--border);}
+.sala-peer:last-child{border-bottom:none;}
+.sala-dot{flex-shrink:0;width:8px;height:8px;background:var(--border2);border-radius:50%;}
+.sala-dot.active{background:var(--green);box-shadow:0 0 0 3px rgba(21,128,61,0.15);}
+.sala-name{display:flex;column-gap:6px;align-items:center;flex-grow:1;min-width:0;overflow:hidden;font-size:12.5px;color:var(--text);text-overflow:ellipsis;white-space:nowrap;}
+.sala-badge{padding:2px 6px;font-size:9px;color:var(--muted);border:1px solid var(--border);border-radius:4px;}
+.sala-meta{flex-shrink:0;font-size:11px;color:var(--muted);}
+.sala-peer.sala-you .sala-name{font-weight:700;}
+.sala-empty{padding:24px 4px;font-size:12.5px;color:var(--muted);text-align:center;}
+.sala-leave{width:100%;justify-content:center;margin-top:14px;}
+</style>
 
 <!-- TOAST -->
 <div id="toast"></div>
@@ -8832,7 +8861,16 @@ function openModal(title,body){
   document.getElementById('modal-body').innerHTML=body;
   document.getElementById('modal').classList.add('open');
 }
-function closeModal(){document.getElementById('modal').classList.remove('open');}
+function closeModal(){
+  document.getElementById('modal').classList.remove('open');
+  // Fechar o modal genérico NÃO sai da Sala de Estudo — a presença continua no ar em
+  // segundo plano (só sai de verdade quem clica em "Sair da sala"), só a listinha de
+  // quem está por perto para de ser atualizada enquanto o modal está fechado.
+  if(typeof salaModalOpen!=='undefined'&&salaModalOpen){
+    salaModalOpen=false;
+    if(typeof salaPresenceDetachListListener==='function')salaPresenceDetachListListener();
+  }
+}
 
 // ===== TOAST =====
 let toastT=null;
@@ -12856,6 +12894,186 @@ function updateTabTitle(){
 }
 setInterval(updateTabTitle,1000);
 
+// ===== SALA DE ESTUDO (presença compartilhada, sem vídeo/chat) =====
+// Porte de um pacote de referência feito pro Moodist (outro projeto, Astro/React/
+// Zustand/Supabase, licença MIT) — mesma arquitetura e visual, mas em cima do Firebase
+// Realtime Database que este app já usa, no lugar do Supabase (que exigiria criar um
+// projeto novo). Aberta como MODAL pelo botão "Sala de Estudo" do menu (salaOpenModal),
+// igual ao pacote original (item de menu -> modal), não como uma tela própria.
+//
+// A conexão de presença (seu próprio nó + o timer de republicação) fica de pé em
+// segundo plano enquanto você estiver "na sala", mesmo com o modal fechado — só quem
+// sai de fato é quem clica em "Sair da sala" (ou fecha a aba, via onDisconnect). Fechar
+// o modal só para de atualizar a listinha de quem está por perto, exatamente como no
+// pacote original (o hook de presença é ligado ao estado "joined", não à visibilidade
+// do modal).
+const SALA_PRESENCE_NICK_KEY='vdn_sala_apelido';
+const SALA_PRESENCE_RETICK_MS=30000; // mesmo intervalo do pacote original: recalcula o "há quanto tempo" sem martelar a rede
+const SALA_PHASE_LABEL={focus:'Focando',break:'Pausa',longbreak:'Pausa longa',livre:'Estudando'};
+
+let salaModalOpen=false;          // o conteúdo da Sala de Estudo é o que está no modal genérico agora?
+let salaPresenceId=null;
+let salaPresenceNickname=(function(){try{return localStorage.getItem(SALA_PRESENCE_NICK_KEY)||'';}catch(e){return'';}})();
+let salaPresenceJoined=false;
+let salaPresenceConnected=false;
+let salaPresencePeers={};         // id -> {nome,estudando,modo,desde,atualizadoEm}
+let salaPresenceRef=null;
+let salaPresenceListRef=null;
+let salaPresenceConnHandler=null;
+let salaPresenceLastSent=null;    // string comparável do último status publicado — só reenvia quando muda de verdade
+let salaPresenceTimer=null;
+
+function salaPresenceEnabled(){return!!(firebaseDB&&currentUser&&connectedRef);}
+
+// Lê o mesmo estado que os dois cronômetros do app já mantêm (nunca duplica a lógica
+// deles). O Pomodoro não guarda um "iniciado em" literal (só pmdRemaining decrescente),
+// então um "desde" sintético é calculado a partir de quanto já passou da fase atual —
+// mesma decisão de projeto do pacote original: só o timestamp de início viaja pela rede.
+function salaCurrentStudyStatus(){
+  const pomodoroAtivo=typeof pmdRunning!=='undefined'&&pmdRunning;
+  const livreAtivo=typeof ftRunning!=='undefined'&&ftRunning;
+  if(pomodoroAtivo){
+    const decorridoMs=(PMD_DURATIONS[pmdPhase]-pmdRemaining)*1000;
+    return{estudando:true,modo:pmdPhase==='focus'?'focus':pmdPhase,desde:Date.now()-Math.max(0,decorridoMs)};
+  }
+  if(livreAtivo)return{estudando:true,modo:'livre',desde:ftStartedAt||Date.now()};
+  return{estudando:false,modo:null,desde:null};
+}
+
+// ---- abrir/fechar o modal ----
+function salaOpenModal(){
+  salaModalOpen=true;
+  openModal('<i class="fa fa-users"></i> Sala de Estudo',salaModalBodyHTML());
+  if(salaPresenceJoined)salaPresenceAttachListListener();
+}
+
+function salaModalBodyHTML(){
+  if(!salaPresenceEnabled()){
+    return`<div class="sala-desc">A sala de estudo não está configurada agora — tente de novo mais tarde.</div>`;
+  }
+  const descricao=`<div class="sala-desc">Estude ao lado de outras pessoas. Sem vídeo, sem cadastro — só um apelido e há quanto tempo cada um está focado.</div>`;
+  if(!salaPresenceJoined){
+    return`
+      ${descricao}
+      <input class="sala-input" id="sala-nick-input" maxlength="24" placeholder="Seu apelido" value="${escapeHtml(salaPresenceNickname||'')}" onkeydown="if(event.key==='Enter')salaJoinRoom()">
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:14px" onclick="salaJoinRoom()">Entrar na sala</button>
+    `;
+  }
+  const peers=Object.entries(salaPresencePeers).sort((a,b)=>(a[1].desde??Infinity)-(b[1].desde??Infinity));
+  const focando=peers.filter(([,p])=>p.estudando).length;
+  return`
+    ${descricao}
+    <div class="sala-summary">
+      <span class="sala-count"><i class="fa fa-user-group"></i> ${peers.length||1}</span>
+      <span class="sala-status">${salaPresenceConnected?`${focando} focando agora`:'conectando...'}</span>
+    </div>
+    <ul class="sala-list">
+      ${peers.map(([id,p])=>`
+        <li class="sala-peer${id===salaPresenceId?' sala-you':''}">
+          <span class="sala-dot${p.estudando?' active':''}"></span>
+          <span class="sala-name">${escapeHtml(p.nome||'Anônimo')}${id===salaPresenceId?'<span class="sala-badge">você</span>':''}</span>
+          <span class="sala-meta">${p.estudando?(SALA_PHASE_LABEL[p.modo]||'Focando')+' · '+salaPresenceElapsed(p.desde):'parado'}</span>
+        </li>`).join('')}
+      ${!peers.length?`<li class="sala-empty">Ninguém aqui ainda. Você é o primeiro.</li>`:''}
+    </ul>
+    <button class="btn btn-ghost sala-leave" onclick="salaLeaveRoom()">Sair da sala</button>
+  `;
+}
+
+function salaRenderModalBody(){
+  if(!salaModalOpen)return; // modal fechado, ou mostrando outra coisa — não mexe no DOM
+  const body=document.getElementById('modal-body');
+  if(body)body.innerHTML=salaModalBodyHTML();
+}
+
+// ---- entrar/sair da sala ----
+function salaJoinRoom(){
+  const input=document.getElementById('sala-nick-input');
+  const apelido=String((input&&input.value)||'').trim().slice(0,24);
+  if(!apelido)return;
+  salaPresenceNickname=apelido;
+  try{localStorage.setItem(SALA_PRESENCE_NICK_KEY,apelido);}catch(e){}
+  salaPresenceJoin();
+  salaPresenceAttachListListener();
+  salaRenderModalBody();
+}
+function salaLeaveRoom(){
+  salaPresenceDetachListListener();
+  salaPresenceLeave();
+  salaRenderModalBody();
+}
+
+// ---- conexão de presença em si (independente do modal estar aberto ou não) ----
+function salaPresenceJoin(){
+  if(salaPresenceJoined||!salaPresenceEnabled())return;
+  if(!salaPresenceId)salaPresenceId='pres_'+genId();
+  salaPresenceJoined=true;
+  salaPresenceRef=firebaseDB.ref('presence/'+salaPresenceId);
+  salaPresenceConnHandler=connectedRef.on('value',snap=>{
+    salaPresenceConnected=snap.val()===true;
+    if(salaPresenceConnected&&salaPresenceJoined){
+      // Reamarra o onDisconnect toda vez que a conexão volta — um onDisconnect já
+      // disparado (ou perdido numa reconexão) não continua valendo sozinho.
+      salaPresenceRef.onDisconnect().remove();
+      salaPresencePublish(true);
+    }
+    salaRenderModalBody();
+  });
+  if(!salaPresenceTimer)salaPresenceTimer=setInterval(()=>{salaPresencePublish(false);salaRenderModalBody();},SALA_PRESENCE_RETICK_MS);
+}
+function salaPresenceLeave(){
+  if(!salaPresenceJoined)return;
+  salaPresenceJoined=false;
+  salaPresenceConnected=false;
+  if(connectedRef&&salaPresenceConnHandler)connectedRef.off('value',salaPresenceConnHandler);
+  salaPresenceConnHandler=null;
+  if(salaPresenceRef){salaPresenceRef.onDisconnect().cancel();salaPresenceRef.remove().catch(()=>{});}
+  salaPresenceRef=null;
+  if(salaPresenceTimer){clearInterval(salaPresenceTimer);salaPresenceTimer=null;}
+  salaPresencePeers={};
+  salaPresenceLastSent=null;
+}
+// Só reenvia quando o status mudou de verdade (forcar=true ignora essa checagem, usado
+// ao entrar/reconectar) — a decisão que vale preservar do pacote original: só o
+// timestamp de início viaja pela rede, nunca um "estou vivo" a cada segundo.
+function salaPresencePublish(forcar){
+  if(!salaPresenceJoined||!salaPresenceRef)return;
+  const status=salaCurrentStudyStatus();
+  const assinatura=status.estudando+'|'+status.modo+'|'+status.desde;
+  if(!forcar&&assinatura===salaPresenceLastSent)return;
+  salaPresenceLastSent=assinatura;
+  salaPresenceRef.set({
+    nome:salaPresenceNickname||'Anônimo',
+    estudando:status.estudando,
+    modo:status.modo,
+    desde:status.desde,
+    atualizadoEm:Date.now(),
+  }).catch(()=>{}); // se a regra do Firebase não liberar esse path, o resto do app continua igual
+}
+
+// ---- listener da listinha de gente (só existe enquanto o modal está aberto) ----
+function salaPresenceAttachListListener(){
+  if(salaPresenceListRef||!salaPresenceEnabled())return;
+  salaPresenceListRef=firebaseDB.ref('presence');
+  salaPresenceListRef.on('value',snap=>{
+    salaPresencePeers=snap.val()||{};
+    salaRenderModalBody();
+  },()=>{}); // erro de permissão: o painel fica no aviso de "indisponível" em vez de quebrar
+}
+function salaPresenceDetachListListener(){
+  if(salaPresenceListRef)salaPresenceListRef.off();
+  salaPresenceListRef=null;
+}
+
+function salaPresenceElapsed(desde){
+  if(!desde)return'pausado';
+  const min=Math.max(0,Math.floor((Date.now()-desde)/60000));
+  if(min<1)return'começou agora';
+  if(min<60)return min+' min';
+  const h=Math.floor(min/60);
+  return h+'h '+(min%60)+'min';
+}
+
 // ===== HISTÓRICO DE SESSÕES =====
 let histTab='day';
 function setHistTab(tab,el){
@@ -12902,6 +13120,7 @@ function bindStaticEvents(){
   document.getElementById('nav-flashcards')?.addEventListener('click',()=>showScreen('flashcards'));
   document.getElementById('nav-redacoes')?.addEventListener('click',()=>showScreen('redacoes'));
   document.getElementById('nav-conquistas')?.addEventListener('click',()=>showScreen('conquistas'));
+  document.getElementById('nav-sala')?.addEventListener('click',salaOpenModal); // abre modal, não é uma tela (showScreen)
   document.getElementById('nav-admin')?.addEventListener('click',()=>showScreen('admin'));
   document.getElementById('xp-pill-btn')?.addEventListener('click',()=>showScreen('dashboard'));
   document.getElementById('exam-date')?.addEventListener('change',saveExamDate);
@@ -12914,6 +13133,8 @@ bindStaticEvents();
 
 // Functions called from dynamically generated innerHTML must be on window
 window.showScreen=showScreen;
+window.salaJoinRoom=salaJoinRoom;
+window.salaLeaveRoom=salaLeaveRoom;
 window.openKingdom=openKingdom;
 window.addTopic=addTopic;
 window.deleteTopic=deleteTopic;
