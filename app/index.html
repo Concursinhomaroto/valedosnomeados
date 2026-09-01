@@ -1850,6 +1850,38 @@ nav{
   <div id="conquistas-grid"></div>
 </div>
 
+<!-- ===== SALA DE ESTUDO (mapa jogável, biblioteca de estudo) =====
+     Fase 1 do plano combinado com o usuário: só o mapa, andando sozinho (WASD/setas) e
+     sentando em cadeira (tecla E) — sem multiplayer, sem chat, sem vídeo (fica pra
+     depois). Assets em /icons/sala-mapa/ (tilesets, personagem, map.json), vindos do
+     repositório MIT do SkyOffice (github.com/kevinshen56714/SkyOffice) + o map.json que
+     o usuário mandou (biblioteca/sala de leitura, refeito a partir do mapa original).
+     Motor Phaser 3, carregado sob demanda via CDN só quem abre essa tela (ver
+     loadPhaser), tudo sob o prefixo sala-/SALA_, pra ficar fácil de tirar inteiro se um
+     dia for preciso. -->
+<div class="screen" id="screen-sala">
+  <div class="sala-mapa-top">
+    <h2><i class="fa fa-house-chimney"></i> Sala de Estudo</h2>
+    <div class="sala-mapa-hint">WASD ou setas pra andar · E pra sentar/levantar</div>
+  </div>
+  <div class="sala-mapa-viewport" id="sala-mapa-viewport"></div>
+</div>
+<style>
+.sala-mapa-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.sala-mapa-top h2{font-family:'Cinzel',serif;font-size:19px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:10px;}
+.sala-mapa-hint{font-size:11px;color:var(--muted);font-weight:700;}
+/* aspect-ratio + max-height mantêm o jogo num tamanho previsível em qualquer viewport —
+   o Phaser (modo Scale.RESIZE) acompanha o tamanho desta caixa sozinho, então ela nunca
+   pode crescer além do espaço disponível (mesma lição de nunca estourar a tela já
+   aplicada nas features anteriores). */
+.sala-mapa-viewport{width:100%;aspect-ratio:4/3;max-height:calc(100vh - 200px);border-radius:var(--r-lg);overflow:hidden;border:1.5px solid var(--border);box-shadow:var(--shadow2);background:#1a1a2e;}
+.sala-mapa-viewport canvas{display:block;width:100%!important;height:100%!important;image-rendering:pixelated;}
+@media(max-width:700px){
+  .sala-mapa-top h2{font-size:16px;}
+  .sala-mapa-hint{display:none;}
+}
+</style>
+
 <!-- ===== PAINEL ADMIN (só visível pra ADMIN_EMAIL) ===== -->
 <div class="screen" id="screen-admin">
   <div class="sec-title">🛠️ Painel Admin — Confirmar Pagamento</div>
@@ -2060,33 +2092,6 @@ nav{
     <div id="modal-body"></div>
   </div>
 </div>
-<style>
-/* ===== SALA DE ESTUDO (presença compartilhada, sem vídeo/chat) =====
-   Aberta como modal pelo botão "Sala de Estudo" do menu lateral (function salaOpenModal)
-   — não é uma tela própria, é só um conteúdo carregado no modal genérico do app
-   (openModal/closeModal, logo acima). Estrutura e medidas espelham de propósito o
-   pacote de referência que deu origem a essa feature (mesmos paddings/proporções),
-   com as cores mapeadas pros tokens de tema que este app já usa. Tudo sob o prefixo
-   sala-/SALA_, pra ficar fácil de tirar inteiro se precisar. */
-.sala-desc{font-size:12.5px;color:var(--text2);line-height:1.6;margin-top:2px;}
-.sala-input{display:block;width:100%;height:45px;padding:0 12px;margin-top:16px;color:var(--text);background:var(--panel2);border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;outline:none;}
-.sala-input::placeholder{color:var(--muted);}
-.sala-summary{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin-top:16px;background:linear-gradient(var(--panel2),var(--panel));border:1px solid var(--border);border-radius:8px;}
-.sala-count{display:flex;column-gap:8px;align-items:center;font-size:15px;font-weight:600;color:var(--text);}
-.sala-status{font-size:11px;color:var(--muted);}
-.sala-list{display:flex;flex-direction:column;max-height:260px;margin:12px 0 0;padding:0;overflow-y:auto;list-style:none;}
-.sala-peer{display:flex;column-gap:10px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--border);}
-.sala-peer:last-child{border-bottom:none;}
-.sala-dot{flex-shrink:0;width:8px;height:8px;background:var(--border2);border-radius:50%;}
-.sala-dot.active{background:var(--green);box-shadow:0 0 0 3px rgba(21,128,61,0.15);}
-.sala-name{display:flex;column-gap:6px;align-items:center;flex-grow:1;min-width:0;overflow:hidden;font-size:12.5px;color:var(--text);text-overflow:ellipsis;white-space:nowrap;}
-.sala-badge{padding:2px 6px;font-size:9px;color:var(--muted);border:1px solid var(--border);border-radius:4px;}
-.sala-meta{flex-shrink:0;font-size:11px;color:var(--muted);}
-.sala-peer.sala-you .sala-name{font-weight:700;}
-.sala-empty{padding:24px 4px;font-size:12.5px;color:var(--muted);text-align:center;}
-.sala-leave{width:100%;justify-content:center;margin-top:14px;}
-</style>
-
 <!-- TOAST -->
 <div id="toast"></div>
 
@@ -3957,6 +3962,10 @@ function openRenewalScreen(reason){
 }
 function showScreen(name){
   if(name!=='flashcards'&&typeof fcVoiceStop==='function')fcVoiceStop();
+  // Pausa o jogo da Sala de Estudo ao sair dela — sem isso ficaria rodando (física,
+  // animações) escondido atrás de qualquer outra tela, gastando CPU/bateria à toa.
+  const estavaNaSala=document.getElementById('screen-sala')?.classList.contains('active');
+  if(estavaNaSala&&name!=='sala'&&typeof salaMapaPause==='function')salaMapaPause();
   if(name==='admin'&&!isAdmin())name='dashboard'; // proteção extra, além do item ficar oculto no menu
   // Repertório e Banco de Erros não têm botão próprio no menu — viraram abas dentro de
   // Redação e Simulado Geral, respectivamente, desde a fusão das telas relacionadas, então
@@ -3982,6 +3991,7 @@ function showScreen(name){
   if(name==='redacoes')renderRedacoesScreen();
   if(name==='repertorio')renderRepertorioScreen();
   if(name==='conquistas')renderConquistasScreen();
+  if(name==='sala')renderSalaMapaScreen();
   if(name==='admin')adminSearchUsers();
   if(name==='map')renderMap();
   // 'vale' (Mapa do Vale, D3+GeoJSON) fica suprimido da navegação por enquanto — mais
@@ -8861,16 +8871,7 @@ function openModal(title,body){
   document.getElementById('modal-body').innerHTML=body;
   document.getElementById('modal').classList.add('open');
 }
-function closeModal(){
-  document.getElementById('modal').classList.remove('open');
-  // Fechar o modal genérico NÃO sai da Sala de Estudo — a presença continua no ar em
-  // segundo plano (só sai de verdade quem clica em "Sair da sala"), só a listinha de
-  // quem está por perto para de ser atualizada enquanto o modal está fechado.
-  if(typeof salaModalOpen!=='undefined'&&salaModalOpen){
-    salaModalOpen=false;
-    if(typeof salaPresenceDetachListListener==='function')salaPresenceDetachListListener();
-  }
-}
+function closeModal(){document.getElementById('modal').classList.remove('open');}
 
 // ===== TOAST =====
 let toastT=null;
@@ -12894,184 +12895,215 @@ function updateTabTitle(){
 }
 setInterval(updateTabTitle,1000);
 
-// ===== SALA DE ESTUDO (presença compartilhada, sem vídeo/chat) =====
-// Porte de um pacote de referência feito pro Moodist (outro projeto, Astro/React/
-// Zustand/Supabase, licença MIT) — mesma arquitetura e visual, mas em cima do Firebase
-// Realtime Database que este app já usa, no lugar do Supabase (que exigiria criar um
-// projeto novo). Aberta como MODAL pelo botão "Sala de Estudo" do menu (salaOpenModal),
-// igual ao pacote original (item de menu -> modal), não como uma tela própria.
-//
-// A conexão de presença (seu próprio nó + o timer de republicação) fica de pé em
-// segundo plano enquanto você estiver "na sala", mesmo com o modal fechado — só quem
-// sai de fato é quem clica em "Sair da sala" (ou fecha a aba, via onDisconnect). Fechar
-// o modal só para de atualizar a listinha de quem está por perto, exatamente como no
-// pacote original (o hook de presença é ligado ao estado "joined", não à visibilidade
-// do modal).
-const SALA_PRESENCE_NICK_KEY='vdn_sala_apelido';
-const SALA_PRESENCE_RETICK_MS=30000; // mesmo intervalo do pacote original: recalcula o "há quanto tempo" sem martelar a rede
-const SALA_PHASE_LABEL={focus:'Focando',break:'Pausa',longbreak:'Pausa longa',livre:'Estudando'};
+// ===== SALA DE ESTUDO (mapa jogável, biblioteca de estudo, motor Phaser 3) =====
+// Fase 1 do plano combinado com o usuário: só o mapa, andando sozinho (WASD/setas) e
+// sentando em cadeira (E) — sem multiplayer, sem chat, sem vídeo, sem diálogo de
+// computador/quadro/máquina de venda (ficam só visuais). Assets em /icons/sala-mapa/
+// (tilesets, itens, personagem, map.json), vindos do repositório MIT do SkyOffice
+// (github.com/kevinshen56714/SkyOffice) + o map.json que o usuário mandou (biblioteca
+// refeita a partir do escritório original). A cena Phaser é escrita do zero aqui —
+// Bootstrap.ts/Game.ts do pacote de referência são do projeto inteiro (React+Redux+
+// Colyseus+WebRTC), fortemente acoplados a rede, e não servem pra copiar direto; a
+// matemática de posição/colisão/animação foi conferida contra o código-fonte real do
+// SkyOffice (Player.ts, MyPlayer.ts, CharacterAnims.ts) pra ficar fiel ao original.
+const SALA_ASSETS='/icons/sala-mapa/';
+const SALA_SITTING_SHIFT={up:[0,3,-10],down:[0,3,1],left:[0,-8,10],right:[0,-8,10]};
 
-let salaModalOpen=false;          // o conteúdo da Sala de Estudo é o que está no modal genérico agora?
-let salaPresenceId=null;
-let salaPresenceNickname=(function(){try{return localStorage.getItem(SALA_PRESENCE_NICK_KEY)||'';}catch(e){return'';}})();
-let salaPresenceJoined=false;
-let salaPresenceConnected=false;
-let salaPresencePeers={};         // id -> {nome,estudando,modo,desde,atualizadoEm}
-let salaPresenceRef=null;
-let salaPresenceListRef=null;
-let salaPresenceConnHandler=null;
-let salaPresenceLastSent=null;    // string comparável do último status publicado — só reenvia quando muda de verdade
-let salaPresenceTimer=null;
+let salaMapaGame=null;     // instância do Phaser.Game — criada uma vez, na 1ª visita
+let salaMapaLoading=false;
 
-function salaPresenceEnabled(){return!!(firebaseDB&&currentUser&&connectedRef);}
-
-// Lê o mesmo estado que os dois cronômetros do app já mantêm (nunca duplica a lógica
-// deles). O Pomodoro não guarda um "iniciado em" literal (só pmdRemaining decrescente),
-// então um "desde" sintético é calculado a partir de quanto já passou da fase atual —
-// mesma decisão de projeto do pacote original: só o timestamp de início viaja pela rede.
-function salaCurrentStudyStatus(){
-  const pomodoroAtivo=typeof pmdRunning!=='undefined'&&pmdRunning;
-  const livreAtivo=typeof ftRunning!=='undefined'&&ftRunning;
-  if(pomodoroAtivo){
-    const decorridoMs=(PMD_DURATIONS[pmdPhase]-pmdRemaining)*1000;
-    return{estudando:true,modo:pmdPhase==='focus'?'focus':pmdPhase,desde:Date.now()-Math.max(0,decorridoMs)};
-  }
-  if(livreAtivo)return{estudando:true,modo:'livre',desde:ftStartedAt||Date.now()};
-  return{estudando:false,modo:null,desde:null};
-}
-
-// ---- abrir/fechar o modal ----
-function salaOpenModal(){
-  salaModalOpen=true;
-  openModal('<i class="fa fa-users"></i> Sala de Estudo',salaModalBodyHTML());
-  if(salaPresenceJoined)salaPresenceAttachListListener();
-}
-
-function salaModalBodyHTML(){
-  if(!salaPresenceEnabled()){
-    return`<div class="sala-desc">A sala de estudo não está configurada agora — tente de novo mais tarde.</div>`;
-  }
-  const descricao=`<div class="sala-desc">Estude ao lado de outras pessoas. Sem vídeo, sem cadastro — só um apelido e há quanto tempo cada um está focado.</div>`;
-  if(!salaPresenceJoined){
-    return`
-      ${descricao}
-      <input class="sala-input" id="sala-nick-input" maxlength="24" placeholder="Seu apelido" value="${escapeHtml(salaPresenceNickname||'')}" onkeydown="if(event.key==='Enter')salaJoinRoom()">
-      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:14px" onclick="salaJoinRoom()">Entrar na sala</button>
-    `;
-  }
-  const peers=Object.entries(salaPresencePeers).sort((a,b)=>(a[1].desde??Infinity)-(b[1].desde??Infinity));
-  const focando=peers.filter(([,p])=>p.estudando).length;
-  return`
-    ${descricao}
-    <div class="sala-summary">
-      <span class="sala-count"><i class="fa fa-user-group"></i> ${peers.length||1}</span>
-      <span class="sala-status">${salaPresenceConnected?`${focando} focando agora`:'conectando...'}</span>
-    </div>
-    <ul class="sala-list">
-      ${peers.map(([id,p])=>`
-        <li class="sala-peer${id===salaPresenceId?' sala-you':''}">
-          <span class="sala-dot${p.estudando?' active':''}"></span>
-          <span class="sala-name">${escapeHtml(p.nome||'Anônimo')}${id===salaPresenceId?'<span class="sala-badge">você</span>':''}</span>
-          <span class="sala-meta">${p.estudando?(SALA_PHASE_LABEL[p.modo]||'Focando')+' · '+salaPresenceElapsed(p.desde):'parado'}</span>
-        </li>`).join('')}
-      ${!peers.length?`<li class="sala-empty">Ninguém aqui ainda. Você é o primeiro.</li>`:''}
-    </ul>
-    <button class="btn btn-ghost sala-leave" onclick="salaLeaveRoom()">Sair da sala</button>
-  `;
-}
-
-function salaRenderModalBody(){
-  if(!salaModalOpen)return; // modal fechado, ou mostrando outra coisa — não mexe no DOM
-  const body=document.getElementById('modal-body');
-  if(body)body.innerHTML=salaModalBodyHTML();
-}
-
-// ---- entrar/sair da sala ----
-function salaJoinRoom(){
-  const input=document.getElementById('sala-nick-input');
-  const apelido=String((input&&input.value)||'').trim().slice(0,24);
-  if(!apelido)return;
-  salaPresenceNickname=apelido;
-  try{localStorage.setItem(SALA_PRESENCE_NICK_KEY,apelido);}catch(e){}
-  salaPresenceJoin();
-  salaPresenceAttachListListener();
-  salaRenderModalBody();
-}
-function salaLeaveRoom(){
-  salaPresenceDetachListListener();
-  salaPresenceLeave();
-  salaRenderModalBody();
-}
-
-// ---- conexão de presença em si (independente do modal estar aberto ou não) ----
-function salaPresenceJoin(){
-  if(salaPresenceJoined||!salaPresenceEnabled())return;
-  if(!salaPresenceId)salaPresenceId='pres_'+genId();
-  salaPresenceJoined=true;
-  salaPresenceRef=firebaseDB.ref('presence/'+salaPresenceId);
-  salaPresenceConnHandler=connectedRef.on('value',snap=>{
-    salaPresenceConnected=snap.val()===true;
-    if(salaPresenceConnected&&salaPresenceJoined){
-      // Reamarra o onDisconnect toda vez que a conexão volta — um onDisconnect já
-      // disparado (ou perdido numa reconexão) não continua valendo sozinho.
-      salaPresenceRef.onDisconnect().remove();
-      salaPresencePublish(true);
-    }
-    salaRenderModalBody();
+// Carrega o Phaser sob demanda — só quem realmente abre essa tela baixa a lib (~1.1MB),
+// mesmo padrão já usado pro PDF.js neste app (ver loadPDFjs).
+function loadPhaser(){
+  return new Promise((res,rej)=>{
+    if(window.Phaser){res();return;}
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js';
+    s.onload=()=>res();
+    s.onerror=rej;
+    document.head.appendChild(s);
   });
-  if(!salaPresenceTimer)salaPresenceTimer=setInterval(()=>{salaPresencePublish(false);salaRenderModalBody();},SALA_PRESENCE_RETICK_MS);
-}
-function salaPresenceLeave(){
-  if(!salaPresenceJoined)return;
-  salaPresenceJoined=false;
-  salaPresenceConnected=false;
-  if(connectedRef&&salaPresenceConnHandler)connectedRef.off('value',salaPresenceConnHandler);
-  salaPresenceConnHandler=null;
-  if(salaPresenceRef){salaPresenceRef.onDisconnect().cancel();salaPresenceRef.remove().catch(()=>{});}
-  salaPresenceRef=null;
-  if(salaPresenceTimer){clearInterval(salaPresenceTimer);salaPresenceTimer=null;}
-  salaPresencePeers={};
-  salaPresenceLastSent=null;
-}
-// Só reenvia quando o status mudou de verdade (forcar=true ignora essa checagem, usado
-// ao entrar/reconectar) — a decisão que vale preservar do pacote original: só o
-// timestamp de início viaja pela rede, nunca um "estou vivo" a cada segundo.
-function salaPresencePublish(forcar){
-  if(!salaPresenceJoined||!salaPresenceRef)return;
-  const status=salaCurrentStudyStatus();
-  const assinatura=status.estudando+'|'+status.modo+'|'+status.desde;
-  if(!forcar&&assinatura===salaPresenceLastSent)return;
-  salaPresenceLastSent=assinatura;
-  salaPresenceRef.set({
-    nome:salaPresenceNickname||'Anônimo',
-    estudando:status.estudando,
-    modo:status.modo,
-    desde:status.desde,
-    atualizadoEm:Date.now(),
-  }).catch(()=>{}); // se a regra do Firebase não liberar esse path, o resto do app continua igual
 }
 
-// ---- listener da listinha de gente (só existe enquanto o modal está aberto) ----
-function salaPresenceAttachListListener(){
-  if(salaPresenceListRef||!salaPresenceEnabled())return;
-  salaPresenceListRef=firebaseDB.ref('presence');
-  salaPresenceListRef.on('value',snap=>{
-    salaPresencePeers=snap.val()||{};
-    salaRenderModalBody();
-  },()=>{}); // erro de permissão: o painel fica no aviso de "indisponível" em vez de quebrar
+function renderSalaMapaScreen(){
+  if(salaMapaGame){salaMapaResume();return;}
+  if(salaMapaLoading)return;
+  salaMapaLoading=true;
+  const viewport=document.getElementById('sala-mapa-viewport');
+  if(viewport)viewport.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;font-size:13px;gap:8px"><i class="fa fa-spinner fa-spin"></i> Carregando a sala...</div>';
+  loadPhaser().then(()=>{
+    salaMapaLoading=false;
+    if(viewport)viewport.innerHTML='';
+    salaMapaCreateGame();
+  }).catch(()=>{
+    salaMapaLoading=false;
+    if(viewport)viewport.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;font-size:12px;text-align:center;padding:20px">Não deu pra carregar a sala agora. Confira sua conexão e tente de novo.</div>';
+  });
 }
-function salaPresenceDetachListListener(){
-  if(salaPresenceListRef)salaPresenceListRef.off();
-  salaPresenceListRef=null;
+function salaMapaPause(){if(salaMapaGame)salaMapaGame.scene.pause('salaMapaScene');}
+function salaMapaResume(){if(salaMapaGame)salaMapaGame.scene.resume('salaMapaScene');}
+
+// Só o personagem "adam" — os outros 3 do pacote original (ash/lucy/nancy) não fazem
+// falta pra um jogador solo. 52 frames (32x48), na mesma ordem do CharacterAnims.ts
+// original: idle 4 direções (0-23), correr 4 direções (24-47), sentado 4 direções (48-51).
+function salaMapaCreateAnims(anims){
+  const fr=15;
+  const dirs=[['right',0],['up',6],['left',12],['down',18]];
+  dirs.forEach(([dir,start])=>{
+    anims.create({key:'adam_idle_'+dir,frames:anims.generateFrameNumbers('adam',{start,end:start+5}),repeat:-1,frameRate:fr*0.6});
+  });
+  const runDirs=[['right',24],['up',30],['left',36],['down',42]];
+  runDirs.forEach(([dir,start])=>{
+    anims.create({key:'adam_run_'+dir,frames:anims.generateFrameNumbers('adam',{start,end:start+5}),repeat:-1,frameRate:fr});
+  });
+  const sitDirs=[['down',48],['left',49],['right',50],['up',51]];
+  sitDirs.forEach(([dir,frame])=>{
+    anims.create({key:'adam_sit_'+dir,frames:anims.generateFrameNumbers('adam',{start:frame,end:frame}),repeat:0,frameRate:fr});
+  });
 }
 
-function salaPresenceElapsed(desde){
-  if(!desde)return'pausado';
-  const min=Math.max(0,Math.floor((Date.now()-desde)/60000));
-  if(min<1)return'começou agora';
-  if(min<60)return min+' min';
-  const h=Math.floor(min/60);
-  return h+'h '+(min%60)+'min';
+function salaMapaCreateGame(){
+  class SalaMapaScene extends Phaser.Scene{
+    constructor(){super('salaMapaScene');}
+    preload(){
+      this.load.tilemapTiledJSON('tilemap',SALA_ASSETS+'map.json');
+      this.load.spritesheet('tiles_wall',SALA_ASSETS+'tileset/FloorAndGround.png',{frameWidth:32,frameHeight:32});
+      this.load.spritesheet('chairs',SALA_ASSETS+'items/chair.png',{frameWidth:32,frameHeight:64});
+      this.load.spritesheet('computers',SALA_ASSETS+'items/computer.png',{frameWidth:96,frameHeight:64});
+      this.load.spritesheet('whiteboards',SALA_ASSETS+'items/whiteboard.png',{frameWidth:64,frameHeight:64});
+      this.load.spritesheet('vendingmachines',SALA_ASSETS+'items/vendingmachine.png',{frameWidth:48,frameHeight:72});
+      this.load.spritesheet('office',SALA_ASSETS+'tileset/Modern_Office_Black_Shadow.png',{frameWidth:32,frameHeight:32});
+      this.load.spritesheet('basement',SALA_ASSETS+'tileset/Basement.png',{frameWidth:32,frameHeight:32});
+      this.load.spritesheet('classroom',SALA_ASSETS+'tileset/Classroom_and_library.png',{frameWidth:32,frameHeight:32});
+      this.load.spritesheet('generic',SALA_ASSETS+'tileset/Generic.png',{frameWidth:32,frameHeight:32});
+      this.load.spritesheet('adam',SALA_ASSETS+'character/adam.png',{frameWidth:32,frameHeight:48});
+    }
+    create(){
+      salaMapaCreateAnims(this.anims);
+      const map=this.make.tilemap({key:'tilemap'});
+      const floorTS=map.addTilesetImage('FloorAndGround','tiles_wall');
+      map.addTilesetImage('Modern_Office_Black_Shadow','office');
+      map.addTilesetImage('Generic','generic');
+      map.addTilesetImage('Basement','basement');
+      map.addTilesetImage('Classroom_and_library','classroom');
+      map.addTilesetImage('chair','chairs');
+      map.addTilesetImage('computer','computers');
+      map.addTilesetImage('whiteboard','whiteboards');
+      map.addTilesetImage('vendingmachine','vendingmachines');
+
+      const groundLayer=map.createLayer('Ground',floorTS);
+      groundLayer.setCollisionByProperty({collides:true});
+
+      this.player=this.physics.add.sprite(705,500,'adam');
+      this.player.setSize(16,10).setOffset(8,38); // colisão só nos "pés", igual ao original (collisionScale)
+      this.player.setDepth(this.player.y);
+      this.player.playerBehavior='idle';
+      this.player.play('adam_idle_down');
+
+      this.cameras.main.setBounds(0,0,map.widthInPixels,map.heightInPixels);
+      this.cameras.main.startFollow(this.player,true);
+      this.cameras.main.setZoom(1.5);
+      this.physics.world.setBounds(0,0,map.widthInPixels,map.heightInPixels);
+      this.physics.add.collider(this.player,groundLayer);
+
+      // Móveis/decoração a partir das camadas de objeto do Tiled — mesma matemática do
+      // addGroupFromTiled original: x=obj.x+largura/2, y=obj.y-altura/2, profundidade=y
+      // (pra desenhar por cima/baixo do jogador de acordo com a posição vertical).
+      const addGroupFromTiled=(layerName,key,tilesetName,collidable)=>{
+        const group=this.physics.add.staticGroup();
+        const layer=map.getObjectLayer(layerName);
+        const tileset=map.getTileset(tilesetName);
+        if(!layer||!tileset)return group;
+        layer.objects.forEach(obj=>{
+          const actualX=obj.x+obj.width*0.5;
+          const actualY=obj.y-obj.height*0.5;
+          group.get(actualX,actualY,key,obj.gid-tileset.firstgid).setDepth(actualY);
+        });
+        if(collidable)this.physics.add.collider(this.player,group);
+        return group;
+      };
+      addGroupFromTiled('Wall','tiles_wall','FloorAndGround',false);
+      addGroupFromTiled('Objects','office','Modern_Office_Black_Shadow',false);
+      addGroupFromTiled('ObjectsOnCollide','office','Modern_Office_Black_Shadow',true);
+      addGroupFromTiled('GenericObjects','generic','Generic',false);
+      addGroupFromTiled('GenericObjectsOnCollide','generic','Generic',true);
+      addGroupFromTiled('Basement','basement','Basement',true);
+      addGroupFromTiled('Library','classroom','Classroom_and_library',true);
+      addGroupFromTiled('LibraryDecor','classroom','Classroom_and_library',false);
+      addGroupFromTiled('Computer','computers','computer',false);
+      addGroupFromTiled('Whiteboard','whiteboards','whiteboard',false);
+      addGroupFromTiled('VendingMachine','vendingmachines','vendingmachine',true);
+
+      // Cadeiras — igual às outras camadas de objeto, mas guardam a direção (do Tiled)
+      // pra saber em que pose sentar e pra que lado deslocar o jogador (SALA_SITTING_SHIFT).
+      this.chairs=this.physics.add.staticGroup();
+      const chairTileset=map.getTileset('chair');
+      const chairLayer=map.getObjectLayer('Chair');
+      if(chairLayer&&chairTileset){
+        chairLayer.objects.forEach(obj=>{
+          const actualX=obj.x+obj.width*0.5;
+          const actualY=obj.y-obj.height*0.5;
+          const sprite=this.chairs.get(actualX,actualY,'chairs',obj.gid-chairTileset.firstgid).setDepth(actualY);
+          const dirProp=(obj.properties||[]).find(p=>p.name==='direction');
+          sprite.direction=dirProp?dirProp.value:'down';
+        });
+      }
+
+      this.cursors={...this.input.keyboard.createCursorKeys(),...this.input.keyboard.addKeys('W,S,A,D')};
+      this.keyE=this.input.keyboard.addKey('E');
+    }
+    update(){
+      const p=this.player,cur=this.cursors;
+      if(Phaser.Input.Keyboard.JustDown(this.keyE)){
+        if(p.playerBehavior==='sitting'){
+          p.playerBehavior='idle';
+          p.play('adam_idle_down',true);
+        }else{
+          let nearest=null,nearestDist=Infinity;
+          this.chairs.getChildren().forEach(c=>{
+            const d=Phaser.Math.Distance.Between(p.x,p.y,c.x,c.y);
+            if(d<nearestDist){nearestDist=d;nearest=c;}
+          });
+          if(nearest&&nearestDist<48){
+            const shift=SALA_SITTING_SHIFT[nearest.direction]||SALA_SITTING_SHIFT.down;
+            p.setVelocity(0,0);
+            p.setPosition(nearest.x+shift[0],nearest.y+shift[1]);
+            p.setDepth(nearest.depth+shift[2]);
+            p.play('adam_sit_'+nearest.direction,true);
+            p.playerBehavior='sitting';
+          }
+        }
+      }
+      if(p.playerBehavior!=='idle')return;
+      const speed=200;
+      let vx=0,vy=0;
+      if(cur.left.isDown||cur.A.isDown)vx-=speed;
+      if(cur.right.isDown||cur.D.isDown)vx+=speed;
+      if(cur.up.isDown||cur.W.isDown){vy-=speed;p.setDepth(p.y);}
+      if(cur.down.isDown||cur.S.isDown){vy+=speed;p.setDepth(p.y);}
+      p.setVelocity(vx,vy);
+      if(vx!==0||vy!==0)p.body.velocity.setLength(speed);
+      if(vx>0)p.play('adam_run_right',true);
+      else if(vx<0)p.play('adam_run_left',true);
+      else if(vy>0)p.play('adam_run_down',true);
+      else if(vy<0)p.play('adam_run_up',true);
+      else{
+        const parts=p.anims.currentAnim.key.split('_');
+        parts[1]='idle';
+        const newAnim=parts.join('_');
+        if(p.anims.currentAnim.key!==newAnim)p.play(newAnim,true);
+      }
+    }
+  }
+  salaMapaGame=new Phaser.Game({
+    type:Phaser.AUTO,
+    parent:'sala-mapa-viewport',
+    backgroundColor:'#1a1a2e',
+    pixelArt:true,
+    physics:{default:'arcade',arcade:{debug:false}},
+    scale:{mode:Phaser.Scale.RESIZE,width:'100%',height:'100%'},
+    scene:[SalaMapaScene],
+  });
 }
 
 // ===== HISTÓRICO DE SESSÕES =====
@@ -13120,7 +13152,7 @@ function bindStaticEvents(){
   document.getElementById('nav-flashcards')?.addEventListener('click',()=>showScreen('flashcards'));
   document.getElementById('nav-redacoes')?.addEventListener('click',()=>showScreen('redacoes'));
   document.getElementById('nav-conquistas')?.addEventListener('click',()=>showScreen('conquistas'));
-  document.getElementById('nav-sala')?.addEventListener('click',salaOpenModal); // abre modal, não é uma tela (showScreen)
+  document.getElementById('nav-sala')?.addEventListener('click',()=>showScreen('sala'));
   document.getElementById('nav-admin')?.addEventListener('click',()=>showScreen('admin'));
   document.getElementById('xp-pill-btn')?.addEventListener('click',()=>showScreen('dashboard'));
   document.getElementById('exam-date')?.addEventListener('change',saveExamDate);
@@ -13133,8 +13165,6 @@ bindStaticEvents();
 
 // Functions called from dynamically generated innerHTML must be on window
 window.showScreen=showScreen;
-window.salaJoinRoom=salaJoinRoom;
-window.salaLeaveRoom=salaLeaveRoom;
 window.openKingdom=openKingdom;
 window.addTopic=addTopic;
 window.deleteTopic=deleteTopic;
