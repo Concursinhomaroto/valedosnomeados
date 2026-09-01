@@ -17,6 +17,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon32.png">
 <link rel="apple-touch-icon" href="/icons/appletouchicon.png">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Vale dos Nomeados">
@@ -5746,19 +5747,18 @@ async function generateFluxograma(subId){
   fluxoRefreshPanel(subId);
 
   try{
-    let raw,grounded=null;
+    let parsed,grounded=null;
     if(usarWeb){
       const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
-      const r=await callGeminiGenerateSearch(apiKey,fluxoPromptWeb(contexto));
-      raw=r.raw;grounded=r.grounded;
+      const r=await callGeminiJSON(apiKey,fluxoPromptWeb(contexto),true);
+      parsed=r.parsed;grounded=r.grounded;
     }else{
       // Sem chunking de propósito: a fonte aqui é o Resumo (já condensado) ou um trecho
       // colado à mão, não o material bruto inteiro — um corte de segurança em 40k
       // caracteres é mais que suficiente e evita estourar o teto de uma chamada só.
-      raw=await callGeminiGenerate(apiKey,fluxoPrompt(texto.slice(0,40000)));
+      const r=await callGeminiJSON(apiKey,fluxoPrompt(texto.slice(0,40000)),false);
+      parsed=r.parsed;
     }
-    const parsed=extractAIJson(raw);
-    if(!parsed||typeof parsed!=='object')throw new Error('A IA não devolveu um fluxograma válido. Tente de novo.');
     sub.fluxograma={arvore:fluxoSanitizeNode(parsed,0),origem:usarWeb?'web':'ia',grounded,geradoEm:new Date().toISOString()};
     saveDB();
     toast(usarWeb?(grounded?'🌐 Fluxograma gerado com pesquisa na internet!':'🔀 Fluxograma gerado (busca na internet indisponível agora — usei o conhecimento da IA)'):'🔀 Fluxograma gerado!','var(--green)');
@@ -12065,6 +12065,64 @@ async function callGeminiGenerateSearch(apiKey,prompt){
   }catch(e){
     throw new Error(`Não foi possível gerar o resumo, nem com busca na internet nem sem ela. Tentativas com busca: ${attempts.join(' · ')||'nenhuma'}. Erro final: ${e.message}`);
   }
+}
+// Igual a callGeminiGenerateSearch, mas EXIGE que a resposta seja um JSON válido (usado
+// pelo Fluxograma — diferente do Resumo, que aceita qualquer texto corrido). Sem isso, o
+// código aceitava a primeira resposta "ok" mesmo vindo em prosa — muito comum quando a
+// busca do Google ativa faz o modelo comentar as fontes em vez de responder só o JSON
+// pedido — e só descobria que não dava pra usar depois, com um erro genérico. Aqui, uma
+// resposta só conta se o extractAIJson dela realmente funcionar; do contrário segue
+// tentando os próximos modelos candidatos (com busca, depois sem busca, depois os
+// descobertos via listGeminiModels) até achar uma que sirva.
+async function callGeminiJSON(apiKey,prompt,useSearch){
+  const attempts=[];
+  let best=null; // primeiro JSON válido encontrado, mas sem confirmar busca real
+  let sawRateLimit=false;
+  async function tentarLista(models,comBusca){
+    for(const model of models){
+      const r=await tryGeminiModel(apiKey,model,prompt,comBusca?{useSearch:true}:undefined);
+      if(!r.ok){
+        if(/^429/.test(r.reason||''))sawRateLimit=true;
+        attempts.push(`${model} (${r.reason})`);
+        continue;
+      }
+      // extractAIJson LANÇA exceção (não devolve null) quando não consegue parsear —
+      // sem o try/catch aqui, uma resposta ruim de UM modelo derrubava a tentativa
+      // inteira em vez de simplesmente seguir pro próximo candidato da lista.
+      let parsed=null;
+      try{parsed=extractAIJson(r.raw);}catch(e){}
+      if(parsed&&typeof parsed==='object'){
+        if(r.grounded)return{parsed,grounded:true};
+        if(!best)best={parsed,grounded:false};
+        // Sem busca ativa não existe "grounded" pra perseguir — o primeiro JSON válido já
+        // resolve, então para por aqui em vez de gastar chamada de API à toa nos outros
+        // candidatos (só na busca vale a pena continuar tentando achar um resultado
+        // realmente pesquisado antes de se contentar com o primeiro que respondeu).
+        if(!comBusca)return best;
+      }else{
+        attempts.push(`${model} (resposta não veio em JSON válido)`);
+      }
+    }
+    return null;
+  }
+  if(useSearch){
+    const hit=await tentarLista(GEMINI_MODEL_CANDIDATES,true);
+    if(hit)return hit;
+    // Busca não trouxe nada aproveitável — tenta de novo sem a ferramenta de busca, que
+    // costuma obedecer melhor à instrução de responder só com JSON.
+    const hit2=await tentarLista(GEMINI_MODEL_CANDIDATES,false);
+    if(hit2)return hit2;
+  }else{
+    const hit=await tentarLista(GEMINI_MODEL_CANDIDATES,false);
+    if(hit)return hit;
+  }
+  if(best)return best;
+  const discovered=(await listGeminiModels(apiKey)).filter(m=>!GEMINI_MODEL_CANDIDATES.includes(m));
+  const hit3=await tentarLista(discovered,false);
+  if(hit3)return hit3;
+  if(best)return best;
+  if(sawRateLimit)throw new Error('Sua chave de API está sendo limitada agora pelo Google (muitas requisições em pouco tempo) — espere alguns minutos e tente de novo.');
+  throw new Error(`Nenhum modelo respondeu com um JSON válido. Tentativas: ${attempts.join(' · ')||'nenhuma'}.`);
 }
 
 // ---- Text-to-Speech nativo do Gemini (áudio de verdade, não a voz do navegador) ----
