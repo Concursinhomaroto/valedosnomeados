@@ -2785,6 +2785,22 @@ function applyDefaults(){
       }
     });
   }
+
+  // Migra TODO fluxograma salvo no formato antigo (aninhado) pro mapa plano, em TODOS os
+  // subtópicos de uma vez — não dá pra deixar isso só sob demanda (quando aquele miniboss
+  // específico é aberto na tela), porque saveDB() grava o db inteiro sempre que qualquer
+  // coisa muda em QUALQUER lugar do app. Um fluxograma antigo esquecido num assunto que a
+  // pessoa nem chegou a abrir nessa sessão continuava aninhado em memória e quebrava a
+  // gravação (limite de 32 níveis de profundidade do Firebase) na primeira vez que
+  // qualquer outra coisa fosse salva. Idempotente: fluxoMigrateLegacy() não faz nada se já
+  // estiver no formato novo.
+  db.kingdoms.forEach(k=>{
+    (db.topics[k.id]||[]).forEach(t=>{
+      (t.subtopics||[]).forEach(s=>{
+        if(s.fluxograma&&s.fluxograma.arvore)fluxoMigrateLegacy(s);
+      });
+    });
+  });
 }
 
 function loadDB(callback){
