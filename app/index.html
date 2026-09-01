@@ -531,8 +531,16 @@ nav{
 .fluxo-badge-done:hover{background:rgba(217,119,6,0.22);}
 .fluxo-badge-todo{background:rgba(107,114,128,0.08);color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:9px;padding:2px 8px;font-weight:700;cursor:pointer;transition:all 0.2s;}
 .fluxo-badge-todo:hover{background:rgba(217,119,6,0.08);color:#d97706;border-color:#d97706;}
-.fluxo-wrap{background:rgba(217,119,6,0.05);border:1.5px solid rgba(217,119,6,0.25);border-radius:14px;padding:14px;margin-top:10px;display:none;overflow-x:auto;}
+/* Barra de rolagem sempre visível e grossa (não a fininha/só-ao-passar-o-mouse que
+   Windows/macOS usam por padrão) — sem isso, dava pra rolar o fluxograma largo pro lado,
+   mas não tinha nenhuma pista visual óbvia de que dava, então parecia que o conteúdo
+   sumia cortado em vez de só estar mais pra lá. */
+.fluxo-wrap{background:rgba(217,119,6,0.05);border:1.5px solid rgba(217,119,6,0.25);border-radius:14px;padding:14px;margin-top:10px;display:none;overflow-x:auto;scrollbar-width:auto;scrollbar-color:#d97706 rgba(217,119,6,0.12);}
 .fluxo-wrap.fluxo-open{display:block;}
+.fluxo-wrap::-webkit-scrollbar{height:14px;}
+.fluxo-wrap::-webkit-scrollbar-track{background:rgba(217,119,6,0.12);border-radius:20px;}
+.fluxo-wrap::-webkit-scrollbar-thumb{background:#d97706;border-radius:20px;border:3px solid transparent;background-clip:padding-box;}
+.fluxo-wrap::-webkit-scrollbar-thumb:hover{background:#b45309;background-clip:padding-box;}
 .fluxo-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
 .fluxo-title{font-size:11px;font-weight:900;color:#d97706;text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;}
 .fluxo-actions{display:flex;gap:6px;flex-wrap:wrap;}
@@ -4838,7 +4846,8 @@ function subItemHTML(s,topicId){
   const hasNote=s.note&&s.note.trim().length>0;
   const noteOpen=openNotes.has(s.id);
   const hasResumo=!!(s.resumo&&s.resumo.texto);
-  const hasFluxo=!!(s.fluxograma&&s.fluxograma.arvore);
+  fluxoMigrateLegacy(s);
+  const hasFluxo=!!(s.fluxograma&&s.fluxograma.nos&&s.fluxograma.raizId);
   // Current session display time
   let displayTime=time;
   if(running) displayTime=time+Math.floor((Date.now()-t.startedAt)/1000);
@@ -5455,44 +5464,47 @@ function saveNote(subId,topicId){
 
 // ===== FLUXOGRAMA DO MINIBOSS =====
 // Resumo visual em passos e decisões pra cada miniboss — ótimo pra protocolos ("se sim,
-// faz X; se não, faz Y"). A IA gera um rascunho a partir do Resumo já existente (ou de um
-// texto colado) e depois dá pra editar à mão, ou criar o fluxograma do zero manualmente.
+// faz X; se não, faz Y") e pra estrutura de qualquer assunto (definição → classificações
+// → exceções → prazos). A IA gera um rascunho a partir do Resumo já existente (ou de um
+// texto colado, ou buscando na internet) e depois dá pra editar à mão, ou criar o
+// fluxograma do zero manualmente.
 //
-// Estrutura da árvore, sempre a mesma forma (recursiva), salva em s.fluxograma.arvore:
-//   {texto, tipo:'inicio'|'acao'|'decisao'|'fim', ramos:[{rotulo, no:{...mesma forma...}}]}
-// Nós que NÃO são decisão têm no máximo 1 item em "ramos" (rotulo sempre null) — é só o
-// próximo passo da sequência. Nós de decisão têm 2+ ramos, cada um com um rótulo (ex:
-// "Sim"/"Não") descrevendo aquele caminho. Um nó vira "folha" quando ramos.length===0.
-//
-// Cada nó é endereçado por um "path": a sequência de índices de ramo percorridos desde a
-// raiz (ex: [0,1] = ramo 0 da raiz, depois ramo 1 desse). Codificado como string
-// "0,1" nos onclick/onchange do HTML, porque atributo não aceita array direto.
+// Estrutura salva em s.fluxograma: {raizId, nos:{id:{texto,tipo,ramos:[{rotulo,to:id}]}}}
+// — um MAPA PLANO de nós por id, não uma árvore aninhada. Isso é proposital: o Firebase
+// Realtime Database recusa qualquer escrita que passe de 32 níveis de profundidade, e uma
+// árvore aninhada de verdade (nó dentro de "ramos" dentro de nó dentro de "ramos"...) soma
+// 2 níveis a cada passo — um fluxograma "sem limite de tamanho" cobrindo um assunto
+// inteiro passava fácil de 12-15 passos em sequência e a gravação falhava silenciosamente
+// (erro só aparecia no console, o usuário via o fluxograma na tela mas ele nunca era salvo
+// de verdade). Com o mapa plano, TODO nó fica a uma profundidade fixa e pequena
+// (fluxograma/nos/<id>/...), não importa quantos passos o fluxograma tenha.
+// "ramos" de um nó continua tendo no máximo 1 item quando não é decisão (rotulo sempre
+// null — só "o próximo passo"), e 2+ itens com rótulo quando é ("decisao"). Um nó vira
+// "folha" quando ramos.length===0.
 const FLUXO_TIPOS={inicio:'🟣 Início',acao:'⬜ Ação',decisao:'🔶 Decisão',fim:'🏁 Fim'};
 const FLUXO_TIPOS_VALIDOS=new Set(Object.keys(FLUXO_TIPOS));
 
-function fluxoPathStr(path){return path.join(',');}
-function fluxoPathArr(str){return str===''?[]:str.split(',').map(Number);}
-function fluxoGetNode(tree,path){
-  let node=tree;
-  for(const idx of path)node=node.ramos[idx].no;
-  return node;
-}
-// Pra remover/alterar um ramo precisa mexer no array "ramos" de quem é PAI do nó no fim
-// do path — retorna esse array + o índice do ramo em questão dentro dele.
-function fluxoGetParentRamos(tree,path){
-  if(!path.length)return null; // raiz não tem pai
-  const parent=fluxoGetNode(tree,path.slice(0,-1));
-  return{ramos:parent.ramos,idx:path[path.length-1]};
+// Fluxogramas gerados antes dessa mudança de formato ficaram salvos como
+// s.fluxograma.arvore (aninhado). Migra pro mapa plano na primeira vez que o painel é
+// aberto/renderizado depois do update, sem perder o que já existia — chamada é barata e
+// idempotente (não faz nada se já estiver no formato novo), então é seguro chamar sempre.
+function fluxoMigrateLegacy(s){
+  if(s.fluxograma&&s.fluxograma.arvore&&!s.fluxograma.nos){
+    const{raizId,nos}=fluxoFlattenArvore(s.fluxograma.arvore);
+    const{arvore,...resto}=s.fluxograma;
+    s.fluxograma={...resto,raizId,nos};
+  }
 }
 
 function fluxoRefreshPanel(subId){
   const sub=simFindSub(subId);
   if(!sub)return;
+  fluxoMigrateLegacy(sub);
   const wrap=document.getElementById('fluxo-'+subId);
   if(wrap){wrap.innerHTML=fluxoPanelHTML(sub);wrap.classList.add('fluxo-open');wrap.style.display='';}
   const btn=document.getElementById('fluxo-btn-'+subId);
   if(btn){
-    const hasFluxo=!!(sub.fluxograma&&sub.fluxograma.arvore);
+    const hasFluxo=!!(sub.fluxograma&&sub.fluxograma.nos&&sub.fluxograma.raizId);
     btn.className=hasFluxo?'fluxo-badge-done':'fluxo-badge-todo';
     btn.innerHTML=hasFluxo?'✅ Fluxograma':'🔀 Fluxograma';
   }
@@ -5514,22 +5526,24 @@ function closeFluxo(subId){
 }
 
 function fluxoPanelHTML(s){
+  fluxoMigrateLegacy(s);
   if(fluxoGenerating.has(s.id)){
     const modo=fluxoGenerating.get(s.id);
     return`<div class="fluxo-header"><div class="fluxo-title"><i class="fa fa-diagram-project"></i> Fluxograma</div></div>
       <div class="fluxo-status"><i class="fa fa-spinner fa-spin"></i> ${modo==='web'?'Pesquisando na internet e montando o fluxograma...':'A IA está montando o fluxograma...'}</div>`;
   }
-  if(fluxoEditing.has(s.id)&&s.fluxograma&&s.fluxograma.arvore){
+  const temFluxo=!!(s.fluxograma&&s.fluxograma.nos&&s.fluxograma.raizId);
+  if(fluxoEditing.has(s.id)&&temFluxo){
     return`
       <div class="fluxo-header">
         <div class="fluxo-title"><i class="fa fa-diagram-project"></i> Editando fluxograma</div>
         <div class="fluxo-actions"><button class="btn btn-xs btn-primary" onclick="fluxoStopEditing('${s.id}')"><i class="fa fa-check"></i> Concluir edição</button></div>
       </div>
-      ${fluxoEditNodeHTML(s.id,s.fluxograma.arvore,[])}
+      ${fluxoEditNodeHTML(s.id,s.fluxograma.nos,s.fluxograma.raizId,true)}
       <div class="fluxo-disclaimer"><i class="fa fa-circle-info"></i> As alterações são salvas sozinhas a cada edição.</div>
     `;
   }
-  if(s.fluxograma&&s.fluxograma.arvore){
+  if(temFluxo){
     const geradoEm=s.fluxograma.geradoEm?new Date(s.fluxograma.geradoEm).toLocaleDateString('pt-BR'):'';
     const fg=s.fluxograma;
     const origem=fg.origem==='manual'?'Criado manualmente'
@@ -5543,7 +5557,7 @@ function fluxoPanelHTML(s){
           <button class="btn btn-xs btn-ghost" onclick="fluxoRegenerar('${s.id}')" title="Gerar de novo com IA (substitui o atual)"><i class="fa fa-arrows-rotate"></i> Gerar de novo</button>
         </div>
       </div>
-      <div class="fluxo-chart">${fluxoRenderNode(s.fluxograma.arvore)}</div>
+      <div class="fluxo-chart">${fluxoRenderNode(s.fluxograma.nos,s.fluxograma.raizId)}</div>
       <div class="fluxo-disclaimer"><i class="fa fa-triangle-exclamation"></i> ${origem}${geradoEm?` em ${geradoEm}`:''} — confira sempre a fonte oficial antes de usar na prova.</div>
     `;
   }
@@ -5564,12 +5578,14 @@ function fluxoPanelHTML(s){
 }
 
 // ---- Visualização (modo leitura) ----
-function fluxoRenderNode(node){
+function fluxoRenderNode(nos,id){
+  const node=nos[id];
+  if(!node)return`<div class="fluxo-node fluxo-node-fim">Fim</div>`;
   let html=`<div class="fluxo-node fluxo-node-${node.tipo||'acao'}">${escapeHtml(node.texto||'')}</div>`;
   const ramos=node.ramos||[];
   if(!ramos.length)return html;
   if(ramos.length===1){
-    html+=`<div class="fluxo-connector"></div><div class="fluxo-arrow">▼</div>${fluxoRenderNode(ramos[0].no)}`;
+    html+=`<div class="fluxo-connector"></div><div class="fluxo-arrow">▼</div>${fluxoRenderNode(nos,ramos[0].to)}`;
     return html;
   }
   // Sem div de conector fixo aqui: com 2+ ramos, a ligação (tronco descendo do nó pai +
@@ -5579,7 +5595,7 @@ function fluxoRenderNode(node){
   html+=`<div class="fluxo-branches">${ramos.map(r=>`
     <div class="fluxo-branch">
       <div class="fluxo-branch-label">${escapeHtml(r.rotulo||'')}</div>
-      ${fluxoRenderNode(r.no)}
+      ${fluxoRenderNode(nos,r.to)}
     </div>`).join('')}</div>`;
   return html;
 }
@@ -5635,84 +5651,107 @@ window.addEventListener('resize',()=>{
 });
 
 // ---- Edição manual ----
-function fluxoEditNodeHTML(subId,node,path){
-  const pathStr=fluxoPathStr(path);
-  const isRoot=path.length===0;
+// Cada nó é endereçado direto pelo seu id no mapa plano (nada de "path" de índices —
+// o mapa plano já elimina a necessidade disso, e de quebra simplifica bastante editar).
+function fluxoEditNodeHTML(subId,nos,id,isRoot){
+  const node=nos[id];
+  if(!node)return'';
   const ramos=node.ramos||[];
   const isDecisao=node.tipo==='decisao';
   let html=`<div class="fluxo-edit-node">
     <div class="fluxo-edit-row">
-      <select class="inp" style="max-width:130px" onchange="fluxoSetField('${subId}','${pathStr}','tipo',this.value)">
+      <select class="inp" style="max-width:130px" onchange="fluxoSetField('${subId}','${id}','tipo',this.value)">
         ${Object.entries(FLUXO_TIPOS).map(([v,lbl])=>`<option value="${v}"${node.tipo===v?' selected':''}>${lbl}</option>`).join('')}
       </select>
-      <input class="inp" style="flex:1;min-width:160px" value="${escapeHtml(node.texto||'')}" placeholder="Texto deste passo..." onchange="fluxoSetField('${subId}','${pathStr}','texto',this.value)">
-      ${!isRoot?`<button class="btn btn-xs btn-danger" onclick="fluxoDeleteNode('${subId}','${pathStr}')" title="Remover este passo e tudo depois dele"><i class="fa fa-trash"></i></button>`:''}
+      <input class="inp" style="flex:1;min-width:160px" value="${escapeHtml(node.texto||'')}" placeholder="Texto deste passo..." onchange="fluxoSetField('${subId}','${id}','texto',this.value)">
+      ${!isRoot?`<button class="btn btn-xs btn-danger" onclick="fluxoDeleteNode('${subId}','${id}')" title="Remover este passo e tudo depois dele"><i class="fa fa-trash"></i></button>`:''}
     </div>`;
 
   if(isDecisao){
     html+=ramos.map((r,i)=>`
       <div class="fluxo-edit-branch">
         <div class="fluxo-edit-row">
-          <input class="inp" style="max-width:160px" value="${escapeHtml(r.rotulo||'')}" placeholder="Rótulo (ex: Sim)" onchange="fluxoSetRamoRotulo('${subId}','${pathStr}',${i},this.value)">
-          <button class="btn btn-xs btn-ghost" onclick="fluxoRemoveRamo('${subId}','${pathStr}',${i})" title="Remover este ramo"><i class="fa fa-xmark"></i> Remover ramo</button>
+          <input class="inp" style="max-width:160px" value="${escapeHtml(r.rotulo||'')}" placeholder="Rótulo (ex: Sim)" onchange="fluxoSetRamoRotulo('${subId}','${id}',${i},this.value)">
+          <button class="btn btn-xs btn-ghost" onclick="fluxoRemoveRamo('${subId}','${id}',${i})" title="Remover este ramo"><i class="fa fa-xmark"></i> Remover ramo</button>
         </div>
-        ${fluxoEditNodeHTML(subId,r.no,[...path,i])}
+        ${fluxoEditNodeHTML(subId,nos,r.to,false)}
       </div>`).join('');
-    html+=`<button class="btn btn-xs btn-ghost" style="margin-top:4px" onclick="fluxoAddRamo('${subId}','${pathStr}')"><i class="fa fa-plus"></i> Adicionar ramo (ex: Sim/Não)</button>`;
+    html+=`<button class="btn btn-xs btn-ghost" style="margin-top:4px" onclick="fluxoAddRamo('${subId}','${id}')"><i class="fa fa-plus"></i> Adicionar ramo (ex: Sim/Não)</button>`;
   }else if(ramos.length){
-    html+=fluxoEditNodeHTML(subId,ramos[0].no,[...path,0]);
+    html+=fluxoEditNodeHTML(subId,nos,ramos[0].to,false);
   }else if(node.tipo!=='fim'){
-    html+=`<button class="btn btn-xs btn-ghost" onclick="fluxoAddRamo('${subId}','${pathStr}')"><i class="fa fa-plus"></i> Adicionar próximo passo</button>`;
+    html+=`<button class="btn btn-xs btn-ghost" onclick="fluxoAddRamo('${subId}','${id}')"><i class="fa fa-plus"></i> Adicionar próximo passo</button>`;
   }
 
   html+='</div>';
   return html;
 }
-function fluxoSetField(subId,pathStr,field,value){
+function fluxoSetField(subId,nodeId,field,value){
   const sub=simFindSub(subId);
   if(!sub||!sub.fluxograma)return;
-  const node=fluxoGetNode(sub.fluxograma.arvore,fluxoPathArr(pathStr));
+  const node=sub.fluxograma.nos[nodeId];
+  if(!node)return;
   node[field]=value;
   saveDB();
   // Mudar o tipo pode trocar decisão <-> linear, o que muda o HTML do editor inteiro —
   // por isso sempre re-renderiza o painel todo em vez de só trocar o texto no lugar.
   fluxoRefreshPanel(subId);
 }
-function fluxoSetRamoRotulo(subId,pathStr,idx,value){
+function fluxoSetRamoRotulo(subId,nodeId,idx,value){
   const sub=simFindSub(subId);
   if(!sub||!sub.fluxograma)return;
-  const node=fluxoGetNode(sub.fluxograma.arvore,fluxoPathArr(pathStr));
-  if(node.ramos[idx])node.ramos[idx].rotulo=value;
+  const node=sub.fluxograma.nos[nodeId];
+  if(node&&node.ramos[idx])node.ramos[idx].rotulo=value;
   saveDB();
 }
-function fluxoAddRamo(subId,pathStr){
+function fluxoAddRamo(subId,nodeId){
   const sub=simFindSub(subId);
   if(!sub||!sub.fluxograma)return;
-  const node=fluxoGetNode(sub.fluxograma.arvore,fluxoPathArr(pathStr));
+  const node=sub.fluxograma.nos[nodeId];
+  if(!node)return;
   if(!node.ramos)node.ramos=[];
-  node.ramos.push({rotulo:node.tipo==='decisao'?'Novo ramo':null,no:{texto:'Novo passo',tipo:'acao',ramos:[]}});
+  const novoId=genId();
+  sub.fluxograma.nos[novoId]={texto:'Novo passo',tipo:'acao',ramos:[]};
+  node.ramos.push({rotulo:node.tipo==='decisao'?'Novo ramo':null,to:novoId});
   saveDB();
   fluxoRefreshPanel(subId);
 }
-function fluxoRemoveRamo(subId,pathStr,idx){
+function fluxoRemoveRamo(subId,nodeId,idx){
   const sub=simFindSub(subId);
   if(!sub||!sub.fluxograma)return;
   if(!confirm('Remover este ramo e tudo que vem depois dele?'))return;
-  const node=fluxoGetNode(sub.fluxograma.arvore,fluxoPathArr(pathStr));
-  node.ramos.splice(idx,1);
+  const node=sub.fluxograma.nos[nodeId];
+  if(!node)return;
+  const[removido]=node.ramos.splice(idx,1);
+  if(removido)fluxoDeleteSubtree(sub.fluxograma,removido.to);
   saveDB();
   fluxoRefreshPanel(subId);
 }
-function fluxoDeleteNode(subId,pathStr){
+function fluxoDeleteNode(subId,nodeId){
   const sub=simFindSub(subId);
   if(!sub||!sub.fluxograma)return;
-  const path=fluxoPathArr(pathStr);
-  if(!path.length){toast('⚠️ Não dá pra remover o passo inicial — clique em "Gerar de novo" se quiser recomeçar do zero.','var(--red)');return;}
+  if(nodeId===sub.fluxograma.raizId){toast('⚠️ Não dá pra remover o passo inicial — clique em "Gerar de novo" se quiser recomeçar do zero.','var(--red)');return;}
   if(!confirm('Remover este passo e tudo que vem depois dele?'))return;
-  const info=fluxoGetParentRamos(sub.fluxograma.arvore,path);
-  info.ramos.splice(info.idx,1);
+  const{nos}=sub.fluxograma;
+  // Acha quem tem um ramo apontando pra esse nó (o "pai") e tira essa referência antes de
+  // apagar a subárvore — sem isso o nó ficaria removido do mapa mas ainda "referenciado".
+  for(const pid in nos){
+    const idx=(nos[pid].ramos||[]).findIndex(r=>r.to===nodeId);
+    if(idx>=0){nos[pid].ramos.splice(idx,1);break;}
+  }
+  fluxoDeleteSubtree(sub.fluxograma,nodeId);
   saveDB();
   fluxoRefreshPanel(subId);
+}
+// Remove um nó E toda a subárvore alcançável só a partir dele (recursivo em memória —
+// isso NÃO tem relação com a profundidade de gravação no Firebase, é só percorrer o
+// mapa plano já carregado localmente) — evita deixar nós órfãos acumulando pra sempre
+// no mapa toda vez que um ramo/passo é removido.
+function fluxoDeleteSubtree(fluxograma,nodeId){
+  const node=fluxograma.nos[nodeId];
+  if(!node)return;
+  (node.ramos||[]).forEach(r=>fluxoDeleteSubtree(fluxograma,r.to));
+  delete fluxograma.nos[nodeId];
 }
 function fluxoStartEditing(subId){
   fluxoEditing.add(subId);
@@ -5725,7 +5764,8 @@ function fluxoStopEditing(subId){
 function fluxoStartManual(subId){
   const sub=simFindSub(subId);
   if(!sub)return;
-  sub.fluxograma={arvore:{texto:'Início',tipo:'inicio',ramos:[]},origem:'manual',geradoEm:new Date().toISOString()};
+  const id=genId();
+  sub.fluxograma={raizId:id,nos:{[id]:{texto:'Início',tipo:'inicio',ramos:[]}},origem:'manual',geradoEm:new Date().toISOString()};
   saveDB();
   fluxoEditing.add(subId);
   fluxoRefreshPanel(subId);
@@ -5739,24 +5779,39 @@ function fluxoRegenerar(subId){
   fluxoRefreshPanel(subId);
 }
 
-// Sanitiza o JSON que veio da IA (ou de qualquer fonte): garante os campos certos, corta
-// tipos inválidos e limita profundidade/nº de ramos por nó — a IA às vezes devolve algo
-// mal formado ou grande demais, e isso nunca pode quebrar o app.
-// Limites bem folgados — só existem pra impedir que uma resposta realmente quebrada (ou
-// maliciosa) trave o navegador; não é pra limitar o tamanho de um fluxograma legítimo
-// cobrindo um assunto inteiro, que agora pode ter quantos nós a IA achar necessário.
-const FLUXO_MAX_PROFUNDIDADE=80;
+// Sanitiza o JSON aninhado que veio da IA (ou de um fluxograma antigo, no
+// fluxoMigrateLegacy) e já converte pro mapa plano {raizId,nos} na mesma passada: garante
+// os campos certos, corta tipos inválidos, limita profundidade/nº de ramos por nó (a IA
+// às vezes devolve algo mal formado ou grande demais, e isso nunca pode quebrar o app) e
+// achata a árvore recursiva num mapa {id:{texto,tipo,ramos:[{rotulo,to:id}]}} — é esse
+// achatamento que evita estourar o limite de profundidade do Firebase (ver comentário no
+// topo do arquivo de fluxograma), não importa quantos passos o fluxograma tenha.
+// Limites de profundidade/ramos são bem folgados — só existem pra impedir que uma
+// resposta realmente quebrada (ou maliciosa, com ciclo/recursão infinita) trave o
+// navegador; não é mais uma limitação de tamanho real, já que o mapa plano resultante
+// fica sempre raso independente de quantos nós a árvore lógica tiver.
+const FLUXO_MAX_PROFUNDIDADE=200;
 const FLUXO_MAX_RAMOS_POR_NO=12;
-function fluxoSanitizeNode(raw,depth){
-  if(!raw||typeof raw!=='object'||depth>FLUXO_MAX_PROFUNDIDADE)return{texto:'Fim',tipo:'fim',ramos:[]};
-  const tipo=FLUXO_TIPOS_VALIDOS.has(raw.tipo)?raw.tipo:'acao';
-  const texto=String(raw.texto||raw.text||'').trim().slice(0,400)||'(sem texto)';
-  const ramosRaw=Array.isArray(raw.ramos)?raw.ramos:[];
-  const ramos=ramosRaw.slice(0,FLUXO_MAX_RAMOS_POR_NO).map(r=>({
-    rotulo:r&&r.rotulo?String(r.rotulo).trim().slice(0,40):null,
-    no:fluxoSanitizeNode(r&&(r.no||r.proximo),depth+1)
-  }));
-  return{texto,tipo,ramos};
+function fluxoFlattenArvore(raw){
+  const nos={};
+  function processa(rawNode,depth){
+    const id=genId();
+    if(!rawNode||typeof rawNode!=='object'||depth>FLUXO_MAX_PROFUNDIDADE){
+      nos[id]={texto:'Fim',tipo:'fim',ramos:[]};
+      return id;
+    }
+    const tipo=FLUXO_TIPOS_VALIDOS.has(rawNode.tipo)?rawNode.tipo:'acao';
+    const texto=String(rawNode.texto||rawNode.text||'').trim().slice(0,400)||'(sem texto)';
+    const ramosRaw=Array.isArray(rawNode.ramos)?rawNode.ramos:[];
+    const ramos=ramosRaw.slice(0,FLUXO_MAX_RAMOS_POR_NO).map(r=>({
+      rotulo:r&&r.rotulo?String(r.rotulo).trim().slice(0,40):null,
+      to:processa(r&&(r.no||r.proximo),depth+1)
+    }));
+    nos[id]={texto,tipo,ramos};
+    return id;
+  }
+  const raizId=processa(raw,0);
+  return{raizId,nos};
 }
 // Regras do JSON compartilhadas pelos dois modos de geração (a partir de texto e via
 // busca na internet) — só muda a TAREFA/fonte do conteúdo, o formato é sempre o mesmo.
@@ -5837,7 +5892,8 @@ async function generateFluxograma(subId){
       const r=await callGeminiJSON(apiKey,fluxoPrompt(texto.slice(0,40000)),false,FLUXO_MAX_OUTPUT_TOKENS);
       parsed=r.parsed;
     }
-    sub.fluxograma={arvore:fluxoSanitizeNode(parsed,0),origem:usarWeb?'web':'ia',grounded,geradoEm:new Date().toISOString()};
+    const{raizId,nos}=fluxoFlattenArvore(parsed);
+    sub.fluxograma={raizId,nos,origem:usarWeb?'web':'ia',grounded,geradoEm:new Date().toISOString()};
     saveDB();
     toast(usarWeb?(grounded?'🌐 Fluxograma gerado com pesquisa na internet!':'🔀 Fluxograma gerado (busca na internet indisponível agora — usei o conhecimento da IA)'):'🔀 Fluxograma gerado!','var(--green)');
   }catch(e){
