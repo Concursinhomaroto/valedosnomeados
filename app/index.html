@@ -1445,6 +1445,9 @@ nav{
     <button class="nav-btn" id="nav-conquistas">
       <span class="nav-icon">🏅</span><span class="nav-label">CONQUISTAS</span>
     </button>
+    <button class="nav-btn" id="nav-sala">
+      <span class="nav-icon">🏠</span><span class="nav-label">SALA DE ESTUDO</span>
+    </button>
     <button class="nav-btn" id="nav-admin" style="display:none">
       <span class="nav-icon">🛠️</span><span class="nav-label">ADMIN</span>
     </button>
@@ -1846,6 +1849,113 @@ nav{
   </div>
   <div id="conquistas-grid"></div>
 </div>
+
+<!-- ===== SALA DE ESTUDO (quarto isométrico pessoal, estilo Habbo) =====
+     Feature isolada de propósito (tudo sob o prefixo .sala-/salaXxx, um <style> próprio
+     logo aqui embaixo, uma linha em applyDefaults(), um hook em showScreen()) — pra ficar
+     fácil de remover por completo se um dia for preciso, do mesmo jeito que a extinta
+     "Meu Dragão" foi (ver commit fb4f20d). -->
+<div class="screen" id="screen-sala">
+  <div class="sala-shell">
+    <div class="sala-top">
+      <h2><i class="fa fa-house-chimney"></i> Sala de Estudo</h2>
+      <div class="sala-top-actions">
+        <button class="btn btn-sm btn-ghost" id="sala-decorate-btn" onclick="salaToggleDecorate()"><i class="fa fa-paintbrush"></i> Decorar</button>
+      </div>
+    </div>
+    <div class="sala-palette" id="sala-palette" hidden></div>
+    <div class="sala-viewport" id="sala-viewport">
+      <div class="sala-room" id="sala-room"></div>
+    </div>
+    <div class="sala-hint">Clique no chão pra andar. É só o seu cantinho — decore do seu jeito, sem pressa.</div>
+  </div>
+</div>
+<style>
+/* Painel externo — mesmo idioma visual de #world-map (painel arredondado, sombra suave). */
+.sala-shell{background:var(--panel2);border:1.5px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow2);padding:var(--sp-5);}
+.sala-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.sala-top h2{font-family:'Cinzel',serif;font-size:19px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:10px;}
+.sala-top-actions{display:flex;gap:8px;}
+#sala-decorate-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+/* Paleta de móveis (some/aparece ao clicar em "Decorar") */
+.sala-palette{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:10px;background:var(--panel);border:1.5px solid var(--border2);border-radius:var(--r-md);}
+.sala-palette-item{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 12px;border-radius:var(--r-md);border:1.5px solid var(--border);background:var(--panel2);color:var(--text2);font-size:10.5px;font-weight:700;cursor:pointer;transition:all .15s;}
+.sala-palette-item:hover{border-color:var(--accent);color:var(--accent);}
+.sala-palette-item.armed{border-color:var(--accent);background:color-mix(in srgb, var(--accent) 14%, var(--panel2));color:var(--accent);}
+.sala-palette-item .sala-palette-icon{font-size:18px;}
+.sala-palette-cancel{margin-left:auto;align-self:center;}
+
+/* Moldura que MEDE o espaço disponível — a sala em si (.sala-room) fica no tamanho
+   natural e é encolhida via transform:scale() calculado em JS (salaFitToScreen), o MESMO
+   padrão já validado no fluxograma (fluxoDrawConnectors) pra nunca estourar a largura da
+   tela, por maior que a sala seja. */
+.sala-viewport{width:100%;overflow:hidden;display:flex;justify-content:center;}
+.sala-room{position:relative;flex-shrink:0;}
+
+/* Chão: cada tile é um losango 2:1 (visual isométrico clássico), sem transform 3D real —
+   só matemática de posicionamento (ver salaGridToScreen). */
+/* Cores por token de tema (--panel/--bg2), não hex fixo — assim claro/escuro já
+   funcionam sozinhos, sem precisar duplicar regra nenhuma pra dark mode. */
+.sala-tile{position:absolute;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);background:linear-gradient(160deg,var(--panel),var(--bg2));border:1px solid var(--border);transition:filter .1s;cursor:pointer;}
+.sala-tile:hover{filter:brightness(1.12);}
+.sala-tile.sala-tile-occupied{cursor:default;}
+.sala-tile.sala-tile-armed-target:hover{filter:brightness(1.3) saturate(1.3);}
+
+/* Paredes de fundo — dois paralelogramos (clip-path calculado em JS a partir dos mesmos
+   cantos do grid, pra nunca ficar dessincronizado do chão) formando o "V" que a gente vê
+   atrás de qualquer sala isométrica. A diferença de brilho entre as duas finge uma luz
+   vindo de um lado só, sem precisar de cor fixa nenhuma (funciona em claro e escuro). */
+.sala-wall{position:absolute;top:0;left:0;background:linear-gradient(200deg,var(--panel2),var(--bg2));}
+.sala-wall-right{filter:brightness(0.9);}
+
+/* Mobília — cada peça é um desenho simples em CSS (sem imagem/emoji), com "pés" ancorados
+   no centro-inferior do tile onde está (ver salaPlaceOnTile). */
+.sala-furniture{position:absolute;cursor:pointer;}
+.sala-furn-tapete{background:repeating-linear-gradient(45deg,#b5473c,#b5473c 6px,#8f3a31 6px,#8f3a31 12px);border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.15);}
+.sala-furn-estante{background:linear-gradient(#6b4226,#4a2d1a);border-radius:3px;box-shadow:0 3px 6px rgba(0,0,0,0.25);}
+.sala-furn-estante::before,.sala-furn-estante::after{content:'';position:absolute;left:3px;right:3px;height:6px;background:repeating-linear-gradient(90deg,#c94f4f,#c94f4f 4px,#4f8fc9 4px,#4f8fc9 8px,#d9c94f 8px,#d9c94f 12px);}
+.sala-furn-estante::before{top:8px;}
+.sala-furn-estante::after{top:22px;}
+.sala-furn-mesa{background:linear-gradient(#a97c50,#8a6038);border-radius:4px;box-shadow:0 3px 6px rgba(0,0,0,0.2);}
+.sala-furn-mesa::before{content:'';position:absolute;top:-8px;left:6px;width:10px;height:10px;background:var(--accent);border-radius:3px 3px 0 0;}
+.sala-furn-planta{background:transparent;}
+.sala-furn-planta::before{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:60%;height:40%;background:#a9673a;border-radius:2px 2px 6px 6px;}
+.sala-furn-planta::after{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:100%;height:65%;background:radial-gradient(circle at 30% 30%,#5bab5b,#357a35);border-radius:50%;}
+.sala-furn-vela{background:#e8ddc8;border-radius:2px;}
+.sala-furn-vela::after{content:'';position:absolute;top:-9px;left:50%;transform:translateX(-50%);width:6px;height:9px;background:radial-gradient(circle,#ffd873,#ff9d3d);border-radius:50% 50% 50% 50% / 60% 60% 40% 40%;animation:sala-flicker 1.6s ease-in-out infinite;}
+.sala-furniture-toolbar{position:absolute;display:flex;gap:4px;background:var(--panel);border:1.5px solid var(--border2);border-radius:var(--r-sm);padding:3px;box-shadow:var(--shadow);z-index:9999;}
+.sala-furniture-toolbar button{border:none;background:none;font-size:11px;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;color:var(--text2);}
+.sala-furniture-toolbar button:hover{background:var(--panel2);}
+
+/* Personagem — desenhado em divs empilhadas (cabeça/corpo/pernas), não emoji nem imagem.
+   Só 2 poses de verdade (down/up); esquerda/direita é a mesma pose espelhada (sala-flip). */
+.sala-avatar{position:absolute;width:32px;height:52px;transition:left .28s linear,top .28s linear;z-index:1;}
+.sala-avatar.sala-flip{transform:scaleX(-1);}
+.sala-avatar-head{position:absolute;top:0;left:50%;transform:translateX(-50%);width:18px;height:18px;border-radius:50%;background:#e8b98a;border:1.5px solid rgba(0,0,0,0.15);}
+.sala-avatar-body{position:absolute;top:16px;left:50%;transform:translateX(-50%);width:22px;height:22px;border-radius:6px 6px 4px 4px;background:var(--accent);border:1.5px solid rgba(0,0,0,0.15);}
+.sala-avatar-leg{position:absolute;top:36px;width:7px;height:16px;border-radius:3px;background:#3a2f52;}
+.sala-avatar-leg-l{left:8px;}
+.sala-avatar-leg-r{right:8px;}
+.sala-avatar.sala-pose-up .sala-avatar-head{background:#d9ad7d;}
+.sala-avatar.walking .sala-avatar-leg-l{animation:sala-walk-l .5s linear infinite;}
+.sala-avatar.walking .sala-avatar-leg-r{animation:sala-walk-r .5s linear infinite;}
+.sala-avatar:not(.walking) .sala-avatar-body{animation:sala-idle 2.4s ease-in-out infinite;}
+@keyframes sala-walk-l{0%,100%{transform:translateY(0) rotate(-18deg);}50%{transform:translateY(0) rotate(18deg);}}
+@keyframes sala-walk-r{0%,100%{transform:translateY(0) rotate(18deg);}50%{transform:translateY(0) rotate(-18deg);}}
+@keyframes sala-idle{0%,100%{transform:translateX(-50%) translateY(0);}50%{transform:translateX(-50%) translateY(-1.5px);}}
+@keyframes sala-flicker{0%,100%{opacity:1;transform:translateX(-50%) scale(1);}50%{opacity:.85;transform:translateX(-50%) scale(0.92);}}
+@media(prefers-reduced-motion:reduce){
+  .sala-avatar-leg-l,.sala-avatar-leg-r,.sala-avatar-body,.sala-furn-vela::after{animation:none!important;}
+}
+
+.sala-hint{text-align:center;font-size:11px;color:var(--muted);margin-top:12px;}
+
+@media(max-width:700px){
+  .sala-shell{padding:var(--sp-3);}
+  .sala-top h2{font-size:16px;}
+}
+</style>
 
 <!-- ===== PAINEL ADMIN (só visível pra ADMIN_EMAIL) ===== -->
 <div class="screen" id="screen-admin">
@@ -2685,6 +2795,7 @@ function applyDefaults(){
   if(!db.erroAssuntos)db.erroAssuntos=[];
   if(typeof db.erroAssuntosResolvidos!=='number')db.erroAssuntosResolvidos=0;
   if(typeof db.fcGroupStudySessions!=='number')db.fcGroupStudySessions=0;
+  if(!db.sala)db.sala={furniture:[],avatarPos:{col:4,row:4}};
 
   // ===== Contadores para o sistema de conquistas (v2) =====
   if(!db.createdAt)db.createdAt=todayStr();
@@ -3953,6 +4064,7 @@ function showScreen(name){
   if(name==='redacoes')renderRedacoesScreen();
   if(name==='repertorio')renderRepertorioScreen();
   if(name==='conquistas')renderConquistasScreen();
+  if(name==='sala')renderSalaScreen();
   if(name==='admin')adminSearchUsers();
   if(name==='map')renderMap();
   // 'vale' (Mapa do Vale, D3+GeoJSON) fica suprimido da navegação por enquanto — mais
@@ -12610,6 +12722,320 @@ function renderFlashcardsScreen(){
   renderFCMain(); // sempre renderiza o painel ao entrar
   updateFCBadge();
 }
+
+// ===== SALA DE ESTUDO (quarto isométrico pessoal, estilo Habbo) =====
+// Tudo aqui usa o prefixo sala-/SALA_ — feature isolada de propósito, fácil de remover
+// inteira se um dia for preciso (ver comentário no <style> junto do HTML da tela).
+const SALA_COLS=8,SALA_ROWS=8;         // tamanho do grid da sala
+const SALA_TILE_W=64,SALA_TILE_H=32;   // tamanho de cada tile no chão, em px (proporção 2:1 = isométrico clássico)
+const SALA_WALL_H=90;                  // altura das paredes de fundo, em px
+const SALA_AVATAR_W=32,SALA_AVATAR_H=52;
+
+const SALA_FURNITURE_TYPES=[
+  {tipo:'tapete',label:'Tapete',icon:'🟥',w:52,h:14},
+  {tipo:'estante',label:'Estante',icon:'📚',w:32,h:52},
+  {tipo:'mesa',label:'Mesa de estudo',icon:'🪑',w:40,h:34},
+  {tipo:'planta',label:'Planta',icon:'🪴',w:26,h:38},
+  {tipo:'vela',label:'Vela',icon:'🕯️',w:10,h:26},
+];
+function salaFurnitureType(tipo){return SALA_FURNITURE_TYPES.find(f=>f.tipo===tipo);}
+
+let salaBuilt=false;              // já desenhou o grid/paredes (não muda de forma, só constrói 1x)
+let salaDecorateMode=false;
+let salaSelectedFurnitureType=null; // tipo armado na paleta, esperando clique num tile vazio
+let salaMovingFurnitureId=null;     // móvel já colocado, armado pra mudar de lugar
+let salaWalking=false;              // true enquanto o avatar está no meio de um caminho
+let salaCurrentPath=[];             // fila de {col,row} restantes da caminhada atual
+let salaFacing='se';                // última direção que o avatar olhou (persiste entre passos)
+let salaResizeTimer=null;
+
+// Conversão grid→tela (única direção necessária — ver plano: cada tile já nasce como um
+// <div data-col data-row> na posição certa, então o clique chega com (col,row) prontos
+// via dataset, sem precisar reverter a projeção nem compensar o scale() do fit-to-screen).
+function salaGridToScreen(col,row){
+  const x=(col-row+SALA_ROWS-1)*(SALA_TILE_W/2);
+  const y=(col+row)*(SALA_TILE_H/2);
+  return{x,y:y+SALA_WALL_H};
+}
+function salaRoomSize(){
+  const maxSpan=(SALA_COLS-1+SALA_ROWS-1);
+  return{
+    width:maxSpan*(SALA_TILE_W/2)+SALA_TILE_W,
+    height:maxSpan*(SALA_TILE_H/2)+SALA_TILE_H+SALA_WALL_H,
+  };
+}
+// Posiciona um elemento (móvel/avatar) com os "pés" no centro-inferior do tile (col,row) —
+// é aí que fica o vértice de baixo do losango, então um sprite mais alto que o tile
+// (estante, avatar) sobe a partir desse ponto em vez de ficar preso dentro da caixa do tile.
+function salaPlaceOnTile(el,col,row,w,h){
+  const{x,y}=salaGridToScreen(col,row);
+  el.style.left=(x+SALA_TILE_W/2-w/2)+'px';
+  el.style.top=(y+SALA_TILE_H-h)+'px';
+}
+
+function salaFurnitureAt(col,row){
+  return(db.sala.furniture||[]).find(f=>f.col===col&&f.row===row);
+}
+function salaTileBlocked(col,row){
+  if(col<0||row<0||col>=SALA_COLS||row>=SALA_ROWS)return true;
+  return!!salaFurnitureAt(col,row);
+}
+// BFS simples (4 direções) — grid tem no máximo 64 células, sobra de sobra pra não
+// precisar de A*. Retorna a lista de passos (sem incluir o ponto de partida) ou [] se
+// não tiver como chegar (ex: avatar cercado de móveis).
+function salaFindPath(fromCol,fromRow,toCol,toRow){
+  if(fromCol===toCol&&fromRow===toRow)return[];
+  if(salaTileBlocked(toCol,toRow))return[];
+  const key=(c,r)=>c+'_'+r;
+  const visited=new Set([key(fromCol,fromRow)]);
+  const queue=[{col:fromCol,row:fromRow,path:[]}];
+  const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+  while(queue.length){
+    const cur=queue.shift();
+    for(const[dc,dr] of dirs){
+      const nc=cur.col+dc,nr=cur.row+dr;
+      if(nc<0||nr<0||nc>=SALA_COLS||nr>=SALA_ROWS)continue;
+      const k=key(nc,nr);
+      if(visited.has(k))continue;
+      if(salaTileBlocked(nc,nr)&&!(nc===toCol&&nr===toRow))continue;
+      const path=[...cur.path,{col:nc,row:nr}];
+      if(nc===toCol&&nr===toRow)return path;
+      visited.add(k);
+      queue.push({col:nc,row:nr,path});
+    }
+  }
+  return[];
+}
+
+function renderSalaScreen(){
+  if(!db.sala)db.sala={furniture:[],avatarPos:{col:4,row:4}};
+  if(!salaBuilt)salaBuildRoomOnce();
+  renderSalaFurniture();
+  renderSalaAvatar(true);
+  salaFitToScreen();
+}
+
+function salaBuildRoomOnce(){
+  const room=document.getElementById('sala-room');
+  if(!room)return;
+  const{width,height}=salaRoomSize();
+  room.style.width=width+'px';
+  room.style.height=height+'px';
+
+  // Paredes de fundo — dois paralelogramos calculados a partir dos MESMOS cantos do grid
+  // usados pro chão (salaGridToScreen), pra nunca ficar dessincronizado dele. O "canto de
+  // trás" da sala é o tile (0,0); a parede esquerda vai dele até o tile (0,ROWS-1), a
+  // direita vai dele até o tile (COLS-1,0) — subindo SALA_WALL_H em cada ponta.
+  const back=salaGridToScreen(0,0),left=salaGridToScreen(0,SALA_ROWS-1),right=salaGridToScreen(SALA_COLS-1,0);
+  const backTopY=back.y-SALA_TILE_H/2-SALA_WALL_H, backBottomY=back.y-SALA_TILE_H/2;
+  const leftBottomY=left.y-SALA_TILE_H/2, leftTopY=leftBottomY-SALA_WALL_H;
+  const rightBottomY=right.y-SALA_TILE_H/2, rightTopY=rightBottomY-SALA_WALL_H;
+  const backX=back.x+SALA_TILE_W/2, leftX=left.x+SALA_TILE_W/2, rightX=right.x+SALA_TILE_W/2;
+  const wallLeft=document.createElement('div');
+  wallLeft.className='sala-wall sala-wall-left';
+  wallLeft.style.width=width+'px';wallLeft.style.height=height+'px';
+  wallLeft.style.clipPath=`polygon(${backX}px ${backBottomY}px, ${leftX}px ${leftBottomY}px, ${leftX}px ${leftTopY}px, ${backX}px ${backTopY}px)`;
+  const wallRight=document.createElement('div');
+  wallRight.className='sala-wall sala-wall-right';
+  wallRight.style.width=width+'px';wallRight.style.height=height+'px';
+  wallRight.style.clipPath=`polygon(${backX}px ${backBottomY}px, ${rightX}px ${rightBottomY}px, ${rightX}px ${rightTopY}px, ${backX}px ${backTopY}px)`;
+  room.appendChild(wallLeft);room.appendChild(wallRight);
+
+  for(let row=0;row<SALA_ROWS;row++){
+    for(let col=0;col<SALA_COLS;col++){
+      const tile=document.createElement('div');
+      tile.className='sala-tile';
+      tile.dataset.col=col;tile.dataset.row=row;
+      const{x,y}=salaGridToScreen(col,row);
+      tile.style.left=x+'px';tile.style.top=y+'px';
+      tile.style.width=SALA_TILE_W+'px';tile.style.height=SALA_TILE_H+'px';
+      tile.style.zIndex=col+row;
+      room.appendChild(tile);
+    }
+  }
+
+  const avatar=document.createElement('div');
+  avatar.className='sala-avatar sala-pose-down';
+  avatar.id='sala-avatar';
+  avatar.innerHTML=`<div class="sala-avatar-head"></div><div class="sala-avatar-body"></div><div class="sala-avatar-leg sala-avatar-leg-l"></div><div class="sala-avatar-leg sala-avatar-leg-r"></div>`;
+  room.appendChild(avatar);
+
+  room.addEventListener('click',salaOnRoomClick);
+  window.addEventListener('resize',()=>{clearTimeout(salaResizeTimer);salaResizeTimer=setTimeout(salaFitToScreen,150);});
+  salaBuilt=true;
+}
+
+function renderSalaFurniture(){
+  const room=document.getElementById('sala-room');
+  if(!room)return;
+  room.querySelectorAll('.sala-furniture,.sala-furniture-toolbar').forEach(el=>el.remove());
+  room.querySelectorAll('.sala-tile').forEach(t=>t.classList.remove('sala-tile-occupied'));
+  (db.sala.furniture||[]).forEach(f=>{
+    const info=salaFurnitureType(f.tipo);
+    if(!info)return;
+    const el=document.createElement('div');
+    el.className='sala-furniture sala-furn-'+f.tipo;
+    el.dataset.furnId=f.id;
+    el.style.width=info.w+'px';el.style.height=info.h+'px';
+    el.style.zIndex=f.col+f.row+1;
+    salaPlaceOnTile(el,f.col,f.row,info.w,info.h);
+    room.appendChild(el);
+    const tile=room.querySelector(`.sala-tile[data-col="${f.col}"][data-row="${f.row}"]`);
+    if(tile)tile.classList.add('sala-tile-occupied');
+  });
+}
+
+// Direção só a partir do delta de grid — quem muda de vez em quando é ver de longe é
+// suficiente aqui, não precisamos de 8 direções pra ficar com cara de personagem de
+// verdade. col+1→sudeste, row+1→sudoeste, col-1→noroeste, row-1→nordeste (ver plano).
+function salaSetFacing(dir){
+  salaFacing=dir;
+  const el=document.getElementById('sala-avatar');
+  if(!el)return;
+  const pose=(dir==='se'||dir==='sw')?'sala-pose-down':'sala-pose-up';
+  el.classList.remove('sala-pose-down','sala-pose-up');
+  el.classList.add(pose);
+  el.classList.toggle('sala-flip',dir==='sw'||dir==='nw');
+}
+function renderSalaAvatar(instant){
+  const el=document.getElementById('sala-avatar');
+  if(!el||!db.sala.avatarPos)return;
+  const{col,row}=db.sala.avatarPos;
+  if(instant){
+    const prevTransition=el.style.transition;
+    el.style.transition='none';
+    salaPlaceOnTile(el,col,row,SALA_AVATAR_W,SALA_AVATAR_H);
+    el.style.zIndex=col+row+1;
+    void el.offsetHeight; // força o reflow antes de devolver a transição, senão o "none" nem chega a valer
+    el.style.transition=prevTransition;
+  }else{
+    salaPlaceOnTile(el,col,row,SALA_AVATAR_W,SALA_AVATAR_H);
+    el.style.zIndex=col+row+1;
+  }
+  salaSetFacing(salaFacing);
+}
+function salaWalkStep(){
+  const el=document.getElementById('sala-avatar');
+  if(!el||!salaCurrentPath.length){
+    salaWalking=false;
+    if(el)el.classList.remove('walking');
+    saveDB();
+    return;
+  }
+  const from=db.sala.avatarPos;
+  const next=salaCurrentPath.shift();
+  const dc=next.col-from.col,dr=next.row-from.row;
+  salaSetFacing(dc>0?'se':dc<0?'nw':dr>0?'sw':'ne');
+  el.classList.add('walking');
+  db.sala.avatarPos={col:next.col,row:next.row};
+  renderSalaAvatar(false);
+  let done=false;
+  const onEnd=()=>{if(done)return;done=true;el.removeEventListener('transitionend',onEnd);salaWalkStep();};
+  el.addEventListener('transitionend',onEnd,{once:true});
+  setTimeout(onEnd,320); // rede de segurança — transitionend pode não disparar (aba em segundo plano, etc.)
+}
+function salaOnRoomClick(e){
+  const furnEl=e.target.closest('.sala-furniture');
+  if(furnEl){salaOnFurnitureClick(furnEl.dataset.furnId,e);return;}
+  const tileEl=e.target.closest('.sala-tile');
+  if(!tileEl)return;
+  const col=+tileEl.dataset.col,row=+tileEl.dataset.row;
+  document.querySelectorAll('.sala-furniture-toolbar').forEach(t=>t.remove());
+  if(salaDecorateMode){
+    if(salaTileBlocked(col,row))return;
+    if(salaSelectedFurnitureType){
+      db.sala.furniture.push({id:'sala_'+genId(),tipo:salaSelectedFurnitureType,col,row});
+      salaSelectedFurnitureType=null;
+      salaUpdatePaletteArmed();
+      renderSalaFurniture();
+      saveDB();
+    }else if(salaMovingFurnitureId){
+      const f=db.sala.furniture.find(x=>x.id===salaMovingFurnitureId);
+      if(f){f.col=col;f.row=row;renderSalaFurniture();saveDB();}
+      salaMovingFurnitureId=null;
+    }
+    return;
+  }
+  if(salaWalking||salaTileBlocked(col,row))return;
+  const path=salaFindPath(db.sala.avatarPos.col,db.sala.avatarPos.row,col,row);
+  if(!path.length)return;
+  salaCurrentPath=path;
+  salaWalking=true;
+  salaWalkStep();
+}
+function salaOnFurnitureClick(furnId,e){
+  if(!salaDecorateMode)return;
+  e.stopPropagation();
+  document.querySelectorAll('.sala-furniture-toolbar').forEach(t=>t.remove());
+  const f=db.sala.furniture.find(x=>x.id===furnId);
+  if(!f)return;
+  const furnEl=document.querySelector(`.sala-furniture[data-furn-id="${furnId}"]`);
+  if(!furnEl)return;
+  const bar=document.createElement('div');
+  bar.className='sala-furniture-toolbar';
+  bar.style.left=furnEl.style.left;
+  bar.style.top=(parseFloat(furnEl.style.top)-26)+'px';
+  bar.innerHTML=`<button onclick="salaArmMoveFurniture('${furnId}')"><i class="fa fa-arrows-up-down-left-right"></i></button><button onclick="salaRemoveFurniture('${furnId}')"><i class="fa fa-trash"></i></button>`;
+  document.getElementById('sala-room')?.appendChild(bar);
+}
+function salaArmMoveFurniture(furnId){
+  salaMovingFurnitureId=furnId;
+  salaSelectedFurnitureType=null;
+  salaUpdatePaletteArmed();
+  document.querySelectorAll('.sala-furniture-toolbar').forEach(t=>t.remove());
+  toast('Clique num tile vazio pra mover pra lá.','var(--accent)');
+}
+function salaRemoveFurniture(furnId){
+  db.sala.furniture=(db.sala.furniture||[]).filter(f=>f.id!==furnId);
+  renderSalaFurniture();
+  saveDB();
+}
+function salaUpdatePaletteArmed(){
+  document.querySelectorAll('.sala-palette-item').forEach(el=>{
+    el.classList.toggle('armed',el.dataset.tipo===salaSelectedFurnitureType);
+  });
+}
+function salaSelectFurniture(tipo){
+  salaMovingFurnitureId=null;
+  salaSelectedFurnitureType=(salaSelectedFurnitureType===tipo)?null:tipo;
+  salaUpdatePaletteArmed();
+}
+function salaToggleDecorate(){
+  salaDecorateMode=!salaDecorateMode;
+  salaSelectedFurnitureType=null;
+  salaMovingFurnitureId=null;
+  document.querySelectorAll('.sala-furniture-toolbar').forEach(t=>t.remove());
+  const btn=document.getElementById('sala-decorate-btn');
+  if(btn)btn.classList.toggle('active',salaDecorateMode);
+  const palette=document.getElementById('sala-palette');
+  if(palette){
+    palette.hidden=!salaDecorateMode;
+    if(salaDecorateMode&&!palette.dataset.built){
+      palette.dataset.built='1';
+      palette.innerHTML=SALA_FURNITURE_TYPES.map(f=>`
+        <div class="sala-palette-item" data-tipo="${f.tipo}" onclick="salaSelectFurniture('${f.tipo}')">
+          <span class="sala-palette-icon">${f.icon}</span>${f.label}
+        </div>`).join('')+`<button class="btn btn-xs btn-ghost sala-palette-cancel" onclick="salaToggleDecorate()">Concluir</button>`;
+    }
+  }
+}
+// Mesmo padrão já validado no fluxograma (fluxoDrawConnectors): a sala é desenhada no
+// tamanho NATURAL e só encolhida via transform:scale() se não couber na largura
+// disponível — nunca aumenta além de 100%, e a altura reservada no layout acompanha o
+// encolhimento (senão sobra vão vazio embaixo, já que transform não muda o espaço que o
+// elemento reserva no documento).
+function salaFitToScreen(){
+  const viewport=document.getElementById('sala-viewport');
+  const room=document.getElementById('sala-room');
+  if(!viewport||!room)return;
+  room.style.transform='';
+  const{width,height}=salaRoomSize();
+  const disponivel=viewport.clientWidth;
+  const escala=disponivel&&width>disponivel?disponivel/width:1;
+  room.style.transformOrigin='top left';
+  room.style.transform=escala<1?`scale(${escala})`:'';
+  viewport.style.height=(height*escala)+'px';
+}
 // ===== CRONÔMETRO FLUTUANTE =====
 let ftRunning=false,ftStartedAt=null,ftAccumulated=0,ftRafId=null;
 function ftGetElapsed(){if(!ftRunning||!ftStartedAt)return ftAccumulated;return ftAccumulated+Math.floor((Date.now()-ftStartedAt)/1000);}
@@ -12902,6 +13328,7 @@ function bindStaticEvents(){
   document.getElementById('nav-flashcards')?.addEventListener('click',()=>showScreen('flashcards'));
   document.getElementById('nav-redacoes')?.addEventListener('click',()=>showScreen('redacoes'));
   document.getElementById('nav-conquistas')?.addEventListener('click',()=>showScreen('conquistas'));
+  document.getElementById('nav-sala')?.addEventListener('click',()=>showScreen('sala'));
   document.getElementById('nav-admin')?.addEventListener('click',()=>showScreen('admin'));
   document.getElementById('xp-pill-btn')?.addEventListener('click',()=>showScreen('dashboard'));
   document.getElementById('exam-date')?.addEventListener('change',saveExamDate);
@@ -12914,6 +13341,10 @@ bindStaticEvents();
 
 // Functions called from dynamically generated innerHTML must be on window
 window.showScreen=showScreen;
+window.salaToggleDecorate=salaToggleDecorate;
+window.salaSelectFurniture=salaSelectFurniture;
+window.salaArmMoveFurniture=salaArmMoveFurniture;
+window.salaRemoveFurniture=salaRemoveFurniture;
 window.openKingdom=openKingdom;
 window.addTopic=addTopic;
 window.deleteTopic=deleteTopic;
