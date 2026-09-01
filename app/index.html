@@ -10797,6 +10797,18 @@ let fcStudyFlipped=false;
 let fcScoreRight=0,fcScoreWrong=0;
 let fcEditingId=null;
 let fcDiff=3;
+// Embaralhamento do baralho: os cards continuam priorizados por status (revisar > novo >
+// nos buckets de intervalo), mas DENTRO de cada bucket a ordem não pode ser sempre a mesma
+// (senão quem não termina a fila inteira revisa pra sempre só os primeiros criados). Cada
+// card ganha uma chave aleatória usada como critério de desempate no sort — o mapa só é
+// recriado quando uma sessão de estudo NOVA começa (fcShuffleSession), pra não embaralhar
+// de novo (e mudar o card que aparece no meio do caminho) a cada re-render da tela.
+let fcShuffleKeys=new Map();
+function fcShuffleSession(){fcShuffleKeys=new Map();}
+function fcShuffleKeyFor(id){
+  if(!fcShuffleKeys.has(id))fcShuffleKeys.set(id,Math.random());
+  return fcShuffleKeys.get(id);
+}
 let fcPdfGenerating=false;
 let fcVoiceMode=false;  // leitura por voz (síntese do navegador) no modo estudo
 let fcVoiceLastKey='';  // evita repetir a fala ao re-renderizar o mesmo card/lado
@@ -10910,7 +10922,7 @@ function fcStudyAllKingdoms(){
   if(!getAllFCEverywhere().length){toast('Nenhum flashcard criado ainda.','var(--muted)');return;}
   fcSelectedMb={id:'__ALL__',name:'Todos os Reinos',icon:'🌍',kIcon:'',kingdom:'Todos os reinos combinados'};
   fcStudyFilter='all';
-  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;
+  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();
   db.fcGroupStudySessions=(db.fcGroupStudySessions||0)+1;saveDB();
   renderFCMbList();renderFCMain();
 }
@@ -10923,7 +10935,7 @@ function fcStudyKingdom(kingdomId){
   if(!getAllFCForKingdom(kingdomId).length){toast('Nenhum flashcard neste reino ainda.','var(--muted)');return;}
   fcSelectedMb={id:'__KINGDOM__'+kingdomId,name:k.name,icon:k.icon||'🏰',kIcon:'',kingdom:k.name,kColor:k.color};
   fcStudyFilter='all';
-  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;
+  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();
   db.fcGroupStudySessions=(db.fcGroupStudySessions||0)+1;saveDB();
   renderFCMbList();renderFCMain();
 }
@@ -11599,7 +11611,11 @@ function fcStudyHTML(cards){
   if(!finalCards.length)return`<div class="empty"><i class="fa fa-ghost"></i><p>Nenhum card para estudar.</p></div>`;
   const sorted=[...finalCards].sort((a,b)=>{
     const o={due:0,new:1,7:2,14:3,21:4,41:5};
-    return (o[fcStatus(a)]||0)-(o[fcStatus(b)]||0);
+    const porStatus=(o[fcStatus(a)]||0)-(o[fcStatus(b)]||0);
+    // Dentro do mesmo status, embaralhado (chave fixa pra sessão atual) em vez de sempre
+    // na ordem de criação — senão quem não dá tempo de ver o baralho todo acaba revisando
+    // pra sempre só os cards mais antigos, e os criados depois nunca aparecem.
+    return porStatus||(fcShuffleKeyFor(a.id)-fcShuffleKeyFor(b.id));
   });
   fcStudyCards=sorted;
   if(fcStudyIdx>=sorted.length)fcStudyIdx=0;
@@ -11876,7 +11892,7 @@ function fcBossStudy(tipo){
   // Filtra os cards do chefão pelo tipo e vai para modo estudo
   fcVoiceStop();fcVoiceLastKey='';
   fcMode='study';
-  fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;
+  fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();
   // Guardar o filtro para o modo estudo saber quais cards usar
   fcStudyFilter=tipo; // 'due','new','ok','all'
   renderFCMain();
@@ -11900,7 +11916,7 @@ function fcOverviewClick(tipo){
   const {t,k}=melhor;
   fcSelectedMb={id:t.id,name:t.name,icon:t.icon||'⚔️',kIcon:k.icon||'🏰',kingdom:k.name,kColor:k.color};
   fcStudyFilter=tipo;
-  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;
+  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcShuffleSession();
   renderFCMbList();renderFCMain();
 }
 
@@ -11915,6 +11931,7 @@ function fcVoltar(){
 
 function fcSetMode(m){
   if(m!=='study')fcVoiceStop();
+  else fcShuffleSession(); // nova sessão de estudo começando: embaralha de novo os cards
   fcMode=m;fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;
   renderFCMain();
 }
