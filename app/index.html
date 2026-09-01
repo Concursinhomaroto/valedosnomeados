@@ -1863,6 +1863,7 @@ nav{
         <button class="btn btn-sm btn-ghost" id="sala-decorate-btn" onclick="salaToggleDecorate()"><i class="fa fa-paintbrush"></i> Decorar</button>
       </div>
     </div>
+    <div class="sala-presence" id="sala-presence"></div>
     <div class="sala-palette" id="sala-palette" hidden></div>
     <div class="sala-viewport" id="sala-viewport">
       <div class="sala-room" id="sala-room"></div>
@@ -1877,6 +1878,24 @@ nav{
 .sala-top h2{font-family:'Cinzel',serif;font-size:19px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:10px;}
 .sala-top-actions{display:flex;gap:8px;}
 #sala-decorate-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+/* Presença — quem mais está com a Sala de Estudo aberta agora, sem vídeo/chat, só
+   apelido + status + há quanto tempo (ver salaRenderPresencePanel). */
+.sala-presence{border:1.5px solid var(--border2);border-radius:var(--r-md);padding:12px;margin-bottom:14px;background:var(--panel);}
+.sala-presence-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+.sala-presence-title{font-size:11px;font-weight:900;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;}
+.sala-presence-count{font-size:11px;color:var(--muted);font-weight:700;}
+.sala-presence-join{display:flex;gap:8px;flex-wrap:wrap;}
+.sala-presence-join input{flex:1;min-width:140px;}
+.sala-presence-list{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;margin-bottom:8px;}
+.sala-presence-peer{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:8px;background:var(--panel2);font-size:12px;}
+.sala-presence-dot{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0;}
+.sala-presence-dot.active{background:var(--green);box-shadow:0 0 0 3px rgba(21,128,61,0.15);}
+.sala-presence-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;color:var(--text);}
+.sala-presence-name.sala-presence-you{color:var(--accent);}
+.sala-presence-meta{font-size:10.5px;color:var(--muted);flex-shrink:0;}
+.sala-presence-empty,.sala-presence-disabled{font-size:11.5px;color:var(--muted);text-align:center;padding:8px 0;}
+.sala-presence-leave{width:100%;justify-content:center;}
 
 /* Paleta de móveis (some/aparece ao clicar em "Decorar") */
 .sala-palette{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:10px;background:var(--panel);border:1.5px solid var(--border2);border-radius:var(--r-md);}
@@ -4039,6 +4058,11 @@ function openRenewalScreen(reason){
 }
 function showScreen(name){
   if(name!=='flashcards'&&typeof fcVoiceStop==='function')fcVoiceStop();
+  // Sai da presença da Sala de Estudo ao navegar pra qualquer outro lugar — a lista de
+  // "quem está por perto" só existe enquanto essa tela está mesmo aberta, não fica
+  // ninguém "preso" nela depois que a pessoa sai.
+  const estavaNaSala=document.getElementById('screen-sala')?.classList.contains('active');
+  if(estavaNaSala&&name!=='sala'&&typeof salaPresenceLeave==='function')salaPresenceLeave();
   if(name==='admin'&&!isAdmin())name='dashboard'; // proteção extra, além do item ficar oculto no menu
   // Repertório e Banco de Erros não têm botão próprio no menu — viraram abas dentro de
   // Redação e Simulado Geral, respectivamente, desde a fusão das telas relacionadas, então
@@ -12813,6 +12837,8 @@ function renderSalaScreen(){
   renderSalaFurniture();
   renderSalaAvatar(true);
   salaFitToScreen();
+  if(salaPresenceNickname)salaPresenceJoin(); // apelido já escolhido antes: entra na sala sozinho
+  salaRenderPresencePanel();
 }
 
 function salaBuildRoomOnce(){
@@ -13036,6 +13062,165 @@ function salaFitToScreen(){
   room.style.transform=escala<1?`scale(${escala})`:'';
   viewport.style.height=(height*escala)+'px';
 }
+
+// ===== SALA DE ESTUDO: PRESENÇA COMPARTILHADA (quem está por perto agora) =====
+// Porte de uma ideia de um pacote de referência feito pro Moodist (outro projeto,
+// Astro/Supabase) — mesmo conceito (lista global e efêmera, sem vídeo/chat, só apelido +
+// status + há quanto tempo), só que em cima do Firebase Realtime Database que este app
+// já usa, em vez de trazer o Supabase como um segundo backend. Só existe enquanto a tela
+// Sala de Estudo está aberta (entra/sai via showScreen) — nenhum listener fica rodando
+// em segundo plano fora dela, e se o Firebase não estiver disponível por qualquer motivo
+// (regra do projeto não liberada, sem rede) o painel avisa e o resto da sala continua
+// funcionando normal.
+const SALA_PRESENCE_NICK_KEY='vdn_sala_apelido';
+const SALA_PRESENCE_RETICK_MS=15000; // não republica nem recalcula "há quanto tempo" a cada segundo
+
+let salaPresenceId=null;
+let salaPresenceNickname=(function(){try{return localStorage.getItem(SALA_PRESENCE_NICK_KEY)||'';}catch(e){return'';}})();
+let salaPresenceJoined=false;
+let salaPresencePeers={};        // id -> {nome,estudando,modo,desde,atualizadoEm}
+let salaPresenceRef=null;
+let salaPresenceListRef=null;
+let salaPresenceConnHandler=null;
+let salaPresenceLastSent=null;   // string comparável do último status publicado, só reenvia quando muda de verdade
+let salaPresenceTimer=null;
+
+function salaPresenceEnabled(){return!!(firebaseDB&&currentUser&&connectedRef);}
+
+// Lê o mesmo estado que os dois cronômetros do app já mantêm (nunca duplica a lógica
+// deles) — mesmo padrão de checagem de "a pessoa está focada" usado em updateTabTitle.
+// O Pomodoro não guarda um "iniciado em" literal (só pmdRemaining decrescente), então um
+// "desde" sintético é calculado a partir de quanto já passou da fase atual.
+function salaCurrentStudyStatus(){
+  const pomodoroAtivo=typeof pmdRunning!=='undefined'&&pmdRunning;
+  const livreAtivo=typeof ftRunning!=='undefined'&&ftRunning;
+  if(pomodoroAtivo){
+    const decorridoMs=(PMD_DURATIONS[pmdPhase]-pmdRemaining)*1000;
+    return{estudando:true,modo:pmdPhase==='focus'?'foco':'pausa',desde:Date.now()-Math.max(0,decorridoMs)};
+  }
+  if(livreAtivo)return{estudando:true,modo:'livre',desde:ftStartedAt||Date.now()};
+  return{estudando:false,modo:null,desde:null};
+}
+
+function salaPresenceJoin(){
+  if(salaPresenceJoined||!salaPresenceEnabled())return;
+  if(!salaPresenceId)salaPresenceId='pres_'+genId();
+  salaPresenceJoined=true;
+  salaPresenceRef=firebaseDB.ref('presence/'+salaPresenceId);
+  salaPresenceConnHandler=connectedRef.on('value',snap=>{
+    if(snap.val()===true&&salaPresenceJoined){
+      // Reamarra o onDisconnect toda vez que a conexão volta — um onDisconnect já
+      // disparado (ou perdido numa reconexão) não continua valendo sozinho.
+      salaPresenceRef.onDisconnect().remove();
+      salaPresencePublish(true);
+    }
+  });
+  salaPresenceListRef=firebaseDB.ref('presence');
+  salaPresenceListRef.on('value',snap=>{
+    salaPresencePeers=snap.val()||{};
+    salaRenderPresencePanel();
+  },()=>{}); // erro de permissão: deixa o painel no aviso de "indisponível" em vez de quebrar
+  if(!salaPresenceTimer)salaPresenceTimer=setInterval(()=>{salaPresencePublish(false);salaRenderPresencePanel();},SALA_PRESENCE_RETICK_MS);
+}
+
+function salaPresenceLeave(){
+  if(!salaPresenceJoined)return;
+  salaPresenceJoined=false;
+  if(connectedRef&&salaPresenceConnHandler)connectedRef.off('value',salaPresenceConnHandler);
+  salaPresenceConnHandler=null;
+  if(salaPresenceListRef)salaPresenceListRef.off();
+  salaPresenceListRef=null;
+  if(salaPresenceRef){salaPresenceRef.onDisconnect().cancel();salaPresenceRef.remove().catch(()=>{});}
+  salaPresenceRef=null;
+  if(salaPresenceTimer){clearInterval(salaPresenceTimer);salaPresenceTimer=null;}
+  salaPresencePeers={};
+  salaPresenceLastSent=null;
+}
+
+// Só reenvia quando o status mudou de verdade (forcar=true ignora essa checagem, usado
+// ao entrar/reconectar) — a decisão que vale preservar do pacote original: só o
+// timestamp de início viaja pela rede, nunca um "estou vivo" a cada segundo.
+function salaPresencePublish(forcar){
+  if(!salaPresenceJoined||!salaPresenceRef)return;
+  const status=salaCurrentStudyStatus();
+  const assinatura=status.estudando+'|'+status.modo+'|'+status.desde;
+  if(!forcar&&assinatura===salaPresenceLastSent)return;
+  salaPresenceLastSent=assinatura;
+  salaPresenceRef.set({
+    nome:salaPresenceNickname||'Anônimo',
+    estudando:status.estudando,
+    modo:status.modo,
+    desde:status.desde,
+    atualizadoEm:Date.now(),
+  }).catch(()=>{}); // se a regra do Firebase não liberar esse path, a sala isométrica continua igual
+}
+
+function salaPresenceSetNickname(valor){
+  const apelido=String(valor||'').trim().slice(0,24);
+  if(!apelido)return;
+  salaPresenceNickname=apelido;
+  try{localStorage.setItem(SALA_PRESENCE_NICK_KEY,apelido);}catch(e){}
+  // Não precisa publicar aqui também: connectedRef já dispara com o valor atual assim
+  // que salaPresenceJoin() registra o listener (é assim que 'value' funciona no
+  // Firebase), então a publicação inicial já acontece por lá — publicar de novo aqui
+  // seria só reenviar a mesma coisa duas vezes.
+  salaPresenceJoin();
+  salaRenderPresencePanel();
+}
+
+function salaPresenceLabel(peer){
+  if(!peer.estudando)return'por perto';
+  if(peer.modo==='foco')return'focando';
+  if(peer.modo==='pausa')return'em pausa';
+  return'estudando';
+}
+function salaPresenceElapsed(desde){
+  if(!desde)return'';
+  const min=Math.max(0,Math.floor((Date.now()-desde)/60000));
+  if(min<1)return'agora mesmo';
+  if(min<60)return min+'min';
+  return Math.floor(min/60)+'h'+(min%60)+'min';
+}
+
+function salaRenderPresencePanel(){
+  const el=document.getElementById('sala-presence');
+  if(!el)return;
+  if(!salaPresenceEnabled()){
+    el.innerHTML=`<div class="sala-presence-disabled"><i class="fa fa-wifi"></i> Presença indisponível agora — o resto da sala continua funcionando normal.</div>`;
+    return;
+  }
+  if(!salaPresenceNickname||!salaPresenceJoined){
+    el.innerHTML=`
+      <div class="sala-presence-header">
+        <div class="sala-presence-title"><i class="fa fa-users"></i> Quem está por perto</div>
+      </div>
+      <div class="sala-presence-join">
+        <input class="inp" id="sala-presence-input" maxlength="24" placeholder="Escolha um apelido..." value="${escapeHtml(salaPresenceNickname||'')}" onkeydown="if(event.key==='Enter')salaPresenceSetNickname(this.value)">
+        <button class="btn btn-sm btn-primary" onclick="salaPresenceSetNickname(document.getElementById('sala-presence-input').value)">Entrar</button>
+      </div>`;
+    return;
+  }
+  const peers=Object.entries(salaPresencePeers);
+  const outros=peers.filter(([id])=>id!==salaPresenceId);
+  const focando=peers.filter(([,p])=>p.estudando).length;
+  el.innerHTML=`
+    <div class="sala-presence-header">
+      <div class="sala-presence-title"><i class="fa fa-users"></i> Quem está por perto</div>
+      <span class="sala-presence-count">${peers.length} na sala · ${focando} focando</span>
+    </div>
+    <div class="sala-presence-list">
+      ${peers.map(([id,p])=>`
+        <div class="sala-presence-peer">
+          <span class="sala-presence-dot${p.estudando?' active':''}"></span>
+          <span class="sala-presence-name${id===salaPresenceId?' sala-presence-you':''}">${escapeHtml(p.nome||'Anônimo')}${id===salaPresenceId?' (você)':''}</span>
+          <span class="sala-presence-meta">${salaPresenceLabel(p)}${p.desde?' · '+salaPresenceElapsed(p.desde):''}</span>
+        </div>`).join('')}
+      ${!outros.length?`<div class="sala-presence-empty">Só você por aqui, por enquanto.</div>`:''}
+    </div>
+    <button class="btn btn-xs btn-ghost sala-presence-leave" onclick="salaPresenceLeave();salaRenderPresencePanel();">Sair da sala</button>
+  `;
+}
+
 // ===== CRONÔMETRO FLUTUANTE =====
 let ftRunning=false,ftStartedAt=null,ftAccumulated=0,ftRafId=null;
 function ftGetElapsed(){if(!ftRunning||!ftStartedAt)return ftAccumulated;return ftAccumulated+Math.floor((Date.now()-ftStartedAt)/1000);}
@@ -13345,6 +13530,8 @@ window.salaToggleDecorate=salaToggleDecorate;
 window.salaSelectFurniture=salaSelectFurniture;
 window.salaArmMoveFurniture=salaArmMoveFurniture;
 window.salaRemoveFurniture=salaRemoveFurniture;
+window.salaPresenceSetNickname=salaPresenceSetNickname;
+window.salaPresenceLeave=salaPresenceLeave;
 window.openKingdom=openKingdom;
 window.addTopic=addTopic;
 window.deleteTopic=deleteTopic;
