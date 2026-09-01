@@ -549,6 +549,11 @@ nav{
 .fluxo-disclaimer{font-size:9.5px;color:var(--muted);margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);display:flex;align-items:center;gap:5px;}
 .fluxo-textarea-wrap{margin-top:10px;}
 /* Visualização (modo leitura) */
+/* .fluxo-chart-viewport é só uma "moldura": largura sempre 100% do painel (pra medir
+   quanto espaço tem disponível), altura ajustada por JS depois de calcular a escala —
+   sem isso sobrava um vão vazio embaixo do gráfico encolhido, do tamanho da diferença
+   entre o alto natural e o alto já reduzido. */
+.fluxo-chart-viewport{width:100%;}
 .fluxo-chart{display:flex;flex-direction:column;align-items:center;padding:8px 4px 4px;min-width:min-content;position:relative;}
 .fluxo-connector-svg{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;}
 .fluxo-connector-svg line{stroke:var(--border);stroke-width:2px;}
@@ -3362,6 +3367,7 @@ let resumoGenerating=new Map(); // subId -> 'arquivo'|'web', enquanto a geraçã
 let openFluxo=new Set(); // subIds cujo painel de fluxograma está aberto
 let fluxoGenerating=new Map(); // subId -> 'texto'|'web', enquanto a geração está em andamento
 let fluxoEditing=new Set(); // subIds cujo fluxograma está em modo de edição manual
+let fluxoZoomMode=new Map(); // subId -> 'fit' (encolhe pra caber, padrão) | 'real' (tamanho real, com rolagem)
 let resumoSpeakSubId=null; // subId cujo resumo está sendo lido em voz agora (ou null se nenhum)
 let resumoSpeakMode=null; // 'audio' (áudio real gerado pela IA — sobrevive à tela bloqueada), 'browser' (voz do navegador — para se a tela travar) ou 'loading' (gerando o áudio)
 let resumoSpeakQueue=[]; // pedaços de texto do resumo atual, na ordem de leitura (modo 'browser')
@@ -5565,15 +5571,19 @@ function fluxoPanelHTML(s){
     const origem=fg.origem==='manual'?'Criado manualmente'
       :fg.origem==='web'?(fg.grounded?'Gerado por IA com pesquisa na internet':'Gerado por IA (busca indisponível — conhecimento já treinado do modelo)')
       :'Gerado por IA a partir do texto';
+    const modoZoom=fluxoZoomMode.get(s.id)||'fit';
     return`
       <div class="fluxo-header">
         <div class="fluxo-title"><i class="fa fa-diagram-project"></i> Fluxograma${fg.origem==='web'?' 🌐':''}</div>
         <div class="fluxo-actions">
+          <button class="btn btn-xs btn-ghost" onclick="fluxoToggleZoomMode('${s.id}')" title="${modoZoom==='fit'?'Ver no tamanho real, com rolagem lateral':'Encolher pra caber tudo na tela, sem precisar rolar'}"><i class="fa fa-magnifying-glass"></i> ${modoZoom==='fit'?'Tamanho real':'Ajustar à tela'}</button>
           <button class="btn btn-xs btn-ghost" onclick="fluxoStartEditing('${s.id}')"><i class="fa fa-pen"></i> Editar</button>
           <button class="btn btn-xs btn-ghost" onclick="fluxoRegenerar('${s.id}')" title="Gerar de novo com IA (substitui o atual)"><i class="fa fa-arrows-rotate"></i> Gerar de novo</button>
         </div>
       </div>
-      <div class="fluxo-chart">${fluxoRenderNode(s.fluxograma.nos,s.fluxograma.raizId)}</div>
+      <div class="fluxo-chart-viewport">
+        <div class="fluxo-chart">${fluxoRenderNode(s.fluxograma.nos,s.fluxograma.raizId)}</div>
+      </div>
       <div class="fluxo-disclaimer"><i class="fa fa-triangle-exclamation"></i> ${origem}${geradoEm?` em ${geradoEm}`:''} — confira sempre a fonte oficial antes de usar na prova.</div>
     `;
   }
@@ -5617,11 +5627,20 @@ function fluxoRenderNode(nos,id){
 }
 // Desenha (via SVG sobreposto) as linhas que ligam um nó de decisão aos seus ramos —
 // medindo a posição real de cada caixa depois de renderizada, porque a largura de cada
-// caixa varia com o texto e não dá pra acertar isso só com CSS/flexbox. Chamada de novo
-// sempre que o painel é redesenhado (gerar/editar) ou aberto, e no resize da janela.
+// caixa varia com o texto e não dá pra acertar isso só com CSS/flexbox — e, no modo
+// padrão ("fit"), encolhe o fluxograma inteiro (caixas + linhas juntas, via
+// transform:scale) pra caber na largura disponível, em vez de depender de alguém achar e
+// usar uma barra de rolagem: um fluxograma pode ter quantos nós for preciso, mas
+// precisa continuar visível de cara. Chamada de novo sempre que o painel é redesenhado
+// (gerar/editar), quando é aberto, no resize da janela e ao trocar de modo de zoom.
 function fluxoDrawConnectors(subId){
-  const chart=document.querySelector(`#fluxo-${subId} .fluxo-chart`);
+  const viewport=document.querySelector(`#fluxo-${subId} .fluxo-chart-viewport`);
+  const chart=viewport?viewport.querySelector('.fluxo-chart'):null;
   if(!chart)return;
+  // Reseta a escala ANTES de medir — senão as posições capturadas já viriam encolhidas,
+  // e a conta de "cabe ou não cabe" ficaria comparando coisa errada.
+  chart.style.transform='';
+  viewport.style.height='';
   const old=chart.querySelector(':scope > svg.fluxo-connector-svg');
   if(old)old.remove();
   const chartRect=chart.getBoundingClientRect();
@@ -5656,6 +5675,25 @@ function fluxoDrawConnectors(subId){
     if(branches.length>1)addLine(Math.min(...xs),y,Math.max(...xs),y); // barra horizontal
     pos.forEach(p=>addLine(p.cx,y,p.cx,p.top)); // haste de cada ramo até a barra
   });
+
+  const modo=fluxoZoomMode.get(subId)||'fit';
+  if(modo==='fit'){
+    const disponivel=viewport.clientWidth;
+    // Nunca aumenta além de 100% — só encolhe quando o fluxograma é largo demais pro
+    // espaço disponível. chartRect já foi medido acima, sempre em escala 1 (natural).
+    const escala=disponivel&&chartRect.width>disponivel?disponivel/chartRect.width:1;
+    chart.style.transformOrigin='top left';
+    chart.style.transform=escala<1?`scale(${escala})`:'';
+    // Sem isso, o viewport ficaria com a altura do tamanho NATURAL do gráfico (transform
+    // não muda o espaço reservado no layout), sobrando um vão vazio embaixo do gráfico
+    // encolhido do tamanho da diferença.
+    viewport.style.height=(chartRect.height*escala)+'px';
+  }
+}
+function fluxoToggleZoomMode(subId){
+  const atual=fluxoZoomMode.get(subId)||'fit';
+  fluxoZoomMode.set(subId,atual==='fit'?'real':'fit');
+  fluxoRefreshPanel(subId);
 }
 // Redesenha todos os fluxogramas abertos quando a janela muda de tamanho — as posições
 // são medidas em pixels reais, então uma mudança de largura desalinha as linhas se não
