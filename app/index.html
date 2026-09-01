@@ -230,7 +230,14 @@ nav{
 }
 
 /* ===== SCREENS ===== */
-.screen{display:none;padding:28px 28px;flex:1;}
+/* min-width:0 é essencial aqui: .screen é item de um flex row (#app) com flex:1, e por
+   padrão um item flex nunca fica menor que o conteúdo mais largo dele (min-width:auto
+   implícito) — um fluxograma grande dentro dele empurrava a tela inteira mais larga que a
+   viewport, e como o body tem overflow-x:hidden, esse excesso ficava cortado/inacessível
+   em vez de aparecer com scroll. Com min-width:0, .screen pode encolher de volta pro
+   espaço disponível, e é o overflow-x:auto do .fluxo-wrap (mais interno) que passa a
+   cuidar do scroll horizontal só do fluxograma, sem afetar o resto da tela. */
+.screen{display:none;padding:28px 28px;flex:1;min-width:0;}
 .screen.active{display:block;}
 
 /* ===== SECTION TITLE ===== */
@@ -345,7 +352,7 @@ nav{
 
 /* ===== SUBTOPIC (MINIBOSS) ===== */
 .sub-list{display:flex;flex-direction:column;gap:8px;}
-.sub-item{background:var(--panel);border:1.5px solid var(--border);border-radius:12px;padding:12px 16px;transition:all 0.2s;box-shadow:0 1px 6px rgba(0,0,0,0.04);}
+.sub-item{background:var(--panel);border:1.5px solid var(--border);border-radius:12px;padding:12px 16px;transition:all 0.2s;box-shadow:0 1px 6px rgba(0,0,0,0.04);min-width:0;}
 .sub-item:hover{border-color:var(--border2);box-shadow:var(--shadow);}
 .sub-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .sub-name{flex:1;min-width:120px;font-size:13px;font-weight:800;color:var(--text);}
