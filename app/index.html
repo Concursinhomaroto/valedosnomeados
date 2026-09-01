@@ -534,7 +534,9 @@ nav{
 .fluxo-disclaimer{font-size:9.5px;color:var(--muted);margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);display:flex;align-items:center;gap:5px;}
 .fluxo-textarea-wrap{margin-top:10px;}
 /* Visualização (modo leitura) */
-.fluxo-chart{display:flex;flex-direction:column;align-items:center;padding:8px 4px 4px;min-width:min-content;}
+.fluxo-chart{display:flex;flex-direction:column;align-items:center;padding:8px 4px 4px;min-width:min-content;position:relative;}
+.fluxo-connector-svg{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;}
+.fluxo-connector-svg line{stroke:var(--border);stroke-width:2px;}
 .fluxo-node{border-radius:12px;padding:10px 16px;font-size:12px;font-weight:700;text-align:center;max-width:230px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
 .fluxo-node-inicio{background:linear-gradient(135deg,var(--accent),#4f46e5);color:#fff;border-radius:24px;}
 .fluxo-node-acao{background:var(--panel2);border:1.5px solid var(--border);color:var(--text);}
@@ -542,7 +544,7 @@ nav{
 .fluxo-node-fim{background:linear-gradient(135deg,var(--green),#15803d);color:#fff;border-radius:24px;}
 .fluxo-connector{width:2px;height:16px;background:var(--border);}
 .fluxo-arrow{color:var(--muted);font-size:11px;line-height:1;margin:-3px 0 1px;}
-.fluxo-branches{display:flex;gap:22px;align-items:flex-start;justify-content:center;}
+.fluxo-branches{display:flex;gap:22px;align-items:flex-start;justify-content:center;padding-top:22px;}
 .fluxo-branch{display:flex;flex-direction:column;align-items:center;padding-top:2px;}
 .fluxo-branch-label{font-size:9.5px;font-weight:900;color:#d97706;background:rgba(217,119,6,0.12);border-radius:20px;padding:2px 10px;margin-bottom:6px;white-space:nowrap;}
 /* Edição */
@@ -5487,11 +5489,16 @@ function fluxoRefreshPanel(subId){
     btn.className=hasFluxo?'fluxo-badge-done':'fluxo-badge-todo';
     btn.innerHTML=hasFluxo?'✅ Fluxograma':'🔀 Fluxograma';
   }
+  fluxoDrawConnectors(subId);
 }
 function toggleFluxo(subId){
   if(openFluxo.has(subId))openFluxo.delete(subId);else openFluxo.add(subId);
   const wrap=document.getElementById('fluxo-'+subId);
   if(wrap){wrap.classList.toggle('fluxo-open',openFluxo.has(subId));wrap.style.display='';}
+  // Painel estava com display:none quando o HTML original foi montado — as caixas do
+  // fluxograma tinham largura 0 até agora, então só dá pra medir e desenhar as linhas de
+  // ligação depois que ele fica visível de verdade.
+  if(openFluxo.has(subId))fluxoDrawConnectors(subId);
 }
 function closeFluxo(subId){
   openFluxo.delete(subId);
@@ -5558,13 +5565,67 @@ function fluxoRenderNode(node){
     html+=`<div class="fluxo-connector"></div><div class="fluxo-arrow">▼</div>${fluxoRenderNode(ramos[0].no)}`;
     return html;
   }
-  html+=`<div class="fluxo-connector"></div><div class="fluxo-branches">${ramos.map(r=>`
+  // Sem div de conector fixo aqui: com 2+ ramos, a ligação (tronco descendo do nó pai +
+  // barra horizontal + haste até cada ramo) é desenhada por fluxoDrawConnectors() depois
+  // do HTML entrar no DOM, medindo a posição real de cada caixa em pixels — não dava pra
+  // acertar isso só com CSS porque a largura de cada caixa varia com o texto.
+  html+=`<div class="fluxo-branches">${ramos.map(r=>`
     <div class="fluxo-branch">
       <div class="fluxo-branch-label">${escapeHtml(r.rotulo||'')}</div>
       ${fluxoRenderNode(r.no)}
     </div>`).join('')}</div>`;
   return html;
 }
+// Desenha (via SVG sobreposto) as linhas que ligam um nó de decisão aos seus ramos —
+// medindo a posição real de cada caixa depois de renderizada, porque a largura de cada
+// caixa varia com o texto e não dá pra acertar isso só com CSS/flexbox. Chamada de novo
+// sempre que o painel é redesenhado (gerar/editar) ou aberto, e no resize da janela.
+function fluxoDrawConnectors(subId){
+  const chart=document.querySelector(`#fluxo-${subId} .fluxo-chart`);
+  if(!chart)return;
+  const old=chart.querySelector(':scope > svg.fluxo-connector-svg');
+  if(old)old.remove();
+  const chartRect=chart.getBoundingClientRect();
+  if(!chartRect.width||!chartRect.height)return; // painel fechado/oculto, nada pra medir
+  const svgNS='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(svgNS,'svg');
+  svg.setAttribute('class','fluxo-connector-svg');
+  svg.setAttribute('width',chartRect.width);
+  svg.setAttribute('height',chartRect.height);
+  chart.insertBefore(svg,chart.firstChild);
+  const addLine=(x1,y1,x2,y2)=>{
+    const line=document.createElementNS(svgNS,'line');
+    line.setAttribute('x1',x1);line.setAttribute('y1',y1);
+    line.setAttribute('x2',x2);line.setAttribute('y2',y2);
+    svg.appendChild(line);
+  };
+  const rel=el=>{
+    const r=el.getBoundingClientRect();
+    return{cx:r.left+r.width/2-chartRect.left,top:r.top-chartRect.top,bottom:r.bottom-chartRect.top};
+  };
+  chart.querySelectorAll('.fluxo-branches').forEach(group=>{
+    const parentBox=group.previousElementSibling; // o .fluxo-node dono deste grupo de ramos
+    const branches=[...group.children];
+    if(!branches.length)return;
+    const pos=branches.map(rel);
+    const y=Math.min(...pos.map(p=>p.top))-13; // altura da barra horizontal, acima das caixas
+    const xs=pos.map(p=>p.cx);
+    if(parentBox){
+      const pp=rel(parentBox);
+      addLine(pp.cx,pp.bottom,pp.cx,y); // tronco descendo do nó pai até a barra
+    }
+    if(branches.length>1)addLine(Math.min(...xs),y,Math.max(...xs),y); // barra horizontal
+    pos.forEach(p=>addLine(p.cx,y,p.cx,p.top)); // haste de cada ramo até a barra
+  });
+}
+// Redesenha todos os fluxogramas abertos quando a janela muda de tamanho — as posições
+// são medidas em pixels reais, então uma mudança de largura desalinha as linhas se não
+// recalcular.
+let fluxoResizeTimer=null;
+window.addEventListener('resize',()=>{
+  clearTimeout(fluxoResizeTimer);
+  fluxoResizeTimer=setTimeout(()=>{openFluxo.forEach(id=>fluxoDrawConnectors(id));},150);
+});
 
 // ---- Edição manual ----
 function fluxoEditNodeHTML(subId,node,path){
@@ -6569,6 +6630,11 @@ function deleteSub(topicId,subId){
 function refreshSubs(topic,topicId){
   const el=document.getElementById('sl-'+topicId);
   if(el)el.innerHTML=renderSubsHTML(topic);
+  // O HTML novo já nasce com a classe fluxo-open certa pra quem já estava aberto, mas as
+  // linhas de ligação do fluxograma são desenhadas à parte (fluxoDrawConnectors) — sem
+  // isso, qualquer fluxograma que já estivesse aberto perdia as linhas no próximo refresh
+  // da lista (ex: ao pausar um cronômetro de outro miniboss).
+  openFluxo.forEach(id=>fluxoDrawConnectors(id));
 }
 
 // ===== TIMERS =====
