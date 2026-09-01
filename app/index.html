@@ -217,11 +217,23 @@ nav{
 .admin-page-btn:disabled{opacity:.4;cursor:default;}
 
 /* ===== MAIN CONTENT ===== */
+/* min-width:0 é essencial aqui: #main-content (não .screen!) é o item que fica direto
+   dentro do flex row (#app, com #sidebar do lado) com flex:1 — e por padrão um item flex
+   nunca fica menor que o conteúdo mais largo dele (min-width:auto implícito). Um
+   fluxograma bem largo lá dentro empurrava #main-content (e com ele #app, a página
+   inteira) mais largo que a viewport, MESMO já reduzido por transform:scale() no modo
+   "ajustar à tela" — transform muda só a pintura na tela, não o tamanho que o elemento
+   reserva no layout pra esse cálculo de largura mínima, então o valor que conta aqui é
+   sempre a largura NATURAL (não-encolhida) do fluxograma. O min-width:0 do .screen logo
+   abaixo não resolvia isso sozinho porque .screen é item de um flex COLUNA (o próprio
+   #main-content), não do flex row — a regra de "nunca encolhe abaixo do conteúdo" só
+   vale no eixo principal do item, que pra .screen é a altura, não a largura. */
 #main-content{
   margin-left:220px;
   flex:1;
   display:flex;flex-direction:column;
   min-height:100vh;
+  min-width:0;
 }
 /* Reserva espaço pro cronômetro flutuante quando aberto, pra ele nunca ficar por
    cima de conteúdo real (grids que preenchem a largura toda, ex: flashcards). */
@@ -230,13 +242,6 @@ nav{
 }
 
 /* ===== SCREENS ===== */
-/* min-width:0 é essencial aqui: .screen é item de um flex row (#app) com flex:1, e por
-   padrão um item flex nunca fica menor que o conteúdo mais largo dele (min-width:auto
-   implícito) — um fluxograma grande dentro dele empurrava a tela inteira mais larga que a
-   viewport, e como o body tem overflow-x:hidden, esse excesso ficava cortado/inacessível
-   em vez de aparecer com scroll. Com min-width:0, .screen pode encolher de volta pro
-   espaço disponível, e é o overflow-x:auto do .fluxo-wrap (mais interno) que passa a
-   cuidar do scroll horizontal só do fluxograma, sem afetar o resto da tela. */
 .screen{display:none;padding:28px 28px;flex:1;min-width:0;}
 .screen.active{display:block;}
 
