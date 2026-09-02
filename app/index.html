@@ -13317,20 +13317,47 @@ function salaMapaCreateAnims(anims){
   });
 }
 
+// Gera o corpo de colisão das paredes por código, a partir dos gids de parede
+// conhecidos na camada Ground (ver comentário em create() — a camada "Wall" do
+// map.json vem vazia nesta planta). Lê o JSON bruto do tilemap (cache), não o objeto
+// Tile do Phaser, pra comparar direto contra os gids crus documentados no
+// build_map_v2.py que gerou este mapa.
+const SALA_WALL_GIDS=new Set([88,90,152,154,216,217,218,722]);
+function salaMapaBuildWallsFromGround(scene,map){
+  const raw=scene.cache.tilemap.get('tilemap').data;
+  const groundData=raw.layers.find(l=>l.name==='Ground').data;
+  const walls=scene.physics.add.staticGroup();
+  for(let ty=0;ty<map.height;ty++){
+    for(let tx=0;tx<map.width;tx++){
+      if(SALA_WALL_GIDS.has(groundData[ty*map.width+tx])){
+        const rect=scene.add.rectangle(tx*32+16,ty*32+16,32,32,0,0);
+        scene.physics.add.existing(rect,true);
+        walls.add(rect);
+      }
+    }
+  }
+  return walls;
+}
+
 // Cabines isoladas (2-3 pessoas), construídas por código — não no map.json (editar Tiled à
-// mão seria arriscado sem a ferramenta original). Ficam numa faixa nova abaixo do salão
-// existente (que é 1280x960), numa extensão do mundo/câmera, reaproveitando o MESMO grupo
-// this.chairs (e portanto o mesmo sentar/levantar por E) usado pelo resto do mapa.
-function salaMapaBuildCabins(scene){
+// mão seria arriscado sem a ferramenta original). Ficam numa faixa nova abaixo do salão,
+// numa extensão do mundo/câmera, reaproveitando o MESMO grupo this.chairs (e portanto o
+// mesmo sentar/levantar por E) usado pelo resto do mapa.
+function salaMapaBuildCabins(scene,mapWidth,mapHeight){
   const wallThickness=12,doorGap=90;
+  const stripY=mapHeight,stripH=360;
+  const cabinY=stripY+50,cabinW=340,cabinH=260;
+  // 3 cabines centralizadas na largura do mapa, com espaço generoso entre elas.
+  const totalW=cabinW*3+100*2;
+  const startX=(mapWidth-totalW)/2;
   const cabins=[
-    {x:60,y:1010,w:340,h:260,seats:2},
-    {x:440,y:1010,w:340,h:260,seats:3},
-    {x:820,y:1010,w:340,h:260,seats:2},
+    {x:startX,y:cabinY,w:cabinW,h:cabinH,seats:2},
+    {x:startX+cabinW+100,y:cabinY,w:cabinW,h:cabinH,seats:3},
+    {x:startX+(cabinW+100)*2,y:cabinY,w:cabinW,h:cabinH,seats:2},
   ];
   // Piso do corredor novo (toda a faixa estendida) — sem isso a área entre/ao redor das
   // cabines fica igual à cor de fundo do jogo (vazio), sem nenhuma pista visual de chão.
-  scene.add.rectangle(640,960+180,1280,360,0x3d3a54).setDepth(-2);
+  scene.add.rectangle(mapWidth/2,stripY+stripH/2,mapWidth,stripH,0x3d3a54).setDepth(-2);
 
   const walls=scene.physics.add.staticGroup();
   const addWall=(wx,wy,ww,wh)=>{
@@ -13377,6 +13404,9 @@ function salaMapaCreateGame(){
       this.load.spritesheet('basement',SALA_ASSETS+'tileset/Basement.png',{frameWidth:32,frameHeight:32});
       this.load.spritesheet('classroom',SALA_ASSETS+'tileset/Classroom_and_library.png',{frameWidth:32,frameHeight:32});
       this.load.spritesheet('generic',SALA_ASSETS+'tileset/Generic.png',{frameWidth:32,frameHeight:32});
+      this.load.spritesheet('conference',SALA_ASSETS+'tileset/Conference_Hall.png',{frameWidth:32,frameHeight:32});
+      this.load.spritesheet('kitchen',SALA_ASSETS+'tileset/Kitchen.png',{frameWidth:32,frameHeight:32});
+      this.load.spritesheet('living',SALA_ASSETS+'tileset/LivingRoom.png',{frameWidth:32,frameHeight:32});
       SALA_CHARACTERS.forEach(char=>{
         this.load.spritesheet(char,SALA_ASSETS+'character/'+char+'.png',{frameWidth:32,frameHeight:48});
       });
@@ -13395,12 +13425,15 @@ function salaMapaCreateGame(){
       map.addTilesetImage('computer','computers');
       map.addTilesetImage('whiteboard','whiteboards');
       map.addTilesetImage('vendingmachine','vendingmachines');
+      map.addTilesetImage('Conference_Hall','conference');
+      map.addTilesetImage('Kitchen','kitchen');
+      map.addTilesetImage('LivingRoom','living');
 
       const groundLayer=map.createLayer('Ground',floorTS);
       groundLayer.setCollisionByProperty({collides:true});
 
       const myChar=SALA_CHARACTERS.includes(db.studyCharacter)?db.studyCharacter:SALA_CHARACTERS[0];
-      this.player=this.physics.add.sprite(705,500,myChar);
+      this.player=this.physics.add.sprite(900,1340,myChar);
       this.player.charKey=myChar;
       this.player.setSize(16,10).setOffset(8,38); // colisão só nos "pés", igual ao original (collisionScale)
       this.player.setDepth(this.player.y);
@@ -13408,13 +13441,20 @@ function salaMapaCreateGame(){
       this.player.play(myChar+'_idle_down');
       this.player.nameText=this.add.text(this.player.x,this.player.y-34,db.studyNickname||'',{fontSize:'11px',fontFamily:'Arial',color:'#ffe27a',stroke:'#000000',strokeThickness:3}).setOrigin(0.5).setDepth(999999);
 
-      // Mundo estendido pra baixo do salão original (1280x960) pra caber as cabines novas.
+      // Mundo estendido pra baixo do salão (planta v2, 60x44=1920x1408) pra caber as
+      // cabines novas.
       const worldW=map.widthInPixels,worldH=map.heightInPixels+360;
       this.cameras.main.setBounds(0,0,worldW,worldH);
       this.cameras.main.startFollow(this.player,true);
       this.cameras.main.setZoom(1.5);
       this.physics.world.setBounds(0,0,worldW,worldH);
       this.physics.add.collider(this.player,groundLayer);
+      // A camada "Wall" do map.json vem vazia nesta planta (as paredes são só visuais,
+      // desenhadas dentro da própria camada Ground) — gera o corpo de colisão por
+      // código a partir dos gids de parede conhecidos (vocabulário do build_map_v2.py
+      // que gerou este mapa: cantos 88/90/216/218, topo 722, rodapé 217, laterais
+      // 152/154). Sem isso o jogador atravessa toda parede do mapa.
+      this.physics.add.collider(this.player,salaMapaBuildWallsFromGround(this,map));
 
       // Móveis/decoração a partir das camadas de objeto do Tiled — mesma matemática do
       // addGroupFromTiled original: x=obj.x+largura/2, y=obj.y-altura/2, profundidade=y
@@ -13443,6 +13483,9 @@ function salaMapaCreateGame(){
       addGroupFromTiled('Computer','computers','computer',false);
       addGroupFromTiled('Whiteboard','whiteboards','whiteboard',false);
       addGroupFromTiled('VendingMachine','vendingmachines','vendingmachine',true);
+      addGroupFromTiled('Conference','conference','Conference_Hall',true);
+      addGroupFromTiled('Kitchen','kitchen','Kitchen',true);
+      addGroupFromTiled('Living','living','LivingRoom',true);
 
       // Cadeiras — igual às outras camadas de objeto, mas guardam a direção (do Tiled)
       // pra saber em que pose sentar e pra que lado deslocar o jogador (SALA_SITTING_SHIFT).
@@ -13458,7 +13501,7 @@ function salaMapaCreateGame(){
           sprite.direction=dirProp?dirProp.value:'down';
         });
       }
-      salaMapaBuildCabins(this);
+      salaMapaBuildCabins(this,map.widthInPixels,map.heightInPixels);
 
       this.cursors={...this.input.keyboard.createCursorKeys(),...this.input.keyboard.addKeys('W,S,A,D')};
       this.keyE=this.input.keyboard.addKey('E');
