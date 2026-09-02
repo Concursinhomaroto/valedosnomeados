@@ -13684,6 +13684,9 @@ function salaMapaCreateGame(){
       this.load.spritesheet('conference',SALA_ASSETS+'tileset/Conference_Hall.png',{frameWidth:32,frameHeight:32});
       this.load.spritesheet('kitchen',SALA_ASSETS+'tileset/Kitchen.png',{frameWidth:32,frameHeight:32});
       this.load.spritesheet('living',SALA_ASSETS+'tileset/LivingRoom.png',{frameWidth:32,frameHeight:32});
+      this.load.spritesheet('gym',SALA_ASSETS+'tileset/Gym.png',{frameWidth:32,frameHeight:32});
+      this.load.spritesheet('music',SALA_ASSETS+'tileset/Music_and_sport.png',{frameWidth:32,frameHeight:32});
+      this.load.spritesheet('art',SALA_ASSETS+'tileset/Art.png',{frameWidth:32,frameHeight:32});
       SALA_CHARACTERS.forEach(char=>{
         this.load.spritesheet(char,SALA_ASSETS+'character/'+char+'.png',{frameWidth:32,frameHeight:48});
       });
@@ -13704,13 +13707,16 @@ function salaMapaCreateGame(){
       map.addTilesetImage('vendingmachine','vendingmachines');
       map.addTilesetImage('Conference_Hall','conference');
       map.addTilesetImage('Kitchen','kitchen');
+      map.addTilesetImage('Gym','gym');
+      map.addTilesetImage('Music_and_sport','music');
+      map.addTilesetImage('Art','art');
       map.addTilesetImage('LivingRoom','living');
 
       const groundLayer=map.createLayer('Ground',floorTS);
       groundLayer.setCollisionByProperty({collides:true});
 
       const myChar=SALA_CHARACTERS.includes(db.studyCharacter)?db.studyCharacter:SALA_CHARACTERS[0];
-      this.player=this.physics.add.sprite(736,704,myChar);
+      this.player=this.physics.add.sprite(1888,672,myChar);
       this.player.charKey=myChar;
       this.player.setSize(16,10).setOffset(8,38); // colisão só nos "pés", igual ao original (collisionScale)
       this.player.setDepth(this.player.y);
@@ -13766,6 +13772,10 @@ function salaMapaCreateGame(){
       addGroupFromTiled('Conference','conference','Conference_Hall',true);
       addGroupFromTiled('Kitchen','kitchen','Kitchen',true);
       addGroupFromTiled('Living','living','LivingRoom',true);
+      addGroupFromTiled('Gym','gym','Gym',true);
+      addGroupFromTiled('Music','music','Music_and_sport',true);
+      addGroupFromTiled('Art','art','Art',true);
+      addGroupFromTiled('ArtDecor','art','Art',false);
 
       // Cadeiras — igual às outras camadas de objeto, mas guardam a direção (do Tiled)
       // pra saber em que pose sentar e pra que lado deslocar o jogador (SALA_SITTING_SHIFT).
