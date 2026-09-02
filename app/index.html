@@ -13343,97 +13343,6 @@ function salaMapaBuildWallsFromGround(scene,map){
   return walls;
 }
 
-// Cabines isoladas (2-3 pessoas), construídas por código — não no map.json (editar Tiled à
-// mão seria arriscado sem a ferramenta original). Ficam numa faixa nova abaixo do salão,
-// numa extensão do mundo/câmera, reaproveitando o MESMO grupo this.chairs (e portanto o
-// mesmo sentar/levantar por E) usado pelo resto do mapa.
-// Frames locais (gid-1, já que FloorAndGround tem firstgid=1) do mesmo vocabulário de
-// parede usado em salaMapaBuildWallsFromGround — reaproveita a arte de verdade do mapa
-// em vez de retângulos coloridos, pra essas cabines parecerem parte do mesmo salão.
-const SALA_WALL_FRAME={TL:87,TR:89,BL:215,BR:217,TOP:721,BOTTOM:216,LEFT:151,RIGHT:153};
-const SALA_FLOOR_FRAME_CORRIDOR=1601; // tábua corrida
-const SALA_FLOOR_FRAME_CABIN=1606;    // terracota — diferencia a cabine do corredor
-// Altura da faixa nova abaixo do mapa (cabine de 256px + 32px de margem em cima e embaixo)
-// — usada tanto aqui quanto no cálculo do mundo/câmera em create(), pra nunca desalinhar.
-const SALA_CABIN_STRIP_H=320;
-
-function salaMapaBuildCabins(scene,mapWidth,mapHeight){
-  const wallThickness=32,doorGapTiles=3,doorGap=doorGapTiles*32;
-  const cabinW=320,cabinH=256; // múltiplos de 32 — ladrilha certinho com a arte real
-  const stripH=SALA_CABIN_STRIP_H;
-  const stripY=mapHeight,cabinY=stripY+32;
-  // 3 cabines centralizadas na largura do mapa, com espaço generoso entre elas.
-  const totalW=cabinW*3+96*2;
-  const startX=(mapWidth-totalW)/2;
-  const cabins=[
-    {x:startX,y:cabinY,w:cabinW,h:cabinH,seats:2},
-    {x:startX+cabinW+96,y:cabinY,w:cabinW,h:cabinH,seats:3},
-    {x:startX+(cabinW+96)*2,y:cabinY,w:cabinW,h:cabinH,seats:2},
-  ];
-  // Piso do corredor novo (toda a faixa estendida) — sem isso a área entre/ao redor das
-  // cabines fica igual à cor de fundo do jogo (vazio), sem nenhuma pista visual de chão.
-  scene.add.tileSprite(mapWidth/2,stripY+stripH/2,mapWidth,stripH,'tiles_wall',SALA_FLOOR_FRAME_CORRIDOR).setDepth(-2);
-
-  const walls=scene.physics.add.staticGroup();
-  // Corpo de colisão só (invisível) — a parte visual é a arte real desenhada logo abaixo,
-  // tile a tile, igual à parede do resto do mapa.
-  const addWallBody=(wx,wy,ww,wh)=>{
-    const rect=scene.add.rectangle(wx,wy,ww,wh,0,0);
-    scene.physics.add.existing(rect,true);
-    walls.add(rect);
-  };
-  cabins.forEach(cab=>{
-    const tilesW=cab.w/32,tilesH=cab.h/32;
-    // Piso da cabine, tom diferente do corredor, pra ler como um cômodo separado.
-    scene.add.tileSprite(cab.x+cab.w/2,cab.y+cab.h/2,cab.w,cab.h,'tiles_wall',SALA_FLOOR_FRAME_CABIN).setDepth(cab.y-1);
-
-    // Cantos.
-    scene.add.sprite(cab.x+16,cab.y+16,'tiles_wall',SALA_WALL_FRAME.TL).setDepth(cab.y);
-    scene.add.sprite(cab.x+cab.w-16,cab.y+16,'tiles_wall',SALA_WALL_FRAME.TR).setDepth(cab.y);
-    scene.add.sprite(cab.x+16,cab.y+cab.h-16,'tiles_wall',SALA_WALL_FRAME.BL).setDepth(cab.y+cab.h-16);
-    scene.add.sprite(cab.x+cab.w-16,cab.y+cab.h-16,'tiles_wall',SALA_WALL_FRAME.BR).setDepth(cab.y+cab.h-16);
-    // Topo, entre os cantos.
-    for(let i=1;i<tilesW-1;i++){
-      scene.add.sprite(cab.x+i*32+16,cab.y+16,'tiles_wall',SALA_WALL_FRAME.TOP).setDepth(cab.y);
-    }
-    // Rodapé de baixo, com vão de porta no meio.
-    const doorStart=Math.floor((tilesW-doorGapTiles)/2);
-    for(let i=1;i<tilesW-1;i++){
-      if(i>=doorStart&&i<doorStart+doorGapTiles)continue;
-      scene.add.sprite(cab.x+i*32+16,cab.y+cab.h-16,'tiles_wall',SALA_WALL_FRAME.BOTTOM).setDepth(cab.y+cab.h-16);
-    }
-    // Laterais.
-    for(let j=1;j<tilesH-1;j++){
-      scene.add.sprite(cab.x+16,cab.y+j*32+16,'tiles_wall',SALA_WALL_FRAME.LEFT).setDepth(cab.y+j*32);
-      scene.add.sprite(cab.x+cab.w-16,cab.y+j*32+16,'tiles_wall',SALA_WALL_FRAME.RIGHT).setDepth(cab.y+j*32);
-    }
-
-    // Corpos de colisão — um retângulo por lado, igual antes, só que agora com arte real por cima.
-    addWallBody(cab.x+cab.w/2,cab.y,cab.w,wallThickness);
-    addWallBody(cab.x,cab.y+cab.h/2,wallThickness,cab.h);
-    addWallBody(cab.x+cab.w,cab.y+cab.h/2,wallThickness,cab.h);
-    const halfW=(cab.w-doorGap)/2;
-    addWallBody(cab.x+halfW/2,cab.y+cab.h,halfW,wallThickness);
-    addWallBody(cab.x+cab.w-halfW/2,cab.y+cab.h,halfW,wallThickness);
-
-    const seatXs=cab.seats===2
-      ?[cab.x+cab.w*0.3,cab.x+cab.w*0.7]
-      :[cab.x+cab.w*0.25,cab.x+cab.w*0.5,cab.x+cab.w*0.75];
-    seatXs.forEach((sx,i)=>{
-      const dir=i%2===0?'down':'up';
-      const sy=dir==='down'?cab.y+cab.h*0.35:cab.y+cab.h*0.65;
-      const sprite=scene.chairs.get(sx,sy,'chairs',SALA_CHAIR_FRAME[dir]).setDepth(sy);
-      sprite.direction=dir;
-    });
-    // Vasinho no canto — puramente decorativo (mesmo frame já usado na recepção), só pra
-    // a cabine não ficar tão nua.
-    const plantY=cab.y+40;
-    scene.add.sprite(cab.x+40,plantY,'living',27).setDepth(plantY);
-  });
-  scene.physics.add.collider(scene.player,walls);
-  scene.salaCabinWalls=walls;
-}
-
 function salaMapaCreateGame(){
   class SalaMapaScene extends Phaser.Scene{
     constructor(){super('salaMapaScene');}
@@ -13477,7 +13386,7 @@ function salaMapaCreateGame(){
       groundLayer.setCollisionByProperty({collides:true});
 
       const myChar=SALA_CHARACTERS.includes(db.studyCharacter)?db.studyCharacter:SALA_CHARACTERS[0];
-      this.player=this.physics.add.sprite(416,224,myChar);
+      this.player=this.physics.add.sprite(736,704,myChar);
       this.player.charKey=myChar;
       this.player.setSize(16,10).setOffset(8,38); // colisão só nos "pés", igual ao original (collisionScale)
       this.player.setDepth(this.player.y);
@@ -13485,9 +13394,7 @@ function salaMapaCreateGame(){
       this.player.play(myChar+'_idle_down');
       this.player.nameText=this.add.text(this.player.x,this.player.y-34,db.studyNickname||'',{fontSize:'11px',fontFamily:'Arial',color:'#ffe27a',stroke:'#000000',strokeThickness:3}).setOrigin(0.5).setDepth(999999);
 
-      // Mundo estendido pra baixo do salão (planta v2, 60x44=1920x1408) pra caber as
-      // cabines novas.
-      const worldW=map.widthInPixels,worldH=map.heightInPixels+SALA_CABIN_STRIP_H;
+      const worldW=map.widthInPixels,worldH=map.heightInPixels;
       this.cameras.main.setBounds(0,0,worldW,worldH);
       this.cameras.main.startFollow(this.player,true);
       this.cameras.main.setZoom(1.5);
@@ -13545,7 +13452,6 @@ function salaMapaCreateGame(){
           sprite.direction=dirProp?dirProp.value:'down';
         });
       }
-      salaMapaBuildCabins(this,map.widthInPixels,map.heightInPixels);
 
       this.cursors={...this.input.keyboard.createCursorKeys(),...this.input.keyboard.addKeys('W,S,A,D')};
       this.keyE=this.input.keyboard.addKey('E');
@@ -13570,7 +13476,6 @@ function salaMapaCreateGame(){
           const nameText=this.add.text(data.x||0,(data.y||0)-34,data.nickname||'?',{fontSize:'11px',fontFamily:'Arial',color:'#ffffff',stroke:'#000000',strokeThickness:3}).setOrigin(0.5);
           entry={sprite,nameText,char};
           this.otherPlayers[uid]=entry;
-          if(this.salaCabinWalls)this.physics.add.collider(sprite,this.salaCabinWalls);
         }
         if(data.character&&data.character!==entry.char&&SALA_CHARACTERS.includes(data.character)){
           entry.char=data.character;
