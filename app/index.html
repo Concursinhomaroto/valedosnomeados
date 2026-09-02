@@ -13481,7 +13481,10 @@ function salaMapaBuildComputerLab(scene,mapWidth,mapHeight){
 
   // 4 estações (2x2), cada uma com um cluster de mesa+monitor diferente dos 5 disponíveis
   // (só pra não ficar repetitivo) + cadeira de frente.
-  const stationPositions=[[labX+106,labY+70],[labX+214,labY+70],[labX+106,labY+190],[labX+214,labY+190]];
+  // y da 2ª fileira calculado com folga da parede de baixo (centrada em labY+labH, ver
+  // addWallBody acima — a face interna dela fica em labY+labH-16): cadeira tem 64px de
+  // alto a partir do centro, então o centro da cadeira precisa ficar bem antes disso.
+  const stationPositions=[[labX+106,labY+70],[labX+214,labY+70],[labX+106,labY+152],[labX+214,labY+152]];
   stationPositions.forEach(([dx,dy],i)=>{
     scene.add.sprite(dx,dy,'computers',i%5).setDepth(dy);
     const chairY=dy+40;
