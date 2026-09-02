@@ -28,9 +28,21 @@ Usados no Vale dos Nomeados só pra renderizar o mapa da Sala de Estudo (Phaser 
 client-side) — sem nenhum código do SkyOffice em si (servidor Colyseus, React, Redux
 etc.), só os arquivos de imagem/mapa.
 
-⚠️ **Pendência real, não resolvida por este aviso**: os termos exatos de uso da
-LimeZu para o pacote pago (Modern Interiors) — em particular se hospedar essas
-imagens num site público conta como "redistribuir" o asset — não foram confirmados
-com uma fonte primária (comprovante de compra/licença). Decisão registrada em
-2026-09-02: manter os assets publicados por ora; revisitar se surgir confirmação
-em qualquer direção.
+⚠️ **Atualização de 2026-09-02**: o usuário enviou o pacote completo
+"Modern_Interiors_RPG_Maker_Version", que inclui `LICENSE.txt` (fonte primária, não
+mais suposição):
+
+```
+MODERN INTERIORS FULL VERSION LICENSE
+YOU CAN: Edit and use the asset in any commercial or non commercial project
+YOU CAN'T: Resell or distribute the asset to others / Edit and resell the asset to others
+Credits required
+```
+
+Isso confirma que "distribuir o asset" é proibido — e servir esses PNGs crus em URLs
+públicas (como este site faz) é um candidato bem direto a se encaixar nessa proibição,
+mesmo a arte estando "dentro" de um jogo. Decisão explícita do usuário, registrada aqui:
+**manter os assets publicados mesmo assim** ("Segue mesmo assim — uso o pacote à
+vontade..."). Crédito visível adicionado na tela da Sala de Estudo (rodapé, link pra
+https://limezu.itch.io/) pra cumprir a exigência de "Credits required" — a única parte
+do texto que dava pra atender sem tirar nada do ar.
