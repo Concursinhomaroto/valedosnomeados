@@ -13434,6 +13434,65 @@ function salaMapaBuildCabins(scene,mapWidth,mapHeight){
   scene.salaCabinWalls=walls;
 }
 
+// Laboratório de informática — mesma técnica das cabines (paredes/piso com a arte real
+// do tileset, corpo de colisão invisível por baixo), na sobra de margem à esquerda da
+// faixa das cabines. Primeira vez que o tileset 'computers' aparece de fato no mapa —
+// já vinha carregado (ver preload) mas a camada Computer do map.json nunca teve objeto
+// nenhum. Cada cluster de mesa (96x64, 3x2 tiles) já vem com monitor(es)+teclado no
+// próprio frame — só falta a cadeira na frente, mesmo grupo this.chairs de sempre
+// (aqui é só visual/decorativo, sentar não liga em nenhuma ação nova, igual quadro
+// branco e máquina de venda hoje).
+function salaMapaBuildComputerLab(scene,mapWidth,mapHeight){
+  const wallThickness=32,doorGapTiles=3,doorGap=doorGapTiles*32;
+  const labW=288,labH=256; // múltiplos de 32, mesma lógica das cabines
+  const stripY=mapHeight,labY=stripY+32,labX=16;
+  const tilesW=labW/32,tilesH=labH/32;
+
+  scene.add.tileSprite(labX+labW/2,labY+labH/2,labW,labH,'tiles_wall',SALA_FLOOR_FRAME_CORRIDOR).setDepth(labY-1);
+
+  const walls=scene.physics.add.staticGroup();
+  const addWallBody=(wx,wy,ww,wh)=>{
+    const rect=scene.add.rectangle(wx,wy,ww,wh,0,0);
+    scene.physics.add.existing(rect,true);
+    walls.add(rect);
+  };
+  scene.add.sprite(labX+16,labY+16,'tiles_wall',SALA_WALL_FRAME.TL).setDepth(labY);
+  scene.add.sprite(labX+labW-16,labY+16,'tiles_wall',SALA_WALL_FRAME.TR).setDepth(labY);
+  scene.add.sprite(labX+16,labY+labH-16,'tiles_wall',SALA_WALL_FRAME.BL).setDepth(labY+labH-16);
+  scene.add.sprite(labX+labW-16,labY+labH-16,'tiles_wall',SALA_WALL_FRAME.BR).setDepth(labY+labH-16);
+  for(let i=1;i<tilesW-1;i++){
+    scene.add.sprite(labX+i*32+16,labY+16,'tiles_wall',SALA_WALL_FRAME.TOP).setDepth(labY);
+  }
+  const doorStart=Math.floor((tilesW-doorGapTiles)/2);
+  for(let i=1;i<tilesW-1;i++){
+    if(i>=doorStart&&i<doorStart+doorGapTiles)continue;
+    scene.add.sprite(labX+i*32+16,labY+labH-16,'tiles_wall',SALA_WALL_FRAME.BOTTOM).setDepth(labY+labH-16);
+  }
+  for(let j=1;j<tilesH-1;j++){
+    scene.add.sprite(labX+16,labY+j*32+16,'tiles_wall',SALA_WALL_FRAME.LEFT).setDepth(labY+j*32);
+    scene.add.sprite(labX+labW-16,labY+j*32+16,'tiles_wall',SALA_WALL_FRAME.RIGHT).setDepth(labY+j*32);
+  }
+  addWallBody(labX+labW/2,labY,labW,wallThickness);
+  addWallBody(labX,labY+labH/2,wallThickness,labH);
+  addWallBody(labX+labW,labY+labH/2,wallThickness,labH);
+  const halfW=(labW-doorGap)/2;
+  addWallBody(labX+halfW/2,labY+labH,halfW,wallThickness);
+  addWallBody(labX+labW-halfW/2,labY+labH,halfW,wallThickness);
+
+  // 4 estações (2x2), cada uma com um cluster de mesa+monitor diferente dos 5 disponíveis
+  // (só pra não ficar repetitivo) + cadeira de frente.
+  const stationPositions=[[labX+106,labY+70],[labX+214,labY+70],[labX+106,labY+190],[labX+214,labY+190]];
+  stationPositions.forEach(([dx,dy],i)=>{
+    scene.add.sprite(dx,dy,'computers',i%5).setDepth(dy);
+    const chairY=dy+40;
+    const sprite=scene.chairs.get(dx,chairY,'chairs',SALA_CHAIR_FRAME.down).setDepth(chairY);
+    sprite.direction='down';
+  });
+
+  scene.physics.add.collider(scene.player,walls);
+  scene.salaComputerLabWalls=walls;
+}
+
 function salaMapaCreateGame(){
   class SalaMapaScene extends Phaser.Scene{
     constructor(){super('salaMapaScene');}
@@ -13546,6 +13605,7 @@ function salaMapaCreateGame(){
         });
       }
       salaMapaBuildCabins(this,map.widthInPixels,map.heightInPixels);
+      salaMapaBuildComputerLab(this,map.widthInPixels,map.heightInPixels);
 
       this.cursors={...this.input.keyboard.createCursorKeys(),...this.input.keyboard.addKeys('W,S,A,D')};
       this.keyE=this.input.keyboard.addKey('E');
