@@ -1903,6 +1903,20 @@ nav{
     </div>
     <div id="admin-pagination" style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px"></div>
   </div>
+
+  <div class="section-card" style="max-width:720px">
+    <div class="sec-title" style="font-size:15px">🗄️ Backups automáticos (sua conta)</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+      Uma cópia completa dos seus dados é gravada automaticamente uma vez por dia, num
+      lugar separado do banco principal — nunca é sobrescrita pelo uso normal do app.
+      Guarda os últimos <span id="admin-backups-retention">30</span> dias. Restaurar
+      substitui TUDO que está na sua conta agora pelo estado daquele dia — não afeta o
+      caminho antigo (vdn_v1) nem nenhuma outra conta.
+    </div>
+    <div id="admin-backups-list" style="display:flex;flex-direction:column;gap:8px">
+      <div class="empty" style="padding:16px"><i class="fa fa-spinner fa-spin"></i><p>Carregando backups...</p></div>
+    </div>
+  </div>
 </div>
 
 <!-- ===== TELA DE UPSELL (recursos travados no plano trial) ===== -->
@@ -2985,6 +2999,7 @@ function loadDB(callback){
       firebaseReady=true;
       overlay.style.display='none';
       if(!data)checkForLegacyMigration();
+      maybeBackupDB();
       if(callback)callback();
     }else{
       overlay.style.display='none';
@@ -3344,6 +3359,139 @@ function saveDB(){
       warnSyncIssue('⚠️ Não foi possível salvar na nuvem agora. Seus dados estão seguros neste dispositivo.');
     }
   },800);
+  maybeBackupDB();
+}
+
+// ===== BACKUP DIÁRIO AUTOMÁTICO =====
+// Rede de segurança independente do resto do app: uma vez por dia, grava uma cópia
+// completa e íntegra do banco num caminho separado (users/{uid}/vdn_v1_backups/{data}),
+// que o fluxo normal de leitura/escrita nunca toca. Existe pra que "não ter pra onde
+// recuperar" nunca mais seja possível de novo, não importa que bug apareça no futuro no
+// caminho normal — mesmo o bug que já corrigimos (ver commit da leitura vazia) teria sido
+// só um contratempo de um dia, em vez de uma perda definitiva, se isso já existisse antes.
+const BACKUP_RETENTION_DAYS=30;
+let backupCheckInFlight=false;
+let backupFailedThisSession=false; // evita bombardear o Firebase de novo a cada save se já falhou uma vez nesta sessão (ex: regra de permissão faltando) — tenta de novo na próxima sessão/dia
+function maybeBackupDB(){
+  if(!firebaseReady||useLocalFallback||!DB_REF||!currentUser)return;
+  if(backupCheckInFlight||backupFailedThisSession)return;
+  const today=todayStr();
+  // Checagem local primeiro, sem rede — cobre a esmagadora maioria das chamadas (o app
+  // chama saveDB() várias vezes por sessão; só precisamos tocar o Firebase na primeira
+  // vez que percebemos que o dia mudou).
+  try{
+    if(localStorage.getItem('vdn_backup_last_date')===today)return;
+  }catch(e){}
+  backupCheckInFlight=true;
+  const metaRef=userRef('vdn_v1_backupMeta');
+  if(!metaRef){backupCheckInFlight=false;return;}
+  metaRef.once('value').then(snap=>{
+    const meta=snap.val()||{};
+    if(meta[today]){
+      // Outro dispositivo/aba desta mesma conta já gravou o backup de hoje — só evita
+      // ficar checando de novo a cada save nesta sessão.
+      try{localStorage.setItem('vdn_backup_last_date',today);}catch(e){}
+      backupCheckInFlight=false;
+      return;
+    }
+    const dates=Object.keys(meta).sort();
+    const keepFrom=Math.max(0,dates.length-(BACKUP_RETENTION_DAYS-1));
+    const toDelete=dates.slice(0,keepFrom);
+    const updates={};
+    updates['vdn_v1_backups/'+today]=sanitizeForFirebase(db);
+    updates['vdn_v1_backupMeta/'+today]=Date.now();
+    toDelete.forEach(d=>{
+      updates['vdn_v1_backups/'+d]=null;
+      updates['vdn_v1_backupMeta/'+d]=null;
+    });
+    userRef('').update(updates).then(()=>{
+      try{localStorage.setItem('vdn_backup_last_date',today);}catch(e){}
+      backupCheckInFlight=false;
+    }).catch(e=>{
+      // Falha silenciosa aqui foi exatamente o que mascarou o bug da migração antiga
+      // (permission_denied engolido por um catch mudo) — não repete esse erro: avisa
+      // de verdade, uma vez por sessão, sem ficar tentando de novo a cada save.
+      console.error('Falha ao gravar backup diário (dados NÃO estão sendo salvos como cópia de segurança):',e);
+      backupFailedThisSession=true;
+      backupCheckInFlight=false;
+      warnSyncIssue('⚠️ O backup automático diário falhou (provavelmente falta liberar o caminho vdn_v1_backups nas regras do Firebase). Seus dados normais continuam salvos — só a cópia extra de segurança que não foi.');
+    });
+  }).catch(e=>{
+    console.error('Falha ao checar backups existentes (provável falta de permissão nas regras do Firebase):',e);
+    backupFailedThisSession=true;
+    backupCheckInFlight=false;
+    warnSyncIssue('⚠️ Não consegui checar/gravar o backup automático diário — confere as regras do Firebase pro caminho vdn_v1_backupMeta.');
+  });
+}
+function adminLoadBackups(){
+  const list=document.getElementById('admin-backups-list');
+  const retSpan=document.getElementById('admin-backups-retention');
+  if(retSpan)retSpan.textContent=BACKUP_RETENTION_DAYS;
+  if(!list)return;
+  const metaRef=userRef('vdn_v1_backupMeta');
+  if(!metaRef){list.innerHTML='<div class="empty" style="padding:16px"><p>Firebase indisponível agora.</p></div>';return;}
+  metaRef.once('value').then(snap=>{
+    const meta=snap.val()||{};
+    const dates=Object.keys(meta).sort().reverse();
+    if(!dates.length){
+      list.innerHTML='<div class="empty" style="padding:16px"><p>Ainda não existe nenhum backup — o primeiro é gravado automaticamente na próxima vez que algo for salvo hoje.</p></div>';
+      return;
+    }
+    list.innerHTML=dates.map(d=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--panel2);border:1.5px solid var(--border2);border-radius:10px;font-size:13px">
+        <span style="flex:1"><b>${fmtDateBR(d)}</b> <span style="color:var(--muted);font-size:11px">gravado às ${new Date(meta[d]).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span></span>
+        <button class="btn btn-xs" onclick="confirmRestoreFromBackup('${d}')"><i class="fa fa-clock-rotate-left"></i> Restaurar</button>
+      </div>
+    `).join('');
+  }).catch(e=>{
+    console.warn('Falha ao listar backups:',e);
+    list.innerHTML='<div class="empty" style="padding:16px"><p>Falha ao carregar a lista de backups.</p></div>';
+  });
+}
+function confirmRestoreFromBackup(date){
+  userRef('vdn_v1_backups/'+date).once('value').then(snap=>{
+    const backup=snap.val();
+    if(!backup){toast('Esse backup não existe mais.','var(--red)');adminLoadBackups();return;}
+    const c=countDataSummary(backup);
+    const curC=countDataSummary(db);
+    openModal(`♻️ Restaurar backup de ${fmtDateBR(date)}`,`
+      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5">
+        Isso substitui <b>tudo</b> que está na sua conta agora pelo estado gravado nesse
+        dia. O que está aí atualmente é perdido, a menos que exista um backup mais recente
+        pra recuperar depois. Tem certeza?
+      </div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:16px">
+        <tr style="text-align:left;color:var(--muted)"><th></th><th>Backup (${fmtDateBR(date)})</th><th>Nesta conta agora</th></tr>
+        <tr><td>Reinos</td><td><b>${c.reinos}</b></td><td>${curC.reinos}</td></tr>
+        <tr><td>Flashcards</td><td><b>${c.flashcards}</b></td><td>${curC.flashcards}</td></tr>
+        <tr><td>Redações</td><td><b>${c.redacoes}</b></td><td>${curC.redacoes}</td></tr>
+        <tr><td>Temas de repertório</td><td><b>${c.temas}</b></td><td>${curC.temas}</td></tr>
+      </table>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" style="flex:1;justify-content:center;background:var(--red)" onclick="restoreFromBackup('${date}')">Restaurar mesmo assim</button>
+      </div>
+    `);
+  }).catch(e=>{console.warn('Falha ao carregar backup pra confirmação:',e);toast('Falha ao carregar esse backup.','var(--red)');});
+}
+function restoreFromBackup(date){
+  userRef('vdn_v1_backups/'+date).once('value').then(snap=>{
+    const backup=snap.val();
+    if(!backup){toast('Esse backup não existe mais.','var(--red)');closeModal();return;}
+    // Object.assign não remove campos que o backup não tem mas o db atual tem (ex: algo
+    // criado depois daquele dia) — zera os campos de conteúdo conhecidos antes de aplicar,
+    // pra "restaurar" ser de fato uma substituição, não uma mistura dos dois estados.
+    ['kingdoms','topics','times','revisions','flashcards','redacoes','repertorio','sessions'].forEach(k=>{delete db[k];});
+    Object.assign(db,backup);
+    applyDefaults();
+    saveDB();
+    closeModal();
+    const c=countDataSummary(backup);
+    toast(`✅ Restaurado! ${c.reinos} reinos, ${c.flashcards} flashcards, ${c.redacoes} redações, ${c.temas} temas.`,'var(--green)');
+    renderHeader();renderMap();updateRevBadge();updateEditaisBadge();updateFCBadge();
+    const sc=document.querySelector('.screen.active')?.id;
+    if(sc==='screen-dashboard')renderDashboard();
+  }).catch(e=>{console.warn('Falha ao restaurar backup:',e);toast('Falha ao restaurar esse backup.','var(--red)');});
 }
 
 // ===== TEMA CLARO/ESCURO =====
@@ -4022,7 +4170,7 @@ function showScreen(name){
   if(name==='repertorio')renderRepertorioScreen();
   if(name==='conquistas')renderConquistasScreen();
   if(name==='sala')renderSalaMapaScreen();
-  if(name==='admin')adminSearchUsers();
+  if(name==='admin'){adminSearchUsers();adminLoadBackups();}
   if(name==='map')renderMap();
   // 'vale' (Mapa do Vale, D3+GeoJSON) fica suprimido da navegação por enquanto — mais
   // pesado pra carregar e menos prático pro uso diário que o grid de reinos. O código
