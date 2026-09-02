@@ -1864,18 +1864,31 @@ nav{
     <h2><i class="fa fa-house-chimney"></i> Sala de Estudo</h2>
     <div class="sala-mapa-hint">WASD ou setas pra andar · E pra sentar/levantar</div>
   </div>
-  <div class="sala-mapa-viewport" id="sala-mapa-viewport"></div>
+  <div class="sala-mapa-stage">
+    <div class="sala-mapa-viewport" id="sala-mapa-viewport"></div>
+    <div class="sala-mapa-controls">
+      <button class="sala-zoom-btn" onclick="salaMapaZoom(0.25)" title="Aumentar zoom"><i class="fa fa-plus"></i></button>
+      <button class="sala-zoom-btn" onclick="salaMapaZoom(-0.25)" title="Diminuir zoom"><i class="fa fa-minus"></i></button>
+      <button class="sala-zoom-btn" onclick="salaOpenNicknamePicker()" title="Trocar visual"><i class="fa fa-user"></i></button>
+    </div>
+  </div>
 </div>
 <style>
 .sala-mapa-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
 .sala-mapa-top h2{font-family:'Cinzel',serif;font-size:19px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:10px;}
 .sala-mapa-hint{font-size:11px;color:var(--muted);font-weight:700;}
+.sala-mapa-stage{position:relative;}
 /* aspect-ratio + max-height mantêm o jogo num tamanho previsível em qualquer viewport —
    o Phaser (modo Scale.RESIZE) acompanha o tamanho desta caixa sozinho, então ela nunca
    pode crescer além do espaço disponível (mesma lição de nunca estourar a tela já
    aplicada nas features anteriores). */
 .sala-mapa-viewport{width:100%;aspect-ratio:4/3;max-height:calc(100vh - 200px);border-radius:var(--r-lg);overflow:hidden;border:1.5px solid var(--border);box-shadow:var(--shadow2);background:#1a1a2e;}
 .sala-mapa-viewport canvas{display:block;width:100%!important;height:100%!important;image-rendering:pixelated;}
+/* Botões flutuantes por cima do canvas — ficam fora do #sala-mapa-viewport de propósito,
+   porque esse innerHTML é limpo/reescrito pelo Phaser ao (re)criar o jogo. */
+.sala-mapa-controls{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:6px;z-index:5;}
+.sala-zoom-btn{width:32px;height:32px;border-radius:8px;border:1.5px solid rgba(255,255,255,0.25);background:rgba(15,15,25,0.65);color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.sala-zoom-btn:hover{background:rgba(15,15,25,0.85);}
 @media(max-width:700px){
   .sala-mapa-top h2{font-size:16px;}
   .sala-mapa-hint{display:none;}
@@ -13074,21 +13087,35 @@ function updateTabTitle(){
 setInterval(updateTabTitle,1000);
 
 // ===== SALA DE ESTUDO (mapa jogável, biblioteca de estudo, motor Phaser 3) =====
-// Fase 1 do plano combinado com o usuário: só o mapa, andando sozinho (WASD/setas) e
-// sentando em cadeira (E) — sem multiplayer, sem chat, sem vídeo, sem diálogo de
-// computador/quadro/máquina de venda (ficam só visuais). Assets em /icons/sala-mapa/
-// (tilesets, itens, personagem, map.json), vindos do repositório MIT do SkyOffice
-// (github.com/kevinshen56714/SkyOffice) + o map.json que o usuário mandou (biblioteca
+// Fase 2: elenco completo (16 personagens), zoom, cabines isoladas e multiplayer de
+// verdade (posição/animação/nome sincronizados via Firebase entre quem estiver na sala
+// ao mesmo tempo). Assets em /icons/sala-mapa/ (tilesets, itens, personagens, map.json),
+// vindos do repositório MIT do SkyOffice (github.com/kevinshen56714/SkyOffice) — os 4
+// personagens originais e as 12 variações de tom de pele (troca de paleta sobre a mesma
+// arte, ver icons/sala-mapa/NOTICE.md) — + o map.json que o usuário mandou (biblioteca
 // refeita a partir do escritório original). A cena Phaser é escrita do zero aqui —
-// Bootstrap.ts/Game.ts do pacote de referência são do projeto inteiro (React+Redux+
+// Bootstrap.ts/Game.ts dos pacotes de referência são do projeto inteiro (React+Redux+
 // Colyseus+WebRTC), fortemente acoplados a rede, e não servem pra copiar direto; a
 // matemática de posição/colisão/animação foi conferida contra o código-fonte real do
 // SkyOffice (Player.ts, MyPlayer.ts, CharacterAnims.ts) pra ficar fiel ao original.
 const SALA_ASSETS='/icons/sala-mapa/';
 const SALA_SITTING_SHIFT={up:[0,3,-10],down:[0,3,1],left:[0,-8,10],right:[0,-8,10]};
+// As mesmas 16 chaves de characters.ts do pacote enviado: 4 bases (arte original do
+// SkyOffice) × 4 tons de pele (o primeiro de cada bloco é o tom original, sem sufixo).
+const SALA_CHARACTERS=[
+  'adam','adam_media','adam_morena','adam_retinta',
+  'ash','ash_media','ash_morena','ash_retinta',
+  'lucy','lucy_media','lucy_morena','lucy_retinta',
+  'nancy','nancy_media','nancy_morena','nancy_retinta',
+];
+// Frame do spritesheet 'chairs' (items/chair.png) que corresponde a cada direção —
+// conferido direto nos objetos da camada "Chair" do map.json já existente (mesmo dado
+// usado pras cadeiras do salão, aqui reaproveitado pras cadeiras novas das cabines).
+const SALA_CHAIR_FRAME={down:1,left:2,right:3,up:5};
 
 let salaMapaGame=null;     // instância do Phaser.Game — criada uma vez, na 1ª visita
 let salaMapaLoading=false;
+let salaMapaSceneRef=null; // referência à cena viva, pra zoom/troca de visual de fora da classe
 
 // Carrega o Phaser sob demanda — só quem realmente abre essa tela baixa a lib (~1.1MB),
 // mesmo padrão já usado pro PDF.js neste app (ver loadPDFjs).
@@ -13103,7 +13130,19 @@ function loadPhaser(){
   });
 }
 
+// 'adam_media' -> 'icons/sala-mapa/portraits/Adam_media_login.png' (mesma convenção de
+// nome do loginImageName() do pacote de referência).
+function salaPortraitPath(character){
+  const parts=character.split('_');
+  parts[0]=parts[0].charAt(0).toUpperCase()+parts[0].slice(1);
+  return SALA_ASSETS+'portraits/'+parts.join('_')+'_login.png';
+}
+
 function renderSalaMapaScreen(){
+  if(!db.studyNickname){salaOpenNicknamePicker();return;}
+  salaMapaBootAfterPicker();
+}
+function salaMapaBootAfterPicker(){
   if(salaMapaGame){salaMapaResume();return;}
   if(salaMapaLoading)return;
   salaMapaLoading=true;
@@ -13118,26 +13157,210 @@ function renderSalaMapaScreen(){
     if(viewport)viewport.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;font-size:12px;text-align:center;padding:20px">Não deu pra carregar a sala agora. Confira sua conexão e tente de novo.</div>';
   });
 }
-function salaMapaPause(){if(salaMapaGame)salaMapaGame.scene.pause('salaMapaScene');}
-function salaMapaResume(){if(salaMapaGame)salaMapaGame.scene.resume('salaMapaScene');}
+function salaMapaPause(){
+  if(salaMapaGame)salaMapaGame.scene.pause('salaMapaScene');
+  salaPresenceLeave(); // sai da sala de verdade — presença só existe enquanto está na tela
+}
+function salaMapaResume(){
+  if(salaMapaGame)salaMapaGame.scene.resume('salaMapaScene');
+  if(salaMapaSceneRef)salaPresenceJoin(salaMapaSceneRef);
+}
+function salaMapaZoom(delta){
+  if(!salaMapaSceneRef)return;
+  const cam=salaMapaSceneRef.cameras.main;
+  const next=Math.max(0.8,Math.min(2.5,Math.round((cam.zoom+delta)*100)/100));
+  cam.setZoom(next);
+}
 
-// Só o personagem "adam" — os outros 3 do pacote original (ash/lucy/nancy) não fazem
-// falta pra um jogador solo. 52 frames (32x48), na mesma ordem do CharacterAnims.ts
-// original: idle 4 direções (0-23), correr 4 direções (24-47), sentado 4 direções (48-51).
+// ===== Nome fixo + escolha de avatar =====
+// db.studyNickname é definido UMA ÚNICA VEZ (sem botão de editar em lugar nenhum da UI —
+// decisão do usuário, porque esse nome vai virar identidade de um ranking de estudos
+// futuro, sem expor o e-mail/nome real da conta). db.studyCharacter pode ser trocado
+// a qualquer momento pelo botão "Trocar visual".
+let salaPickerSelectedChar=null;
+function salaOpenNicknamePicker(){
+  salaPickerSelectedChar=db.studyCharacter||SALA_CHARACTERS[0];
+  const hasNickname=!!db.studyNickname;
+  openModal(hasNickname?'🎭 Trocar visual':'🎭 Entrar na Sala de Estudo',`
+    ${hasNickname?`
+      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5">
+        Seu nome na sala é <b>${escapeHtml(db.studyNickname)}</b> (fixo, não muda). Escolha outro avatar abaixo, se quiser:
+      </div>
+    `:`
+      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5">
+        Escolha um nome e um avatar pra Sala de Estudo. <b>O nome não pode ser trocado depois</b> —
+        ele também vai identificar você num futuro ranking de estudos, sem expor seu nome/e-mail de verdade.
+      </div>
+      <label style="font-size:11px;font-weight:800;color:var(--text2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Nome na sala (fixo)</label>
+      <input class="inp" id="sala-nick-input" placeholder="Ex: Estudante Fantasma" maxlength="18" style="width:100%;margin-bottom:16px">
+    `}
+    <label style="font-size:11px;font-weight:800;color:var(--text2);display:block;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Avatar</label>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px">
+      ${SALA_CHARACTERS.map(c=>`
+        <div class="sala-portrait-opt" data-char="${c}" onclick="salaSelectPortrait('${c}')" style="cursor:pointer;border-radius:10px;border:2px solid ${c===salaPickerSelectedChar?'var(--accent)':'var(--border2)'};padding:4px;background:var(--panel2);display:flex;align-items:center;justify-content:center">
+          <img src="${salaPortraitPath(c)}" style="width:100%;image-rendering:pixelated;display:block" alt="${c}">
+        </div>
+      `).join('')}
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="salaConfirmNicknamePicker()"><i class="fa fa-${hasNickname?'check':'door-open'}"></i> ${hasNickname?'Salvar visual':'Entrar na sala'}</button>
+  `);
+}
+function salaSelectPortrait(character){
+  salaPickerSelectedChar=character;
+  document.querySelectorAll('.sala-portrait-opt').forEach(el=>{
+    const active=el.dataset.char===character;
+    el.style.borderColor=active?'var(--accent)':'var(--border2)';
+  });
+}
+function salaConfirmNicknamePicker(){
+  const needName=!db.studyNickname;
+  let name=db.studyNickname;
+  if(needName){
+    name=(document.getElementById('sala-nick-input')?.value||'').trim();
+    if(name.length<2||name.length>18){toast('⚠️ Escolha um nome de 2 a 18 caracteres','var(--red)');return;}
+  }
+  db.studyNickname=name;
+  db.studyCharacter=salaPickerSelectedChar||SALA_CHARACTERS[0];
+  saveDB();
+  closeModal();
+  if(salaMapaSceneRef&&salaMapaGame){
+    // Já estava com a sala aberta (isso foi só uma troca de visual) — troca o
+    // personagem ao vivo, sem recarregar o jogo, e avisa quem mais estiver vendo.
+    const p=salaMapaSceneRef.player;
+    p.charKey=db.studyCharacter;
+    p.setTexture(db.studyCharacter);
+    p.play(db.studyCharacter+'_idle_down',true);
+    if(salaOwnPresenceKeyRef)salaOwnPresenceKeyRef.update({character:db.studyCharacter,nickname:db.studyNickname}).catch(()=>{});
+  }else{
+    salaMapaBootAfterPicker();
+  }
+}
+
+// ===== Multiplayer: presença em tempo real na Sala de Estudo =====
+// Caminho não-siloado (fora de users/{uid}), mesmo padrão já usado por promo/lifetime —
+// dado efêmero e compartilhado entre contas, não histórico de ninguém.
+// sala_presence/{uid} = {nickname, character, x, y, state, dir, ts}
+let salaPresenceRef=null;
+let salaOwnPresenceKeyRef=null;
+let salaPresenceWriteFailed=false;
+let salaLastPresenceSend=0;
+const SALA_PRESENCE_THROTTLE_MS=150;
+
+// Extrai {state,dir} de uma anim key (ex: 'lucy_media_run_right' -> {state:'run',dir:'right'})
+// tirando o prefixo do PRÓPRIO personagem de quem chama — evita ter que adivinhar onde a
+// chave do personagem termina e a do estado começa (nomes têm tamanhos variáveis).
+function salaAnimStateDir(p){
+  const key=(p.anims.currentAnim&&p.anims.currentAnim.key)||(p.charKey+'_idle_down');
+  const suffix=key.slice(p.charKey.length+1);
+  const parts=suffix.split('_');
+  return{state:parts[0]||'idle',dir:parts[1]||'down'};
+}
+function salaPresenceHandleFail(e){
+  if(salaPresenceWriteFailed)return;
+  salaPresenceWriteFailed=true;
+  console.warn('Falha na presença da Sala de Estudo:',e);
+  warnSyncIssue('⚠️ Não consegui sincronizar a Sala de Estudo com outras pessoas agora — provavelmente falta liberar sala_presence nas regras do Firebase.');
+}
+function salaPresenceJoin(scene){
+  if(!firebaseDB||!currentUser||salaPresenceWriteFailed||salaOwnPresenceKeyRef)return;
+  const{state,dir}=salaAnimStateDir(scene.player);
+  salaOwnPresenceKeyRef=firebaseDB.ref('sala_presence/'+currentUser.uid);
+  salaOwnPresenceKeyRef.set({
+    nickname:db.studyNickname,character:db.studyCharacter||SALA_CHARACTERS[0],
+    x:scene.player.x,y:scene.player.y,state,dir,ts:Date.now(),
+  }).catch(e=>salaPresenceHandleFail(e));
+  salaOwnPresenceKeyRef.onDisconnect().remove();
+
+  salaPresenceRef=firebaseDB.ref('sala_presence');
+  salaPresenceRef.on('value',snap=>{
+    scene.salaSyncOtherPlayers(snap.val()||{});
+  },e=>salaPresenceHandleFail(e));
+}
+function salaPresenceLeave(){
+  if(salaPresenceRef){salaPresenceRef.off();salaPresenceRef=null;}
+  if(salaOwnPresenceKeyRef){
+    salaOwnPresenceKeyRef.onDisconnect().cancel();
+    salaOwnPresenceKeyRef.remove().catch(()=>{});
+    salaOwnPresenceKeyRef=null;
+  }
+}
+function salaPresenceMaybeSend(scene){
+  if(!salaOwnPresenceKeyRef||salaPresenceWriteFailed)return;
+  const now=Date.now();
+  if(now-salaLastPresenceSend<SALA_PRESENCE_THROTTLE_MS)return;
+  const p=scene.player;
+  const{state,dir}=salaAnimStateDir(p);
+  if(p.x===scene.salaLastSentX&&p.y===scene.salaLastSentY&&state===scene.salaLastSentState&&dir===scene.salaLastSentDir)return;
+  scene.salaLastSentX=p.x;scene.salaLastSentY=p.y;scene.salaLastSentState=state;scene.salaLastSentDir=dir;
+  salaLastPresenceSend=now;
+  salaOwnPresenceKeyRef.update({x:p.x,y:p.y,state,dir,ts:now}).catch(e=>salaPresenceHandleFail(e));
+}
+
+// 16 personagens (4 bases do SkyOffice × 4 tons de pele, ver SALA_CHARACTERS acima), todos
+// no mesmo layout de 52 frames (32x48): idle 4 direções (0-23), correr 4 direções (24-47),
+// sentado 4 direções (48-51), na mesma ordem do CharacterAnims.ts original.
 function salaMapaCreateAnims(anims){
   const fr=15;
   const dirs=[['right',0],['up',6],['left',12],['down',18]];
-  dirs.forEach(([dir,start])=>{
-    anims.create({key:'adam_idle_'+dir,frames:anims.generateFrameNumbers('adam',{start,end:start+5}),repeat:-1,frameRate:fr*0.6});
-  });
   const runDirs=[['right',24],['up',30],['left',36],['down',42]];
-  runDirs.forEach(([dir,start])=>{
-    anims.create({key:'adam_run_'+dir,frames:anims.generateFrameNumbers('adam',{start,end:start+5}),repeat:-1,frameRate:fr});
-  });
   const sitDirs=[['down',48],['left',49],['right',50],['up',51]];
-  sitDirs.forEach(([dir,frame])=>{
-    anims.create({key:'adam_sit_'+dir,frames:anims.generateFrameNumbers('adam',{start:frame,end:frame}),repeat:0,frameRate:fr});
+  SALA_CHARACTERS.forEach(char=>{
+    dirs.forEach(([dir,start])=>{
+      anims.create({key:char+'_idle_'+dir,frames:anims.generateFrameNumbers(char,{start,end:start+5}),repeat:-1,frameRate:fr*0.6});
+    });
+    runDirs.forEach(([dir,start])=>{
+      anims.create({key:char+'_run_'+dir,frames:anims.generateFrameNumbers(char,{start,end:start+5}),repeat:-1,frameRate:fr});
+    });
+    sitDirs.forEach(([dir,frame])=>{
+      anims.create({key:char+'_sit_'+dir,frames:anims.generateFrameNumbers(char,{start:frame,end:frame}),repeat:0,frameRate:fr});
+    });
   });
+}
+
+// Cabines isoladas (2-3 pessoas), construídas por código — não no map.json (editar Tiled à
+// mão seria arriscado sem a ferramenta original). Ficam numa faixa nova abaixo do salão
+// existente (que é 1280x960), numa extensão do mundo/câmera, reaproveitando o MESMO grupo
+// this.chairs (e portanto o mesmo sentar/levantar por E) usado pelo resto do mapa.
+function salaMapaBuildCabins(scene){
+  const wallThickness=12,doorGap=90;
+  const cabins=[
+    {x:60,y:1010,w:340,h:260,seats:2},
+    {x:440,y:1010,w:340,h:260,seats:3},
+    {x:820,y:1010,w:340,h:260,seats:2},
+  ];
+  // Piso do corredor novo (toda a faixa estendida) — sem isso a área entre/ao redor das
+  // cabines fica igual à cor de fundo do jogo (vazio), sem nenhuma pista visual de chão.
+  scene.add.rectangle(640,960+180,1280,360,0x3d3a54).setDepth(-2);
+
+  const walls=scene.physics.add.staticGroup();
+  const addWall=(wx,wy,ww,wh)=>{
+    const wall=scene.add.rectangle(wx,wy,ww,wh,0x6b4a2f).setStrokeStyle(2,0x8b6f47);
+    wall.setDepth(wy);
+    scene.physics.add.existing(wall,true);
+    walls.add(wall);
+  };
+  cabins.forEach(cab=>{
+    // Piso da cabine, mais claro que o corredor, pra ler como um cômodo separado.
+    scene.add.rectangle(cab.x+cab.w/2,cab.y+cab.h/2,cab.w,cab.h,0x5a5470).setDepth(-1);
+    addWall(cab.x+cab.w/2,cab.y,cab.w,wallThickness); // topo
+    addWall(cab.x,cab.y+cab.h/2,wallThickness,cab.h); // esquerda
+    addWall(cab.x+cab.w,cab.y+cab.h/2,wallThickness,cab.h); // direita
+    const halfW=(cab.w-doorGap)/2;
+    addWall(cab.x+halfW/2,cab.y+cab.h,halfW,wallThickness); // baixo-esquerda (vão de porta no meio)
+    addWall(cab.x+cab.w-halfW/2,cab.y+cab.h,halfW,wallThickness); // baixo-direita
+
+    const seatXs=cab.seats===2
+      ?[cab.x+cab.w*0.3,cab.x+cab.w*0.7]
+      :[cab.x+cab.w*0.25,cab.x+cab.w*0.5,cab.x+cab.w*0.75];
+    seatXs.forEach((sx,i)=>{
+      const dir=i%2===0?'down':'up';
+      const sy=dir==='down'?cab.y+cab.h*0.35:cab.y+cab.h*0.65;
+      const sprite=scene.chairs.get(sx,sy,'chairs',SALA_CHAIR_FRAME[dir]).setDepth(sy);
+      sprite.direction=dir;
+    });
+  });
+  scene.physics.add.collider(scene.player,walls);
+  scene.salaCabinWalls=walls;
 }
 
 function salaMapaCreateGame(){
@@ -13154,9 +13377,13 @@ function salaMapaCreateGame(){
       this.load.spritesheet('basement',SALA_ASSETS+'tileset/Basement.png',{frameWidth:32,frameHeight:32});
       this.load.spritesheet('classroom',SALA_ASSETS+'tileset/Classroom_and_library.png',{frameWidth:32,frameHeight:32});
       this.load.spritesheet('generic',SALA_ASSETS+'tileset/Generic.png',{frameWidth:32,frameHeight:32});
-      this.load.spritesheet('adam',SALA_ASSETS+'character/adam.png',{frameWidth:32,frameHeight:48});
+      SALA_CHARACTERS.forEach(char=>{
+        this.load.spritesheet(char,SALA_ASSETS+'character/'+char+'.png',{frameWidth:32,frameHeight:48});
+      });
     }
     create(){
+      salaMapaSceneRef=this;
+      this.otherPlayers={}; // uid -> {sprite, nameText, char}
       salaMapaCreateAnims(this.anims);
       const map=this.make.tilemap({key:'tilemap'});
       const floorTS=map.addTilesetImage('FloorAndGround','tiles_wall');
@@ -13172,16 +13399,21 @@ function salaMapaCreateGame(){
       const groundLayer=map.createLayer('Ground',floorTS);
       groundLayer.setCollisionByProperty({collides:true});
 
-      this.player=this.physics.add.sprite(705,500,'adam');
+      const myChar=SALA_CHARACTERS.includes(db.studyCharacter)?db.studyCharacter:SALA_CHARACTERS[0];
+      this.player=this.physics.add.sprite(705,500,myChar);
+      this.player.charKey=myChar;
       this.player.setSize(16,10).setOffset(8,38); // colisão só nos "pés", igual ao original (collisionScale)
       this.player.setDepth(this.player.y);
       this.player.playerBehavior='idle';
-      this.player.play('adam_idle_down');
+      this.player.play(myChar+'_idle_down');
+      this.player.nameText=this.add.text(this.player.x,this.player.y-34,db.studyNickname||'',{fontSize:'11px',fontFamily:'Arial',color:'#ffe27a',stroke:'#000000',strokeThickness:3}).setOrigin(0.5).setDepth(999999);
 
-      this.cameras.main.setBounds(0,0,map.widthInPixels,map.heightInPixels);
+      // Mundo estendido pra baixo do salão original (1280x960) pra caber as cabines novas.
+      const worldW=map.widthInPixels,worldH=map.heightInPixels+360;
+      this.cameras.main.setBounds(0,0,worldW,worldH);
       this.cameras.main.startFollow(this.player,true);
       this.cameras.main.setZoom(1.5);
-      this.physics.world.setBounds(0,0,map.widthInPixels,map.heightInPixels);
+      this.physics.world.setBounds(0,0,worldW,worldH);
       this.physics.add.collider(this.player,groundLayer);
 
       // Móveis/decoração a partir das camadas de objeto do Tiled — mesma matemática do
@@ -13226,16 +13458,60 @@ function salaMapaCreateGame(){
           sprite.direction=dirProp?dirProp.value:'down';
         });
       }
+      salaMapaBuildCabins(this);
 
       this.cursors={...this.input.keyboard.createCursorKeys(),...this.input.keyboard.addKeys('W,S,A,D')};
       this.keyE=this.input.keyboard.addKey('E');
+
+      salaPresenceJoin(this);
+    }
+    // Reconcilia sprites+nametags de outras contas a partir do nó sala_presence inteiro
+    // (chamado a cada snapshot do listener — ver salaPresenceJoin). Cria quem é novo,
+    // move/anima quem já existe (com um tween curto até o alvo, pra não "pular" a cada
+    // atualização), remove quem saiu.
+    salaSyncOtherPlayers(all){
+      const seen=new Set();
+      Object.keys(all).forEach(uid=>{
+        if(!currentUser||uid===currentUser.uid)return;
+        const data=all[uid]||{};
+        seen.add(uid);
+        let entry=this.otherPlayers[uid];
+        if(!entry){
+          const char=SALA_CHARACTERS.includes(data.character)?data.character:SALA_CHARACTERS[0];
+          const sprite=this.physics.add.sprite(data.x||0,data.y||0,char);
+          sprite.play(char+'_idle_down');
+          const nameText=this.add.text(data.x||0,(data.y||0)-34,data.nickname||'?',{fontSize:'11px',fontFamily:'Arial',color:'#ffffff',stroke:'#000000',strokeThickness:3}).setOrigin(0.5);
+          entry={sprite,nameText,char};
+          this.otherPlayers[uid]=entry;
+          if(this.salaCabinWalls)this.physics.add.collider(sprite,this.salaCabinWalls);
+        }
+        if(data.character&&data.character!==entry.char&&SALA_CHARACTERS.includes(data.character)){
+          entry.char=data.character;
+          entry.sprite.setTexture(data.character);
+        }
+        if(typeof data.x==='number'&&typeof data.y==='number'){
+          this.tweens.add({targets:entry.sprite,x:data.x,y:data.y,duration:SALA_PRESENCE_THROTTLE_MS,ease:'Linear'});
+          entry.sprite.setDepth(data.y);
+        }
+        const wantedKey=entry.char+'_'+(data.state||'idle')+'_'+(data.dir||'down');
+        if(this.anims.exists(wantedKey)&&(!entry.sprite.anims.currentAnim||entry.sprite.anims.currentAnim.key!==wantedKey)){
+          entry.sprite.play(wantedKey,true);
+        }
+        entry.nameText.setText(data.nickname||'?');
+      });
+      Object.keys(this.otherPlayers).forEach(uid=>{
+        if(seen.has(uid))return;
+        this.otherPlayers[uid].sprite.destroy();
+        this.otherPlayers[uid].nameText.destroy();
+        delete this.otherPlayers[uid];
+      });
     }
     update(){
       const p=this.player,cur=this.cursors;
       if(Phaser.Input.Keyboard.JustDown(this.keyE)){
         if(p.playerBehavior==='sitting'){
           p.playerBehavior='idle';
-          p.play('adam_idle_down',true);
+          p.play(p.charKey+'_idle_down',true);
         }else{
           let nearest=null,nearestDist=Infinity;
           this.chairs.getChildren().forEach(c=>{
@@ -13247,30 +13523,35 @@ function salaMapaCreateGame(){
             p.setVelocity(0,0);
             p.setPosition(nearest.x+shift[0],nearest.y+shift[1]);
             p.setDepth(nearest.depth+shift[2]);
-            p.play('adam_sit_'+nearest.direction,true);
+            p.play(p.charKey+'_sit_'+nearest.direction,true);
             p.playerBehavior='sitting';
           }
         }
       }
-      if(p.playerBehavior!=='idle')return;
-      const speed=200;
-      let vx=0,vy=0;
-      if(cur.left.isDown||cur.A.isDown)vx-=speed;
-      if(cur.right.isDown||cur.D.isDown)vx+=speed;
-      if(cur.up.isDown||cur.W.isDown){vy-=speed;p.setDepth(p.y);}
-      if(cur.down.isDown||cur.S.isDown){vy+=speed;p.setDepth(p.y);}
-      p.setVelocity(vx,vy);
-      if(vx!==0||vy!==0)p.body.velocity.setLength(speed);
-      if(vx>0)p.play('adam_run_right',true);
-      else if(vx<0)p.play('adam_run_left',true);
-      else if(vy>0)p.play('adam_run_down',true);
-      else if(vy<0)p.play('adam_run_up',true);
-      else{
-        const parts=p.anims.currentAnim.key.split('_');
-        parts[1]='idle';
-        const newAnim=parts.join('_');
-        if(p.anims.currentAnim.key!==newAnim)p.play(newAnim,true);
+      if(p.playerBehavior==='idle'){
+        const speed=200;
+        let vx=0,vy=0;
+        if(cur.left.isDown||cur.A.isDown)vx-=speed;
+        if(cur.right.isDown||cur.D.isDown)vx+=speed;
+        if(cur.up.isDown||cur.W.isDown){vy-=speed;p.setDepth(p.y);}
+        if(cur.down.isDown||cur.S.isDown){vy+=speed;p.setDepth(p.y);}
+        p.setVelocity(vx,vy);
+        if(vx!==0||vy!==0)p.body.velocity.setLength(speed);
+        if(vx>0)p.play(p.charKey+'_run_right',true);
+        else if(vx<0)p.play(p.charKey+'_run_left',true);
+        else if(vy>0)p.play(p.charKey+'_run_down',true);
+        else if(vy<0)p.play(p.charKey+'_run_up',true);
+        else{
+          const{dir}=salaAnimStateDir(p);
+          const newAnim=p.charKey+'_idle_'+dir;
+          if(!p.anims.currentAnim||p.anims.currentAnim.key!==newAnim)p.play(newAnim,true);
+        }
       }
+      p.nameText.setPosition(p.x,p.y-34);
+      Object.values(this.otherPlayers).forEach(entry=>{
+        entry.nameText.setPosition(entry.sprite.x,entry.sprite.y-34).setDepth((entry.sprite.depth||0)+1);
+      });
+      salaPresenceMaybeSend(this);
     }
   }
   salaMapaGame=new Phaser.Game({
