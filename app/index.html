@@ -6148,6 +6148,23 @@ ${contexto}
 ${FLUXO_JSON_REGRAS}
 - Se não tiver certeza sobre uma informação específica (data exata, número de lei, prazo), prefira omitir a deixar algo errado no fluxograma.`;
 }
+// Igual a fluxoPromptWeb, mas usada quando já existe um resumo recém-gerado (fluxo
+// automático da 1ª sessão de estudo): pesquisa na internet E usa o resumo como base,
+// combinando as duas fontes — diferente do botão manual de Fluxograma, que só pesquisa
+// na internet quando NÃO há nenhum texto/resumo disponível.
+function fluxoPromptWebComResumo(contexto,resumoTexto){
+  return`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil, especialista em transformar conteúdo de estudo em fluxogramas/mapas visuais de memorização.
+
+TAREFA: Pesquise na internet, em fontes confiáveis (legislação oficial, doutrina consolidada, material de concurso reconhecido), as informações mais importantes sobre o assunto abaixo, e COMBINE com o resumo já preparado a seguir — use o resumo como base e complemente/atualize com o que encontrar pesquisando (mudanças recentes de lei, súmulas, jurisprudência), cobrindo os pontos-chave que mais caem em prova — terminologias, classificações, prazos, números e conceitos essenciais —, no formato JSON abaixo. Responda APENAS com o JSON, sem texto antes ou depois, sem markdown, sem bloco de código.
+
+${contexto}
+
+RESUMO JÁ PREPARADO (use como base):
+${resumoTexto}
+
+${FLUXO_JSON_REGRAS}
+- Se não tiver certeza sobre uma informação específica (data exata, número de lei, prazo), prefira omitir a deixar algo errado no fluxograma.`;
+}
 async function generateFluxograma(subId){
   const sub=simFindSub(subId);
   let topic=null,kingdom=null;
@@ -7043,6 +7060,7 @@ function toggleTimer(subId,topicId){
         gainXP(xpGain);
         saveDB();
         toast(`🎯 Primeiro estudo! Primeira revisão agendada em 7 dias — as próximas se ajustam à sua dificuldade. +${xpGain} XP!`,'var(--green)');
+        autoGerarResumoEFluxograma(sub.id);
       }
       refreshSubs(topic,topicId);
     }
@@ -7057,6 +7075,66 @@ function toggleTimer(subId,topicId){
     const topic=(db.topics[currentKingdom?.id||'']||[]).find(tp=>tp.subtopics?.some(s=>s.id===subId));
     if(topic)refreshSubs(topic,topicId);
     renderMap();
+  }
+}
+
+// Dispara automaticamente, sem exigir clique, na primeira vez que o usuário
+// clica em "Estudar" de um miniboss: gera o Resumo (com pesquisa na internet +
+// flashcards já cadastrados do chefão, via generateResumoWeb) e, assim que ele
+// terminar, gera o Fluxograma combinando pesquisa na internet COM o resumo
+// recém-criado (autoGerarFluxogramaWebEResumo abaixo) — diferente do botão manual
+// de Fluxograma, que só pesquisa na internet quando NÃO há resumo/texto disponível.
+// Roda em segundo plano (fire-and-forget) pra não travar o início do cronômetro;
+// se não houver chave de API configurada, desiste em silêncio — um fluxo 100%
+// automático não deve interromper o usuário abrindo modal de configuração.
+async function autoGerarResumoEFluxograma(subId){
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey)return;
+  if(resumoGenerating.has(subId)||fluxoGenerating.has(subId))return;
+  try{
+    await generateResumoWeb(subId);
+  }catch(e){
+    console.error('Auto-resumo (primeiro estudo) falhou:',e);
+    return;
+  }
+  const sub=simFindSub(subId);
+  if(!sub||!sub.resumo||!sub.resumo.texto)return;
+  try{
+    await autoGerarFluxogramaWebEResumo(subId,sub.resumo.texto);
+  }catch(e){
+    console.error('Auto-fluxograma (primeiro estudo) falhou:',e);
+  }
+}
+// Fluxograma do fluxo automático da 1ª sessão: pesquisa na internet E usa o resumo
+// recém-gerado como base (fluxoPromptWebComResumo), sempre com useSearch=true —
+// não reaproveita generateFluxograma porque essa função pula a pesquisa quando já
+// existe um texto/resumo (usarWeb=!texto), e aqui o pedido é combinar as duas fontes.
+async function autoGerarFluxogramaWebEResumo(subId,resumoTexto){
+  const sub=simFindSub(subId);
+  let topic=null,kingdom=null;
+  for(const k of db.kingdoms){ (db.topics[k.id]||[]).forEach(t=>{if(t.subtopics?.some(x=>x.id===subId)){topic=t;kingdom=k;}}); if(topic)break; }
+  if(!sub||!topic||!kingdom)return;
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey)return;
+  if(fluxoGenerating.has(subId)){toast('Geração em andamento...','var(--orange)');return;}
+
+  fluxoGenerating.set(subId,'web');
+  openFluxo.add(subId);
+  fluxoRefreshPanel(subId);
+  try{
+    const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
+    const FLUXO_MAX_OUTPUT_TOKENS=32768;
+    const{parsed,grounded}=await callGeminiJSON(apiKey,fluxoPromptWebComResumo(contexto,resumoTexto.slice(0,40000)),true,FLUXO_MAX_OUTPUT_TOKENS);
+    const{raizId,nos}=fluxoFlattenArvore(parsed);
+    sub.fluxograma={raizId,nos,origem:'web',grounded,geradoEm:new Date().toISOString()};
+    saveDB();
+    toast(grounded?'🌐 Fluxograma gerado com pesquisa na internet + resumo!':'🔀 Fluxograma gerado com base no resumo (busca na internet indisponível agora)','var(--green)');
+  }catch(e){
+    console.error('Fluxograma error:',e);
+    toast('⚠️ '+e.message,'var(--red)');
+  }finally{
+    fluxoGenerating.delete(subId);
+    fluxoRefreshPanel(subId);
   }
 }
 
