@@ -1884,13 +1884,13 @@ nav{
    o Phaser (modo Scale.RESIZE) acompanha o tamanho desta caixa sozinho, então ela nunca
    pode crescer além do espaço disponível (mesma lição de nunca estourar a tela já
    aplicada nas features anteriores). */
-.sala-mapa-viewport{width:100%;aspect-ratio:4/3;max-height:calc(100vh - 200px);border-radius:var(--r-lg);overflow:hidden;border:1.5px solid var(--border);box-shadow:var(--shadow2);background:#1a1a2e;}
+.sala-mapa-viewport{width:100%;aspect-ratio:4/3;max-height:calc(100vh - 200px);border-radius:var(--r-lg);overflow:hidden;border:2px solid var(--accent);box-shadow:0 0 0 1px rgba(124,58,237,0.25),0 0 24px -6px rgba(124,58,237,0.55),var(--shadow2);background:#1a1a2e;}
 .sala-mapa-viewport canvas{display:block;width:100%!important;height:100%!important;image-rendering:pixelated;}
 /* Botões flutuantes por cima do canvas — ficam fora do #sala-mapa-viewport de propósito,
    porque esse innerHTML é limpo/reescrito pelo Phaser ao (re)criar o jogo. */
 .sala-mapa-controls{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:6px;z-index:5;}
-.sala-zoom-btn{width:32px;height:32px;border-radius:8px;border:1.5px solid rgba(255,255,255,0.25);background:rgba(15,15,25,0.65);color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-.sala-zoom-btn:hover{background:rgba(15,15,25,0.85);}
+.sala-zoom-btn{width:32px;height:32px;border-radius:8px;border:1.5px solid var(--accent);background:rgba(124,58,237,0.55);color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.sala-zoom-btn:hover{background:var(--accent);}
 .sala-mapa-credit{margin-top:8px;font-size:10px;color:var(--muted);text-align:right;}
 .sala-mapa-credit a{color:var(--muted);text-decoration:underline;}
 @media(max-width:700px){
@@ -13163,10 +13163,20 @@ function salaMapaBootAfterPicker(){
 }
 function salaMapaPause(){
   if(salaMapaGame)salaMapaGame.scene.pause('salaMapaScene');
+  // Pausar a cena NÃO solta a captura de teclado do Phaser — WASD/setas/espaço
+  // (createCursorKeys() já inclui espaço) continuavam com preventDefault ligado
+  // na página inteira, travando essas teclas em qualquer outro lugar do site
+  // (ex.: painel de miniboss) mesmo depois de sair da sala. Solta explicitamente.
+  if(salaMapaSceneRef&&salaMapaSceneRef.input&&salaMapaSceneRef.input.keyboard){
+    salaMapaSceneRef.input.keyboard.disableGlobalCapture();
+  }
   salaPresenceLeave(); // sai da sala de verdade — presença só existe enquanto está na tela
 }
 function salaMapaResume(){
   if(salaMapaGame)salaMapaGame.scene.resume('salaMapaScene');
+  if(salaMapaSceneRef&&salaMapaSceneRef.input&&salaMapaSceneRef.input.keyboard){
+    salaMapaSceneRef.input.keyboard.enableGlobalCapture();
+  }
   if(salaMapaSceneRef)salaPresenceJoin(salaMapaSceneRef);
 }
 function salaMapaZoom(delta){
@@ -13418,7 +13428,12 @@ function salaMapaCreateGame(){
         layer.objects.forEach(obj=>{
           const actualX=obj.x+obj.width*0.5;
           const actualY=obj.y-obj.height*0.5;
-          group.get(actualX,actualY,key,obj.gid-tileset.firstgid).setDepth(actualY);
+          const sprite=group.get(actualX,actualY,key,obj.gid-tileset.firstgid).setDepth(actualY);
+          // Objeto marcado no map.json com a propriedade 'tint'='accent' (posto pelo
+          // gerador do mapa) ganha a cor roxa da plataforma via tint de verdade — sem
+          // precisar achar/arriscar coordenada de um asset roxo pronto no pacote.
+          const tintProp=(obj.properties||[]).find(p=>p.name==='tint');
+          if(tintProp&&tintProp.value==='accent')sprite.setTint(0x7c3aed);
         });
         if(collidable)this.physics.add.collider(this.player,group);
         return group;
