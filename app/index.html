@@ -2920,13 +2920,41 @@ function loadDB(callback){
       }
       if(!usedLocalOverride)Object.assign(db,data);
     }else if(!firebaseReady){
-      // Conta genuinamente nova (primeiro load, sem nada salvo ainda) — marca explícito
-      // pra applyDefaults() não sobrescrever com o default "true" (pular onboarding), e
-      // entra no plano trial (acesso só às telas liberadas, ver LOCKED_SCREENS).
-      db.onboardingCompleted=false;
-      db.plan='trial';
-      db.trialStartedAt=todayStr();
+      // O Firebase veio vazio no primeiro carregamento da sessão — antes de assumir "conta
+      // nova", confere se este MESMO navegador guarda uma cópia local de dados de verdade
+      // (mesma proteção que já existia pra quando o Firebase tem dado desatualizado por
+      // causa de uso offline, só que aplicada também quando ele não tem dado NENHUM — um
+      // usuário de verdade não pode virar conta em branco só porque essa leitura específica
+      // veio vazia). Só conta como "achado" se tiver algo relevante de verdade.
+      let localTemDadoDeVerdade=false;
+      try{
+        const localRaw=localStorage.getItem(LS_KEY);
+        const local=localRaw?JSON.parse(localRaw):null;
+        const c=local?countDataSummary(local):null;
+        if(c&&(c.reinos+c.flashcards+c.redacoes+c.temas)>0){
+          Object.assign(db,local);
+          usedLocalOverride=true;
+          localTemDadoDeVerdade=true;
+        }
+      }catch(e){}
+      if(!localTemDadoDeVerdade){
+        // Conta genuinamente nova (nem no Firebase, nem numa cópia local deste navegador) —
+        // marca explícito pra applyDefaults() não sobrescrever com o default "true" (pular
+        // onboarding), e entra no plano trial (acesso só às telas liberadas, ver LOCKED_SCREENS).
+        db.onboardingCompleted=false;
+        db.plan='trial';
+        db.trialStartedAt=todayStr();
+      }
     }
+    // Nesse ponto, se o Firebase devolveu vazio no PRIMEIRO carregamento da sessão, ainda
+    // não dá pra saber se é uma conta genuinamente nova ou se os dados de verdade estão
+    // esperando no caminho antigo (ver checkForLegacyMigration(), chamada mais abaixo,
+    // só depois que firebaseReady vira true) — pode ser só uma leitura vazia passageira
+    // também. Enquanto essa dúvida não é resolvida, NADA pode ser escrito de volta no
+    // caminho novo: um usuário de verdade com histórico acumulado não pode ter esse
+    // histórico substituído por um estado em branco só porque a primeira leitura veio
+    // vazia (foi exatamente isso que gerou o bug relatado em produção).
+    const primeiraLeituraVeioVazia=!data&&!wasReady;
     applyDefaults();
     applyOrigemStarterDeck();
     // A versão local venceu o conflito — empurra ela de volta pro Firebase, senão o
@@ -2943,10 +2971,12 @@ function loadDB(callback){
       db.paymentHistory=db.paymentHistory||[];
       db.paymentHistory.push({date:data.lastPaymentAt,planType:db.planType||'mensal',confirmadoEm:new Date().toISOString()});
       saveDB();
-    }else if(db.accountEmail!==prevAccountEmail){
+    }else if(db.accountEmail!==prevAccountEmail&&!primeiraLeituraVeioVazia){
       // applyDefaults() só atualiza accountEmail em memória — sem isso, uma conta que loga
       // e não faz mais nenhuma ação (ex: só entrou pra conferir algo) nunca chega a salvar
-      // o e-mail no Firebase, e some da busca do Painel Admin.
+      // o e-mail no Firebase, e some da busca do Painel Admin. O !primeiraLeituraVeioVazia
+      // é o que evita salvar às cegas quando ainda não sabemos se é conta nova de
+      // verdade ou dado esperando migração do caminho antigo.
       saveDB();
     }
     applyPlanGating();
