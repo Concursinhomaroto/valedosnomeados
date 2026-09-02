@@ -13425,6 +13425,10 @@ function salaMapaBuildCabins(scene,mapWidth,mapHeight){
       const sprite=scene.chairs.get(sx,sy,'chairs',SALA_CHAIR_FRAME[dir]).setDepth(sy);
       sprite.direction=dir;
     });
+    // Vasinho no canto — puramente decorativo (mesmo frame já usado na recepção), só pra
+    // a cabine não ficar tão nua.
+    const plantY=cab.y+40;
+    scene.add.sprite(cab.x+40,plantY,'living',27).setDepth(plantY);
   });
   scene.physics.add.collider(scene.player,walls);
   scene.salaCabinWalls=walls;
