@@ -13718,7 +13718,7 @@ function salaMapaCreateGame(){
       groundLayer.setCollisionByProperty({collides:true});
 
       const myChar=SALA_CHARACTERS.includes(db.studyCharacter)?db.studyCharacter:SALA_CHARACTERS[0];
-      this.player=this.physics.add.sprite(224,544,myChar);
+      this.player=this.physics.add.sprite(288,160,myChar);
       this.player.charKey=myChar;
       this.player.setSize(16,10).setOffset(8,38); // colisão só nos "pés", igual ao original (collisionScale)
       this.player.setDepth(this.player.y);
