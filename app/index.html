@@ -6315,14 +6315,15 @@ async function generateFlashcardsSub(subId,mais){
   openFlash.add(subId);
   flashRefreshPanel(subId);
   try{
-    // Se já existe resumo do assunto, ele vira a fonte (mais fiel ao que o
-    // aluno estudou); senão a IA pesquisa na internet.
+    // A busca na internet é SEMPRE ativa. Quando existe resumo do assunto, ele
+    // entra como material a ser CONFRONTADO com o que a IA encontrar — o que
+    // estiver mais atual prevalece (mudança de lei, súmula, novo entendimento).
     const base=(sub.resumo&&sub.resumo.texto)?sub.resumo.texto.slice(0,20000):'';
     const jaTem=flashCardsDoSub(subId).map(c=>c.pergunta);
     const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
     const prompt=`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil, especialista em criar flashcards de memorização.
 
-TAREFA: Crie ${FLASH_QTD} flashcards sobre o assunto abaixo${base?', usando como fonte o material do aluno logo adiante':', pesquisando as informações em fontes confiáveis'}. Responda APENAS com um JSON válido, sem texto antes ou depois, sem markdown, sem bloco de código.
+TAREFA: Pesquise na internet, em fontes confiáveis (legislação oficial, doutrina consolidada, material de concurso reconhecido), as informações mais ATUAIS sobre o assunto abaixo${base?', COMPARE com o material do aluno que vem no final e crie os flashcards a partir dessa comparação':''}, e crie ${FLASH_QTD} flashcards. Responda APENAS com um JSON válido, sem texto antes ou depois, sem markdown, sem bloco de código.
 
 ${contexto}
 
@@ -6333,9 +6334,11 @@ REGRAS:
 - A pergunta deve ser curta e direta, cobrando UM ponto só (nada de pergunta com várias partes).
 - A resposta deve ser objetiva, de 1 a 3 linhas, com o dado exato (prazo, número, classificação, definição).
 - Priorize o que mais cai em prova: terminologias, prazos, números, exceções e classificações.
-- Não repita a mesma informação em cards diferentes.${jaTem.length?`\n- NÃO repita nenhuma destas perguntas que já existem:\n${jaTem.slice(0,60).map(q=>'  - '+q).join('\n')}`:''}${base?`\n\nMATERIAL DO ALUNO:\n${base}`:''}`;
+- Não repita a mesma informação em cards diferentes.
+- Prefira SEMPRE a informação mais atual que encontrar na pesquisa. Se o que você achou pesquisando divergir do material do aluno (lei alterada, súmula nova, entendimento mudado), use a versão atual e sinalize na resposta do card, começando com \"ATUALIZADO:\" e dizendo em uma frase o que mudou.${jaTem.length?`\n- NÃO repita nenhuma destas perguntas que já existem:\n${jaTem.slice(0,60).map(q=>'  - '+q).join('\n')}`:''}${base?`\n\nMATERIAL DO ALUNO (resumo já estudado — confronte com o que você pesquisar):\n${base}`:''}`;
 
-    const{parsed}=await callGeminiJSON(apiKey,prompt,!base,8192);
+    // useSearch sempre true: mesmo com resumo, a IA precisa conferir na web
+    const{parsed,grounded}=await callGeminiJSON(apiKey,prompt,true,8192);
     const cards=Array.isArray(parsed)?parsed:(parsed&&Array.isArray(parsed.cards)?parsed.cards:[]);
     if(!cards.length)throw new Error('A IA não devolveu nenhum flashcard válido.');
     if(!db.flashcards)db.flashcards={};
@@ -6353,7 +6356,8 @@ REGRAS:
     db.fcCreatedTotal=(db.fcCreatedTotal||0)+n;
     saveDB();
     if(typeof updateFCBadge==='function')updateFCBadge();
-    toast(`🃏 ${n} flashcard${n>1?'s':''} gerado${n>1?'s':''} com a IA!`,'var(--green)');
+    toast(grounded?`🌐 ${n} flashcard${n>1?'s':''} gerado${n>1?'s':''} com pesquisa na internet!`
+                  :`🃏 ${n} flashcard${n>1?'s':''} gerado${n>1?'s':''} (busca indisponível agora — usei o conhecimento da IA)`,'var(--green)');
   }catch(e){
     toast('❌ '+(e.message||'Erro ao gerar flashcards'),'var(--red)');
   }finally{
