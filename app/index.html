@@ -4998,19 +4998,103 @@ function addTopic(){
   renderTopics();renderMap();toast('⚔️ Chefão invocado!','var(--accent)');
 }
 
+// Acha {topic, kingdom} de um topicId varrendo todos os reinos — mesmo padrão
+// de findTopicKingdomBySubId, um nível acima.
+function findTopicAndKingdom(topicId){
+  for(const k of db.kingdoms){
+    const t=(db.topics[k.id]||[]).find(tp=>tp.id===topicId);
+    if(t)return{topic:t,kingdom:k};
+  }
+  return{topic:null,kingdom:null};
+}
+
 function renameTopic(topicId){
   let topic=null;
   for(const k of db.kingdoms){const f=(db.topics[k.id]||[]).find(t=>t.id===topicId);if(f){topic=f;break;}}
   if(!topic)return;
-  openModal('✎ Renomear Chefão',`
+  openModal('✎ Editar Chefão',`
     <div style="display:flex;flex-direction:column;gap:14px">
       <div>
         <label style="font-size:11px;font-weight:800;color:var(--text2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Novo nome</label>
         <input class="inp" id="rn-topic-name" value="${escapeHtml(topic.name)}" style="width:100%">
       </div>
       <button class="btn btn-primary" onclick="saveTopicRename('${topicId}')" style="width:100%;justify-content:center"><i class="fa fa-check"></i> Salvar</button>
+      <div style="border-top:1px dashed var(--border);padding-top:14px;display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Corrigir organização</div>
+        <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center" onclick="promptPromoteTopic('${topicId}')"><i class="fa fa-arrow-up"></i> Transformar em Reino</button>
+        <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center" onclick="openMoveTopicModal('${topicId}')"><i class="fa fa-right-left"></i> Mover para outro Reino</button>
+      </div>
     </div>
   `);
+}
+// "Transformar em Reino": o chefão cresceu demais / foi cadastrado no nível
+// errado — cria um reino novo e o chefão (com todos os minibosses, tempo,
+// revisões, resumo, fluxograma e flashcards — nada disso muda de id) passa a
+// morar nele.
+function promptPromoteTopic(topicId){
+  const{topic}=findTopicAndKingdom(topicId);
+  if(!topic)return;
+  openModal('🔼 Transformar em Reino',`
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:12px;color:var(--text2);line-height:1.5">Cria um reino novo com o nome abaixo e move <b>${escapeHtml(topic.name)}</b> (com todos os minibosses) pra dentro dele.</div>
+      <div>
+        <label style="font-size:11px;font-weight:800;color:var(--text2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Nome do novo reino</label>
+        <input class="inp" id="promote-kingdom-name" value="${escapeHtml(topic.name)}" style="width:100%">
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="promoteTopicToKingdom('${topicId}')"><i class="fa fa-check"></i> Transformar</button>
+    </div>
+  `);
+}
+function promoteTopicToKingdom(topicId){
+  const{topic,kingdom:oldKingdom}=findTopicAndKingdom(topicId);
+  if(!topic||!oldKingdom)return;
+  const name=(document.getElementById('promote-kingdom-name')?.value||'').trim();
+  if(!name){toast('⚠️ Digite um nome pro reino','var(--red)');return;}
+  const newKingdom={id:genId(),name,icon:'🏰',color:'#6c47ff'};
+  db.topics[oldKingdom.id]=db.topics[oldKingdom.id].filter(t=>t.id!==topicId);
+  db.kingdoms.push(newKingdom);
+  db.topics[newKingdom.id]=[topic];
+  // flashcards não precisam de ajuste aqui: guardam o mbId do CHEFÃO, e o
+  // chefão manteve o mesmo id — só mudou de reino.
+  saveDB();closeModal();
+  if(currentKingdom?.id===oldKingdom.id)renderTopics();
+  renderMap();
+  toast(`🔼 "${topic.name}" agora é um reino!`,'var(--accent)');
+}
+// "Mover para outro Reino": corrige um chefão cadastrado no reino errado.
+function openMoveTopicModal(topicId){
+  const{topic,kingdom:curKingdom}=findTopicAndKingdom(topicId);
+  if(!topic)return;
+  const options=db.kingdoms.filter(k=>k.id!==curKingdom.id)
+    .map(k=>`<option value="${k.id}">${escapeHtml(k.name)}</option>`);
+  if(!options.length){
+    openModal('↔ Mover para outro Reino',`<div class="empty" style="padding:10px 0"><i class="fa fa-dragon"></i><p>Não existe outro reino pra mover. Crie um reino primeiro.</p></div>`);
+    return;
+  }
+  openModal('↔ Mover para outro Reino',`
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:12px;color:var(--text2);line-height:1.5">Move <b>${escapeHtml(topic.name)}</b> (com todos os minibosses) pra outro reino.</div>
+      <div>
+        <label style="font-size:11px;font-weight:800;color:var(--text2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Reino de destino</label>
+        <select class="inp" id="move-topic-target" style="width:100%">${options.join('')}</select>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="moveTopicToKingdom('${topicId}')"><i class="fa fa-check"></i> Mover</button>
+    </div>
+  `);
+}
+function moveTopicToKingdom(topicId){
+  const{topic,kingdom:oldKingdom}=findTopicAndKingdom(topicId);
+  if(!topic||!oldKingdom)return;
+  const destId=document.getElementById('move-topic-target')?.value||'';
+  const destKingdom=db.kingdoms.find(k=>k.id===destId);
+  if(!destKingdom){toast('⚠️ Escolha um reino de destino','var(--red)');return;}
+  db.topics[oldKingdom.id]=db.topics[oldKingdom.id].filter(t=>t.id!==topicId);
+  if(!db.topics[destKingdom.id])db.topics[destKingdom.id]=[];
+  db.topics[destKingdom.id].push(topic);
+  saveDB();closeModal();
+  if(currentKingdom?.id===oldKingdom.id)renderTopics();
+  renderMap();
+  toast(`↔ "${topic.name}" movido para "${destKingdom.name}"`,'var(--accent)');
 }
 function saveTopicRename(topicId){
   let topic=null;
