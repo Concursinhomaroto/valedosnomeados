@@ -7033,21 +7033,117 @@ function addSubtopic(topicId){
   toast('👾 Miniboss invocado! Inicie o estudo para liberar as revisões.','var(--cyan)');
 }
 
+// Acha o {topic, kingdom} de um subId varrendo todos os reinos — mesmo padrão
+// já usado em renameSubtopic/deleteSub/addSubtopic, só que devolvendo também o
+// reino (precisamos dele pra listar chefões de OUTROS reinos no "mover").
+function findTopicKingdomBySubId(subId){
+  for(const k of db.kingdoms){
+    const t=(db.topics[k.id]||[]).find(tp=>(tp.subtopics||[]).some(s=>s.id===subId));
+    if(t)return{topic:t,kingdom:k,sub:t.subtopics.find(s=>s.id===subId)};
+  }
+  return{topic:null,kingdom:null,sub:null};
+}
+
 function renameSubtopic(topicId,subId){
   let topic=null,kId=currentKingdom?.id||'';
   if(kId) topic=(db.topics[kId]||[]).find(t=>t.id===topicId);
   if(!topic){for(const k of db.kingdoms){const f=(db.topics[k.id]||[]).find(t=>t.id===topicId);if(f){topic=f;break;}}}
   const sub=topic&&(topic.subtopics||[]).find(s=>s.id===subId);
   if(!sub)return;
-  openModal('✎ Renomear Miniboss',`
+  openModal('✎ Editar Miniboss',`
     <div style="display:flex;flex-direction:column;gap:14px">
       <div>
         <label style="font-size:11px;font-weight:800;color:var(--text2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Novo nome</label>
         <input class="inp" id="rn-sub-name" value="${escapeHtml(sub.name)}" style="width:100%">
       </div>
       <button class="btn btn-primary" onclick="saveSubtopicRename('${topicId}','${subId}')" style="width:100%;justify-content:center"><i class="fa fa-check"></i> Salvar</button>
+      <div style="border-top:1px dashed var(--border);padding-top:14px;display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Corrigir organização</div>
+        <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center" onclick="promptPromoteSubtopic('${topicId}','${subId}')"><i class="fa fa-arrow-up"></i> Transformar em Chefão</button>
+        <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center" onclick="openMoveSubtopicModal('${topicId}','${subId}')"><i class="fa fa-right-left"></i> Mover para outro Chefão</button>
+      </div>
     </div>
   `);
+}
+// "Transformar em Chefão": o miniboss virou grande demais / foi cadastrado no
+// nível errado — cria um Chefão novo (no mesmo reino) e o miniboss passa a
+// ser o primeiro subtópico dele. Nada do que já foi feito nele se perde:
+// tempo, revisões, resumo, fluxograma e simulado ficam no próprio objeto
+// (chaveados por subId, que não muda); só os flashcards precisam ser
+// realinhados (eles guardam o mbId do CHEFÃO, não do miniboss).
+function promptPromoteSubtopic(topicId,subId){
+  const{topic,sub}=findTopicKingdomBySubId(subId);
+  if(!topic||!sub)return;
+  openModal('🔼 Transformar em Chefão',`
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:12px;color:var(--text2);line-height:1.5">Cria um chefão novo com o nome abaixo e move <b>${escapeHtml(sub.name)}</b> pra dentro dele como o primeiro miniboss. Tempo, revisões, resumo e fluxograma continuam intactos.</div>
+      <div>
+        <label style="font-size:11px;font-weight:800;color:var(--text2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Nome do novo chefão</label>
+        <input class="inp" id="promote-topic-name" value="${escapeHtml(sub.name)}" style="width:100%">
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="promoteSubtopicToTopic('${topicId}','${subId}')"><i class="fa fa-check"></i> Transformar</button>
+    </div>
+  `);
+}
+function promoteSubtopicToTopic(oldTopicId,subId){
+  const{topic:oldTopic,kingdom,sub}=findTopicKingdomBySubId(subId);
+  if(!oldTopic||!sub||oldTopic.id!==oldTopicId)return;
+  const name=(document.getElementById('promote-topic-name')?.value||'').trim();
+  if(!name){toast('⚠️ Digite um nome pro chefão','var(--red)');return;}
+  const newTopic={id:genId(),name,icon:'⚔️',priority:1,subtopics:[sub]};
+  oldTopic.subtopics=oldTopic.subtopics.filter(s=>s.id!==subId);
+  db.topics[kingdom.id].push(newTopic);
+  Object.values(db.flashcards||{}).forEach(c=>{if(c.subId===subId)c.mbId=newTopic.id;});
+  saveDB();closeModal();
+  if(currentKingdom?.id===kingdom.id)renderTopics();
+  renderMap();
+  toast(`🔼 "${sub.name}" agora é um chefão!`,'var(--accent)');
+}
+// "Mover para outro Chefão": corrige um miniboss cadastrado no chefão (ou até
+// reino) errado por engano. Lista TODOS os chefões de TODOS os reinos, porque
+// o erro de registro pode ter sido escolher o reino errado, não só o chefão.
+function openMoveSubtopicModal(topicId,subId){
+  const{topic:curTopic,kingdom:curKingdom,sub}=findTopicKingdomBySubId(subId);
+  if(!curTopic||!sub)return;
+  const options=[];
+  db.kingdoms.forEach(k=>{
+    (db.topics[k.id]||[]).forEach(t=>{
+      if(t.id===curTopic.id)return; // não lista o chefão atual
+      options.push(`<option value="${k.id}::${t.id}">${escapeHtml(k.name)} → ${escapeHtml(t.name)}</option>`);
+    });
+  });
+  if(!options.length){
+    openModal('↔ Mover para outro Chefão',`<div class="empty" style="padding:10px 0"><i class="fa fa-dragon"></i><p>Não existe outro chefão pra mover. Crie um chefão em outro lugar primeiro.</p></div>`);
+    return;
+  }
+  openModal('↔ Mover para outro Chefão',`
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:12px;color:var(--text2);line-height:1.5">Move <b>${escapeHtml(sub.name)}</b> (com tempo, revisões, resumo e fluxograma intactos) pra outro chefão.</div>
+      <div>
+        <label style="font-size:11px;font-weight:800;color:var(--text2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Chefão de destino</label>
+        <select class="inp" id="move-sub-target" style="width:100%">${options.join('')}</select>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="moveSubtopicToTopic('${topicId}','${subId}')"><i class="fa fa-check"></i> Mover</button>
+    </div>
+  `);
+}
+function moveSubtopicToTopic(oldTopicId,subId){
+  const{topic:oldTopic,sub}=findTopicKingdomBySubId(subId);
+  if(!oldTopic||!sub||oldTopic.id!==oldTopicId)return;
+  const val=document.getElementById('move-sub-target')?.value||'';
+  const[destKingdomId,destTopicId]=val.split('::');
+  const destKingdom=db.kingdoms.find(k=>k.id===destKingdomId);
+  const destTopic=destKingdom&&(db.topics[destKingdomId]||[]).find(t=>t.id===destTopicId);
+  if(!destTopic){toast('⚠️ Escolha um chefão de destino','var(--red)');return;}
+  oldTopic.subtopics=oldTopic.subtopics.filter(s=>s.id!==subId);
+  if(!destTopic.subtopics)destTopic.subtopics=[];
+  destTopic.subtopics.push(sub);
+  Object.values(db.flashcards||{}).forEach(c=>{if(c.subId===subId)c.mbId=destTopic.id;});
+  saveDB();closeModal();
+  refreshSubs(oldTopic,oldTopicId);
+  refreshSubs(destTopic,destTopicId);
+  renderMap();
+  toast(`↔ "${sub.name}" movido para "${destTopic.name}"`,'var(--accent)');
 }
 function saveSubtopicRename(topicId,subId){
   let topic=null,kId=currentKingdom?.id||'';
