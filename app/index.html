@@ -382,15 +382,20 @@ nav{
 .note-wrap.note-open{display:block;}
 
 /* ===== LEGISLAÇÃO / BASE LEGAL (IA) ===== */
-.legis-wrap{background:rgba(8,145,178,0.05);border:1.5px solid rgba(8,145,178,0.25);border-radius:14px;padding:14px;margin-top:10px;display:none;}
-.legis-wrap.legis-open{display:block;}
-.legis-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
-.legis-title{font-size:11px;font-weight:900;color:var(--cyan);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;}
-.legis-body{font-size:12.5px;color:var(--text2);line-height:1.7;white-space:pre-line;}
 .legis-disclaimer{font-size:9.5px;color:var(--muted);margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);display:flex;align-items:center;gap:5px;}
-.legis-empty{font-size:12px;color:var(--muted);text-align:center;padding:10px 0;}
+.flash-wrap{background:rgba(124,58,237,0.05);border:1.5px solid rgba(124,58,237,0.28);border-radius:14px;padding:14px;margin-top:10px;display:none;}
+.flash-wrap.flash-open{display:block;}
+.flash-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.flash-title{font-size:11px;font-weight:900;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;}
+.flash-empty{font-size:12px;color:var(--muted);text-align:center;padding:10px 0;}
+.flash-card{background:var(--card2,rgba(255,255,255,0.03));border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:7px;}
+.flash-q{font-size:12.5px;font-weight:700;color:var(--text);line-height:1.5;}
+.flash-a{font-size:12px;color:var(--text2);line-height:1.6;margin-top:5px;padding-top:5px;border-top:1px dashed var(--border);}
+.flash-count{font-size:10px;color:var(--muted);font-weight:700;}
 
 /* ===== SIMULADO RÁPIDO (IA) ===== */
+.btn-purple-s{background:rgba(124,58,237,0.12);border:1.5px solid rgba(124,58,237,0.35);color:var(--accent);}
+.btn-purple-s:hover{background:rgba(124,58,237,0.22);}
 .btn-pink{background:linear-gradient(135deg,var(--pink),#9d174d);color:#fff;box-shadow:0 4px 12px rgba(190,24,93,0.3);}
 .btn-pink:hover{filter:brightness(1.1);transform:translateY(-1px);}
 .sim-wrap{background:rgba(190,24,93,0.05);border:1.5px solid rgba(190,24,93,0.25);border-radius:14px;padding:14px;margin-top:10px;display:none;}
@@ -3592,8 +3597,8 @@ function pauseOtherTimers(exceptType,exceptSubId){
   }
 }
 let openNotes=new Set(); // subIds whose note panel is manually open
-let openLegis=new Set(); // subIds whose painel de base legal está aberto
-let legisGenerating=new Set(); // subIds com geração de IA em andamento
+let openFlash=new Set();      // subIds com o painel de flashcards aberto
+let flashGenerating=new Set();// subIds com geração de flashcards por IA em andamento
 let openSim=new Set(); // subIds com painel de simulado aberto
 let simGenerating=new Set(); // subIds com geração de simulado em andamento
 let openResumo=new Set(); // subIds cujo painel de resumo (IA a partir de arquivo) está aberto
@@ -5141,7 +5146,7 @@ function subItemHTML(s,topicId){
       <button class="${hasResumo?'resumo-badge-done':'resumo-badge-todo'}" onclick="toggleResumo('${s.id}')" id="resumo-btn-${s.id}" title="Anexe um arquivo pra IA gerar um resumo completo, com opção de ouvir">
         ${hasResumo?'✅ Resumo':'📄 Resumo'}
       </button>
-      <button class="btn btn-sm ${s.legislacao?'btn-cyan':'btn-ghost'}" onclick="toggleLegis('${s.id}')" id="legis-btn-${s.id}"><i class="fa fa-scale-balanced"></i> ${s.legislacao?'Base Legal':'Base Legal'}</button>
+      <button class="btn btn-sm ${flashCountSub(s.id)?'btn-purple-s':'btn-ghost'}" onclick="toggleFlash('${s.id}')" id="flash-btn-${s.id}"><i class="fa fa-layer-group"></i> Flashcards${flashCountSub(s.id)?` (${flashCountSub(s.id)})`:''}</button>
       <button class="btn btn-sm ${s.simStats?'btn-pink':'btn-ghost'}" onclick="toggleSim('${s.id}')" id="sim-btn-${s.id}"><i class="fa fa-list-check"></i> Simulado</button>
       <button class="${hasFluxo?'fluxo-badge-done':'fluxo-badge-todo'}" onclick="toggleFluxo('${s.id}')" id="fluxo-btn-${s.id}" title="Resumo visual em forma de fluxograma — a IA gera um rascunho e você pode editar depois">
         ${hasFluxo?'✅ Fluxograma':'🔀 Fluxograma'}
@@ -5150,7 +5155,7 @@ function subItemHTML(s,topicId){
       <button class="btn btn-sm btn-danger" onclick="deleteSub('${topicId}','${s.id}')"><i class="fa fa-trash"></i></button>
     </div>
     <div class="resumo-wrap${openResumo.has(s.id)?' resumo-open':''}" id="resumo-${s.id}">${resumoPanelHTML(s)}</div>
-    <div class="legis-wrap${openLegis.has(s.id)?' legis-open':''}" id="legis-${s.id}">${legisPanelHTML(s)}</div>
+    <div class="flash-wrap${openFlash.has(s.id)?' flash-open':''}" id="flash-${s.id}">${flashPanelHTML(s)}</div>
     <div class="sim-wrap${openSim.has(s.id)?' sim-open':''}" id="sim-${s.id}">${simPanelHTML(s)}</div>
     <div class="fluxo-wrap${openFluxo.has(s.id)?' fluxo-open':''}" id="fluxo-${s.id}">${fluxoPanelHTML(s)}</div>
     <div class="timer-wrap" id="tw-${s.id}" ${panelOpen?'style="display:block"':''}>
@@ -6223,93 +6228,140 @@ async function generateFluxograma(subId){
   }
 }
 
-// ===== BASE LEGAL (legislação/jurisprudência gerada por IA, cross-linkada ao miniboss) =====
-function legisPanelHTML(s){
-  if(legisGenerating.has(s.id)){
-    return`<div class="legis-empty"><i class="fa fa-spinner fa-spin"></i> Consultando a IA...</div>`;
+// ===== FLASHCARDS DO MINIBOSS (gerados por IA; substituíram a Base Legal) =====
+// ---------------------------------------------------------------------------
+// FLASHCARDS DO MINIBOSS (substituiu a Base Legal no card do miniboss)
+// Os cards ficam no mesmo banco de sempre (db.flashcards, agrupado por chefão
+// em mbId, que é o que a tela de Flashcards usa) e ganham subId + subNome, pra
+// dar pra mostrar aqui só os do assunto específico daquele miniboss.
+// ---------------------------------------------------------------------------
+function flashCardsDoSub(subId){
+  return Object.values(db.flashcards||{}).filter(c=>c.subId===subId);
+}
+function flashCountSub(subId){
+  return flashCardsDoSub(subId).length;
+}
+function flashPanelHTML(s){
+  if(flashGenerating.has(s.id)){
+    return`<div class="flash-empty"><i class="fa fa-spinner fa-spin"></i> Gerando flashcards com a IA...</div>`;
   }
-  if(s.legislacao&&s.legislacao.texto){
-    const geradoEm=s.legislacao.geradoEm?new Date(s.legislacao.geradoEm).toLocaleDateString('pt-BR'):'';
+  const cards=flashCardsDoSub(s.id);
+  if(cards.length){
+    const lista=cards.map(c=>`
+      <div class="flash-card">
+        <div class="flash-q">${escapeHtml(c.pergunta)}</div>
+        <div class="flash-a">${escapeHtml(c.resposta)}</div>
+      </div>`).join('');
     return`
-      <div class="legis-header">
-        <div class="legis-title"><i class="fa fa-scale-balanced"></i> Base legal</div>
-        <button class="btn btn-xs btn-ghost" onclick="generateLegislacao('${s.id}',true)" title="Gerar de novo"><i class="fa fa-rotate"></i> Atualizar</button>
+      <div class="flash-header">
+        <div class="flash-title"><i class="fa fa-layer-group"></i> Flashcards <span class="flash-count">${cards.length} card${cards.length>1?'s':''}</span></div>
+        <button class="btn btn-xs btn-ghost" onclick="generateFlashcardsSub('${s.id}',true)" title="Gerar mais com a IA"><i class="fa fa-wand-magic-sparkles"></i> Gerar mais</button>
       </div>
-      <div class="legis-body">${s.legislacao.texto}</div>
-      <div class="legis-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm} — confira sempre a fonte oficial antes de usar na prova.</div>
+      ${lista}
     `;
   }
   return`
-    <div class="legis-header"><div class="legis-title"><i class="fa fa-scale-balanced"></i> Base legal</div></div>
-    <div class="legis-empty">Ainda não gerada.</div>
-    <button class="btn btn-sm btn-cyan" style="width:100%;justify-content:center" onclick="generateLegislacao('${s.id}')"><i class="fa fa-wand-magic-sparkles"></i> Gerar com IA</button>
+    <div class="flash-header"><div class="flash-title"><i class="fa fa-layer-group"></i> Flashcards</div></div>
+    <div class="flash-empty">Nenhum flashcard deste assunto ainda.</div>
+    <button class="btn btn-sm btn-purple-s" style="width:100%;justify-content:center" onclick="generateFlashcardsSub('${s.id}')"><i class="fa fa-wand-magic-sparkles"></i> Gerar com IA</button>
   `;
 }
-function toggleLegis(subId){
-  if(openLegis.has(subId))openLegis.delete(subId);else openLegis.add(subId);
-  const wrap=document.getElementById('legis-'+subId);
+function flashRefreshPanel(subId){
+  const sub=simFindSub(subId);
+  if(!sub)return;
+  const wrap=document.getElementById('flash-'+subId);
   if(wrap){
-    wrap.classList.toggle('legis-open',openLegis.has(subId));
+    wrap.innerHTML=flashPanelHTML(sub);
+    wrap.classList.toggle('flash-open',openFlash.has(subId));
     wrap.style.display='';
   }
+  const btn=document.getElementById('flash-btn-'+subId);
+  if(btn){
+    const n=flashCountSub(subId);
+    btn.className='btn btn-sm '+(n?'btn-purple-s':'btn-ghost');
+    btn.innerHTML=`<i class="fa fa-layer-group"></i> Flashcards${n?` (${n})`:''}`;
+  }
 }
-function closeLegis(subId){
-  openLegis.delete(subId);
-  const wrap=document.getElementById('legis-'+subId);
-  if(wrap){wrap.classList.remove('legis-open');wrap.style.display='';}
+// Clicar no botão abre o painel E, se ainda não houver card nenhum, já dispara a
+// geração pela IA — que é o comportamento pedido: clicou, gera.
+function toggleFlash(subId){
+  if(openFlash.has(subId))openFlash.delete(subId);else openFlash.add(subId);
+  flashRefreshPanel(subId);
+  if(openFlash.has(subId)&&!flashCountSub(subId)&&!flashGenerating.has(subId)){
+    generateFlashcardsSub(subId);
+  }
 }
-async function generateLegislacao(subId,force){
+function closeFlash(subId){
+  openFlash.delete(subId);
+  flashRefreshPanel(subId);
+}
+const FLASH_QTD=10;
+async function generateFlashcardsSub(subId,mais){
   let sub=null,topic=null,kingdom=null;
   for(const k of db.kingdoms){
     (db.topics[k.id]||[]).forEach(t=>{const f=t.subtopics?.find(s=>s.id===subId);if(f){sub=f;topic=t;kingdom=k;}});
     if(sub)break;
   }
-  if(!sub)return;
-  if(sub.legislacao&&!force)return;
-
+  if(!sub||!topic||!kingdom)return;
   const apiKey=(db.geminiApiKey||'').trim();
   if(!apiKey){
     toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');
     openAISettingsModal();
     return;
   }
+  if(flashGenerating.has(subId)){toast('Geração em andamento...','var(--orange)');return;}
 
-  legisGenerating.add(subId);
-  openLegis.add(subId);
-  const wrap=document.getElementById('legis-'+subId);
-  if(wrap){wrap.classList.add('legis-open');wrap.style.display='';wrap.innerHTML=legisPanelHTML(sub);}
-
+  flashGenerating.add(subId);
+  openFlash.add(subId);
+  flashRefreshPanel(subId);
   try{
-    const prompt=`Você é um assistente jurídico especializado em concursos públicos brasileiros.
+    // Se já existe resumo do assunto, ele vira a fonte (mais fiel ao que o
+    // aluno estudou); senão a IA pesquisa na internet.
+    const base=(sub.resumo&&sub.resumo.texto)?sub.resumo.texto.slice(0,20000):'';
+    const jaTem=flashCardsDoSub(subId).map(c=>c.pergunta);
+    const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
+    const prompt=`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil, especialista em criar flashcards de memorização.
 
-TAREFA: Liste a base legal (leis, artigos, súmulas e jurisprudência relevante) para o assunto abaixo, de forma objetiva e direta — uma referência rápida de consulta pra quem já estudou o tema e quer confirmar a fonte.
+TAREFA: Crie ${FLASH_QTD} flashcards sobre o assunto abaixo${base?', usando como fonte o material do aluno logo adiante':', pesquisando as informações em fontes confiáveis'}. Responda APENAS com um JSON válido, sem texto antes ou depois, sem markdown, sem bloco de código.
 
-REINO/ÁREA: ${kingdom.name}
-CHEFÃO/TÓPICO: ${topic.name}
-MINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}
+${contexto}
+
+FORMATO EXATO:
+{"cards":[{"pergunta":"...","resposta":"..."}]}
 
 REGRAS:
-- Liste no máximo 8 itens, só o essencial (norma + número + ano + artigo, quando aplicável).
-- Se houver súmula ou jurisprudência consolidada relevante, cite pelo nome/número.
-- Se não existir base legal específica aplicável (assunto teórico/técnico sem embasamento normativo direto), diga isso claramente em vez de inventar uma citação.
-- Responda em texto simples, um item por linha, sem markdown, sem introdução nem conclusão.`;
+- A pergunta deve ser curta e direta, cobrando UM ponto só (nada de pergunta com várias partes).
+- A resposta deve ser objetiva, de 1 a 3 linhas, com o dado exato (prazo, número, classificação, definição).
+- Priorize o que mais cai em prova: terminologias, prazos, números, exceções e classificações.
+- Não repita a mesma informação em cards diferentes.${jaTem.length?`\n- NÃO repita nenhuma destas perguntas que já existem:\n${jaTem.slice(0,60).map(q=>'  - '+q).join('\n')}`:''}${base?`\n\nMATERIAL DO ALUNO:\n${base}`:''}`;
 
-    const raw=await callGeminiGenerate(apiKey,prompt);
-    sub.legislacao={texto:raw.trim(),geradoEm:new Date().toISOString()};
+    const{parsed}=await callGeminiJSON(apiKey,prompt,!base,8192);
+    const cards=Array.isArray(parsed)?parsed:(parsed&&Array.isArray(parsed.cards)?parsed.cards:[]);
+    if(!cards.length)throw new Error('A IA não devolveu nenhum flashcard válido.');
+    if(!db.flashcards)db.flashcards={};
+    let n=0;
+    cards.forEach(c=>{
+      const pergunta=String(c&&c.pergunta||'').trim();
+      const resposta=String(c&&c.resposta||'').trim();
+      if(!pergunta||!resposta)return;
+      const id='fc_'+genId();
+      db.flashcards[id]={id,mbId:topic.id,subId:sub.id,subNome:sub.name,
+        pergunta,resposta,tags:'ia-miniboss',dificuldade:2,acertos:0,erros:0,
+        lastConf:0,criacao:new Date().toISOString(),ultimaRevisao:null};
+      n++;
+    });
+    db.fcCreatedTotal=(db.fcCreatedTotal||0)+n;
     saveDB();
-    toast('⚖️ Base legal gerada!','var(--cyan)');
+    if(typeof updateFCBadge==='function')updateFCBadge();
+    toast(`🃏 ${n} flashcard${n>1?'s':''} gerado${n>1?'s':''} com a IA!`,'var(--green)');
   }catch(e){
-    toast('❌ '+(e.message||'Erro ao gerar base legal'),'var(--red)');
+    toast('❌ '+(e.message||'Erro ao gerar flashcards'),'var(--red)');
   }finally{
-    legisGenerating.delete(subId);
-    const btn=document.getElementById('legis-btn-'+subId);
-    if(btn)btn.className='btn btn-sm '+(sub.legislacao?'btn-cyan':'btn-ghost');
-    const wrap2=document.getElementById('legis-'+subId);
-    if(wrap2){wrap2.innerHTML=legisPanelHTML(sub);wrap2.classList.add('legis-open');wrap2.style.display='';}
+    flashGenerating.delete(subId);
+    flashRefreshPanel(subId);
   }
 }
 
-// ===== SIMULADO RÁPIDO (IA) =====
 function simFindSub(subId){
   let sub=null;
   for(const k of db.kingdoms){
