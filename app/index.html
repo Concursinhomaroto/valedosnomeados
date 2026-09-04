@@ -2016,6 +2016,7 @@ nav{
     <button class="btn btn-sm btn-ghost" onclick="mapedRascunhos()"><i class="fa fa-floppy-disk"></i> Rascunhos</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedLiberarMoveis()"><i class="fa fa-person-walking"></i> Liberar móveis</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedMarcarParedes()"><i class="fa fa-wand-magic-sparkles"></i> Marcar paredes</button>
+    <button class="btn btn-sm btn-ghost" onclick="mapedLimparColisao()"><i class="fa fa-broom"></i> Limpar paredes</button>
     <span class="maped-sep"></span>
     <button class="btn btn-sm" onclick="mapedRestaurarPadrao()"><i class="fa fa-rotate"></i> Despublicar</button>
     <button class="btn btn-sm btn-primary" onclick="mapedSalvar()"><i class="fa fa-cloud-arrow-up"></i> Publicar</button>
@@ -14781,6 +14782,10 @@ function mapedSetMode(m,el){
   // Uma sala do pacote tem 150+ tiles de móvel. Carimbar tudo como bloqueio
   // fecha o mapa — o padrão aqui é decorar; parede se desenha no modo Parede.
   if(amb){mapedRenderGaleria();document.getElementById('maped-collide').checked=false;}
+  if(m==='parede'){
+    document.getElementById('maped-vercol').checked=true;   // pintar às cegas não funciona
+    document.getElementById('maped-collide').checked=true;
+  }
   if(pane)pane.style.display=amb?'none':'block';
   if(gal)gal.style.display=amb?'grid':'none';
   if(combo)combo.style.display=amb?'none':'block';
@@ -14804,7 +14809,7 @@ function mapedRefreshInfo(){
     borracha:'Clique pra tirar a peça mais de cima daquele tile. O piso não é apagado — pinte por cima no modo Piso.',
     spawn:'Clique onde as pessoas devem aparecer ao entrar na sala.',
     ambiente:'Escolha a sala ao lado e clique: ela entra inteira, chão e móveis. Os móveis NÃO barram o jogador (marque "bloqueia passagem" antes de carimbar se quiser que barrem). Quem fecha a sala é o modo Parede.',
-    parede:'Marcado, pinta onde NÃO se passa (vermelho, invisível no jogo). Desmarcado, vira borracha de bloqueio: libera a passagem ali, inclusive no móvel que estiver no tile. Ligue "ver colisão" pra enxergar tudo que barra.'};
+    parede:'Arraste sobre o mapa pra marcar em RETÂNGULO onde não se passa (vermelho, invisível no jogo). Desmarque "bloqueia passagem" e o mesmo arrasto vira borracha, liberando a área — inclusive os móveis que estiverem nela.'};
   const g=mapedGround();
   i.innerHTML=(dicas[mapedModo]||'')+
     `<br><br><b>Mapa:</b> ${mapedMapa?mapedMapa.width+'x'+mapedMapa.height:'—'} tiles`+
@@ -15152,10 +15157,14 @@ function mapedEscondeFantasma(){
 }
 function mapedCanvasDown(ev){
   ev.preventDefault();
+  // Parede é retângulo: clica num canto, arrasta até o outro, solta. Marcar
+  // tile a tile uma parede de 20 tiles é trabalho demais, e marcar por TIPO de
+  // tile erra quando o chão alterna dois desenhos — pinta metade do piso.
+  if(mapedModo==='parede'){mapedParedeArrasta(ev);return;}
   mapedSnapshot();
   const p=mapedCanvasTile(ev);
   mapedAplicar(p.tx,p.ty);
-  if(mapedModo!=='piso'&&mapedModo!=='borracha'&&mapedModo!=='parede')return;
+  if(mapedModo!=='piso'&&mapedModo!=='borracha')return;
   mapedPintando=true;
   let ult=p.tx+','+p.ty;
   const mv=e=>{
@@ -15483,6 +15492,66 @@ function mapedAplicarParedes(){
   mapedDraw();
   const d=mapedDiagnostico();
   toast(`🧱 ${n} tiles atualizados. Andável a partir da entrada: ${d.alcance} tiles.`,'var(--accent)');
+}
+
+// Retângulo de colisão. O contorno amarelo do cursor vira a prévia da área.
+function mapedParedeArrasta(ev){
+  const ini=mapedCanvasTile(ev);
+  const g=document.getElementById('maped-ghost');
+  const bloq=document.getElementById('maped-collide').checked;
+  const pinta=(a,b)=>{
+    if(!g)return;
+    const Z=mapedZoomN*MAPED_T;
+    g.style.display='block';
+    g.style.left=(Math.min(a.tx,b.tx)*Z)+'px';g.style.top=(Math.min(a.ty,b.ty)*Z)+'px';
+    g.style.width=((Math.abs(b.tx-a.tx)+1)*Z)+'px';g.style.height=((Math.abs(b.ty-a.ty)+1)*Z)+'px';
+    g.style.borderColor=bloq?'#ff4646':'#4ade80';
+    g.style.background=bloq?'rgba(255,70,70,0.28)':'rgba(74,222,128,0.24)';
+  };
+  let fim=ini; pinta(ini,ini);
+  const mv=e=>{fim=mapedCanvasTile(e);pinta(ini,fim);};
+  const up=()=>{
+    document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);
+    if(g){g.style.borderColor='';g.style.background='';g.style.display='none';}
+    mapedSnapshot();
+    const sol=mapedSolid(),W=mapedMapa.width;
+    const x0=Math.max(0,Math.min(ini.tx,fim.tx)),x1=Math.min(W-1,Math.max(ini.tx,fim.tx));
+    const y0=Math.max(0,Math.min(ini.ty,fim.ty)),y1=Math.min(mapedMapa.height-1,Math.max(ini.ty,fim.ty));
+    let n=0;
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+      if(sol.data[y*W+x]!==(bloq?1:0))n++;
+      sol.data[y*W+x]=bloq?1:0;
+      // Desmarcando, também libera o móvel que estiver ali — senão a área
+      // continuaria bloqueada pelo objeto e pareceria que o pincel não pegou.
+      if(!bloq)mapedLiberarTile(x,y);
+    }
+    mapedDraw();
+    if(n)toast(`${bloq?'🧱 Bloqueados':'🚶 Liberados'} ${n} tiles.`,'var(--accent)');
+  };
+  document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);
+}
+// Tira o bloqueio dos objetos que cobrem um tile (usado pelo pincel liberando).
+function mapedLiberarTile(tx,ty){
+  mapedMapa.layers.forEach(l=>{
+    if(l.type!=='objectgroup'||l.name==='Chair')return;
+    l.objects.forEach(o=>{
+      const x0=Math.floor(o.x/MAPED_T),y1=Math.floor((o.y-1)/MAPED_T);
+      const cols=Math.max(1,Math.round(o.width/MAPED_T)),lins=Math.max(1,Math.round(o.height/MAPED_T));
+      if(tx<x0||tx>=x0+cols||ty>y1||ty<=y1-lins)return;
+      o.properties=(o.properties||[]).filter(p=>p.name!=='collide');
+      o.properties.push({name:'collide',type:'bool',value:false});
+    });
+  });
+}
+// Zera o desenho de colisão inteiro. Serve pra recomeçar quando uma marcação em
+// massa pegou o tile errado — como marcar um dos dois tiles de um piso xadrez.
+function mapedLimparColisao(){
+  if(!confirm('Apagar TODO o desenho de parede do mapa e recomeçar?'))return;
+  mapedSnapshot();
+  mapedSolid().data.fill(0);
+  document.getElementById('maped-vercol').checked=true;
+  mapedDraw();
+  toast('Desenho de parede apagado. Pinte de novo no modo Parede.','var(--accent)');
 }
 
 // --------------------------------------------------------- tamanho / publicar ---
