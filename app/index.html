@@ -5727,6 +5727,26 @@ async function tavilyPesquisar(assunto,contexto){
 // Envelopa o prompt original amarrando a resposta ao material recuperado. Sem
 // esse cerco, o modelo lê os trechos e mesmo assim responde de memória — foi o
 // que aconteceu com o grounding do Google.
+// Ponto único de busca pras quatro gerações (resumo, fluxograma, flashcards e
+// repertório). Antes cada uma decidia sozinha como pesquisar, e foi assim que a
+// do resumo ganhou o Tavily enquanto as outras ficaram no grounding do Gemini —
+// que numa chave sem plano pago devolve 429 e cai no conhecimento treinado.
+//
+// 'limite' existe porque as chamadas que precisam responder em JSON não
+// suportam um material tão grande quanto o resumo: material demais empurra o
+// modelo pra prosa e quebra o parse.
+async function buscarMaterial(assunto,contexto,limite){
+  if(!tavilyAtivo())return{material:'',fontes:[],consultas:[],diag:[],via:null};
+  try{
+    const b=await tavilyPesquisar(assunto,contexto);
+    const diag=b.erros.map(e=>({modelo:'tavily',erro:e}));
+    if(!b.texto)return{material:'',fontes:[],consultas:b.consultas,
+      diag:diag.length?diag:[{modelo:'tavily',erro:'a busca não retornou nenhuma página'}],via:null};
+    return{material:b.texto.slice(0,limite||60000),fontes:b.fontes,consultas:b.consultas,diag,via:'tavily'};
+  }catch(e){
+    return{material:'',fontes:[],consultas:[],diag:[{modelo:'tavily',erro:e.message}],via:null};
+  }
+}
 function tavilyPromptComFontes(promptOriginal,material){
   return`${promptOriginal}
 
@@ -6184,13 +6204,22 @@ function fluxoPanelHTML(s){
   if(temFluxo){
     const geradoEm=s.fluxograma.geradoEm?new Date(s.fluxograma.geradoEm).toLocaleDateString('pt-BR'):'';
     const fg=s.fluxograma;
+    const nF=(fg.fontes||[]).length;
     const origem=fg.origem==='manual'?'Criado manualmente'
-      :fg.origem==='web'?(fg.grounded?'Gerado por IA com pesquisa na internet':'Gerado por IA (busca indisponível — conhecimento já treinado do modelo)')
-      :'Gerado por IA a partir do texto';
+      :fg.origem==='web'
+        ?(fg.grounded?(fg.via==='tavily'?`Gerado com ${nF} fontes pesquisadas`:'Gerado por IA com pesquisa na internet')
+                    :'Gerado por IA (busca indisponível — conhecimento já treinado do modelo)')
+      // Fluxograma tirado do Resumo herda a procedência dele. Antes aparecia só
+      // como "a partir do texto", sem fonte à vista, mesmo quando o resumo de
+      // origem tinha sido pesquisado — dava a impressão de não usar o resumo.
+      :fg.doResumo
+        ?(fg.grounded?`Gerado a partir do Resumo, que foi pesquisado${fg.via==='tavily'?' no Tavily':''} (${nF} fontes)`
+                    :'Gerado a partir do Resumo (que saiu sem pesquisa na internet)')
+      :'Gerado por IA a partir do texto colado';
     const modoZoom=fluxoZoomMode.get(s.id)||'fit';
     return`
       <div class="fluxo-header">
-        <div class="fluxo-title"><i class="fa fa-diagram-project"></i> Fluxograma${fg.origem==='web'?' 🌐':''}</div>
+        <div class="fluxo-title"><i class="fa fa-diagram-project"></i> Fluxograma${fg.grounded?' 🌐':''}</div>
         <div class="fluxo-actions">
           <button class="btn btn-xs btn-ghost" onclick="fluxoToggleZoomMode('${s.id}')" title="${modoZoom==='fit'?'Ver no tamanho real, com rolagem lateral':'Encolher pra caber tudo na tela, sem precisar rolar'}"><i class="fa fa-magnifying-glass"></i> ${modoZoom==='fit'?'Tamanho real':'Ajustar à tela'}</button>
           <button class="btn btn-xs btn-ghost" onclick="fluxoStartEditing('${s.id}')"><i class="fa fa-pen"></i> Editar</button>
@@ -6201,6 +6230,7 @@ function fluxoPanelHTML(s){
         <div class="fluxo-chart">${fluxoRenderNode(s.fluxograma.nos,s.fluxograma.raizId)}</div>
       </div>
       <div class="fluxo-disclaimer"><i class="fa fa-triangle-exclamation"></i> ${origem}${geradoEm?` em ${geradoEm}`:''} — confira sempre a fonte oficial antes de usar na prova.</div>
+      ${fontesHTML(fg.fontes,null,null)}
     `;
   }
   const temResumo=!!(s.resumo&&s.resumo.texto);
@@ -6574,7 +6604,7 @@ async function generateFluxograma(subId){
   fluxoRefreshPanel(subId);
 
   try{
-    let parsed,grounded=null,fontesFluxo=[];
+    let parsed,grounded=null,fontesFluxo=[],viaFluxo=null;
     // Sem limite fixo de nós no fluxograma, a resposta em JSON pode ficar bem maior que o
     // teto padrão de 8192 tokens (suficiente pra a maioria das chamadas da IA no app, mas
     // curto pra cobrir um assunto inteiro com todos os pontos-chave) — sem isso, um
@@ -6582,19 +6612,40 @@ async function generateFluxograma(subId){
     const FLUXO_MAX_OUTPUT_TOKENS=32768;
     if(usarWeb){
       const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
-      const r=await callGeminiJSON(apiKey,fluxoPromptWeb(contexto),true,FLUXO_MAX_OUTPUT_TOKENS);
-      parsed=r.parsed;grounded=r.grounded;fontesFluxo=r.fontes||[];
+      // Sem resumo pra usar de base: pesquisa. Tavily primeiro, grounding do
+      // Gemini como alternativa — a mesma ordem do resumo.
+      const b=await buscarMaterial(sub.name,`${kingdom.name} — ${topic.name}`,30000);
+      if(b.material){
+        const r=await callGeminiJSON(apiKey,tavilyPromptComFontes(fluxoPromptWeb(contexto),b.material),false,FLUXO_MAX_OUTPUT_TOKENS);
+        parsed=r.parsed;grounded=true;fontesFluxo=b.fontes;viaFluxo='tavily';
+      }else{
+        const r=await callGeminiJSON(apiKey,fluxoPromptWeb(contexto),true,FLUXO_MAX_OUTPUT_TOKENS);
+        parsed=r.parsed;grounded=r.grounded;fontesFluxo=r.fontes||[];
+      }
     }else{
       // Sem chunking de propósito: a fonte aqui é o Resumo (já condensado) ou um trecho
       // colado à mão, não o material bruto inteiro — um corte de segurança em 40k
       // caracteres é mais que suficiente e evita estourar o teto de uma chamada só.
       const r=await callGeminiJSON(apiKey,fluxoPrompt(texto.slice(0,40000)),false,FLUXO_MAX_OUTPUT_TOKENS);
       parsed=r.parsed;
+      // Veio do Resumo? Então herda de onde o Resumo veio. Sem isso, um
+      // fluxograma feito em cima de resumo pesquisado no Tavily aparecia como
+      // "gerado por IA a partir do texto", sem fonte nenhuma à vista.
+      if(!textoColado&&sub.resumo&&sub.resumo.texto){
+        grounded=!!sub.resumo.grounded;
+        fontesFluxo=sub.resumo.fontes||[];
+        viaFluxo=sub.resumo.via||null;
+      }
     }
     const{raizId,nos}=fluxoFlattenArvore(parsed);
-    sub.fluxograma={raizId,nos,origem:usarWeb?'web':'ia',grounded,fontes:fontesFluxo,geradoEm:new Date().toISOString()};
+    sub.fluxograma={raizId,nos,origem:usarWeb?'web':'ia',grounded,via:viaFluxo,
+                    doResumo:!usarWeb&&!textoColado&&!!(sub.resumo&&sub.resumo.texto),
+                    fontes:fontesFluxo,geradoEm:new Date().toISOString()};
     saveDB();
-    toast(usarWeb?(grounded?'🌐 Fluxograma gerado com pesquisa na internet!':'🔀 Fluxograma gerado (busca na internet indisponível agora — usei o conhecimento da IA)'):'🔀 Fluxograma gerado!','var(--green)');
+    toast(usarWeb
+      ?(grounded?(viaFluxo==='tavily'?`🔎 Fluxograma gerado com ${fontesFluxo.length} fontes do Tavily!`:'🌐 Fluxograma gerado com pesquisa na internet!')
+               :'🔀 Fluxograma gerado (busca indisponível — usei o conhecimento da IA)')
+      :(grounded?`🔀 Fluxograma gerado a partir do Resumo (${fontesFluxo.length} fontes herdadas)`:'🔀 Fluxograma gerado!'),'var(--green)');
   }catch(e){
     console.error('Fluxograma error:',e);
     toast('⚠️ '+e.message,'var(--red)');
@@ -6716,7 +6767,12 @@ REGRAS:
 - Prefira SEMPRE a informação mais atual que encontrar na pesquisa. Se o que você achou pesquisando divergir do material do aluno (lei alterada, súmula nova, entendimento mudado), use a versão atual e sinalize na resposta do card, começando com \"ATUALIZADO:\" e dizendo em uma frase o que mudou.${jaTem.length?`\n- NÃO repita nenhuma destas perguntas que já existem:\n${jaTem.slice(0,60).map(q=>'  - '+q).join('\n')}`:''}${base?`\n\nMATERIAL DO ALUNO (resumo já estudado — confronte com o que você pesquisar):\n${base}`:''}`;
 
     // useSearch sempre true: mesmo com resumo, a IA precisa conferir na web
-    const{parsed,grounded}=await callGeminiJSON(apiKey,prompt,true,8192);
+    // Tavily quando houver chave: pesquisa e o Gemini monta os cards a partir do
+    // que voltou, numa chamada sem grounding. É a mesma ordem do resumo.
+    const bF=await buscarMaterial(sub.name,`${kingdom.name} — ${topic.name}`,25000);
+    const{parsed,grounded}=bF.material
+      ?{...(await callGeminiJSON(apiKey,tavilyPromptComFontes(prompt,bF.material),false,8192)),grounded:true}
+      :await callGeminiJSON(apiKey,prompt,true,8192);
     const cards=Array.isArray(parsed)?parsed:(parsed&&Array.isArray(parsed.cards)?parsed.cards:[]);
     if(!cards.length)throw new Error('A IA não devolveu nenhum flashcard válido.');
     if(!db.flashcards)db.flashcards={};
@@ -6734,7 +6790,7 @@ REGRAS:
     db.fcCreatedTotal=(db.fcCreatedTotal||0)+n;
     saveDB();
     if(typeof updateFCBadge==='function')updateFCBadge();
-    toast(grounded?`🌐 ${n} flashcard${n>1?'s':''} gerado${n>1?'s':''} com pesquisa na internet!`
+    toast(grounded?`${bF.via==='tavily'?'🔎':'🌐'} ${n} flashcard${n>1?'s':''} gerado${n>1?'s':''} com pesquisa na internet${bF.via==='tavily'?` (${bF.fontes.length} fontes)`:''}!`
                   :`🃏 ${n} flashcard${n>1?'s':''} gerado${n>1?'s':''} (busca indisponível agora — usei o conhecimento da IA)`,'var(--green)');
   }catch(e){
     toast('❌ '+(e.message||'Erro ao gerar flashcards'),'var(--red)');
@@ -10253,7 +10309,10 @@ async function repGerarComIA(id){
       repGerandoIAStep=i+1;
       repRenderMain();
       const campos=REP_IA_BATCHES[i];
-      const{raw,grounded}=await callGeminiGenerateSearch(apiKey,repPromptGerarBatch(t.nome,eixo?.nome||'',campos));
+      const bR=await buscarMaterial(t.nome,eixo?.nome||'',30000);
+      const{raw,grounded}=bR.material
+        ?{raw:await callGeminiGenerate(apiKey,tavilyPromptComFontes(repPromptGerarBatch(t.nome,eixo?.nome||'',campos),bR.material)),grounded:true}
+        :await callGeminiGenerateSearch(apiKey,repPromptGerarBatch(t.nome,eixo?.nome||'',campos));
       const data=extractAIJson(raw);
       campos.forEach(cid=>{
         if(typeof data[cid]==='string'&&data[cid].trim())t[cid]=data[cid].trim();
@@ -10322,7 +10381,10 @@ async function repVerificarComIA(id){
   repRenderMain();
 
   try{
-    const{raw,grounded}=await callGeminiGenerateSearch(apiKey,repPromptVerificar(t.nome,eixo?.nome||'',conteudoAtual));
+    const bV=await buscarMaterial(t.nome,eixo?.nome||'',30000);
+    const{raw,grounded}=bV.material
+      ?{raw:await callGeminiGenerate(apiKey,tavilyPromptComFontes(repPromptVerificar(t.nome,eixo?.nome||'',conteudoAtual),bV.material)),grounded:true}
+      :await callGeminiGenerateSearch(apiKey,repPromptVerificar(t.nome,eixo?.nome||'',conteudoAtual));
     t.verificacao={texto:raw.trim(),geradoEm:new Date().toISOString(),grounded};
     saveDB();
     toast(grounded?'🔍 Verificação concluída com pesquisa na internet.':'🔍 Verificação concluída (busca na internet indisponível dessa vez).','var(--green)');
