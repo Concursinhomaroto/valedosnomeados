@@ -1038,6 +1038,22 @@ nav{
 .fc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
 .fc-title{font-size:16px;font-weight:900;color:var(--text);}
 .fc-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+/* ===== Editor de mapa da Sala (painel admin) ===== */
+.maped-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 10px;background:var(--panel2);border:1.5px solid var(--border2);border-radius:12px;margin-bottom:10px;}
+.maped-sep{width:1px;height:20px;background:var(--border2);margin:0 2px;}
+.maped-modes{display:flex;gap:4px;}
+.maped-mode{padding:6px 10px;border-radius:8px;border:1.5px solid var(--border2);background:var(--panel);color:var(--text2);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;}
+.maped-mode.active{background:rgba(124,58,237,0.14);border-color:rgba(124,58,237,0.45);color:var(--accent);}
+.maped-chk{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap;}
+.maped-wrap{display:flex;gap:10px;align-items:flex-start;}
+.maped-side{width:280px;flex:0 0 280px;background:var(--panel2);border:1.5px solid var(--border2);border-radius:12px;padding:10px;}
+.maped-tspane{position:relative;max-height:52vh;overflow:auto;border:1.5px solid var(--border2);border-radius:8px;background:#0e0e14;}
+.maped-tspane canvas{display:block;image-rendering:pixelated;cursor:crosshair;}
+.maped-tssel{position:absolute;border:2px solid #7c3aed;background:rgba(124,58,237,0.22);pointer-events:none;display:none;}
+.maped-info{margin-top:8px;font-size:11px;color:var(--muted);line-height:1.5;}
+.maped-canvaswrap{flex:1;min-width:0;max-height:76vh;overflow:auto;border:1.5px solid var(--border2);border-radius:12px;background:#12121a;}
+.maped-canvaswrap canvas{display:block;image-rendering:pixelated;cursor:crosshair;}
+@media(max-width:900px){.maped-wrap{flex-direction:column;}.maped-side{width:100%;flex:1 1 auto;}}
 .fc-search{padding:7px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:12px;outline:none;background:var(--panel);color:var(--text);width:200px;}
 .fc-search:focus{border-color:var(--accent);}
 
@@ -1927,6 +1943,17 @@ nav{
   </div>
 
   <div class="section-card" style="max-width:720px">
+    <div class="sec-title" style="font-size:15px">🧱 Mapa da Sala de Estudo</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+      Monte a planta peça por peça, com o acervo inteiro do pacote de arte (sala de aula,
+      academia, cozinha, hospital, museu, mercado, quarto, banheiro — tudo). O que você
+      publicar vale pra todo mundo que entrar na Sala; dá pra voltar ao campus padrão
+      a qualquer momento.
+    </div>
+    <button class="btn btn-primary" onclick="showScreen('mapaeditor')"><i class="fa fa-pen-ruler"></i> Abrir o editor de mapa</button>
+  </div>
+
+  <div class="section-card" style="max-width:720px">
     <div class="sec-title" style="font-size:15px">🗄️ Backups automáticos (sua conta)</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
       Uma cópia completa dos seus dados é gravada automaticamente uma vez por dia, num
@@ -1937,6 +1964,51 @@ nav{
     </div>
     <div id="admin-backups-list" style="display:flex;flex-direction:column;gap:8px">
       <div class="empty" style="padding:16px"><i class="fa fa-spinner fa-spin"></i><p>Carregando backups...</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== EDITOR DE MAPA DA SALA (só ADMIN_EMAIL) ===== -->
+<div class="screen" id="screen-mapaeditor">
+  <div class="sec-title">🧱 Editor do Mapa da Sala</div>
+  <div class="maped-bar">
+    <button class="btn btn-sm" onclick="showScreen('admin')"><i class="fa fa-arrow-left"></i> Admin</button>
+    <span class="maped-sep"></span>
+    <div class="maped-modes">
+      <button class="maped-mode active" data-mode="objeto" onclick="mapedSetMode('objeto',this)"><i class="fa fa-couch"></i> Peça</button>
+      <button class="maped-mode" data-mode="piso" onclick="mapedSetMode('piso',this)"><i class="fa fa-fill-drip"></i> Piso</button>
+      <button class="maped-mode" data-mode="cadeira" onclick="mapedSetMode('cadeira',this)"><i class="fa fa-chair"></i> Cadeira</button>
+      <button class="maped-mode" data-mode="borracha" onclick="mapedSetMode('borracha',this)"><i class="fa fa-eraser"></i> Apagar</button>
+      <button class="maped-mode" data-mode="spawn" onclick="mapedSetMode('spawn',this)"><i class="fa fa-street-view"></i> Entrada</button>
+    </div>
+    <span class="maped-sep"></span>
+    <label class="maped-chk"><input type="checkbox" id="maped-collide" checked onchange="mapedRefreshInfo()"> bloqueia passagem</label>
+    <label class="maped-chk"><input type="checkbox" id="maped-grid" checked onchange="mapedDraw()"> grade</label>
+    <span class="maped-sep"></span>
+    <button class="btn btn-sm btn-ghost" onclick="mapedZoom(-1)"><i class="fa fa-magnifying-glass-minus"></i></button>
+    <span id="maped-zoom-label" class="maped-chk">100%</span>
+    <button class="btn btn-sm btn-ghost" onclick="mapedZoom(1)"><i class="fa fa-magnifying-glass-plus"></i></button>
+    <span class="maped-sep"></span>
+    <button class="btn btn-sm btn-ghost" onclick="mapedUndo()"><i class="fa fa-rotate-left"></i> Desfazer</button>
+    <button class="btn btn-sm btn-ghost" onclick="mapedResize()"><i class="fa fa-expand"></i> Tamanho</button>
+    <span class="maped-sep"></span>
+    <button class="btn btn-sm" onclick="mapedRestaurarPadrao()"><i class="fa fa-rotate"></i> Voltar ao padrão</button>
+    <button class="btn btn-sm btn-primary" onclick="mapedSalvar()"><i class="fa fa-cloud-arrow-up"></i> Publicar</button>
+  </div>
+  <div class="maped-wrap">
+    <div class="maped-side">
+      <select class="inp" id="maped-ts" onchange="mapedSelectTileset(this.value)" style="font-size:12px;margin-bottom:8px"></select>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px" id="maped-side-hint">
+        Arraste na folha pra pegar uma peça inteira (um sofá tem 2x2 tiles, uma cama 2x3).
+      </div>
+      <div class="maped-tspane" id="maped-tspane">
+        <canvas id="maped-tscanvas" onmousedown="mapedTsDown(event)"></canvas>
+        <div class="maped-tssel" id="maped-tssel"></div>
+      </div>
+      <div class="maped-info" id="maped-info"></div>
+    </div>
+    <div class="maped-canvaswrap" id="maped-canvaswrap">
+      <canvas id="maped-canvas" onmousedown="mapedCanvasDown(event)"></canvas>
     </div>
   </div>
 </div>
@@ -4166,7 +4238,7 @@ function showScreen(name){
   // animações) escondido atrás de qualquer outra tela, gastando CPU/bateria à toa.
   const estavaNaSala=document.getElementById('screen-sala')?.classList.contains('active');
   if(estavaNaSala&&name!=='sala'&&typeof salaMapaPause==='function')salaMapaPause();
-  if(name==='admin'&&!isAdmin())name='dashboard'; // proteção extra, além do item ficar oculto no menu
+  if((name==='admin'||name==='mapaeditor')&&!isAdmin())name='dashboard'; // proteção extra, além do item ficar oculto no menu
   // Repertório e Banco de Erros não têm botão próprio no menu — viraram abas dentro de
   // Redação e Simulado Geral, respectivamente, desde a fusão das telas relacionadas, então
   // o destaque do menu segue apontando pro botão "pai" de cada uma.
@@ -4193,6 +4265,7 @@ function showScreen(name){
   if(name==='conquistas')renderConquistasScreen();
   if(name==='sala')renderSalaMapaScreen();
   if(name==='admin'){adminSearchUsers();adminLoadBackups();}
+  if(name==='mapaeditor')renderMapEditor();
   if(name==='map')renderMap();
   // 'vale' (Mapa do Vale, D3+GeoJSON) fica suprimido da navegação por enquanto — mais
   // pesado pra carregar e menos prático pro uso diário que o grid de reinos. O código
@@ -13417,6 +13490,48 @@ setInterval(updateTabTitle,1000);
 // matemática de posição/colisão/animação foi conferida contra o código-fonte real do
 // SkyOffice (Player.ts, MyPlayer.ts, CharacterAnims.ts) pra ficar fiel ao original.
 const SALA_ASSETS='/icons/sala-mapa/';
+// Catálogo COMPLETO dos tilesets do pacote — é o que o editor do admin oferece
+// pra montar o mapa peça por peça. n=nome (tem que bater com o do map.json),
+// f=firstgid, i=caminho, c=colunas, t=total de tiles, w/h=tamanho do tile,
+// l=rótulo em português. Os 16 primeiros mantêm o firstgid histórico: mudar
+// qualquer um deles reinterpretaria todo gid do campus que já está salvo.
+const SALA_TILESETS=[
+  {n:"FloorAndGround",f:1,i:"tileset/FloorAndGround.png",c:64,t:2560,w:32,h:32,l:"Piso e paredes"},
+  {n:"chair",f:2561,i:"items/chair.png",c:1,t:23,w:32,h:64,l:"Cadeiras"},
+  {n:"Modern_Office_Black_Shadow",f:2584,i:"tileset/Modern_Office_Black_Shadow.png",c:16,t:848,w:32,h:32,l:"Escritório"},
+  {n:"Generic",f:3432,i:"tileset/Generic.png",c:16,t:1248,w:32,h:32,l:"Genérico"},
+  {n:"computer",f:4680,i:"items/computer.png",c:5,t:5,w:96,h:64,l:"Computadores"},
+  {n:"whiteboard",f:4685,i:"items/whiteboard.png",c:1,t:3,w:64,h:64,l:"Quadro branco"},
+  {n:"Basement",f:4688,i:"tileset/Basement.png",c:16,t:800,w:32,h:32,l:"Porão"},
+  {n:"vendingmachine",f:5488,i:"items/vendingmachine.png",c:1,t:1,w:64,h:96,l:"Máquina de vending"},
+  {n:"Classroom_and_library",f:5489,i:"tileset/Classroom_and_library.png",c:16,t:544,w:32,h:32,l:"Sala de aula e biblioteca"},
+  {n:"Conference_Hall",f:6033,i:"tileset/Conference_Hall.png",c:16,t:192,w:32,h:32,l:"Auditório"},
+  {n:"Kitchen",f:6225,i:"tileset/Kitchen.png",c:16,t:784,w:32,h:32,l:"Cozinha"},
+  {n:"LivingRoom",f:7009,i:"tileset/LivingRoom.png",c:16,t:720,w:32,h:32,l:"Sala de estar"},
+  {n:"Gym",f:7729,i:"tileset/Gym.png",c:16,t:528,w:32,h:32,l:"Academia"},
+  {n:"Music_and_sport",f:8257,i:"tileset/Music_and_sport.png",c:16,t:768,w:32,h:32,l:"Música e esporte"},
+  {n:"Art",f:9025,i:"tileset/Art.png",c:16,t:112,w:32,h:32,l:"Arte e quadros"},
+  {n:"Arches",f:9137,i:"tileset/Arches.png",c:10,t:320,w:32,h:32,l:"Portas em arco"},
+  {n:"Bathroom",f:9457,i:"tileset/Bathroom.png",c:16,t:896,w:32,h:32,l:"Banheiro"},
+  {n:"Bedroom",f:10353,i:"tileset/Bedroom.png",c:16,t:1712,w:32,h:32,l:"Quarto"},
+  {n:"Birthday_party",f:12065,i:"tileset/Birthday_party.png",c:12,t:84,w:32,h:32,l:"Festa"},
+  {n:"Christmas",f:12149,i:"tileset/Christmas.png",c:16,t:272,w:32,h:32,l:"Natal"},
+  {n:"Clothing_Store",f:12421,i:"tileset/Clothing_Store.png",c:16,t:1072,w:32,h:32,l:"Loja de roupa"},
+  {n:"Condominium",f:13493,i:"tileset/Condominium.png",c:16,t:304,w:32,h:32,l:"Condomínio"},
+  {n:"Fishing",f:13797,i:"tileset/Fishing.png",c:16,t:432,w:32,h:32,l:"Pesca"},
+  {n:"Grocery_store",f:14229,i:"tileset/Grocery_store.png",c:16,t:1248,w:32,h:32,l:"Mercado"},
+  {n:"Halloween",f:15477,i:"tileset/Halloween.png",c:16,t:976,w:32,h:32,l:"Halloween"},
+  {n:"Hospital",f:16453,i:"tileset/Hospital.png",c:16,t:1760,w:32,h:32,l:"Hospital"},
+  {n:"Ice_Cream_Shop",f:18213,i:"tileset/Ice_Cream_Shop.png",c:16,t:272,w:32,h:32,l:"Sorveteria"},
+  {n:"Jail",f:18485,i:"tileset/Jail.png",c:16,t:720,w:32,h:32,l:"Cadeia"},
+  {n:"Japanese_interiors",f:19205,i:"tileset/Japanese_interiors.png",c:16,t:512,w:32,h:32,l:"Japonês"},
+  {n:"Museum",f:19717,i:"tileset/Museum.png",c:16,t:1952,w:32,h:32,l:"Museu"},
+  {n:"Room_Builder",f:21669,i:"tileset/Room_Builder.png",c:76,t:8588,w:32,h:32,l:"Construtor de sala"},
+  {n:"Shooting_Range",f:30257,i:"tileset/Shooting_Range.png",c:16,t:80,w:32,h:32,l:"Tiro ao alvo"},
+  {n:"Television_Studio",f:30337,i:"tileset/Television_Studio.png",c:16,t:224,w:32,h:32,l:"Estúdio de TV"},
+  {n:"Upstairs_System",f:30561,i:"tileset/Upstairs_System.png",c:16,t:432,w:32,h:32,l:"Escadas e andar de cima"},
+];
+const SALA_TS_BY_NAME={};SALA_TILESETS.forEach(t=>{t.key='ts_'+t.n;SALA_TS_BY_NAME[t.n]=t;});
 const SALA_SITTING_SHIFT={up:[0,3,-10],down:[0,3,1],left:[0,-8,10],right:[0,-8,10]};
 // As mesmas 16 chaves de characters.ts do pacote enviado: 4 bases (arte original do
 // SkyOffice) × 4 tons de pele (o primeiro de cada bloco é o tom original, sem sufixo).
@@ -13426,7 +13541,7 @@ const SALA_CHARACTERS=[
   'lucy','lucy_media','lucy_morena','lucy_retinta',
   'nancy','nancy_media','nancy_morena','nancy_retinta',
 ];
-// Frame do spritesheet 'chairs' (items/chair.png) que corresponde a cada direção —
+// Frame do spritesheet de cadeiras (items/chair.png) que corresponde a cada direção —
 // conferido direto nos objetos da camada "Chair" do map.json já existente (mesmo dado
 // usado pras cadeiras do salão, aqui reaproveitado pras cadeiras novas das cabines).
 const SALA_CHAIR_FRAME={down:1,left:2,right:3,up:5};
@@ -13460,13 +13575,30 @@ function renderSalaMapaScreen(){
   if(!db.studyNickname){salaOpenNicknamePicker();return;}
   salaMapaBootAfterPicker();
 }
+// Planta em vigor. O editor do admin grava em sala_mapa/atual (JSON serializado
+// num campo só: é uma escrita atômica, e o Realtime Database não devolve array
+// vazio se a gente aninhar objeto). Sem nada lá, vale o arquivo do repositório.
+let salaMapaJSON=null;
+async function salaMapaFetchMap(){
+  try{
+    if(firebaseDB){
+      const snap=await firebaseDB.ref('sala_mapa/atual').once('value');
+      const v=snap.val();
+      if(v&&v.json)return JSON.parse(v.json);
+    }
+  }catch(e){console.warn('sala: mapa customizado indisponível, usando o padrão',e);}
+  const r=await fetch(SALA_ASSETS+'map.json',{cache:'no-cache'});
+  if(!r.ok)throw new Error('map.json '+r.status);
+  return await r.json();
+}
 function salaMapaBootAfterPicker(){
   if(salaMapaGame){salaMapaResume();return;}
   if(salaMapaLoading)return;
   salaMapaLoading=true;
   const viewport=document.getElementById('sala-mapa-viewport');
   if(viewport)viewport.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;font-size:13px;gap:8px"><i class="fa fa-spinner fa-spin"></i> Carregando a sala...</div>';
-  loadPhaser().then(()=>{
+  Promise.all([loadPhaser(),salaMapaFetchMap()]).then(([_,mapa])=>{
+    salaMapaJSON=mapa;
     salaMapaLoading=false;
     if(viewport)viewport.innerHTML='';
     salaMapaCreateGame();
@@ -13667,27 +13799,30 @@ function salaMapaBuildWallsFromGround(scene,map){
   return walls;
 }
 
+// Ponto de entrada do mapa: propriedade "spawn" ("tx,ty" em tiles) gravada pelo
+// editor. Se não houver, ou se apontar pra fora, entra no meio da largura, a 8
+// tiles do fim — que na planta padrão é a recepção.
+function salaMapaSpawnPoint(map){
+  const prop=(map.properties||[]).find(p=>p.name==='spawn');
+  if(prop&&typeof prop.value==='string'){
+    const [tx,ty]=prop.value.split(',').map(Number);
+    if(tx>=0&&tx<map.width&&ty>=0&&ty<map.height)return{x:tx*32+16,y:ty*32+16};
+  }
+  return{x:Math.floor(map.width/2)*32+16,y:(map.height-8)*32+16};
+}
+
 function salaMapaCreateGame(){
   class SalaMapaScene extends Phaser.Scene{
     constructor(){super('salaMapaScene');}
     preload(){
-      this.load.tilemapTiledJSON('tilemap',SALA_ASSETS+'map.json');
-      this.load.spritesheet('tiles_wall',SALA_ASSETS+'tileset/FloorAndGround.png',{frameWidth:32,frameHeight:32});
-      this.load.spritesheet('chairs',SALA_ASSETS+'items/chair.png',{frameWidth:32,frameHeight:64});
-      this.load.spritesheet('computers',SALA_ASSETS+'items/computer.png',{frameWidth:96,frameHeight:64});
-      this.load.spritesheet('whiteboards',SALA_ASSETS+'items/whiteboard.png',{frameWidth:64,frameHeight:64});
-      this.load.spritesheet('vendingmachines',SALA_ASSETS+'items/vendingmachine.png',{frameWidth:48,frameHeight:72});
-      this.load.spritesheet('office',SALA_ASSETS+'tileset/Modern_Office_Black_Shadow.png',{frameWidth:32,frameHeight:32});
-      this.load.spritesheet('basement',SALA_ASSETS+'tileset/Basement.png',{frameWidth:32,frameHeight:32});
-      this.load.spritesheet('classroom',SALA_ASSETS+'tileset/Classroom_and_library.png',{frameWidth:32,frameHeight:32});
-      this.load.spritesheet('generic',SALA_ASSETS+'tileset/Generic.png',{frameWidth:32,frameHeight:32});
-      this.load.spritesheet('conference',SALA_ASSETS+'tileset/Conference_Hall.png',{frameWidth:32,frameHeight:32});
-      this.load.spritesheet('kitchen',SALA_ASSETS+'tileset/Kitchen.png',{frameWidth:32,frameHeight:32});
-      this.load.spritesheet('living',SALA_ASSETS+'tileset/LivingRoom.png',{frameWidth:32,frameHeight:32});
-      this.load.spritesheet('gym',SALA_ASSETS+'tileset/Gym.png',{frameWidth:32,frameHeight:32});
-      this.load.spritesheet('music',SALA_ASSETS+'tileset/Music_and_sport.png',{frameWidth:32,frameHeight:32});
-      this.load.spritesheet('art',SALA_ASSETS+'tileset/Art.png',{frameWidth:32,frameHeight:32});
-      this.load.spritesheet('arches',SALA_ASSETS+'tileset/Arches.png',{frameWidth:32,frameHeight:32});
+      // Só carrega os tilesets que ESTE mapa usa. São 34 no catálogo (~3 MB);
+      // puxar todos a cada visita à sala seria desperdício — o editor do admin
+      // carrega os que faltam sob demanda, por fora do Phaser.
+      const usados=new Set((salaMapaJSON.tilesets||[]).map(t=>t.name));
+      SALA_TILESETS.forEach(t=>{
+        if(!usados.has(t.n))return;
+        this.load.spritesheet(t.key,SALA_ASSETS+t.i,{frameWidth:t.w,frameHeight:t.h});
+      });
       SALA_CHARACTERS.forEach(char=>{
         this.load.spritesheet(char,SALA_ASSETS+'character/'+char+'.png',{frameWidth:32,frameHeight:48});
       });
@@ -13696,29 +13831,22 @@ function salaMapaCreateGame(){
       salaMapaSceneRef=this;
       this.otherPlayers={}; // uid -> {sprite, nameText, char}
       salaMapaCreateAnims(this.anims);
+      // O JSON do mapa não vem mais do loader do Phaser: já foi buscado antes
+      // (Firebase primeiro, arquivo padrão como fallback) pra que o preload
+      // soubesse quais tilesets carregar.
+      this.cache.tilemap.add('tilemap',{format:Phaser.Tilemaps.Formats.TILED_JSON,data:salaMapaJSON});
       const map=this.make.tilemap({key:'tilemap'});
-      const floorTS=map.addTilesetImage('FloorAndGround','tiles_wall');
-      map.addTilesetImage('Modern_Office_Black_Shadow','office');
-      map.addTilesetImage('Generic','generic');
-      map.addTilesetImage('Basement','basement');
-      map.addTilesetImage('Classroom_and_library','classroom');
-      map.addTilesetImage('chair','chairs');
-      map.addTilesetImage('computer','computers');
-      map.addTilesetImage('whiteboard','whiteboards');
-      map.addTilesetImage('vendingmachine','vendingmachines');
-      map.addTilesetImage('Conference_Hall','conference');
-      map.addTilesetImage('Kitchen','kitchen');
-      map.addTilesetImage('Gym','gym');
-      map.addTilesetImage('Music_and_sport','music');
-      map.addTilesetImage('Art','art');
-      map.addTilesetImage('Arches','arches');
-      map.addTilesetImage('LivingRoom','living');
+      SALA_TILESETS.forEach(t=>{if(this.textures.exists(t.key))map.addTilesetImage(t.n,t.key);});
+      const floorTS=map.getTileset('FloorAndGround');
 
       const groundLayer=map.createLayer('Ground',floorTS);
       groundLayer.setCollisionByProperty({collides:true});
 
       const myChar=SALA_CHARACTERS.includes(db.studyCharacter)?db.studyCharacter:SALA_CHARACTERS[0];
-      this.player=this.physics.add.sprite(1456,2048,myChar); // recepção, logo dentro da entrada sul do campus
+      // Ponto de entrada: o editor do admin grava em map.properties.spawn ("x,y" em
+      // tiles). Sem isso, cai na recepção do campus padrão.
+      const spawn=salaMapaSpawnPoint(map);
+      this.player=this.physics.add.sprite(spawn.x,spawn.y,myChar);
       this.player.charKey=myChar;
       this.player.setSize(16,10).setOffset(8,38); // colisão só nos "pés", igual ao original (collisionScale)
       this.player.setDepth(this.player.y);
@@ -13740,45 +13868,31 @@ function salaMapaCreateGame(){
       this.physics.add.collider(this.player,salaMapaBuildWallsFromGround(this,map));
 
       // Móveis/decoração a partir das camadas de objeto do Tiled — mesma matemática do
-      // addGroupFromTiled original: x=obj.x+largura/2, y=obj.y-altura/2, profundidade=y
-      // (pra desenhar por cima/baixo do jogador de acordo com a posição vertical).
-      const addGroupFromTiled=(layerName,key,tilesetName,collidable)=>{
-        const group=this.physics.add.staticGroup();
-        const layer=map.getObjectLayer(layerName);
-        const tileset=map.getTileset(tilesetName);
-        if(!layer||!tileset)return group;
-        layer.objects.forEach(obj=>{
-          const actualX=obj.x+obj.width*0.5;
-          const actualY=obj.y-obj.height*0.5;
-          const sprite=group.get(actualX,actualY,key,obj.gid-tileset.firstgid).setDepth(actualY);
-          // Objeto marcado no map.json com a propriedade 'tint'='accent' (posto pelo
-          // gerador do mapa) ganha a cor roxa da plataforma via tint de verdade — sem
-          // precisar achar/arriscar coordenada de um asset roxo pronto no pacote.
-          const tintProp=(obj.properties||[]).find(p=>p.name==='tint');
+      // Uma camada de objeto por tileset ('Obj_<nome>'), porque o quadro do sprite
+      // é gid-firstgid DAQUELE tileset — misturar temas numa camada só renderiza
+      // lixo. Colisão agora é por OBJETO (propriedade 'collide'), não por camada:
+      // com 34 temas não daria pra ter um par colidível/não-colidível de cada.
+      this.solids=this.physics.add.staticGroup();
+      SALA_TILESETS.forEach(t=>{
+        const layer=map.getObjectLayer('Obj_'+t.n),tileset=map.getTileset(t.n);
+        if(!layer||!tileset)return;
+        layer.objects.forEach(o=>{
+          const actualX=o.x+o.width*0.5,actualY=o.y-o.height*0.5;
+          const props=o.properties||[];
+          const cp=props.find(p=>p.name==='collide');
+          const colide=!(cp&&(cp.value===false||cp.value==='false'));
+          const sprite=colide
+            ?this.solids.get(actualX,actualY,t.key,o.gid-tileset.firstgid)
+            :this.add.sprite(actualX,actualY,t.key,o.gid-tileset.firstgid);
+          if(!sprite)return;
+          sprite.setDepth(actualY);
+          // Objeto marcado com 'tint'='accent' ganha o roxo da plataforma via tint de
+          // verdade — sem precisar achar/arriscar coordenada de um asset roxo pronto.
+          const tintProp=props.find(p=>p.name==='tint');
           if(tintProp&&tintProp.value==='accent')sprite.setTint(0x7c3aed);
         });
-        if(collidable)this.physics.add.collider(this.player,group);
-        return group;
-      };
-      addGroupFromTiled('Wall','tiles_wall','FloorAndGround',false);
-      addGroupFromTiled('Objects','office','Modern_Office_Black_Shadow',false);
-      addGroupFromTiled('ObjectsOnCollide','office','Modern_Office_Black_Shadow',true);
-      addGroupFromTiled('GenericObjects','generic','Generic',false);
-      addGroupFromTiled('GenericObjectsOnCollide','generic','Generic',true);
-      addGroupFromTiled('Basement','basement','Basement',true);
-      addGroupFromTiled('Library','classroom','Classroom_and_library',true);
-      addGroupFromTiled('LibraryDecor','classroom','Classroom_and_library',false);
-      addGroupFromTiled('Computer','computers','computer',true);
-      addGroupFromTiled('Whiteboard','whiteboards','whiteboard',false);
-      addGroupFromTiled('VendingMachine','vendingmachines','vendingmachine',true);
-      addGroupFromTiled('Conference','conference','Conference_Hall',true);
-      addGroupFromTiled('Kitchen','kitchen','Kitchen',true);
-      addGroupFromTiled('Living','living','LivingRoom',true);
-      addGroupFromTiled('Gym','gym','Gym',true);
-      addGroupFromTiled('Music','music','Music_and_sport',true);
-      addGroupFromTiled('Art','art','Art',true);
-      addGroupFromTiled('ArtDecor','art','Art',false);
-      addGroupFromTiled('Arches','arches','Arches',false);
+      });
+      this.physics.add.collider(this.player,this.solids);
 
       // Cadeiras — igual às outras camadas de objeto, mas guardam a direção (do Tiled)
       // pra saber em que pose sentar e pra que lado deslocar o jogador (SALA_SITTING_SHIFT).
@@ -13789,7 +13903,7 @@ function salaMapaCreateGame(){
         chairLayer.objects.forEach(obj=>{
           const actualX=obj.x+obj.width*0.5;
           const actualY=obj.y-obj.height*0.5;
-          const sprite=this.chairs.get(actualX,actualY,'chairs',obj.gid-chairTileset.firstgid).setDepth(actualY);
+          const sprite=this.chairs.get(actualX,actualY,SALA_TS_BY_NAME.chair.key,obj.gid-chairTileset.firstgid).setDepth(actualY);
           const dirProp=(obj.properties||[]).find(p=>p.name==='direction');
           sprite.direction=dirProp?dirProp.value:'down';
         });
@@ -13897,6 +14011,336 @@ function salaMapaCreateGame(){
     scale:{mode:Phaser.Scale.RESIZE,width:'100%',height:'100%'},
     scene:[SalaMapaScene],
   });
+}
+
+// ============================ EDITOR DE MAPA DA SALA =========================
+// Monta o map.json da Sala de Estudo peça por peça, direto no navegador, com o
+// catálogo INTEIRO do pacote (34 folhas — hospital, museu, mercado, o que for).
+// Publica em sala_mapa/atual no Firebase; a Sala lê de lá antes do arquivo do
+// repositório (ver salaMapaFetchMap). Só o ADMIN_EMAIL chega aqui.
+const MAPED_T=32;
+let mapedMapa=null;          // o map.json em edição
+let mapedTS=null;            // tileset selecionado (item de SALA_TILESETS)
+let mapedSel=null;           // {c,r,w,h} — retângulo escolhido na folha
+let mapedModo='objeto';
+let mapedZoomN=1;
+let mapedImgs={};            // nome do tileset -> HTMLImageElement já carregado
+let mapedUndoStack=[];
+let mapedGroundCache=null;   // canvas do piso, redesenhado só quando o piso muda
+let mapedPintando=false;
+
+function mapedTilesetPorGid(gid){
+  let achado=null;
+  SALA_TILESETS.forEach(t=>{if(gid>=t.f&&gid<t.f+t.t&&(!achado||t.f>achado.f))achado=t;});
+  return achado;
+}
+function mapedImg(t){
+  if(mapedImgs[t.n])return mapedImgs[t.n];
+  const im=new Image();
+  im.onload=()=>{mapedGroundCache=null;mapedDraw();};
+  im.src=SALA_ASSETS+t.i;
+  mapedImgs[t.n]=im;
+  return im;
+}
+function mapedCamada(nome){
+  let l=mapedMapa.layers.find(x=>x.name===nome);
+  if(!l){
+    l={draworder:'topdown',id:mapedMapa.layers.length+1,name:nome,objects:[],
+       opacity:1,type:'objectgroup',visible:true,x:0,y:0};
+    mapedMapa.layers.push(l);
+  }
+  return l;
+}
+function mapedGround(){return mapedMapa.layers.find(l=>l.type==='tilelayer');}
+
+// ---------------------------------------------------------------- abertura ---
+function renderMapEditor(){
+  if(!isAdmin()){showScreen('dashboard');return;}
+  const sel=document.getElementById('maped-ts');
+  if(sel&&!sel.options.length){
+    sel.innerHTML=SALA_TILESETS.map(t=>`<option value="${t.n}">${t.l}</option>`).join('');
+  }
+  if(mapedMapa){mapedDraw();return;}
+  document.getElementById('maped-info').innerHTML='<i class="fa fa-spinner fa-spin"></i> Carregando o mapa...';
+  salaMapaFetchMap().then(m=>{
+    mapedMapa=m;
+    // Garante que TODAS as folhas estão registradas no mapa, mesmo as que ainda
+    // não têm nenhuma peça: sem a entrada em tilesets, o Phaser não carrega a
+    // imagem e a peça nova sairia invisível no jogo.
+    mapedMapa.tilesets=SALA_TILESETS.map(t=>({
+      columns:t.c,firstgid:t.f,image:'../'+t.i,imageheight:Math.ceil(t.t/t.c)*t.h,
+      imagewidth:t.c*t.w,margin:0,name:t.n,spacing:0,tilecount:t.t,
+      tileheight:t.h,tilewidth:t.w}));
+    mapedSelectTileset(SALA_TILESETS[0].n);
+    mapedDraw();
+  }).catch(e=>{
+    document.getElementById('maped-info').textContent='Não deu pra carregar o mapa: '+e.message;
+  });
+}
+function mapedSetMode(m,el){
+  mapedModo=m;
+  document.querySelectorAll('.maped-mode').forEach(b=>b.classList.remove('active'));
+  if(el)el.classList.add('active');
+  mapedRefreshInfo();
+}
+function mapedZoom(d){
+  mapedZoomN=Math.max(0.25,Math.min(2,mapedZoomN+d*0.25));
+  document.getElementById('maped-zoom-label').textContent=Math.round(mapedZoomN*100)+'%';
+  mapedDraw();
+}
+function mapedRefreshInfo(){
+  const i=document.getElementById('maped-info');if(!i)return;
+  const dicas={
+    objeto:'Clique no mapa pra colocar a peça escolhida ao lado. Ela é desenhada por cima do piso e some com a borracha.',
+    piso:'Clique (ou arraste) pra pintar o chão. Peças por cima continuam onde estão.',
+    cadeira:'Coloca uma cadeira em que dá pra sentar de verdade. A direção vem do tile que você escolher na folha "Cadeiras".',
+    borracha:'Clique pra tirar a peça mais de cima daquele tile. O piso não é apagado — pinte por cima no modo Piso.',
+    spawn:'Clique onde as pessoas devem aparecer ao entrar na sala.'};
+  const g=mapedGround();
+  i.innerHTML=(dicas[mapedModo]||'')+
+    `<br><br><b>Mapa:</b> ${mapedMapa?mapedMapa.width+'x'+mapedMapa.height:'—'} tiles`+
+    (mapedSel?`<br><b>Peça:</b> ${mapedTS.l} ${mapedSel.w}x${mapedSel.h} tiles`:'')+
+    `<br><b>Peças no mapa:</b> ${mapedMapa?mapedMapa.layers.filter(l=>l.type==='objectgroup').reduce((a,l)=>a+l.objects.length,0):0}`;
+}
+
+// ------------------------------------------------------------ folha de tiles ---
+function mapedSelectTileset(nome){
+  mapedTS=SALA_TS_BY_NAME[nome];
+  mapedSel=null;
+  const combo=document.getElementById('maped-ts');
+  if(combo&&combo.value!==nome)combo.value=nome;
+  const im=mapedImg(mapedTS);
+  const cv=document.getElementById('maped-tscanvas');
+  const linhas=Math.ceil(mapedTS.t/mapedTS.c);
+  cv.width=mapedTS.c*mapedTS.w;cv.height=linhas*mapedTS.h;
+  cv.style.width=cv.width+'px';cv.style.height=cv.height+'px';
+  const desenha=()=>{
+    const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
+    ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.drawImage(im,0,0);
+  };
+  if(im.complete&&im.naturalWidth)desenha();else im.addEventListener('load',desenha,{once:true});
+  document.getElementById('maped-tssel').style.display='none';
+  mapedRefreshInfo();
+}
+function mapedTsPointer(ev){
+  const cv=document.getElementById('maped-tscanvas'),r=cv.getBoundingClientRect();
+  return{c:Math.floor((ev.clientX-r.left)/mapedTS.w),r:Math.floor((ev.clientY-r.top)/mapedTS.h)};
+}
+function mapedTsDown(ev){
+  ev.preventDefault();
+  const p=mapedTsPointer(ev);
+  mapedSel={c:p.c,r:p.r,w:1,h:1,ini:p};
+  mapedTsPintaSel();
+  const mv=e=>{
+    const q=mapedTsPointer(e);
+    mapedSel.c=Math.min(mapedSel.ini.c,q.c);mapedSel.r=Math.min(mapedSel.ini.r,q.r);
+    mapedSel.w=Math.abs(q.c-mapedSel.ini.c)+1;mapedSel.h=Math.abs(q.r-mapedSel.ini.r)+1;
+    mapedTsPintaSel();
+  };
+  const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);mapedRefreshInfo();};
+  document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);
+}
+function mapedTsPintaSel(){
+  const box=document.getElementById('maped-tssel');
+  box.style.display='block';
+  box.style.left=(mapedSel.c*mapedTS.w)+'px';box.style.top=(mapedSel.r*mapedTS.h)+'px';
+  box.style.width=(mapedSel.w*mapedTS.w)+'px';box.style.height=(mapedSel.h*mapedTS.h)+'px';
+}
+
+// -------------------------------------------------------------- desenhar mapa ---
+function mapedDesenhaGround(){
+  const g=mapedGround(),W=mapedMapa.width,H=mapedMapa.height;
+  const cv=document.createElement('canvas');
+  cv.width=W*MAPED_T;cv.height=H*MAPED_T;
+  const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
+  ctx.fillStyle='#12121a';ctx.fillRect(0,0,cv.width,cv.height);
+  for(let i=0;i<g.data.length;i++){
+    const gid=g.data[i];if(!gid)continue;
+    const t=mapedTilesetPorGid(gid);if(!t)continue;
+    const im=mapedImg(t);if(!im.complete||!im.naturalWidth)continue;
+    const k=gid-t.f,sx=(k%t.c)*t.w,sy=Math.floor(k/t.c)*t.h;
+    ctx.drawImage(im,sx,sy,t.w,t.h,(i%W)*MAPED_T,Math.floor(i/W)*MAPED_T,t.w,t.h);
+  }
+  return cv;
+}
+function mapedDraw(){
+  if(!mapedMapa)return;
+  const cv=document.getElementById('maped-canvas');if(!cv)return;
+  const W=mapedMapa.width,H=mapedMapa.height,Z=mapedZoomN;
+  cv.width=W*MAPED_T;cv.height=H*MAPED_T;
+  cv.style.width=(cv.width*Z)+'px';cv.style.height=(cv.height*Z)+'px';
+  const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
+  if(!mapedGroundCache)mapedGroundCache=mapedDesenhaGround();
+  ctx.drawImage(mapedGroundCache,0,0);
+  // Mesma ordenação do Phaser: quem tem y maior é desenhado por cima.
+  const objs=[];
+  mapedMapa.layers.forEach(l=>{if(l.type==='objectgroup')l.objects.forEach(o=>objs.push(o));});
+  objs.sort((a,b)=>a.y-b.y);
+  objs.forEach(o=>{
+    const t=mapedTilesetPorGid(o.gid);if(!t)return;
+    const im=mapedImg(t);if(!im.complete||!im.naturalWidth)return;
+    const k=o.gid-t.f,sx=(k%t.c)*t.w,sy=Math.floor(k/t.c)*t.h;
+    ctx.drawImage(im,sx,sy,t.w,t.h,o.x,o.y-o.height,o.width,o.height);
+  });
+  if(document.getElementById('maped-grid').checked){
+    ctx.strokeStyle='rgba(255,255,255,0.07)';ctx.lineWidth=1;
+    for(let x=0;x<=W;x++){ctx.beginPath();ctx.moveTo(x*MAPED_T,0);ctx.lineTo(x*MAPED_T,H*MAPED_T);ctx.stroke();}
+    for(let y=0;y<=H;y++){ctx.beginPath();ctx.moveTo(0,y*MAPED_T);ctx.lineTo(W*MAPED_T,y*MAPED_T);ctx.stroke();}
+  }
+  const sp=(mapedMapa.properties||[]).find(p=>p.name==='spawn');
+  if(sp){
+    const [tx,ty]=String(sp.value).split(',').map(Number);
+    ctx.strokeStyle='#ffe27a';ctx.lineWidth=3;
+    ctx.strokeRect(tx*MAPED_T+2,ty*MAPED_T+2,MAPED_T-4,MAPED_T-4);
+  }
+  mapedRefreshInfo();
+}
+
+// ------------------------------------------------------------------- edição ---
+function mapedSnapshot(){
+  mapedUndoStack.push(JSON.stringify(mapedMapa));
+  if(mapedUndoStack.length>40)mapedUndoStack.shift();
+}
+function mapedUndo(){
+  const s=mapedUndoStack.pop();
+  if(!s){toast('Nada pra desfazer','var(--muted)');return;}
+  mapedMapa=JSON.parse(s);mapedGroundCache=null;mapedDraw();
+}
+function mapedCanvasTile(ev){
+  const cv=document.getElementById('maped-canvas'),r=cv.getBoundingClientRect();
+  return{tx:Math.floor((ev.clientX-r.left)/(MAPED_T*mapedZoomN)),
+         ty:Math.floor((ev.clientY-r.top)/(MAPED_T*mapedZoomN))};
+}
+function mapedNextId(){
+  let max=0;
+  mapedMapa.layers.forEach(l=>{if(l.objects)l.objects.forEach(o=>{if(o.id>max)max=o.id;});});
+  return max+1;
+}
+function mapedAplicar(tx,ty){
+  if(tx<0||ty<0||tx>=mapedMapa.width||ty>=mapedMapa.height)return;
+  if(mapedModo==='spawn'){
+    mapedMapa.properties=[{name:'spawn',type:'string',value:tx+','+ty}];
+    mapedDraw();return;
+  }
+  if(mapedModo==='borracha'){
+    // Tira o objeto mais "de cima" que cobre este tile (maior y desenhado por último).
+    let alvo=null,camada=null;
+    mapedMapa.layers.forEach(l=>{
+      if(l.type!=='objectgroup')return;
+      l.objects.forEach(o=>{
+        const x0=o.x/MAPED_T,y1=(o.y-1)/MAPED_T,cols=Math.max(1,o.width/MAPED_T),lins=Math.max(1,o.height/MAPED_T);
+        if(tx>=x0&&tx<x0+cols&&ty<=y1&&ty>y1-lins&&(!alvo||o.y>alvo.y)){alvo=o;camada=l;}
+      });
+    });
+    if(alvo){camada.objects=camada.objects.filter(o=>o!==alvo);mapedDraw();}
+    return;
+  }
+  if(!mapedSel){toast('Escolha uma peça na folha ao lado','var(--muted)');return;}
+  if(mapedModo==='piso'){
+    const g=mapedGround();
+    for(let dy=0;dy<mapedSel.h;dy++)for(let dx=0;dx<mapedSel.w;dx++){
+      const x=tx+dx,y=ty+dy;
+      if(x>=mapedMapa.width||y>=mapedMapa.height)continue;
+      g.data[y*mapedMapa.width+x]=mapedTS.f+(mapedSel.r+dy)*mapedTS.c+(mapedSel.c+dx);
+    }
+    mapedGroundCache=null;mapedDraw();return;
+  }
+  const colide=document.getElementById('maped-collide').checked;
+  if(mapedModo==='cadeira'){
+    // Cadeira é uma camada à parte porque o jogo lê a direção dela pra sentar.
+    const dir={0:'down',1:'left',2:'right',3:'up'}[mapedSel.r%4]||'down';
+    mapedCamada('Chair').objects.push({
+      gid:SALA_TS_BY_NAME.chair.f+mapedSel.r,height:64,id:mapedNextId(),name:'',rotation:0,
+      type:'',visible:true,width:32,x:tx*MAPED_T,y:ty*MAPED_T+64,
+      properties:[{name:'direction',type:'string',value:dir}]});
+    mapedDraw();return;
+  }
+  // Peça normal: um objeto por tile do retângulo escolhido, na camada da folha.
+  const l=mapedCamada('Obj_'+mapedTS.n);
+  // Passo em TILES do mapa: há folhas com tile maior que 32 (computador 96x64,
+  // vending 64x96). Andar de 1 em 1 nelas empilharia as peças umas sobre as outras.
+  const passoX=Math.max(1,mapedTS.w/MAPED_T),passoY=Math.max(1,mapedTS.h/MAPED_T);
+  for(let dy=0;dy<mapedSel.h;dy++)for(let dx=0;dx<mapedSel.w;dx++){
+    const gid=mapedTS.f+(mapedSel.r+dy)*mapedTS.c+(mapedSel.c+dx);
+    l.objects.push({gid,height:mapedTS.h,id:mapedNextId(),name:'',rotation:0,type:'',
+      visible:true,width:mapedTS.w,x:(tx+dx*passoX)*MAPED_T,y:(ty+dy*passoY)*MAPED_T+mapedTS.h,
+      properties:[{name:'collide',type:'bool',value:colide}]});
+  }
+  mapedDraw();
+}
+function mapedCanvasDown(ev){
+  ev.preventDefault();
+  mapedSnapshot();
+  const p=mapedCanvasTile(ev);
+  mapedAplicar(p.tx,p.ty);
+  if(mapedModo!=='piso'&&mapedModo!=='borracha')return;
+  mapedPintando=true;
+  let ult=p.tx+','+p.ty;
+  const mv=e=>{
+    const q=mapedCanvasTile(e),k=q.tx+','+q.ty;
+    if(k!==ult){ult=k;mapedAplicar(q.tx,q.ty);}
+  };
+  const up=()=>{mapedPintando=false;document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);};
+  document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);
+}
+
+// --------------------------------------------------------- tamanho / publicar ---
+function mapedResize(){
+  const w=parseInt(prompt('Largura em tiles (hoje '+mapedMapa.width+'):',mapedMapa.width),10);
+  if(!w||w<10||w>200)return;
+  const h=parseInt(prompt('Altura em tiles (hoje '+mapedMapa.height+'):',mapedMapa.height),10);
+  if(!h||h<10||h>200)return;
+  mapedSnapshot();
+  const g=mapedGround(),novo=new Array(w*h).fill(0);
+  for(let y=0;y<Math.min(h,mapedMapa.height);y++)
+    for(let x=0;x<Math.min(w,mapedMapa.width);x++)
+      novo[y*w+x]=g.data[y*mapedMapa.width+x];
+  g.data=novo;g.width=w;g.height=h;
+  mapedMapa.width=w;mapedMapa.height=h;
+  // Peça que ficou fora do novo limite some — senão viraria objeto fantasma,
+  // invisível no editor e ainda carregado pelo jogo.
+  mapedMapa.layers.forEach(l=>{
+    if(l.type==='objectgroup')l.objects=l.objects.filter(o=>o.x<w*MAPED_T&&o.y<=h*MAPED_T);
+  });
+  mapedGroundCache=null;mapedDraw();
+}
+async function mapedSalvar(){
+  if(!isAdmin())return;
+  const vazio=mapedGround().data.every(v=>!v);
+  if(vazio&&!confirm('O piso está todo vazio. Publicar assim mesmo?'))return;
+  mapedMapa.nextobjectid=mapedNextId();
+  try{
+    await firebaseDB.ref('sala_mapa/atual').set({
+      json:JSON.stringify(mapedMapa),
+      atualizadoEm:Date.now(),
+      porUid:currentUser?currentUser.uid:null,
+    });
+    salaMapaJSON=null;
+    mapedDerrubaSala();
+    toast('🧱 Mapa publicado! Quem entrar na Sala já vê a planta nova.','var(--accent)');
+  }catch(e){
+    toast('Não deu pra publicar: '+e.message,'var(--danger)');
+  }
+}
+async function mapedRestaurarPadrao(){
+  if(!confirm('Isso apaga a planta publicada e volta pro campus que vem no app. Continuar?'))return;
+  try{
+    await firebaseDB.ref('sala_mapa/atual').remove();
+    mapedMapa=null;salaMapaJSON=null;mapedGroundCache=null;mapedUndoStack=[];
+    mapedDerrubaSala();
+    renderMapEditor();
+    toast('Voltou pro campus padrão.','var(--accent)');
+  }catch(e){toast('Não deu pra restaurar: '+e.message,'var(--danger)');}
+}
+// A Sala monta o Phaser uma vez só, na 1ª visita. Depois de publicar uma planta
+// nova ela precisa ser destruída, senão continuaria mostrando a antiga até o
+// próximo recarregamento da página.
+function mapedDerrubaSala(){
+  if(!salaMapaGame)return;
+  try{salaPresenceLeave&&salaPresenceLeave();}catch(e){}
+  try{salaMapaGame.destroy(true);}catch(e){}
+  salaMapaGame=null;salaMapaSceneRef=null;
 }
 
 // ===== HISTÓRICO DE SESSÕES =====
