@@ -2015,6 +2015,7 @@ nav{
     <button class="btn btn-sm btn-ghost" onclick="mapedAbrir('padrao')"><i class="fa fa-school"></i> Abrir o campus padrão</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedRascunhos()"><i class="fa fa-floppy-disk"></i> Rascunhos</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedLiberarMoveis()"><i class="fa fa-person-walking"></i> Liberar móveis</button>
+    <button class="btn btn-sm btn-ghost" onclick="mapedMarcarParedes()"><i class="fa fa-wand-magic-sparkles"></i> Marcar paredes</button>
     <span class="maped-sep"></span>
     <button class="btn btn-sm" onclick="mapedRestaurarPadrao()"><i class="fa fa-rotate"></i> Despublicar</button>
     <button class="btn btn-sm btn-primary" onclick="mapedSalvar()"><i class="fa fa-cloud-arrow-up"></i> Publicar</button>
@@ -14798,7 +14799,7 @@ function mapedRefreshInfo(){
   const i=document.getElementById('maped-info');if(!i)return;
   const dicas={
     objeto:'Clique no mapa pra colocar a peça escolhida ao lado. Ela é desenhada por cima do piso e some com a borracha.',
-    piso:'Clique (ou arraste) pra pintar o chão. Peças por cima continuam onde estão.',
+    piso:'Clique (ou arraste) pra pintar o chão. Com "bloqueia passagem" MARCADO, o que você pintar vira parede; desmarcado, vira chão livre. Pra consertar um mapa pronto de uma vez, use "Marcar paredes".',
     cadeira:'Coloca uma cadeira em que dá pra sentar de verdade. A direção vem do tile que você escolher na folha "Cadeiras".',
     borracha:'Clique pra tirar a peça mais de cima daquele tile. O piso não é apagado — pinte por cima no modo Piso.',
     spawn:'Clique onde as pessoas devem aparecer ao entrar na sala.',
@@ -15081,10 +15082,16 @@ function mapedAplicar(tx,ty){
   if(!mapedSel){toast('Escolha uma peça na folha ao lado','var(--muted)');return;}
   if(mapedModo==='piso'){
     const g=mapedGround();
+    // A caixinha vale aqui também: pintou parede com ela marcada, o tile já sai
+    // bloqueando. Antes o modo Piso a ignorava, e por isso parede desenhada com
+    // qualquer folha que não a lavanda do FloorAndGround não barrava ninguém.
+    const bloq=document.getElementById('maped-collide').checked;
+    const sol=mapedSolid();
     for(let dy=0;dy<mapedSel.h;dy++)for(let dx=0;dx<mapedSel.w;dx++){
       const x=tx+dx,y=ty+dy;
       if(x>=mapedMapa.width||y>=mapedMapa.height)continue;
       g.data[y*mapedMapa.width+x]=mapedTS.f+(mapedSel.r+dy)*mapedTS.c+(mapedSel.c+dx);
+      sol.data[y*mapedMapa.width+x]=bloq?1:0;
     }
     mapedGroundCache=null;mapedDraw();return;
   }
@@ -15401,6 +15408,81 @@ function mapedLiberarMoveis(){
   mapedSnapshot();mapedDraw();
   toast(`🚶 ${n} móveis liberados. Agora dá pra andar por ${antes.alcance} tiles. `+
         `Use o modo Parede pras paredes.`,'var(--accent)');
+}
+
+// Conserto em massa pra mapa já construído: lista cada tile DIFERENTE que existe
+// no chão, com miniatura e quantas vezes aparece, e você marca quais são parede.
+//
+// Existe porque a colisão do chão só reconhece 6 gids da parede lavanda do
+// FloorAndGround. Parede pintada com Room_Builder, com tema ou com qualquer
+// outra folha não barrava nada — e traçar tudo à mão no modo Parede, num mapa
+// inteiro, é inviável. Como parede se repete, marcar por TIPO resolve o mapa
+// todo em alguns cliques.
+function mapedMiniatura(gid){
+  const t=mapedTilesetPorGid(gid);
+  if(!t)return '';
+  const im=mapedImg(t);
+  if(!im.complete||!im.naturalWidth)return '';
+  const cv=document.createElement('canvas');cv.width=t.w;cv.height=t.h;
+  const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
+  const k=gid-t.f;
+  ctx.drawImage(im,(k%t.c)*t.w,Math.floor(k/t.c)*t.h,t.w,t.h,0,0,t.w,t.h);
+  try{return cv.toDataURL();}catch(e){return '';}
+}
+function mapedMarcarParedes(){
+  if(!mapedMapa)return;
+  const g=mapedGround(),sol=mapedSolid(),W=mapedMapa.width;
+  const cont={},bloqueados={};
+  for(let i=0;i<g.data.length;i++){
+    const gid=g.data[i];if(!gid)continue;
+    cont[gid]=(cont[gid]||0)+1;
+    if(sol.data[i])bloqueados[gid]=(bloqueados[gid]||0)+1;
+  }
+  const tipos=Object.keys(cont).map(Number).sort((a,b)=>cont[b]-cont[a]);
+  if(!tipos.length){toast('O chão está vazio.','var(--muted)');return;}
+  const cards=tipos.map(gid=>{
+    const t=mapedTilesetPorGid(gid);
+    const img=mapedMiniatura(gid);
+    // Já bloqueado na maioria das ocorrências? Então vem marcado.
+    const marcado=(bloqueados[gid]||0)>cont[gid]/2;
+    return`
+      <label style="display:flex;align-items:center;gap:9px;padding:7px 9px;border:1.5px solid var(--border2);border-radius:9px;margin-bottom:6px;cursor:pointer">
+        <input type="checkbox" class="maped-parede-chk" data-gid="${gid}" ${marcado?'checked':''}>
+        ${img?`<img src="${img}" style="width:32px;height:32px;image-rendering:pixelated;background:#12121a;border-radius:4px">`:'<div style="width:32px;height:32px"></div>'}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:800">${cont[gid]} tile${cont[gid]>1?'s':''} no mapa</div>
+          <div style="font-size:10.5px;color:var(--muted)">${t?t.l:'folha desconhecida'}</div>
+        </div>
+      </label>`;
+  }).join('');
+  openModal('🧱 Marcar paredes',`
+    <div style="text-align:left">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">
+        Marque quais destes tiles são <b>parede</b> — o jogador não vai poder passar por cima deles.
+        Deixe desmarcado tudo que for chão. Vale pra todas as ocorrências de cada tipo no mapa.
+      </div>
+      <div style="max-height:52vh;overflow:auto;margin-bottom:14px">${cards}</div>
+      <button class="btn btn-primary" style="width:100%" onclick="mapedAplicarParedes()">
+        <i class="fa fa-check"></i> Aplicar
+      </button>
+    </div>`);
+}
+function mapedAplicarParedes(){
+  const marcados=new Set();
+  document.querySelectorAll('.maped-parede-chk').forEach(c=>{if(c.checked)marcados.add(Number(c.dataset.gid));});
+  mapedSnapshot();
+  const g=mapedGround(),sol=mapedSolid();
+  let n=0;
+  for(let i=0;i<g.data.length;i++){
+    const v=marcados.has(g.data[i])?1:0;
+    if(sol.data[i]!==v)n++;
+    sol.data[i]=v;
+  }
+  closeModal();
+  document.getElementById('maped-vercol').checked=true;   // mostra o resultado na hora
+  mapedDraw();
+  const d=mapedDiagnostico();
+  toast(`🧱 ${n} tiles atualizados. Andável a partir da entrada: ${d.alcance} tiles.`,'var(--accent)');
 }
 
 // --------------------------------------------------------- tamanho / publicar ---
