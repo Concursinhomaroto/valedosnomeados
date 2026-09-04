@@ -13030,6 +13030,14 @@ async function callGeminiGenerateSearch(apiKey,prompt){
       const alt=await tryGeminiModel(apiKey,model,prompt,{useSearch:true,searchTool:'retrieval'});
       if(alt.ok)r=alt; else diag.push({modelo:model,erro:r.reason});
     }
+    // 429 é quota da CHAVE, não do modelo: insistir nos outros três só queima
+    // requisição e piora o limite por minuto. Para aqui e cai pro caminho sem
+    // busca, que é o que ainda funciona quando só o grounding está bloqueado.
+    if(!r.ok&&r.http===429){
+      diag.push({modelo:model,erro:r.reason});
+      diag.push({modelo:'(diagnóstico)',erro:'429 nas chamadas COM busca enquanto a chamada SEM busca funciona = a pesquisa do Google não está liberada nessa chave/plano. Não adianta tentar outro modelo: a quota é da chave.'});
+      break;
+    }
     if(r.ok){
       if(r.grounded)return{raw:r.raw,grounded:true,fontes:r.fontes,consultas:r.consultas,diag:[]};
       diag.push({modelo:model,erro:r.motivo});
