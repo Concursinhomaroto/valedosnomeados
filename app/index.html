@@ -1992,6 +1992,7 @@ nav{
     <span class="maped-sep"></span>
     <label class="maped-chk"><input type="checkbox" id="maped-collide" checked onchange="mapedRefreshInfo()"> bloqueia passagem</label>
     <label class="maped-chk"><input type="checkbox" id="maped-grid" checked onchange="mapedDraw()"> grade</label>
+    <label class="maped-chk"><input type="checkbox" id="maped-vercol" onchange="mapedDraw()"> ver colisão</label>
     <span class="maped-sep"></span>
     <button class="btn btn-sm btn-ghost" onclick="mapedZoom(-1)"><i class="fa fa-magnifying-glass-minus"></i></button>
     <span id="maped-zoom-label" class="maped-chk">100%</span>
@@ -13854,10 +13855,11 @@ function salaMapaCreateAnims(anims){
 // topo (11,16-18) e corpo (12,16-18) — e as duas precisam barrar. A lista
 // antiga só tinha 722 (=topo do meio) junto de 7 gids do mapa do SkyOffice
 // que nem existem mais aqui: a lateral e o rodapé de toda sala passavam.
-const SALA_WALL_GIDS=new Set([
-  721,722,723, 785,786,787,            // parede lavanda de 2 linhas (campus atual)
-  88,90,152,154,216,217,218,           // paredes do mapa antigo, mantidas por segurança
-]);
+// Só a parede lavanda de 2 linhas do campus padrão. Os 7 gids do mapa antigo do
+// SkyOffice saíram: são tiles TRANSPARENTES de uma planta que não existe mais e,
+// desde que dá pra pintar qualquer tile como chão, viraram armadilha — pintar um
+// deles deixava a área invisível e sólida ao mesmo tempo.
+const SALA_WALL_GIDS=new Set([721,722,723, 785,786,787]);
 function salaMapaBuildWallsFromGround(scene,map){
   const raw=scene.cache.tilemap.get('tilemap').data;
   const groundData=raw.layers.find(l=>l.name==='Ground').data;
@@ -13945,7 +13947,11 @@ function salaMapaCreateGame(){
       // código a partir dos gids de parede conhecidos (vocabulário do build_map_v2.py
       // que gerou este mapa: cantos 88/90/216/218, topo 722, rodapé 217, laterais
       // 152/154). Sem isso o jogador atravessa toda parede do mapa.
-      this.physics.add.collider(this.player,salaMapaBuildWallsFromGround(this,map));
+      // Guardado na cena (e não só passado pro collider) pra dar pra inspecionar
+      // o que virou parede — é como o teste confere que o editor mostra a mesma
+      // colisão que o jogo monta.
+      this.walls=salaMapaBuildWallsFromGround(this,map);
+      this.physics.add.collider(this.player,this.walls);
 
       // Móveis/decoração a partir das camadas de objeto do Tiled — mesma matemática do
       // Uma camada de objeto por tileset ('Obj_<nome>'), porque o quadro do sprite
@@ -14265,7 +14271,7 @@ function mapedRefreshInfo(){
     borracha:'Clique pra tirar a peça mais de cima daquele tile. O piso não é apagado — pinte por cima no modo Piso.',
     spawn:'Clique onde as pessoas devem aparecer ao entrar na sala.',
     ambiente:'Escolha a sala ao lado e clique: ela entra inteira, chão e móveis. Depois passe o modo Parede em volta dela — o carimbo desenha a parede, mas quem barra o jogador é o Parede.',
-    parede:'Pinta onde NÃO se passa (vermelho). É invisível no jogo. Desmarque "bloqueia passagem" pra apagar o bloqueio arrastando.'};
+    parede:'Marcado, pinta onde NÃO se passa (vermelho, invisível no jogo). Desmarcado, vira borracha de bloqueio: libera a passagem ali, inclusive no móvel que estiver no tile. Ligue "ver colisão" pra enxergar tudo que barra.'};
   const g=mapedGround();
   i.innerHTML=(dicas[mapedModo]||'')+
     `<br><br><b>Mapa:</b> ${mapedMapa?mapedMapa.width+'x'+mapedMapa.height:'—'} tiles`+
@@ -14273,7 +14279,13 @@ function mapedRefreshInfo(){
       ?(mapedDesignSel?`<br><b>Ambiente:</b> ${mapedDesignSel.label} (${mapedDesignSel.w}x${mapedDesignSel.h})`:'<br><b>Escolha um ambiente ao lado.</b>')
       :(mapedSel?`<br><b>Peça:</b> ${mapedTS.l} ${mapedSel.w}x${mapedSel.h} tiles`:''))+
     `<br><b>Peças no mapa:</b> ${mapedMapa?mapedMapa.layers.filter(l=>l.type==='objectgroup').reduce((a,l)=>a+l.objects.length,0):0}`+
-    (mapedSujo?'<br><b style="color:var(--accent)">Há alterações não publicadas.</b>':'');
+    (mapedSujo?'<br><b style="color:var(--accent)">Há alterações não publicadas.</b>':'')+
+    (()=>{ try{
+      const d=mapedDiagnostico();
+      if(d.preso)return `<br><b style="color:var(--danger)">A entrada está bloqueada — ninguém vai conseguir andar.</b>`;
+      return `<br><b>Andável a partir da entrada:</b> ${d.alcance} de ${d.livre} tiles livres`
+        +(d.alcance<d.livre*0.35?' <b style="color:var(--danger)">(o resto está fechado)</b>':'');
+    }catch(e){return '';} })();
 }
 
 // ------------------------------------------------------------ folha de tiles ---
@@ -14443,12 +14455,24 @@ function mapedDraw(){
     for(let x=0;x<=W;x++){ctx.beginPath();ctx.moveTo(x*MAPED_T,0);ctx.lineTo(x*MAPED_T,H*MAPED_T);ctx.stroke();}
     for(let y=0;y<=H;y++){ctx.beginPath();ctx.moveTo(0,y*MAPED_T);ctx.lineTo(W*MAPED_T,y*MAPED_T);ctx.stroke();}
   }
-  const solid=mapedMapa.layers.find(l=>l.name==='Solid');
-  if(solid){
-    ctx.fillStyle='rgba(255,70,70,0.30)';
-    for(let i=0;i<solid.data.length;i++){
-      if(!solid.data[i])continue;
+  // "ver colisão" mostra TUDO que vai barrar no jogo (chão de parede, desenho
+  // Solid e todo objeto marcado como bloqueio). Sem isso não dá pra entender
+  // por que o personagem não anda numa sala que na tela parece vazia.
+  if(document.getElementById('maped-vercol').checked){
+    const sol=mapedGradeSolida();
+    ctx.fillStyle='rgba(255,70,70,0.34)';
+    for(let i=0;i<sol.length;i++){
+      if(!sol[i])continue;
       ctx.fillRect((i%W)*MAPED_T,Math.floor(i/W)*MAPED_T,MAPED_T,MAPED_T);
+    }
+  }else{
+    const solid=mapedMapa.layers.find(l=>l.name==='Solid');
+    if(solid){
+      ctx.fillStyle='rgba(255,70,70,0.30)';
+      for(let i=0;i<solid.data.length;i++){
+        if(!solid.data[i])continue;
+        ctx.fillRect((i%W)*MAPED_T,Math.floor(i/W)*MAPED_T,MAPED_T,MAPED_T);
+      }
     }
   }
   const sp=(mapedMapa.properties||[]).find(p=>p.name==='spawn');
@@ -14486,8 +14510,23 @@ function mapedAplicar(tx,ty){
   if(tx<0||ty<0||tx>=mapedMapa.width||ty>=mapedMapa.height)return;
   if(mapedModo==='ambiente'){mapedCarimbarAmbiente(tx,ty);return;}
   if(mapedModo==='parede'){
-    const l=mapedSolid();
-    l.data[ty*mapedMapa.width+tx]=document.getElementById('maped-collide').checked?1:0;
+    const bloq=document.getElementById('maped-collide').checked;
+    mapedSolid().data[ty*mapedMapa.width+tx]=bloq?1:0;
+    if(!bloq){
+      // Desmarcado, o pincel é "liberar passagem": tira o bloqueio do desenho E
+      // do móvel que estiver ali. Sem isso não haveria como destravar um mapa já
+      // montado, só apagando e refazendo peça por peça.
+      mapedMapa.layers.forEach(l=>{
+        if(l.type!=='objectgroup'||l.name==='Chair')return;
+        l.objects.forEach(o=>{
+          const x0=Math.floor(o.x/MAPED_T),y1=Math.floor((o.y-1)/MAPED_T);
+          const cols=Math.max(1,Math.round(o.width/MAPED_T)),lins=Math.max(1,Math.round(o.height/MAPED_T));
+          if(tx<x0||tx>=x0+cols||ty>y1||ty<=y1-lins)return;
+          o.properties=(o.properties||[]).filter(p=>p.name!=='collide');
+          o.properties.push({name:'collide',type:'bool',value:false});
+        });
+      });
+    }
     mapedDraw();return;
   }
   if(mapedModo==='spawn'){
@@ -14621,6 +14660,9 @@ function mapedCarimbarAmbiente(tx,ty){
   if(!mapedDesignSel){toast('Escolha um ambiente na lista ao lado','var(--muted)');return;}
   const d=mapedDesignSel,g=mapedGround(),W=mapedMapa.width,H=mapedMapa.height;
   const enc=mapedEncaixa(tx,ty,d.w,d.h,null);tx=enc.tx;ty=enc.ty;
+  // Segue a caixinha "bloqueia passagem". Marcar todo tile de móvel como sólido
+  // fazia da sala mobiliada um labirinto sem passagem nenhuma.
+  const colideAmb=document.getElementById('maped-collide').checked;
   d.camadas.forEach(c=>{
     const ts=SALA_TS_BY_NAME[c.ts];if(!ts)return;
     const bits=mapedBits(c.mask),l=c.papel==='chao'?null:mapedCamada('Obj_'+c.ts);
@@ -14633,7 +14675,7 @@ function mapedCarimbarAmbiente(tx,ty){
       if(!l)g.data[y*W+x]=gid;
       else l.objects.push({gid,height:32,id:mapedNextId(),name:'',rotation:0,type:'',
         visible:true,width:32,x:x*MAPED_T,y:y*MAPED_T+32,
-        properties:[{name:'collide',type:'bool',value:true}]});
+        properties:[{name:'collide',type:'bool',value:colideAmb}]});
     }
   });
   mapedGroundCache=null;mapedDraw();
@@ -14759,6 +14801,54 @@ function mapedRecuperarAuto(){
   toast('Recuperado. Salve como rascunho ou publique.','var(--accent)');
 }
 
+// ------------------------------------------------- o que o jogo vai barrar ---
+// Repete EXATAMENTE a regra do jogo (salaMapaBuildWallsFromGround + a
+// propriedade 'collide' de cada objeto). Se divergir daqui, o editor mente.
+function mapedGradeSolida(){
+  const W=mapedMapa.width,H=mapedMapa.height,sol=new Uint8Array(W*H);
+  const g=mapedGround(),solid=mapedMapa.layers.find(l=>l.name==='Solid');
+  for(let i=0;i<W*H;i++){
+    if(SALA_WALL_GIDS.has(g.data[i])||(solid&&solid.data[i]))sol[i]=1;
+  }
+  mapedMapa.layers.forEach(l=>{
+    if(l.type!=='objectgroup'||l.name==='Chair')return;
+    l.objects.forEach(o=>{
+      const cp=(o.properties||[]).find(p=>p.name==='collide');
+      if(cp&&(cp.value===false||cp.value==='false'))return;
+      const x0=Math.floor(o.x/MAPED_T),y1=Math.floor((o.y-1)/MAPED_T);
+      const cols=Math.max(1,Math.round(o.width/MAPED_T)),lins=Math.max(1,Math.round(o.height/MAPED_T));
+      for(let dy=0;dy<lins;dy++)for(let dx=0;dx<cols;dx++){
+        const x=x0+dx,y=y1-dy;
+        if(x>=0&&y>=0&&x<W&&y<H)sol[y*W+x]=1;
+      }
+    });
+  });
+  return sol;
+}
+// Anda a partir da entrada como o jogador andaria. Serve pra responder a
+// pergunta que importa antes de publicar: "dá pra sair do lugar?".
+function mapedAlcance(sol){
+  const W=mapedMapa.width,H=mapedMapa.height;
+  const sp=(mapedMapa.properties||[]).find(p=>p.name==='spawn');
+  let sx=Math.floor(W/2),sy=H-8;
+  if(sp){const [a,b]=String(sp.value).split(',').map(Number);
+         if(a>=0&&a<W&&b>=0&&b<H){sx=a;sy=b;}}
+  const inicio=sy*W+sx;
+  if(sol[inicio])return{sx,sy,preso:true,alcance:0,livre:sol.filter(v=>!v).length};
+  const visto=new Uint8Array(W*H),fila=[inicio];visto[inicio]=1;let n=0;
+  while(fila.length){
+    const k=fila.pop();n++;
+    const x=k%W,y=(k/W)|0;
+    const viz=[x>0?k-1:-1,x<W-1?k+1:-1,y>0?k-W:-1,y<H-1?k+W:-1];
+    for(const v of viz)if(v>=0&&!visto[v]&&!sol[v]){visto[v]=1;fila.push(v);}
+  }
+  return{sx,sy,preso:false,alcance:n,livre:sol.filter(v=>!v).length};
+}
+function mapedDiagnostico(){
+  const sol=mapedGradeSolida(),a=mapedAlcance(sol);
+  return{...a,sol};
+}
+
 // --------------------------------------------------------- tamanho / publicar ---
 function mapedResize(){
   const w=parseInt(prompt('Largura em tiles (hoje '+mapedMapa.width+'):',mapedMapa.width),10);
@@ -14787,6 +14877,20 @@ async function mapedSalvar(){
   if(!isAdmin())return;
   const vazio=mapedGround().data.every(v=>!v);
   if(vazio&&!confirm('O piso está todo vazio. Publicar assim mesmo?'))return;
+  // Publicar troca a planta de todo mundo. Antes disso, anda pelo mapa a partir
+  // da entrada: mapa em que não dá pra sair do lugar era exatamente o que
+  // acontecia sem esta conferência.
+  const d=mapedDiagnostico();
+  if(d.preso&&!confirm(
+      `A entrada (tile ${d.sx},${d.sy}) está EM CIMA de algo que bloqueia. `+
+      `Quem entrar vai nascer preso e não vai conseguir andar.\n\n`+
+      `Ligue "ver colisão" pra ver o vermelho e mova a Entrada pra um tile livre.\n\n`+
+      `Publicar assim mesmo?`))return;
+  if(!d.preso&&d.alcance<d.livre*0.35&&!confirm(
+      `Saindo da entrada dá pra alcançar só ${d.alcance} tiles, de ${d.livre} livres no mapa `+
+      `(${Math.round(d.alcance/d.livre*100)}%). O resto fica fechado por trás de móvel ou parede.\n\n`+
+      `Ligue "ver colisão" pra ver onde está fechado.\n\n`+
+      `Publicar assim mesmo?`))return;
   mapedMapa.nextobjectid=mapedNextId();
   try{
     await firebaseDB.ref('sala_mapa/atual').set({
