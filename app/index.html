@@ -2005,6 +2005,7 @@ nav{
     <button class="btn btn-sm btn-ghost" onclick="mapedAbrir('publicado')"><i class="fa fa-folder-open"></i> Abrir o atual</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedAbrir('padrao')"><i class="fa fa-school"></i> Abrir o campus padrão</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedRascunhos()"><i class="fa fa-floppy-disk"></i> Rascunhos</button>
+    <button class="btn btn-sm btn-ghost" onclick="mapedLiberarMoveis()"><i class="fa fa-person-walking"></i> Liberar móveis</button>
     <span class="maped-sep"></span>
     <button class="btn btn-sm" onclick="mapedRestaurarPadrao()"><i class="fa fa-rotate"></i> Despublicar</button>
     <button class="btn btn-sm btn-primary" onclick="mapedSalvar()"><i class="fa fa-cloud-arrow-up"></i> Publicar</button>
@@ -14340,13 +14341,15 @@ function mapedSetMode(m,el){
   const amb=m==='ambiente';
   const pane=document.getElementById('maped-tspane'),gal=document.getElementById('maped-gallery'),
         combo=document.getElementById('maped-ts'),hint=document.getElementById('maped-side-hint');
-  if(amb)mapedRenderGaleria();
+  // Uma sala do pacote tem 150+ tiles de móvel. Carimbar tudo como bloqueio
+  // fecha o mapa — o padrão aqui é decorar; parede se desenha no modo Parede.
+  if(amb){mapedRenderGaleria();document.getElementById('maped-collide').checked=false;}
   if(pane)pane.style.display=amb?'none':'block';
   if(gal)gal.style.display=amb?'grid':'none';
   if(combo)combo.style.display=amb?'none':'block';
   mapedEscondeFantasma();
   if(hint)hint.textContent=amb
-    ?'Escolha a sala e clique no mapa: ela é carimbada inteira, com chão e móveis.'
+    ?'Escolha a sala e clique no mapa: ela entra inteira, com chão e móveis. Os móveis entram como decoração (não barram) — desenhe as paredes dela no modo Parede.'
     :'Clique num móvel da folha: ele é selecionado inteiro, do jeito que foi desenhado. Arraste só se quiser recortar um pedaço na mão.';
   mapedDraw();
 }
@@ -14363,7 +14366,7 @@ function mapedRefreshInfo(){
     cadeira:'Coloca uma cadeira em que dá pra sentar de verdade. A direção vem do tile que você escolher na folha "Cadeiras".',
     borracha:'Clique pra tirar a peça mais de cima daquele tile. O piso não é apagado — pinte por cima no modo Piso.',
     spawn:'Clique onde as pessoas devem aparecer ao entrar na sala.',
-    ambiente:'Escolha a sala ao lado e clique: ela entra inteira, chão e móveis. Depois passe o modo Parede em volta dela — o carimbo desenha a parede, mas quem barra o jogador é o Parede.',
+    ambiente:'Escolha a sala ao lado e clique: ela entra inteira, chão e móveis. Os móveis NÃO barram o jogador (marque "bloqueia passagem" antes de carimbar se quiser que barrem). Quem fecha a sala é o modo Parede.',
     parede:'Marcado, pinta onde NÃO se passa (vermelho, invisível no jogo). Desmarcado, vira borracha de bloqueio: libera a passagem ali, inclusive no móvel que estiver no tile. Ligue "ver colisão" pra enxergar tudo que barra.'};
   const g=mapedGround();
   i.innerHTML=(dicas[mapedModo]||'')+
@@ -14940,6 +14943,28 @@ function mapedAlcance(sol){
 function mapedDiagnostico(){
   const sol=mapedGradeSolida(),a=mapedAlcance(sol);
   return{...a,sol};
+}
+
+// Conserta de uma vez o mapa que ficou intransitável: tira o bloqueio de TODOS
+// os móveis, deixando de pé só o desenho da camada Parede e o chão de parede.
+// Sem isso, um mapa montado com ambientes carimbados só se salvava tile a tile.
+function mapedLiberarMoveis(){
+  let n=0;
+  mapedMapa.layers.forEach(l=>{
+    if(l.type!=='objectgroup'||l.name==='Chair')return;
+    l.objects.forEach(o=>{
+      const cp=(o.properties||[]).find(p=>p.name==='collide');
+      if(cp&&cp.value===false)return;
+      o.properties=(o.properties||[]).filter(p=>p.name!=='collide');
+      o.properties.push({name:'collide',type:'bool',value:false});
+      n++;
+    });
+  });
+  if(!n){toast('Nenhum móvel estava bloqueando.','var(--muted)');return;}
+  const antes=mapedDiagnostico();
+  mapedSnapshot();mapedDraw();
+  toast(`🚶 ${n} móveis liberados. Agora dá pra andar por ${antes.alcance} tiles. `+
+        `Use o modo Parede pras paredes.`,'var(--accent)');
 }
 
 // --------------------------------------------------------- tamanho / publicar ---
