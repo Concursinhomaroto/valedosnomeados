@@ -382,6 +382,14 @@ nav{
 .note-wrap.note-open{display:block;}
 
 /* ===== LEGISLAÇÃO / BASE LEGAL (IA) ===== */
+.resumo-fontes{margin-top:12px;border-top:1px dashed var(--border2);padding-top:10px;}
+.resumo-fontes summary{cursor:pointer;font-size:11px;font-weight:800;color:var(--accent);letter-spacing:.3px;}
+.resumo-fontes-q{font-size:10.5px;color:var(--muted);margin:7px 0 4px;}
+.resumo-fontes-q span{background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:1px 6px;display:inline-block;margin:2px 2px 0 0;}
+.resumo-fontes-lista{margin:6px 0 0;padding-left:18px;font-size:11.5px;line-height:1.6;}
+.resumo-fontes-lista a{color:var(--text);text-decoration:underline;}
+.resumo-fontes-lista em{color:var(--muted);font-style:normal;font-size:10.5px;}
+.resumo-fontes-aviso{margin-top:8px;font-size:10.5px;color:var(--muted);font-style:italic;}
 .legis-disclaimer{font-size:9.5px;color:var(--muted);margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);display:flex;align-items:center;gap:5px;}
 .flash-wrap{background:rgba(124,58,237,0.05);border:1.5px solid rgba(124,58,237,0.28);border-radius:14px;padding:14px;margin-top:10px;display:none;}
 .flash-wrap.flash-open{display:block;}
@@ -5381,7 +5389,7 @@ function resumoPanelHTML(s){
     const isSpeaking=isMine&&(resumoSpeakMode==='audio'||(resumoSpeakMode==='browser'&&window.speechSynthesis&&window.speechSynthesis.speaking));
     const isPaused=isSpeaking&&resumoSpeakPaused;
     const fonteTxt=isWeb
-      ?(s.resumo.grounded?', com apoio de pesquisa na internet e dos seus flashcards':', com base no conhecimento já treinado do modelo (busca na internet indisponível agora)')
+      ?(s.resumo.grounded?', com apoio de pesquisa na internet e dos seus flashcards':' ⚠️ SEM pesquisa na internet — saiu do conhecimento treinado do modelo, que tem data de corte. Não confie em número, prazo ou dose daqui sem conferir')
       :' a partir do arquivo enviado';
     const ouvirBtn=isLoadingAudio
       ?`<button class="btn btn-xs btn-gold" disabled><i class="fa fa-spinner fa-spin"></i> Gerando áudio...</button>`
@@ -5402,6 +5410,7 @@ function resumoPanelHTML(s){
       </div>
       ${isSpeaking?`<div style="font-size:9.5px;color:var(--muted);margin:-4px 0 8px;display:flex;align-items:center;gap:5px">${resumoSpeakMode==='audio'?'<i class=\"fa fa-lock-open\"></i> Áudio da IA — continua tocando com a tela travada.':'<i class=\"fa fa-triangle-exclamation\"></i> Voz do navegador — para se a tela travar (configure sua chave de IA pra ouvir com a tela travada).'}</div>`:''}
       <div class="resumo-body">${s.resumo.texto}</div>
+      ${fontesHTML(s.resumo.fontes,s.resumo.consultas)}
       <div class="resumo-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm}${fonteTxt} — confira sempre a fonte oficial antes de usar na prova.</div>
     `;
   }
@@ -5599,16 +5608,73 @@ async function generateResumo(subId,file){
   }
 }
 
+// Regras de atualidade compartilhadas por todo prompt que pesquisa na internet.
+//
+// A âncora de DATA é o item que mais muda resultado: o modelo não sabe que dia é
+// hoje. Sem isso, "as informações mais atuais" é medido contra o fim do treino
+// dele, e ele devolve com confiança o que era verdade há dois anos — foi
+// exatamente o caso do cálculo de cristaloide em queimado.
+//
+// O resto existe porque busca genérica REFORÇA o desatualizado: a internet em
+// português está cheia de apostila repetindo a versão antiga, e o modelo mistura
+// isso com o que já sabia. Daí exigir edição/ano declarados, priorizar fonte
+// primária e obrigar a assumir a divergência em vez de escolher em silêncio.
+// Lista clicável do que a busca realmente leu. É a diferença entre "não confio
+// nesse resumo" e "vejo que ele leu três apostilas e nenhuma diretriz" — sem
+// isso não dá pra distinguir busca ausente de fonte ruim.
+function fontesHTML(fontes,consultas){
+  const f=(fontes||[]).filter(x=>x&&x.url);
+  const c=(consultas||[]).filter(Boolean);
+  if(!f.length&&!c.length)return '';
+  const dominio=u=>{try{return new URL(u).hostname.replace(/^www\./,'');}catch(e){return u.slice(0,40);}};
+  return`
+    <details class="resumo-fontes">
+      <summary><i class="fa fa-link"></i> Fontes usadas na pesquisa (${f.length})</summary>
+      ${c.length?`<div class="resumo-fontes-q">Buscou por: ${c.map(q=>`<span>${String(q).replace(/</g,'&lt;')}</span>`).join(' · ')}</div>`:''}
+      <ol class="resumo-fontes-lista">
+        ${f.map(x=>`<li><a href="${x.url}" target="_blank" rel="noopener noreferrer">${(x.titulo||dominio(x.url)).replace(/</g,'&lt;')}</a> <em>${dominio(x.url)}</em></li>`).join('')}
+      </ol>
+      <div class="resumo-fontes-aviso">Confira a fonte antes de decorar número, prazo, dose ou fórmula. Apostila e blog não confirmam versão vigente.</div>
+    </details>`;
+}
+function promptRegrasAtualidade(){
+  const hoje=new Date();
+  const dataBR=hoje.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+  return`DATA DE HOJE: ${dataBR}. Considere esta a data corrente ao julgar o que é "atual" — não use a data em que seu treinamento terminou.
+
+REGRAS DE ATUALIDADE (obrigatórias):
+- PESQUISE ANTES DE RESPONDER. Inclua o ano corrente nos termos de busca e procure explicitamente por revisão, atualização, nova edição, nova redação, nova diretriz.
+- Priorize FONTE PRIMÁRIA: texto de lei no site oficial, diretriz da entidade que a publica, órgão oficial, publicação da sociedade científica. Apostila, blog, resumo de cursinho e vídeo servem no máximo como pista — nunca como base para afirmar um número.
+- Para tudo que tem versão (lei, súmula, diretriz, protocolo, tabela, fórmula, dose, prazo), DIGA a edição/ano da fonte de onde tirou. Sem isso, não afirme o número.
+- Se o que você encontrar na pesquisa divergir do que você "sabe" de treinamento, a pesquisa vence. Escreva o valor atual E diga em uma frase o que mudou, desde quando, e o que era antes.
+- Se as fontes divergirem entre si, mostre as duas versões e diga qual é a mais recente, em vez de escolher em silêncio.
+- Se não conseguir confirmar a versão vigente de algo em fonte confiável, escreva "não confirmei a versão vigente" naquele ponto. Nunca preencha com o que você lembra.
+- Termine com uma seção "ATUALIZAÇÕES RECENTES" listando o que mudou nos últimos anos nesse assunto e a partir de quando. Se nada relevante mudou, escreva exatamente: "Nada relevante mudou recentemente neste assunto."`;
+}
+// Versão curta, pras respostas que precisam sair em JSON puro e não comportam
+// seção extra nem texto solto.
+function promptRegrasAtualidadeCurta(){
+  const hoje=new Date();
+  const dataBR=hoje.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+  return`DATA DE HOJE: ${dataBR} — é esta a data corrente, não a do fim do seu treinamento.
+- Pesquise antes de responder, incluindo o ano corrente nos termos de busca, e procure por revisão/atualização/nova edição.
+- Priorize fonte primária (lei oficial, diretriz da entidade que publica, órgão oficial) sobre apostila, blog ou cursinho.
+- Se a pesquisa divergir do que você sabe de treinamento, vale a pesquisa: use o valor atual.
+- Não afirme número, prazo, dose ou fórmula que você não conseguiu confirmar em fonte da versão vigente.`;
+}
 function resumoPromptWeb(contexto,flashcardsTxt){
   return`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil.
 
-TAREFA: Pesquise na internet as informações mais atuais e as principais alterações/atualizações relevantes (mudanças de lei, novas súmulas, jurisprudência recente, mudanças de entendimento) sobre o assunto abaixo, e produza um RESUMO COMPLETO, organizado e didático — cobrindo tanto a base teórica quanto o que mudou recentemente. É um material de estudo completo, não um resumo superficial.
+${promptRegrasAtualidade()}
+
+TAREFA: Pesquise na internet as informações mais atuais e as principais alterações/atualizações relevantes (mudanças de lei, novas súmulas, jurisprudência recente, mudanças de entendimento, revisão de diretriz ou protocolo) sobre o assunto abaixo, e produza um RESUMO COMPLETO, organizado e didático — cobrindo tanto a base teórica quanto o que mudou recentemente. É um material de estudo completo, não um resumo superficial.
 
 ${contexto}
 ${flashcardsTxt?`\nO aluno já tem os seguintes flashcards cadastrados sobre esse chefão — use como contexto do que ele já estuda, incorporando o que for relevante ao resumo (não copie no formato pergunta/resposta):\n${flashcardsTxt}\n`:''}
 REGRAS:
 - Organize por tópicos e subtópicos, com títulos curtos em MAIÚSCULAS seguidos de dois pontos.
 - Destaque conceitos-chave, definições, exceções, prazos, números, classificações e, principalmente, alterações recentes relevantes pra concurso.
+- Ao dar número, prazo, dose, fórmula ou classificação, diga entre parênteses de qual edição/ano é a fonte. Ex: "(diretriz de 2024)".
 - Se não tiver certeza sobre uma informação específica (data exata, número de lei, etc.), sinalize isso como algo a confirmar, em vez de inventar.
 - Escreva em texto corrido organizado por tópicos, sem markdown (sem #, sem **, sem bullets com símbolos especiais), porque esse texto também vai ser lido em voz alta.`;
 }
@@ -5649,9 +5715,10 @@ async function generateResumoWeb(subId){
     const statusEl=document.querySelector(`#resumo-${subId} .resumo-status-txt`);
     if(statusEl)statusEl.textContent='Pesquisando na internet e gerando o resumo...';
 
-    const{raw,grounded}=await callGeminiGenerateSearch(apiKey,resumoPromptWeb(contexto,flashcardsTxt));
+    const{raw,grounded,fontes,consultas}=await callGeminiGenerateSearch(apiKey,resumoPromptWeb(contexto,flashcardsTxt));
 
-    sub.resumo={texto:raw.trim(),geradoEm:new Date().toISOString(),origem:'web',grounded};
+    sub.resumo={texto:raw.trim(),geradoEm:new Date().toISOString(),origem:'web',grounded,
+                fontes:fontes||[],consultas:consultas||[]};
     saveDB();
     toast(grounded?'🌐 Resumo gerado com pesquisa na internet!':'📄 Resumo gerado (busca na internet indisponível agora — usei o conhecimento da IA)','var(--green)');
   }catch(e){
@@ -6321,7 +6388,9 @@ ${texto}`;
 function fluxoPromptWeb(contexto){
   return`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil, especialista em transformar conteúdo de estudo em fluxogramas/mapas visuais de memorização.
 
-TAREFA: Pesquise na internet, em fontes confiáveis (legislação oficial, doutrina consolidada, material de concurso reconhecido), as informações mais importantes sobre o assunto abaixo, e monte um fluxograma cobrindo os pontos-chave que mais caem em prova — terminologias, classificações, prazos, números e conceitos essenciais —, no formato JSON abaixo. Responda APENAS com o JSON, sem texto antes ou depois, sem markdown, sem bloco de código.
+${promptRegrasAtualidadeCurta()}
+
+TAREFA: Pesquise na internet, em fontes confiáveis (legislação oficial, diretriz oficial, doutrina consolidada), as informações mais ATUAIS e importantes sobre o assunto abaixo, e monte um fluxograma cobrindo os pontos-chave que mais caem em prova — terminologias, classificações, prazos, números e conceitos essenciais —, no formato JSON abaixo. Responda APENAS com o JSON, sem texto antes ou depois, sem markdown, sem bloco de código.
 
 ${contexto}
 
@@ -6335,7 +6404,9 @@ ${FLUXO_JSON_REGRAS}
 function fluxoPromptWebComResumo(contexto,resumoTexto){
   return`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil, especialista em transformar conteúdo de estudo em fluxogramas/mapas visuais de memorização.
 
-TAREFA: Pesquise na internet, em fontes confiáveis (legislação oficial, doutrina consolidada, material de concurso reconhecido), as informações mais importantes sobre o assunto abaixo, e COMBINE com o resumo já preparado a seguir — use o resumo como base e complemente/atualize com o que encontrar pesquisando (mudanças recentes de lei, súmulas, jurisprudência), cobrindo os pontos-chave que mais caem em prova — terminologias, classificações, prazos, números e conceitos essenciais —, no formato JSON abaixo. Responda APENAS com o JSON, sem texto antes ou depois, sem markdown, sem bloco de código.
+${promptRegrasAtualidadeCurta()}
+
+TAREFA: Pesquise na internet, em fontes confiáveis (legislação oficial, diretriz oficial, doutrina consolidada), as informações mais ATUAIS sobre o assunto abaixo, e COMBINE com o resumo já preparado a seguir — use o resumo como base e complemente/CORRIJA com o que encontrar pesquisando (mudanças recentes de lei, súmulas, jurisprudência, revisão de diretriz). Se a pesquisa contradisser o resumo, vale a pesquisa, cobrindo os pontos-chave que mais caem em prova — terminologias, classificações, prazos, números e conceitos essenciais —, no formato JSON abaixo. Responda APENAS com o JSON, sem texto antes ou depois, sem markdown, sem bloco de código.
 
 ${contexto}
 
@@ -6373,7 +6444,7 @@ async function generateFluxograma(subId){
   fluxoRefreshPanel(subId);
 
   try{
-    let parsed,grounded=null;
+    let parsed,grounded=null,fontesFluxo=[];
     // Sem limite fixo de nós no fluxograma, a resposta em JSON pode ficar bem maior que o
     // teto padrão de 8192 tokens (suficiente pra a maioria das chamadas da IA no app, mas
     // curto pra cobrir um assunto inteiro com todos os pontos-chave) — sem isso, um
@@ -6382,7 +6453,7 @@ async function generateFluxograma(subId){
     if(usarWeb){
       const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
       const r=await callGeminiJSON(apiKey,fluxoPromptWeb(contexto),true,FLUXO_MAX_OUTPUT_TOKENS);
-      parsed=r.parsed;grounded=r.grounded;
+      parsed=r.parsed;grounded=r.grounded;fontesFluxo=r.fontes||[];
     }else{
       // Sem chunking de propósito: a fonte aqui é o Resumo (já condensado) ou um trecho
       // colado à mão, não o material bruto inteiro — um corte de segurança em 40k
@@ -6391,7 +6462,7 @@ async function generateFluxograma(subId){
       parsed=r.parsed;
     }
     const{raizId,nos}=fluxoFlattenArvore(parsed);
-    sub.fluxograma={raizId,nos,origem:usarWeb?'web':'ia',grounded,geradoEm:new Date().toISOString()};
+    sub.fluxograma={raizId,nos,origem:usarWeb?'web':'ia',grounded,fontes:fontesFluxo,geradoEm:new Date().toISOString()};
     saveDB();
     toast(usarWeb?(grounded?'🌐 Fluxograma gerado com pesquisa na internet!':'🔀 Fluxograma gerado (busca na internet indisponível agora — usei o conhecimento da IA)'):'🔀 Fluxograma gerado!','var(--green)');
   }catch(e){
@@ -6498,7 +6569,9 @@ async function generateFlashcardsSub(subId,mais){
     const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
     const prompt=`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil, especialista em criar flashcards de memorização.
 
-TAREFA: Pesquise na internet, em fontes confiáveis (legislação oficial, doutrina consolidada, material de concurso reconhecido), as informações mais ATUAIS sobre o assunto abaixo${base?', COMPARE com o material do aluno que vem no final e crie os flashcards a partir dessa comparação':''}, e crie ${FLASH_QTD} flashcards. Responda APENAS com um JSON válido, sem texto antes ou depois, sem markdown, sem bloco de código.
+${promptRegrasAtualidadeCurta()}
+
+TAREFA: Pesquise na internet, em fontes confiáveis (legislação oficial, diretriz oficial, doutrina consolidada), as informações mais ATUAIS sobre o assunto abaixo${base?', COMPARE com o material do aluno que vem no final e crie os flashcards a partir dessa comparação':''}, e crie ${FLASH_QTD} flashcards. Responda APENAS com um JSON válido, sem texto antes ou depois, sem markdown, sem bloco de código.
 
 ${contexto}
 
@@ -7451,9 +7524,9 @@ async function autoGerarFluxogramaWebEResumo(subId,resumoTexto){
   try{
     const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
     const FLUXO_MAX_OUTPUT_TOKENS=32768;
-    const{parsed,grounded}=await callGeminiJSON(apiKey,fluxoPromptWebComResumo(contexto,resumoTexto.slice(0,40000)),true,FLUXO_MAX_OUTPUT_TOKENS);
+    const{parsed,grounded,fontes}=await callGeminiJSON(apiKey,fluxoPromptWebComResumo(contexto,resumoTexto.slice(0,40000)),true,FLUXO_MAX_OUTPUT_TOKENS);
     const{raizId,nos}=fluxoFlattenArvore(parsed);
-    sub.fluxograma={raizId,nos,origem:'web',grounded,geradoEm:new Date().toISOString()};
+    sub.fluxograma={raizId,nos,origem:'web',grounded,fontes:fontes||[],geradoEm:new Date().toISOString()};
     saveDB();
     toast(grounded?'🌐 Fluxograma gerado com pesquisa na internet + resumo!':'🔀 Fluxograma gerado com base no resumo (busca na internet indisponível agora)','var(--green)');
   }catch(e){
@@ -10001,6 +10074,8 @@ function repPromptGerarBatch(nomeTema,nomeEixo,campoIds){
   const schema='{'+campoIds.map(id=>`"${id}":"..."`).join(',')+'}';
   return`Você é um professor especialista em preparar candidatos para concursos públicos brasileiros e redação dissertativa-argumentativa, montando material de repertório sociocultural sobre um tema.
 
+${promptRegrasAtualidadeCurta()}
+
 TAREFA: Use a ferramenta de busca do Google AGORA, antes de escrever qualquer coisa, mesmo que ache que já sabe a resposta — o objetivo é confirmar leis, números e decisões atualizados, não só recitar o que você já tem de treino. Depois de pesquisar, monte uma PARTE de um banco de repertório completo e ATUALIZADO sobre o tema abaixo, pronto pra ser usado numa redação ou resposta discursiva de concurso.
 
 EIXO TEMÁTICO: ${nomeEixo||'(não informado)'}
@@ -10078,6 +10153,8 @@ async function repGerarComIA(id){
 // ---- VERIFICAR (revisa o que já está escrito, sem regenerar nada) ----
 function repPromptVerificar(nomeTema,nomeEixo,conteudoAtual){
   return`Você é um revisor factual especialista em concursos públicos brasileiros.
+
+${promptRegrasAtualidadeCurta()}
 
 TAREFA: Use a ferramenta de busca do Google AGORA, antes de responder — essa verificação só tem valor se você realmente pesquisar, não recitar o que já sabe de treino. Depois de pesquisar, VERIFIQUE cada afirmação factual (leis, números, datas, nomes, decisões judiciais) do texto abaixo, que é um repertório de redação sobre o tema informado. Aponte especificamente o que está errado, desatualizado, inventado ou sem confirmação — e sugira a correção quando souber.
 
@@ -12863,7 +12940,16 @@ async function tryGeminiModel(apiKey,model,prompt,opts){
     // mesmo quando o modelo só respondia do conhecimento treinado, sem pesquisar de fato.
     const gm=data?.candidates?.[0]?.groundingMetadata;
     const grounded=!!(gm&&(((gm.groundingChunks||[]).length)||((gm.webSearchQueries||[]).length)));
-    return{ok:true,raw,grounded};
+    // As URLs que a busca realmente leu. O código antes só contava e jogava fora —
+    // e sem elas não dá pra saber se um resumo desatualizado veio de busca ausente
+    // ou de fonte ruim, que são problemas diferentes.
+    const fontes=((gm&&gm.groundingChunks)||[])
+      .map(c=>c&&c.web?{url:c.web.uri||'',titulo:c.web.title||''}:null)
+      .filter(f=>f&&f.url)
+      .filter((f,i,a)=>a.findIndex(x=>x.url===f.url)===i)
+      .slice(0,12);
+    const consultas=((gm&&gm.webSearchQueries)||[]).slice(0,8);
+    return{ok:true,raw,grounded,fontes,consultas};
   }catch(e){
     return{ok:false,reason:e.message};
   }
@@ -12914,8 +13000,8 @@ async function callGeminiGenerateSearch(apiKey,prompt){
   for(const model of GEMINI_MODEL_CANDIDATES){
     const r=await tryGeminiModel(apiKey,model,prompt,{useSearch:true});
     if(r.ok){
-      if(r.grounded)return{raw:r.raw,grounded:true};
-      if(!fallback)fallback={raw:r.raw,grounded:false};
+      if(r.grounded)return{raw:r.raw,grounded:true,fontes:r.fontes,consultas:r.consultas};
+      if(!fallback)fallback={raw:r.raw,grounded:false,fontes:[],consultas:[]};
       continue;
     }
     attempts.push(`${model} (${r.reason})`);
@@ -12923,7 +13009,7 @@ async function callGeminiGenerateSearch(apiKey,prompt){
   if(fallback)return fallback;
   try{
     const raw=await callGeminiGenerate(apiKey,prompt);
-    return{raw,grounded:false};
+    return{raw,grounded:false,fontes:[],consultas:[]};
   }catch(e){
     throw new Error(`Não foi possível gerar o resumo, nem com busca na internet nem sem ela. Tentativas com busca: ${attempts.join(' · ')||'nenhuma'}. Erro final: ${e.message}`);
   }
@@ -12954,8 +13040,8 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
       let parsed=null;
       try{parsed=extractAIJson(r.raw);}catch(e){}
       if(parsed&&typeof parsed==='object'){
-        if(r.grounded)return{parsed,grounded:true};
-        if(!best)best={parsed,grounded:false};
+        if(r.grounded)return{parsed,grounded:true,fontes:r.fontes,consultas:r.consultas};
+        if(!best)best={parsed,grounded:false,fontes:[],consultas:[]};
         // Sem busca ativa não existe "grounded" pra perseguir — o primeiro JSON válido já
         // resolve, então para por aqui em vez de gastar chamada de API à toa nos outros
         // candidatos (só na busca vale a pena continuar tentando achar um resultado
