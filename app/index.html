@@ -1992,7 +1992,11 @@ nav{
     <button class="btn btn-sm btn-ghost" onclick="mapedUndo()"><i class="fa fa-rotate-left"></i> Desfazer</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedResize()"><i class="fa fa-expand"></i> Tamanho</button>
     <span class="maped-sep"></span>
-    <button class="btn btn-sm" onclick="mapedRestaurarPadrao()"><i class="fa fa-rotate"></i> Voltar ao padrão</button>
+    <button class="btn btn-sm btn-ghost" onclick="mapedNovo()"><i class="fa fa-file"></i> Novo do zero</button>
+    <button class="btn btn-sm btn-ghost" onclick="mapedAbrir('publicado')"><i class="fa fa-folder-open"></i> Abrir o atual</button>
+    <button class="btn btn-sm btn-ghost" onclick="mapedAbrir('padrao')"><i class="fa fa-school"></i> Abrir o campus padrão</button>
+    <span class="maped-sep"></span>
+    <button class="btn btn-sm" onclick="mapedRestaurarPadrao()"><i class="fa fa-rotate"></i> Despublicar</button>
     <button class="btn btn-sm btn-primary" onclick="mapedSalvar()"><i class="fa fa-cloud-arrow-up"></i> Publicar</button>
   </div>
   <div class="maped-wrap">
@@ -14028,6 +14032,7 @@ let mapedImgs={};            // nome do tileset -> HTMLImageElement já carregad
 let mapedUndoStack=[];
 let mapedGroundCache=null;   // canvas do piso, redesenhado só quando o piso muda
 let mapedPintando=false;
+let mapedSujo=false;   // tem edição que ainda não foi publicada
 
 function mapedTilesetPorGid(gid){
   let achado=null;
@@ -14054,6 +14059,60 @@ function mapedCamada(nome){
 function mapedGround(){return mapedMapa.layers.find(l=>l.type==='tilelayer');}
 
 // ---------------------------------------------------------------- abertura ---
+// Sempre as 34 folhas registradas, mesmo as que ainda não têm nenhuma peça: sem
+// a entrada em 'tilesets' o Phaser não carrega a imagem e a peça nova sairia
+// invisível no jogo depois de publicada.
+function mapedTilesetsDoCatalogo(){
+  return SALA_TILESETS.map(t=>({
+    columns:t.c,firstgid:t.f,image:'../'+t.i,imageheight:Math.ceil(t.t/t.c)*t.h,
+    imagewidth:t.c*t.w,margin:0,name:t.n,spacing:0,tilecount:t.t,
+    tileheight:t.h,tilewidth:t.w}));
+}
+function mapedCarregar(m){
+  mapedMapa=m;
+  mapedMapa.tilesets=mapedTilesetsDoCatalogo();
+  mapedUndoStack=[];mapedGroundCache=null;mapedSujo=false;
+  mapedSelectTileset(mapedTS?mapedTS.n:SALA_TILESETS[0].n);
+  mapedDraw();
+}
+// Mapa em branco: o chão nasce todo de calçada, no mesmo padrão 3x2 do campus.
+// Deixar o Ground zerado daria um mapa preto e sem colisão nenhuma — dá pra
+// pintar por cima, mas começar do vazio absoluto só atrapalha.
+function mapedMapaVazio(w,h){
+  const fg=SALA_TS_BY_NAME.FloorAndGround,data=new Array(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)data[y*w+x]=fg.f+(30+y%2)*fg.c+(5+x%3);
+  return{compressionlevel:-1,width:w,height:h,infinite:false,orientation:'orthogonal',
+    renderorder:'right-down',tiledversion:'1.8.2',tileheight:32,tilewidth:32,
+    type:'map',version:'1.8',nextlayerid:2,nextobjectid:1,
+    properties:[{name:'spawn',type:'string',value:Math.floor(w/2)+','+Math.floor(h/2)}],
+    tilesets:mapedTilesetsDoCatalogo(),
+    layers:[{data,width:w,height:h,id:1,name:'Ground',opacity:1,type:'tilelayer',
+             visible:true,x:0,y:0}]};
+}
+function mapedDescartar(oque){
+  return !mapedSujo||confirm('Você tem alterações que ainda não foram publicadas. '+oque+' mesmo assim?');
+}
+function mapedNovo(){
+  if(!mapedDescartar('Começar um mapa em branco'))return;
+  const w=parseInt(prompt('Largura do mapa novo, em tiles (o campus atual tem 92):','60'),10);
+  if(!w||w<10||w>200)return;
+  const h=parseInt(prompt('Altura do mapa novo, em tiles (o campus atual tem 72):','45'),10);
+  if(!h||h<10||h>200)return;
+  mapedCarregar(mapedMapaVazio(w,h));
+  toast('Mapa em branco de '+w+'x'+h+'. Ele só vale pra todo mundo depois de Publicar.','var(--accent)');
+}
+// 'publicado' = a planta em vigor (a do Firebase, ou a do app se não houver).
+// 'padrao' = o campus que vem no app, ignorando o que estiver publicado — é o
+// jeito de recomeçar de uma base pronta sem antes despublicar nada.
+function mapedAbrir(origem){
+  if(!mapedDescartar(origem==='padrao'?'Abrir o campus padrão':'Recarregar o mapa em vigor'))return;
+  const info=document.getElementById('maped-info');
+  if(info)info.innerHTML='<i class="fa fa-spinner fa-spin"></i> Carregando...';
+  const p=origem==='padrao'
+    ?fetch(SALA_ASSETS+'map.json',{cache:'no-cache'}).then(r=>{if(!r.ok)throw new Error('map.json '+r.status);return r.json();})
+    :salaMapaFetchMap();
+  p.then(mapedCarregar).catch(e=>{if(info)info.textContent='Não deu pra carregar: '+e.message;});
+}
 function renderMapEditor(){
   if(!isAdmin()){showScreen('dashboard');return;}
   const sel=document.getElementById('maped-ts');
@@ -14062,20 +14121,7 @@ function renderMapEditor(){
   }
   if(mapedMapa){mapedDraw();return;}
   document.getElementById('maped-info').innerHTML='<i class="fa fa-spinner fa-spin"></i> Carregando o mapa...';
-  salaMapaFetchMap().then(m=>{
-    mapedMapa=m;
-    // Garante que TODAS as folhas estão registradas no mapa, mesmo as que ainda
-    // não têm nenhuma peça: sem a entrada em tilesets, o Phaser não carrega a
-    // imagem e a peça nova sairia invisível no jogo.
-    mapedMapa.tilesets=SALA_TILESETS.map(t=>({
-      columns:t.c,firstgid:t.f,image:'../'+t.i,imageheight:Math.ceil(t.t/t.c)*t.h,
-      imagewidth:t.c*t.w,margin:0,name:t.n,spacing:0,tilecount:t.t,
-      tileheight:t.h,tilewidth:t.w}));
-    mapedSelectTileset(SALA_TILESETS[0].n);
-    mapedDraw();
-  }).catch(e=>{
-    document.getElementById('maped-info').textContent='Não deu pra carregar o mapa: '+e.message;
-  });
+  mapedAbrir('publicado');
 }
 function mapedSetMode(m,el){
   mapedModo=m;
@@ -14100,7 +14146,8 @@ function mapedRefreshInfo(){
   i.innerHTML=(dicas[mapedModo]||'')+
     `<br><br><b>Mapa:</b> ${mapedMapa?mapedMapa.width+'x'+mapedMapa.height:'—'} tiles`+
     (mapedSel?`<br><b>Peça:</b> ${mapedTS.l} ${mapedSel.w}x${mapedSel.h} tiles`:'')+
-    `<br><b>Peças no mapa:</b> ${mapedMapa?mapedMapa.layers.filter(l=>l.type==='objectgroup').reduce((a,l)=>a+l.objects.length,0):0}`;
+    `<br><b>Peças no mapa:</b> ${mapedMapa?mapedMapa.layers.filter(l=>l.type==='objectgroup').reduce((a,l)=>a+l.objects.length,0):0}`+
+    (mapedSujo?'<br><b style="color:var(--accent)">Há alterações não publicadas.</b>':'');
 }
 
 // ------------------------------------------------------------ folha de tiles ---
@@ -14199,6 +14246,7 @@ function mapedDraw(){
 
 // ------------------------------------------------------------------- edição ---
 function mapedSnapshot(){
+  mapedSujo=true;
   mapedUndoStack.push(JSON.stringify(mapedMapa));
   if(mapedUndoStack.length>40)mapedUndoStack.shift();
 }
@@ -14316,7 +14364,7 @@ async function mapedSalvar(){
       atualizadoEm:Date.now(),
       porUid:currentUser?currentUser.uid:null,
     });
-    salaMapaJSON=null;
+    salaMapaJSON=null;mapedSujo=false;
     mapedDerrubaSala();
     toast('🧱 Mapa publicado! Quem entrar na Sala já vê a planta nova.','var(--accent)');
   }catch(e){
@@ -14327,7 +14375,7 @@ async function mapedRestaurarPadrao(){
   if(!confirm('Isso apaga a planta publicada e volta pro campus que vem no app. Continuar?'))return;
   try{
     await firebaseDB.ref('sala_mapa/atual').remove();
-    mapedMapa=null;salaMapaJSON=null;mapedGroundCache=null;mapedUndoStack=[];
+    mapedMapa=null;salaMapaJSON=null;mapedGroundCache=null;mapedUndoStack=[];mapedSujo=false;
     mapedDerrubaSala();
     renderMapEditor();
     toast('Voltou pro campus padrão.','var(--accent)');
