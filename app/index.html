@@ -1056,7 +1056,8 @@ nav{
 .maped-card img{width:100%;height:78px;object-fit:contain;image-rendering:pixelated;display:block;}
 .maped-card span{font-size:10px;font-weight:700;color:var(--text2);display:block;margin-top:4px;line-height:1.2;}
 .maped-info{margin-top:8px;font-size:11px;color:var(--muted);line-height:1.5;}
-.maped-canvaswrap{flex:1;min-width:0;max-height:76vh;overflow:auto;border:1.5px solid var(--border2);border-radius:12px;background:#12121a;}
+.maped-canvaswrap{flex:1;min-width:0;max-height:76vh;overflow:auto;border:1.5px solid var(--border2);border-radius:12px;background:#12121a;position:relative;}
+.maped-ghost{position:absolute;border:2px solid #ffe27a;background:rgba(255,226,122,0.16);pointer-events:none;display:none;border-radius:2px;}
 .maped-canvaswrap canvas{display:block;image-rendering:pixelated;cursor:crosshair;}
 @media(max-width:900px){.maped-wrap{flex-direction:column;}.maped-side{width:100%;flex:1 1 auto;}}
 .fc-search{padding:7px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:12px;outline:none;background:var(--panel);color:var(--text);width:200px;}
@@ -2022,7 +2023,8 @@ nav{
       <div class="maped-info" id="maped-info"></div>
     </div>
     <div class="maped-canvaswrap" id="maped-canvaswrap">
-      <canvas id="maped-canvas" onmousedown="mapedCanvasDown(event)"></canvas>
+      <canvas id="maped-canvas" onmousedown="mapedCanvasDown(event)" onmousemove="mapedCanvasHover(event)" onmouseleave="mapedEscondeFantasma()"></canvas>
+      <div class="maped-ghost" id="maped-ghost"></div>
     </div>
   </div>
 </div>
@@ -14147,9 +14149,35 @@ function mapedTilesetsDoCatalogo(){
     imagewidth:t.c*t.w,margin:0,name:t.n,spacing:0,tilecount:t.t,
     tileheight:t.h,tilewidth:t.w}));
 }
+// Empurra a peça pra dentro do mapa em vez de deixá-la sair pela borda. Uma
+// peça larga (o balcão de cozinha tem 16 tiles) clicada perto da direita
+// nascia quase toda fora: invisível na tela e gravada no arquivo como objeto
+// fantasma, que o jogo ainda carregava.
+function mapedEncaixa(tx,ty,w,h,ts){
+  const pX=ts?Math.max(1,ts.w/MAPED_T):1,pY=ts?Math.max(1,ts.h/MAPED_T):1;
+  const larg=(w-1)*pX+1,alt=(h-1)*pY+1;
+  return{tx:Math.max(0,Math.min(tx,mapedMapa.width-larg)),
+         ty:Math.max(0,Math.min(ty,mapedMapa.height-alt))};
+}
+// Mapa salvo antes dessa correção pode carregar peça fora do limite. Some com
+// elas na abertura e avisa, senão ficariam pra sempre invisíveis e inalcançáveis
+// pela borracha.
+function mapedLimpaFantasmas(){
+  const W=mapedMapa.width*MAPED_T,H=mapedMapa.height*MAPED_T;
+  let n=0;
+  mapedMapa.layers.forEach(l=>{
+    if(l.type!=='objectgroup')return;
+    const antes=l.objects.length;
+    l.objects=l.objects.filter(o=>o.x>=0&&o.y>0&&o.x<W&&o.y<=H);
+    n+=antes-l.objects.length;
+  });
+  return n;
+}
 function mapedCarregar(m){
   mapedMapa=m;
   mapedMapa.tilesets=mapedTilesetsDoCatalogo();
+  const fantasmas=mapedLimpaFantasmas();
+  if(fantasmas)setTimeout(()=>toast(fantasmas+' peça(s) estavam fora do mapa e foram removidas.','var(--accent)'),600);
   mapedUndoStack=[];mapedGroundCache=null;mapedSujo=false;
   mapedSelectTileset(mapedTS?mapedTS.n:SALA_TILESETS[0].n);
   mapedDraw();
@@ -14217,6 +14245,7 @@ function mapedSetMode(m,el){
   if(pane)pane.style.display=amb?'none':'block';
   if(gal)gal.style.display=amb?'grid':'none';
   if(combo)combo.style.display=amb?'none':'block';
+  mapedEscondeFantasma();
   if(hint)hint.textContent=amb
     ?'Escolha a sala e clique no mapa: ela é carimbada inteira, com chão e móveis.'
     :'Clique num móvel da folha: ele é selecionado inteiro, do jeito que foi desenhado. Arraste só se quiser recortar um pedaço na mão.';
@@ -14500,16 +14529,48 @@ function mapedAplicar(tx,ty){
   }
   // Peça normal: um objeto por tile do retângulo escolhido, na camada da folha.
   const l=mapedCamada('Obj_'+mapedTS.n);
+  const enc=mapedEncaixa(tx,ty,mapedSel.w,mapedSel.h,mapedTS);
+  tx=enc.tx;ty=enc.ty;
   // Passo em TILES do mapa: há folhas com tile maior que 32 (computador 96x64,
   // vending 64x96). Andar de 1 em 1 nelas empilharia as peças umas sobre as outras.
   const passoX=Math.max(1,mapedTS.w/MAPED_T),passoY=Math.max(1,mapedTS.h/MAPED_T);
   for(let dy=0;dy<mapedSel.h;dy++)for(let dx=0;dx<mapedSel.w;dx++){
     const gid=mapedTS.f+(mapedSel.r+dy)*mapedTS.c+(mapedSel.c+dx);
+    const ox=tx+dx*passoX,oy=ty+dy*passoY;
+    if(ox<0||oy<0||ox>=mapedMapa.width||oy>=mapedMapa.height)continue;   // nunca cria fantasma
     l.objects.push({gid,height:mapedTS.h,id:mapedNextId(),name:'',rotation:0,type:'',
-      visible:true,width:mapedTS.w,x:(tx+dx*passoX)*MAPED_T,y:(ty+dy*passoY)*MAPED_T+mapedTS.h,
+      visible:true,width:mapedTS.w,x:ox*MAPED_T,y:oy*MAPED_T+mapedTS.h,
       properties:[{name:'collide',type:'bool',value:colide}]});
   }
   mapedDraw();
+}
+// Contorno do tamanho real da peça, seguindo o cursor. Sem isso não dá pra
+// saber que o balcão de 16 tiles não cabe ali — e a peça só "sumia".
+function mapedCanvasHover(ev){
+  if(mapedPintando)return;
+  const g=document.getElementById('maped-ghost');
+  if(!g||!mapedMapa)return;
+  let w=1,h=1,pX=1,pY=1;
+  if(mapedModo==='ambiente'){
+    if(!mapedDesignSel)return mapedEscondeFantasma();
+    w=mapedDesignSel.w;h=mapedDesignSel.h;
+  }else if(mapedModo==='objeto'||mapedModo==='piso'){
+    if(!mapedSel)return mapedEscondeFantasma();
+    w=mapedSel.w;h=mapedSel.h;
+    if(mapedModo==='objeto'&&mapedTS){pX=Math.max(1,mapedTS.w/MAPED_T);pY=Math.max(1,mapedTS.h/MAPED_T);}
+  }
+  const p=mapedCanvasTile(ev);
+  const enc=(mapedModo==='objeto'||mapedModo==='ambiente')
+    ?mapedEncaixa(p.tx,p.ty,w,h,mapedModo==='objeto'?mapedTS:null)
+    :{tx:p.tx,ty:p.ty};
+  const Z=mapedZoomN*MAPED_T;
+  g.style.display='block';
+  g.style.left=(enc.tx*Z)+'px';g.style.top=(enc.ty*Z)+'px';
+  g.style.width=(((w-1)*pX+1)*Z)+'px';g.style.height=(((h-1)*pY+1)*Z)+'px';
+}
+function mapedEscondeFantasma(){
+  const g=document.getElementById('maped-ghost');
+  if(g)g.style.display='none';
 }
 function mapedCanvasDown(ev){
   ev.preventDefault();
@@ -14559,6 +14620,7 @@ function mapedEscolheDesign(id){
 function mapedCarimbarAmbiente(tx,ty){
   if(!mapedDesignSel){toast('Escolha um ambiente na lista ao lado','var(--muted)');return;}
   const d=mapedDesignSel,g=mapedGround(),W=mapedMapa.width,H=mapedMapa.height;
+  const enc=mapedEncaixa(tx,ty,d.w,d.h,null);tx=enc.tx;ty=enc.ty;
   d.camadas.forEach(c=>{
     const ts=SALA_TS_BY_NAME[c.ts];if(!ts)return;
     const bits=mapedBits(c.mask),l=c.papel==='chao'?null:mapedCamada('Obj_'+c.ts);
