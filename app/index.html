@@ -1050,6 +1050,11 @@ nav{
 .maped-tspane{position:relative;max-height:52vh;overflow:auto;border:1.5px solid var(--border2);border-radius:8px;background:#0e0e14;}
 .maped-tspane canvas{display:block;image-rendering:pixelated;cursor:crosshair;}
 .maped-tssel{position:absolute;border:2px solid #7c3aed;background:rgba(124,58,237,0.22);pointer-events:none;display:none;}
+.maped-gallery{max-height:52vh;overflow:auto;display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.maped-card{border:1.5px solid var(--border2);border-radius:8px;padding:6px;background:var(--panel);cursor:pointer;text-align:center;}
+.maped-card.sel{border-color:var(--accent);background:rgba(124,58,237,0.12);}
+.maped-card img{width:100%;height:78px;object-fit:contain;image-rendering:pixelated;display:block;}
+.maped-card span{font-size:10px;font-weight:700;color:var(--text2);display:block;margin-top:4px;line-height:1.2;}
 .maped-info{margin-top:8px;font-size:11px;color:var(--muted);line-height:1.5;}
 .maped-canvaswrap{flex:1;min-width:0;max-height:76vh;overflow:auto;border:1.5px solid var(--border2);border-radius:12px;background:#12121a;}
 .maped-canvaswrap canvas{display:block;image-rendering:pixelated;cursor:crosshair;}
@@ -1978,6 +1983,8 @@ nav{
       <button class="maped-mode active" data-mode="objeto" onclick="mapedSetMode('objeto',this)"><i class="fa fa-couch"></i> Peça</button>
       <button class="maped-mode" data-mode="piso" onclick="mapedSetMode('piso',this)"><i class="fa fa-fill-drip"></i> Piso</button>
       <button class="maped-mode" data-mode="cadeira" onclick="mapedSetMode('cadeira',this)"><i class="fa fa-chair"></i> Cadeira</button>
+      <button class="maped-mode" data-mode="ambiente" onclick="mapedSetMode('ambiente',this)"><i class="fa fa-house"></i> Ambiente pronto</button>
+      <button class="maped-mode" data-mode="parede" onclick="mapedSetMode('parede',this)"><i class="fa fa-border-all"></i> Parede</button>
       <button class="maped-mode" data-mode="borracha" onclick="mapedSetMode('borracha',this)"><i class="fa fa-eraser"></i> Apagar</button>
       <button class="maped-mode" data-mode="spawn" onclick="mapedSetMode('spawn',this)"><i class="fa fa-street-view"></i> Entrada</button>
     </div>
@@ -2003,12 +2010,14 @@ nav{
     <div class="maped-side">
       <select class="inp" id="maped-ts" onchange="mapedSelectTileset(this.value)" style="font-size:12px;margin-bottom:8px"></select>
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px" id="maped-side-hint">
-        Arraste na folha pra pegar uma peça inteira (um sofá tem 2x2 tiles, uma cama 2x3).
+        Clique num móvel da folha: ele é selecionado inteiro, do jeito que foi desenhado.
+        Arraste só se quiser recortar um pedaço na mão.
       </div>
       <div class="maped-tspane" id="maped-tspane">
         <canvas id="maped-tscanvas" onmousedown="mapedTsDown(event)"></canvas>
         <div class="maped-tssel" id="maped-tssel"></div>
       </div>
+      <div class="maped-gallery" id="maped-gallery" style="display:none"></div>
       <div class="maped-info" id="maped-info"></div>
     </div>
     <div class="maped-canvaswrap" id="maped-canvaswrap">
@@ -13497,8 +13506,9 @@ const SALA_ASSETS='/icons/sala-mapa/';
 // Catálogo COMPLETO dos tilesets do pacote — é o que o editor do admin oferece
 // pra montar o mapa peça por peça. n=nome (tem que bater com o do map.json),
 // f=firstgid, i=caminho, c=colunas, t=total de tiles, w/h=tamanho do tile,
-// l=rótulo em português. Os 16 primeiros mantêm o firstgid histórico: mudar
-// qualquer um deles reinterpretaria todo gid do campus que já está salvo.
+// l=rótulo em português, d=1 marca as folhas que são camada de ambiente pronto.
+// Os 16 primeiros mantêm o firstgid histórico: mudar qualquer um deles
+// reinterpretaria todo gid do campus que já está salvo.
 const SALA_TILESETS=[
   {n:"FloorAndGround",f:1,i:"tileset/FloorAndGround.png",c:64,t:2560,w:32,h:32,l:"Piso e paredes"},
   {n:"chair",f:2561,i:"items/chair.png",c:1,t:23,w:32,h:64,l:"Cadeiras"},
@@ -13507,7 +13517,7 @@ const SALA_TILESETS=[
   {n:"computer",f:4680,i:"items/computer.png",c:5,t:5,w:96,h:64,l:"Computadores"},
   {n:"whiteboard",f:4685,i:"items/whiteboard.png",c:1,t:3,w:64,h:64,l:"Quadro branco"},
   {n:"Basement",f:4688,i:"tileset/Basement.png",c:16,t:800,w:32,h:32,l:"Porão"},
-  {n:"vendingmachine",f:5488,i:"items/vendingmachine.png",c:1,t:1,w:64,h:96,l:"Máquina de vending"},
+  {n:"vendingmachine",f:5488,i:"items/vendingmachine.png",c:1,t:1,w:48,h:72,l:"Máquina de vending"},
   {n:"Classroom_and_library",f:5489,i:"tileset/Classroom_and_library.png",c:16,t:544,w:32,h:32,l:"Sala de aula e biblioteca"},
   {n:"Conference_Hall",f:6033,i:"tileset/Conference_Hall.png",c:16,t:192,w:32,h:32,l:"Auditório"},
   {n:"Kitchen",f:6225,i:"tileset/Kitchen.png",c:16,t:784,w:32,h:32,l:"Cozinha"},
@@ -13534,8 +13544,59 @@ const SALA_TILESETS=[
   {n:"Shooting_Range",f:30257,i:"tileset/Shooting_Range.png",c:16,t:80,w:32,h:32,l:"Tiro ao alvo"},
   {n:"Television_Studio",f:30337,i:"tileset/Television_Studio.png",c:16,t:224,w:32,h:32,l:"Estúdio de TV"},
   {n:"Upstairs_System",f:30561,i:"tileset/Upstairs_System.png",c:16,t:432,w:32,h:32,l:"Escadas e andar de cima"},
+  {n:"Condominium_Design__layer_1",f:30993,i:"designs/Condominium_Design__layer_1.png",c:14,t:154,w:32,h:32,l:"Ambiente: Apartamento (chão)",d:1},
+  {n:"Condominium_Design__layer_2",f:31147,i:"designs/Condominium_Design__layer_2.png",c:14,t:154,w:32,h:32,l:"Ambiente: Apartamento (objetos)",d:1},
+  {n:"Condominium_Design_2__layer_1",f:31301,i:"designs/Condominium_Design_2__layer_1.png",c:14,t:84,w:32,h:32,l:"Ambiente: Apartamento 2 (chão)",d:1},
+  {n:"Condominium_Design_2__layer_2",f:31385,i:"designs/Condominium_Design_2__layer_2.png",c:14,t:84,w:32,h:32,l:"Ambiente: Apartamento 2 (objetos)",d:1},
+  {n:"Generic_Home_1__layer_1",f:31469,i:"designs/Generic_Home_1__layer_1.png",c:14,t:196,w:32,h:32,l:"Ambiente: Casa (chão)",d:1},
+  {n:"Generic_Home_1__layer_2",f:31665,i:"designs/Generic_Home_1__layer_2.png",c:14,t:196,w:32,h:32,l:"Ambiente: Casa (objetos)",d:1},
+  {n:"Gym__layer_1",f:31861,i:"designs/Gym__layer_1.png",c:19,t:285,w:32,h:32,l:"Ambiente: Academia (chão)",d:1},
+  {n:"Gym__layer_2",f:32146,i:"designs/Gym__layer_2.png",c:19,t:285,w:32,h:32,l:"Ambiente: Academia (objetos)",d:1},
+  {n:"Gym_2__layer_1",f:32431,i:"designs/Gym_2__layer_1.png",c:12,t:84,w:32,h:32,l:"Ambiente: Academia 2 (chão)",d:1},
+  {n:"Gym_2__layer_2",f:32515,i:"designs/Gym_2__layer_2.png",c:12,t:84,w:32,h:32,l:"Ambiente: Academia 2 (objetos)",d:1},
+  {n:"Ice_Cream_Shop_Design__layer_1",f:32599,i:"designs/Ice_Cream_Shop_Design__layer_1.png",c:12,t:120,w:32,h:32,l:"Ambiente: Sorveteria (chão)",d:1},
+  {n:"Ice_Cream_Shop_Design__layer_2",f:32719,i:"designs/Ice_Cream_Shop_Design__layer_2.png",c:12,t:120,w:32,h:32,l:"Ambiente: Sorveteria (objetos)",d:1},
+  {n:"Ice_Cream_Shop_Design__layer_3",f:32839,i:"designs/Ice_Cream_Shop_Design__layer_3.png",c:12,t:120,w:32,h:32,l:"Ambiente: Sorveteria (objetos)",d:1},
+  {n:"Japanese_Home_1__layer_1",f:32959,i:"designs/Japanese_Home_1__layer_1.png",c:19,t:266,w:32,h:32,l:"Ambiente: Casa japonesa (chão)",d:1},
+  {n:"Japanese_Home_1__layer_2",f:33225,i:"designs/Japanese_Home_1__layer_2.png",c:19,t:266,w:32,h:32,l:"Ambiente: Casa japonesa (objetos)",d:1},
+  {n:"Museum_entrance__layer_1",f:33491,i:"designs/Museum_entrance__layer_1.png",c:16,t:352,w:32,h:32,l:"Ambiente: Museu — entrada (chão)",d:1},
+  {n:"Museum_entrance__layer_2",f:33843,i:"designs/Museum_entrance__layer_2.png",c:16,t:352,w:32,h:32,l:"Ambiente: Museu — entrada (objetos)",d:1},
+  {n:"Museum_room_1__layer_1",f:34195,i:"designs/Museum_room_1__layer_1.png",c:20,t:340,w:32,h:32,l:"Ambiente: Museu — sala 1 (chão)",d:1},
+  {n:"Museum_room_1__layer_2",f:34535,i:"designs/Museum_room_1__layer_2.png",c:20,t:340,w:32,h:32,l:"Ambiente: Museu — sala 1 (objetos)",d:1},
+  {n:"Museum_room_2__layer_1",f:34875,i:"designs/Museum_room_2__layer_1.png",c:16,t:528,w:32,h:32,l:"Ambiente: Museu — sala 2 (chão)",d:1},
+  {n:"Museum_room_2__layer_2",f:35403,i:"designs/Museum_room_2__layer_2.png",c:16,t:528,w:32,h:32,l:"Ambiente: Museu — sala 2 (objetos)",d:1},
+  {n:"Museum_room_3__layer_1",f:35931,i:"designs/Museum_room_3__layer_1.png",c:17,t:357,w:32,h:32,l:"Ambiente: Museu — sala 3 (chão)",d:1},
+  {n:"Museum_room_3__layer_2",f:36288,i:"designs/Museum_room_3__layer_2.png",c:17,t:357,w:32,h:32,l:"Ambiente: Museu — sala 3 (objetos)",d:1},
+  {n:"Museum_room_4__layer_1",f:36645,i:"designs/Museum_room_4__layer_1.png",c:16,t:160,w:32,h:32,l:"Ambiente: Museu — sala 4 (chão)",d:1},
+  {n:"Museum_room_4__layer_2",f:36805,i:"designs/Museum_room_4__layer_2.png",c:16,t:160,w:32,h:32,l:"Ambiente: Museu — sala 4 (objetos)",d:1},
+  {n:"Shooting_Range_Design__layer_1",f:36965,i:"designs/Shooting_Range_Design__layer_1.png",c:10,t:110,w:32,h:32,l:"Ambiente: Tiro ao alvo (chão)",d:1},
+  {n:"Shooting_Range_Design__layer_2",f:37075,i:"designs/Shooting_Range_Design__layer_2.png",c:10,t:110,w:32,h:32,l:"Ambiente: Tiro ao alvo (objetos)",d:1},
+  {n:"Tv_Studio_Design__layer_1",f:37185,i:"designs/Tv_Studio_Design__layer_1.png",c:11,t:110,w:32,h:32,l:"Ambiente: Estúdio de TV (chão)",d:1},
+  {n:"Tv_Studio_Design__layer_2",f:37295,i:"designs/Tv_Studio_Design__layer_2.png",c:11,t:110,w:32,h:32,l:"Ambiente: Estúdio de TV (objetos)",d:1},
+  {n:"Tv_Studio_Design__layer_3",f:37405,i:"designs/Tv_Studio_Design__layer_3.png",c:11,t:110,w:32,h:32,l:"Ambiente: Estúdio de TV (objetos)",d:1},
 ];
 const SALA_TS_BY_NAME={};SALA_TILESETS.forEach(t=>{t.key='ts_'+t.n;SALA_TS_BY_NAME[t.n]=t;});
+// Ambientes prontos de 6_Home_Designs: salas inteiras já desenhadas. Cada uma
+// vem em camadas — a 1ª é o chão/parede (vai pro Ground) e as demais são os
+// móveis (viram objetos, que é o que dá o recorte por profundidade). 'mask' é
+// um bitmap de quais tiles daquela camada têm arte: sem ele o carimbo cobriria
+// o mapa inteiro de tile transparente e apagaria o que estava embaixo.
+const SALA_DESIGNS=[
+  {id:"Condominium_Design",label:"Apartamento",w:14,h:11,preview:"Condominium_Design__preview.png",camadas:[{ts:"Condominium_Design__layer_1",papel:"chao",cols:14,rows:11,mask:"Hp6H9////////////////////wM="},{ts:"Condominium_Design__layer_2",papel:"objeto",cols:14,rows:11,mask:"DAwDw8CwP+wP4AAAAAPAADDAwAA="}]},
+  {id:"Condominium_Design_2",label:"Apartamento 2",w:14,h:6,preview:"Condominium_Design_2__preview.png",camadas:[{ts:"Condominium_Design_2__layer_1",papel:"chao",cols:14,rows:6,mask:"/////////////w8="},{ts:"Condominium_Design_2__layer_2",papel:"objeto",cols:14,rows:6,mask:"/p//x98BAAIQAwM="}]},
+  {id:"Generic_Home_1",label:"Casa",w:14,h:14,preview:"Generic_Home_1__preview.png",camadas:[{ts:"Generic_Home_1__layer_1",papel:"chao",cols:14,rows:14,mask:"/B//9//9////////83/8H//H//F//B//Bw=="},{ts:"Generic_Home_1__layer_2",papel:"objeto",cols:14,rows:14,mask:"sAD+g//8PTU/z48BYTA4Dt6D/+A/CAgCAg=="}]},
+  {id:"Gym",label:"Academia",w:19,h:15,preview:"Gym__preview.png",camadas:[{ts:"Gym__layer_1",papel:"chao",cols:19,rows:15,mask:"//f/v////f//////////////////////////////////A/AB"},{ts:"Gym__layer_2",papel:"objeto",cols:19,rows:15,mask:"+KDyH5X/+PzH5/83f79Zn8/9fATg4z8A//H0zwd4PAAAAAAA"}]},
+  {id:"Gym_2",label:"Academia 2",w:12,h:7,preview:"Gym_2__preview.png",camadas:[{ts:"Gym_2__layer_1",papel:"chao",cols:12,rows:7,mask:"/////////////w8="},{ts:"Gym_2__layer_2",papel:"objeto",cols:12,rows:7,mask:"BuBf/GUZBsZiAAA="}]},
+  {id:"Ice_Cream_Shop_Design",label:"Sorveteria",w:12,h:10,preview:"Ice_Cream_Shop_Design__preview.png",camadas:[{ts:"Ice_Cream_Shop_Design__layer_1",papel:"chao",cols:12,rows:10,mask:"////////////////////"},{ts:"Ice_Cream_Shop_Design__layer_2",papel:"objeto",cols:12,rows:10,mask:"/ud//mdgBqZQDudwAAAG"},{ts:"Ice_Cream_Shop_Design__layer_3",papel:"objeto",cols:12,rows:10,mask:"AAAAAIAf+AEQAAAAAAAA"}]},
+  {id:"Japanese_Home_1",label:"Casa japonesa",w:19,h:14,preview:"Japanese_Home_1__preview.png",camadas:[{ts:"Japanese_Home_1__layer_1",papel:"chao",cols:19,rows:14,mask:"///////////////////////////////////xA4AfAPwAAA=="},{ts:"Japanese_Home_1__layer_2",papel:"objeto",cols:19,rows:14,mask:"AADgPp///Vwj5D02/7P5n8/hew7/c7iXALjAAAAPAEgAAA=="}]},
+  {id:"Museum_entrance",label:"Museu — entrada",w:16,h:22,preview:"Museum_entrance__preview.png",camadas:[{ts:"Museum_entrance__layer_1",papel:"chao",cols:16,rows:22,mask:"+H/8//z//P/8//z//P/8//z//P/8/////wf/B/9//3//f/9//3//B/8H/wA="},{ts:"Museum_entrance__layer_2",papel:"objeto",cols:16,rows:22,mask:"MDDwP/z//P/AD9hvwA/YbzhwOHA4cH8A/wP+A/4DcBgAG34bfgN+A34AAAA="}]},
+  {id:"Museum_room_1",label:"Museu — sala 1",w:20,h:17,preview:"Museum_room_1__preview.png",camadas:[{ts:"Museum_room_1__layer_1",papel:"chao",cols:20,rows:17,mask:"/vfvf//+9+9///7373///vfvf///////////////////////////////Dw=="},{ts:"Museum_room_1__layer_2",papel:"objeto",cols:20,rows:17,mask:"AIDBP1r848c//4DxDxj/gPEPGP+SxCNPPf7U40kkAADQeFidj9f5eAEABA=="}]},
+  {id:"Museum_room_2",label:"Museu — sala 2",w:16,h:33,preview:"Museum_room_2__preview.png",camadas:[{ts:"Museum_room_2__layer_1",papel:"chao",cols:16,rows:33,mask:"/D/8P/w//D/8P/w//D/8P/w///////////////gf/n/+f/5//n/+f/5//n/+f/5//n/+f/5//n/+f/5//n/+f/5/"},{ts:"Museum_room_2__layer_2",papel:"objeto",cols:16,rows:33,mask:"AAD4H/gf+B98HngeeB4YGBAIcA5yTnJPMAwwDDAMPDw8PDw8PDx8PkACfD58PkACfD58Pnw+PD48Pzw+eD78PxAA"}]},
+  {id:"Museum_room_3",label:"Museu — sala 3",w:17,h:21,preview:"Museum_room_3__preview.png",camadas:[{ts:"Museum_room_3__layer_1",papel:"chao",cols:17,rows:21,mask:"/v/8//n/8//n/8//n/8//3/+//z/+f/z/+f/z/+f/7////////////////8f"},{ts:"Museum_room_3__layer_2",papel:"objeto",cols:17,rows:21,mask:"IAj4//D/4f8DfIABDPcd7jvcdzjg8ADg44PHAwcHAI7uvd1/uf88n/++vwEb"}]},
+  {id:"Museum_room_4",label:"Museu — sala 4",w:16,h:10,preview:"Museum_room_4__preview.png",camadas:[{ts:"Museum_room_4__layer_1",papel:"chao",cols:16,rows:10,mask:"/n/+f/5///////////////////8="},{ts:"Museum_room_4__layer_2",papel:"objeto",cols:16,rows:10,mask:"/D/8P/w//L8cuB/4w8PAAxw4AAA="}]},
+  {id:"Shooting_Range_Design",label:"Tiro ao alvo",w:10,h:11,preview:"Shooting_Range_Design__preview.png",camadas:[{ts:"Shooting_Range_Design__layer_1",papel:"chao",cols:10,rows:11,mask:"/vvvv//++////////z8="},{ts:"Shooting_Range_Design__layer_2",papel:"objeto",cols:10,rows:11,mask:"qPDHH3/88ccff4QBBAA="}]},
+  {id:"Tv_Studio_Design",label:"Estúdio de TV",w:11,h:10,preview:"Tv_Studio_Design__preview.png",camadas:[{ts:"Tv_Studio_Design__layer_1",papel:"chao",cols:11,rows:10,mask:"/////////////////z8="},{ts:"Tv_Studio_Design__layer_2",papel:"objeto",cols:11,rows:10,mask:"/yeI97wnIACowlUGAgA="},{ts:"Tv_Studio_Design__layer_3",papel:"objeto",cols:11,rows:10,mask:"AAAAAPCBDwAAAAAAAAA="}]},
+];
 const SALA_SITTING_SHIFT={up:[0,3,-10],down:[0,3,1],left:[0,-8,10],right:[0,-8,10]};
 // As mesmas 16 chaves de characters.ts do pacote enviado: 4 bases (arte original do
 // SkyOffice) × 4 tons de pele (o primeiro de cada bloco é o tom original, sem sufixo).
@@ -13786,14 +13847,26 @@ function salaMapaCreateAnims(anims){
 // map.json vem vazia nesta planta). Lê o JSON bruto do tilemap (cache), não o objeto
 // Tile do Phaser, pra comparar direto contra os gids crus documentados no
 // build_map_v2.py que gerou este mapa.
-const SALA_WALL_GIDS=new Set([88,90,152,154,216,217,218,722]);
+// FG(r,c) = r*64+c+1 no FloorAndGround. A parede 2.5D ocupa DUAS linhas —
+// topo (11,16-18) e corpo (12,16-18) — e as duas precisam barrar. A lista
+// antiga só tinha 722 (=topo do meio) junto de 7 gids do mapa do SkyOffice
+// que nem existem mais aqui: a lateral e o rodapé de toda sala passavam.
+const SALA_WALL_GIDS=new Set([
+  721,722,723, 785,786,787,            // parede lavanda de 2 linhas (campus atual)
+  88,90,152,154,216,217,218,           // paredes do mapa antigo, mantidas por segurança
+]);
 function salaMapaBuildWallsFromGround(scene,map){
   const raw=scene.cache.tilemap.get('tilemap').data;
   const groundData=raw.layers.find(l=>l.name==='Ground').data;
   const walls=scene.physics.add.staticGroup();
+  // Mapa montado no editor pode ter parede de qualquer folha do pacote, e aí
+  // nenhuma lista de gid resolve. A camada 'Solid' é o desenho de colisão que o
+  // editor grava à mão: 1 = não passa.
+  const solidLayer=raw.layers.find(l=>l.name==='Solid');
+  const solid=solidLayer?solidLayer.data:null;
   for(let ty=0;ty<map.height;ty++){
     for(let tx=0;tx<map.width;tx++){
-      if(SALA_WALL_GIDS.has(groundData[ty*map.width+tx])){
+      if(SALA_WALL_GIDS.has(groundData[ty*map.width+tx])||(solid&&solid[ty*map.width+tx])){
         const rect=scene.add.rectangle(tx*32+16,ty*32+16,32,32,0,0);
         scene.physics.add.existing(rect,true);
         walls.add(rect);
@@ -13843,7 +13916,7 @@ function salaMapaCreateGame(){
       SALA_TILESETS.forEach(t=>{if(this.textures.exists(t.key))map.addTilesetImage(t.n,t.key);});
       const floorTS=map.getTileset('FloorAndGround');
 
-      const groundLayer=map.createLayer('Ground',floorTS);
+      const groundLayer=map.createLayer('Ground',map.tilesets);
       groundLayer.setCollisionByProperty({collides:true});
 
       const myChar=SALA_CHARACTERS.includes(db.studyCharacter)?db.studyCharacter:SALA_CHARACTERS[0];
@@ -14056,7 +14129,12 @@ function mapedCamada(nome){
   }
   return l;
 }
-function mapedGround(){return mapedMapa.layers.find(l=>l.type==='tilelayer');}
+// Por NOME, não pela 1ª camada de tile: desde que existe a 'Solid' (desenho de
+// colisão, também tilelayer), pegar a primeira daria a errada num mapa em que a
+// ordem venha diferente.
+function mapedGround(){
+  return mapedMapa.layers.find(l=>l.name==='Ground')||mapedMapa.layers.find(l=>l.type==='tilelayer');
+}
 
 // ---------------------------------------------------------------- abertura ---
 // Sempre as 34 folhas registradas, mesmo as que ainda não têm nenhuma peça: sem
@@ -14127,7 +14205,17 @@ function mapedSetMode(m,el){
   mapedModo=m;
   document.querySelectorAll('.maped-mode').forEach(b=>b.classList.remove('active'));
   if(el)el.classList.add('active');
-  mapedRefreshInfo();
+  const amb=m==='ambiente';
+  const pane=document.getElementById('maped-tspane'),gal=document.getElementById('maped-gallery'),
+        combo=document.getElementById('maped-ts'),hint=document.getElementById('maped-side-hint');
+  if(amb)mapedRenderGaleria();
+  if(pane)pane.style.display=amb?'none':'block';
+  if(gal)gal.style.display=amb?'grid':'none';
+  if(combo)combo.style.display=amb?'none':'block';
+  if(hint)hint.textContent=amb
+    ?'Escolha a sala e clique no mapa: ela é carimbada inteira, com chão e móveis.'
+    :'Clique num móvel da folha: ele é selecionado inteiro, do jeito que foi desenhado. Arraste só se quiser recortar um pedaço na mão.';
+  mapedDraw();
 }
 function mapedZoom(d){
   mapedZoomN=Math.max(0.25,Math.min(2,mapedZoomN+d*0.25));
@@ -14141,11 +14229,15 @@ function mapedRefreshInfo(){
     piso:'Clique (ou arraste) pra pintar o chão. Peças por cima continuam onde estão.',
     cadeira:'Coloca uma cadeira em que dá pra sentar de verdade. A direção vem do tile que você escolher na folha "Cadeiras".',
     borracha:'Clique pra tirar a peça mais de cima daquele tile. O piso não é apagado — pinte por cima no modo Piso.',
-    spawn:'Clique onde as pessoas devem aparecer ao entrar na sala.'};
+    spawn:'Clique onde as pessoas devem aparecer ao entrar na sala.',
+    ambiente:'Escolha a sala ao lado e clique: ela entra inteira, chão e móveis. Depois passe o modo Parede em volta dela — o carimbo desenha a parede, mas quem barra o jogador é o Parede.',
+    parede:'Pinta onde NÃO se passa (vermelho). É invisível no jogo. Desmarque "bloqueia passagem" pra apagar o bloqueio arrastando.'};
   const g=mapedGround();
   i.innerHTML=(dicas[mapedModo]||'')+
     `<br><br><b>Mapa:</b> ${mapedMapa?mapedMapa.width+'x'+mapedMapa.height:'—'} tiles`+
-    (mapedSel?`<br><b>Peça:</b> ${mapedTS.l} ${mapedSel.w}x${mapedSel.h} tiles`:'')+
+    (mapedModo==='ambiente'
+      ?(mapedDesignSel?`<br><b>Ambiente:</b> ${mapedDesignSel.label} (${mapedDesignSel.w}x${mapedDesignSel.h})`:'<br><b>Escolha um ambiente ao lado.</b>')
+      :(mapedSel?`<br><b>Peça:</b> ${mapedTS.l} ${mapedSel.w}x${mapedSel.h} tiles`:''))+
     `<br><b>Peças no mapa:</b> ${mapedMapa?mapedMapa.layers.filter(l=>l.type==='objectgroup').reduce((a,l)=>a+l.objects.length,0):0}`+
     (mapedSujo?'<br><b style="color:var(--accent)">Há alterações não publicadas.</b>':'');
 }
@@ -14170,6 +14262,81 @@ function mapedSelectTileset(nome){
   document.getElementById('maped-tssel').style.display='none';
   mapedRefreshInfo();
 }
+// ------------------------------------------------- achar a peça inteira ------
+// As folhas do pacote não alinham um móvel por tile: uma cadeira ocupa 1x2 a
+// partir de uma linha, a máquina ao lado ocupa 2x3 a partir de outra. Escolher
+// um retângulo "no olho" corta dois objetos pela metade — era o que fazia a
+// peça sair desconfigurada. Aqui a folha é varrida uma vez e cada tile aprende
+// a que móvel pertence, pra um clique pegar a peça toda.
+//
+// Vizinhos só entram na mesma peça se a arte ENCOSTA de verdade na borda
+// comum. Só olhar "tem pixel" juntaria a cadeira com a máquina de baixo, que
+// são tiles colados mas com 8px de folga entre os desenhos.
+const mapedPecasCache={};
+function mapedPecasDaFolha(t){
+  if(mapedPecasCache[t.n])return mapedPecasCache[t.n];
+  const im=mapedImg(t);
+  if(!im.complete||!im.naturalWidth)return null;
+  const cols=t.c,rows=Math.ceil(t.t/t.c),n=cols*rows;
+  const cv=document.createElement('canvas');
+  cv.width=cols*t.w;cv.height=t.h;
+  const ctx=cv.getContext('2d',{willReadFrequently:true});
+  ctx.imageSmoothingEnabled=false;
+  const pai=new Int32Array(n);for(let i=0;i<n;i++)pai[i]=i;
+  const acha=i=>{while(pai[i]!==i){pai[i]=pai[pai[i]];i=pai[i];}return i;};
+  const une=(a,b)=>{a=acha(a);b=acha(b);if(a!==b)pai[b]=a;};
+  const toca=(m1,m2)=>{for(let i=0;i<m1.length;i++)if(m1[i]&&m2[i])return true;return false;};
+  const temArte=new Uint8Array(n);
+  let baseAnt=null;                      // máscara da borda de baixo da linha anterior
+  for(let r=0;r<rows;r++){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.drawImage(im,0,r*t.h,cv.width,t.h,0,0,cv.width,t.h);
+    const d=ctx.getImageData(0,0,cv.width,t.h).data;
+    const baseAtual=[];let dirAnt=null;
+    for(let c=0;c<cols;c++){
+      const k=r*cols+c,x0=c*t.w;
+      const mT=new Uint8Array(t.w),mB=new Uint8Array(t.w),
+            mL=new Uint8Array(t.h),mR=new Uint8Array(t.h);
+      let arte=0;
+      for(let y=0;y<t.h;y++)for(let x=0;x<t.w;x++){
+        if(!d[(y*cv.width+x0+x)*4+3])continue;
+        arte=1;
+        if(y===0)mT[x]=1;
+        if(y===t.h-1)mB[x]=1;
+        if(x===0)mL[y]=1;
+        if(x===t.w-1)mR[y]=1;
+      }
+      temArte[k]=arte;baseAtual[c]=mB;
+      if(arte){
+        if(dirAnt&&temArte[k-1]&&toca(dirAnt,mL))une(k-1,k);
+        if(baseAnt&&baseAnt[c]&&temArte[k-cols]&&toca(baseAnt[c],mT))une(k-cols,k);
+      }
+      dirAnt=arte?mR:null;
+    }
+    baseAnt=baseAtual;
+  }
+  const caixas={},porTile=new Array(n).fill(null);
+  for(let k=0;k<n;k++){
+    if(!temArte[k])continue;
+    const p=acha(k),c=k%cols,r=(k/cols)|0;
+    const b=caixas[p]||(caixas[p]={c:c,r:r,c1:c,r1:r});
+    b.c=Math.min(b.c,c);b.c1=Math.max(b.c1,c);
+    b.r=Math.min(b.r,r);b.r1=Math.max(b.r1,r);
+    caixas[p]=b;
+  }
+  for(let k=0;k<n;k++)if(temArte[k])porTile[k]=caixas[acha(k)];
+  Object.values(caixas).forEach(b=>{b.w=b.c1-b.c+1;b.h=b.r1-b.r+1;});
+  return mapedPecasCache[t.n]={porTile,cols,rows};
+}
+// Clique simples pega o móvel inteiro; arrastar continua valendo pra quem quer
+// recortar na mão (um pedaço de parede, meio tapete).
+function mapedPecaInteira(c,r){
+  const pc=mapedPecasDaFolha(mapedTS);
+  if(!pc)return null;
+  if(c<0||r<0||c>=pc.cols||r>=pc.rows)return null;
+  const b=pc.porTile[r*pc.cols+c];
+  return b?{c:b.c,r:b.r,w:b.w,h:b.h}:null;
+}
 function mapedTsPointer(ev){
   const cv=document.getElementById('maped-tscanvas'),r=cv.getBoundingClientRect();
   return{c:Math.floor((ev.clientX-r.left)/mapedTS.w),r:Math.floor((ev.clientY-r.top)/mapedTS.h)};
@@ -14185,7 +14352,14 @@ function mapedTsDown(ev){
     mapedSel.w=Math.abs(q.c-mapedSel.ini.c)+1;mapedSel.h=Math.abs(q.r-mapedSel.ini.r)+1;
     mapedTsPintaSel();
   };
-  const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);mapedRefreshInfo();};
+  const up=()=>{
+    document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);
+    if(mapedSel.w===1&&mapedSel.h===1){        // clique seco: pega o móvel inteiro
+      const inteira=mapedPecaInteira(p.c,p.r);
+      if(inteira){Object.assign(mapedSel,inteira);mapedTsPintaSel();}
+    }
+    mapedRefreshInfo();
+  };
   document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);
 }
 function mapedTsPintaSel(){
@@ -14235,6 +14409,14 @@ function mapedDraw(){
     for(let x=0;x<=W;x++){ctx.beginPath();ctx.moveTo(x*MAPED_T,0);ctx.lineTo(x*MAPED_T,H*MAPED_T);ctx.stroke();}
     for(let y=0;y<=H;y++){ctx.beginPath();ctx.moveTo(0,y*MAPED_T);ctx.lineTo(W*MAPED_T,y*MAPED_T);ctx.stroke();}
   }
+  const solid=mapedMapa.layers.find(l=>l.name==='Solid');
+  if(solid){
+    ctx.fillStyle='rgba(255,70,70,0.30)';
+    for(let i=0;i<solid.data.length;i++){
+      if(!solid.data[i])continue;
+      ctx.fillRect((i%W)*MAPED_T,Math.floor(i/W)*MAPED_T,MAPED_T,MAPED_T);
+    }
+  }
   const sp=(mapedMapa.properties||[]).find(p=>p.name==='spawn');
   if(sp){
     const [tx,ty]=String(sp.value).split(',').map(Number);
@@ -14267,6 +14449,12 @@ function mapedNextId(){
 }
 function mapedAplicar(tx,ty){
   if(tx<0||ty<0||tx>=mapedMapa.width||ty>=mapedMapa.height)return;
+  if(mapedModo==='ambiente'){mapedCarimbarAmbiente(tx,ty);return;}
+  if(mapedModo==='parede'){
+    const l=mapedSolid();
+    l.data[ty*mapedMapa.width+tx]=document.getElementById('maped-collide').checked?1:0;
+    mapedDraw();return;
+  }
   if(mapedModo==='spawn'){
     mapedMapa.properties=[{name:'spawn',type:'string',value:tx+','+ty}];
     mapedDraw();return;
@@ -14322,7 +14510,7 @@ function mapedCanvasDown(ev){
   mapedSnapshot();
   const p=mapedCanvasTile(ev);
   mapedAplicar(p.tx,p.ty);
-  if(mapedModo!=='piso'&&mapedModo!=='borracha')return;
+  if(mapedModo!=='piso'&&mapedModo!=='borracha'&&mapedModo!=='parede')return;
   mapedPintando=true;
   let ult=p.tx+','+p.ty;
   const mv=e=>{
@@ -14333,6 +14521,72 @@ function mapedCanvasDown(ev){
   document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);
 }
 
+
+// ---------------------------------------------------- ambientes prontos ------
+let mapedDesignSel=null;
+function mapedBits(b64){
+  const bin=atob(b64),u=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+  return u;
+}
+function mapedRenderGaleria(){
+  const g=document.getElementById('maped-gallery');
+  if(!g||g.dataset.pronta)return;
+  g.innerHTML=SALA_DESIGNS.map(d=>`
+    <div class="maped-card" id="mapedcard-${d.id}" onclick="mapedEscolheDesign('${d.id}')">
+      <img src="${SALA_ASSETS}designs/${d.preview}" alt="">
+      <span>${d.label}<br>${d.w}x${d.h}</span>
+    </div>`).join('');
+  g.dataset.pronta='1';
+}
+function mapedEscolheDesign(id){
+  mapedDesignSel=SALA_DESIGNS.find(d=>d.id===id)||null;
+  document.querySelectorAll('.maped-card').forEach(c=>c.classList.remove('sel'));
+  const el=document.getElementById('mapedcard-'+id);
+  if(el)el.classList.add('sel');
+  mapedRefreshInfo();
+}
+// Carimba a sala inteira: a 1ª camada vira chão de verdade (Ground), as demais
+// viram objetos, que é o que faz o personagem passar por trás/na frente do
+// móvel certo. O bitmap 'mask' evita carimbar tile transparente por cima do
+// que já existe — sem ele o retângulo do ambiente apagaria tudo em volta.
+function mapedCarimbarAmbiente(tx,ty){
+  if(!mapedDesignSel){toast('Escolha um ambiente na lista ao lado','var(--muted)');return;}
+  const d=mapedDesignSel,g=mapedGround(),W=mapedMapa.width,H=mapedMapa.height;
+  d.camadas.forEach(c=>{
+    const ts=SALA_TS_BY_NAME[c.ts];if(!ts)return;
+    const bits=mapedBits(c.mask),l=c.papel==='chao'?null:mapedCamada('Obj_'+c.ts);
+    for(let r=0;r<c.rows;r++)for(let cc=0;cc<c.cols;cc++){
+      const k=r*c.cols+cc;
+      if(!((bits[k>>3]>>(k&7))&1))continue;
+      const x=tx+cc,y=ty+r;
+      if(x<0||y<0||x>=W||y>=H)continue;
+      const gid=ts.f+k;
+      if(!l)g.data[y*W+x]=gid;
+      else l.objects.push({gid,height:32,id:mapedNextId(),name:'',rotation:0,type:'',
+        visible:true,width:32,x:x*MAPED_T,y:y*MAPED_T+32,
+        properties:[{name:'collide',type:'bool',value:true}]});
+    }
+  });
+  mapedGroundCache=null;mapedDraw();
+}
+
+// ------------------------------------------------------- desenho de colisão ---
+// O chão do jogo só barra o jogador em gids de parede conhecidos, o que não
+// serve pra mapa montado à mão (parede pode vir de qualquer folha). A camada
+// 'Solid' é um desenho separado de onde não se passa — invisível no jogo,
+// vermelho hachurado aqui.
+function mapedSolid(){
+  let l=mapedMapa.layers.find(x=>x.name==='Solid');
+  if(!l){
+    l={data:new Array(mapedMapa.width*mapedMapa.height).fill(0),width:mapedMapa.width,
+       height:mapedMapa.height,id:mapedMapa.layers.length+1,name:'Solid',opacity:1,
+       type:'tilelayer',visible:false,x:0,y:0};
+    mapedMapa.layers.push(l);
+  }
+  return l;
+}
+
 // --------------------------------------------------------- tamanho / publicar ---
 function mapedResize(){
   const w=parseInt(prompt('Largura em tiles (hoje '+mapedMapa.width+'):',mapedMapa.width),10);
@@ -14340,11 +14594,15 @@ function mapedResize(){
   const h=parseInt(prompt('Altura em tiles (hoje '+mapedMapa.height+'):',mapedMapa.height),10);
   if(!h||h<10||h>200)return;
   mapedSnapshot();
-  const g=mapedGround(),novo=new Array(w*h).fill(0);
-  for(let y=0;y<Math.min(h,mapedMapa.height);y++)
-    for(let x=0;x<Math.min(w,mapedMapa.width);x++)
-      novo[y*w+x]=g.data[y*mapedMapa.width+x];
-  g.data=novo;g.width=w;g.height=h;
+  // Todas as camadas de tile (Ground e Solid) redimensionam juntas, senão a
+  // colisão fica deslocada em relação ao desenho.
+  mapedMapa.layers.filter(l=>l.type==='tilelayer').forEach(l=>{
+    const novo=new Array(w*h).fill(0);
+    for(let y=0;y<Math.min(h,mapedMapa.height);y++)
+      for(let x=0;x<Math.min(w,mapedMapa.width);x++)
+        novo[y*w+x]=l.data[y*mapedMapa.width+x];
+    l.data=novo;l.width=w;l.height=h;
+  });
   mapedMapa.width=w;mapedMapa.height=h;
   // Peça que ficou fora do novo limite some — senão viraria objeto fantasma,
   // invisível no editor e ainda carregado pelo jogo.
