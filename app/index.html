@@ -1490,6 +1490,7 @@ nav{
 
   <!-- Tema + cronômetro flutuante, fixos no rodapé da sidebar -->
   <div class="sidebar-bottom-row">
+    <button class="theme-toggle-btn" id="ia-settings-btn" onclick="openAISettingsModal()" title="Chaves de IA e voz da leitura">⚙️</button>
     <button class="theme-toggle-btn" id="theme-toggle" onclick="toggleTheme()" title="Alternar tema claro/escuro">🌙</button>
     <button class="sidebar-timer-btn" id="float-timer-btn" onclick="floatTimerOpen()" title="Cronômetro de Sessão">⏱️</button>
     <button class="sidebar-timer-btn" id="auth-logout-btn" onclick="authSignOut()" title="Sair da conta" style="display:none">🚪</button>
@@ -2879,6 +2880,8 @@ function applyDefaults(){
   if(!db.revsCompletedPerDay)db.revsCompletedPerDay={};
   if(!db.redacoesPerDay)db.redacoesPerDay={};
   if(typeof db.geminiApiKey!=='string')db.geminiApiKey='';
+  if(typeof db.tavilyApiKey!=='string')db.tavilyApiKey='';
+  if(typeof db.tavilySoOficial!=='boolean')db.tavilySoOficial=true;
   // Default true (pula onboarding) pra qualquer conta que já tinha dados antes desse campo
   // existir. Só vira false explicitamente no primeiro load de uma conta genuinamente nova
   // (ver loadDB()), então esse default aqui nunca reativa o onboarding pra ninguém que já
@@ -5649,6 +5652,96 @@ function fontesHTML(fontes,consultas,diag){
       <div class="resumo-fontes-aviso">Confira a fonte antes de decorar número, prazo, dose ou fórmula. Apostila e blog não confirmam versão vigente.</div>
     </details>`;
 }
+// ======================= BUSCA NA INTERNET VIA TAVILY ========================
+// A busca do próprio Gemini (grounding) exige plano pago — numa chave sem isso
+// ela devolve 429 em toda chamada e o resumo acaba saindo do conhecimento
+// treinado, com data de corte. O Tavily faz só a busca, e devolve o TEXTO das
+// páginas; o Gemini então escreve a partir desse texto, numa chamada comum, que
+// é o que funciona em qualquer chave.
+//
+// A diferença que mais importa não é nem o custo: aqui dá pra escolher onde
+// procurar. Busca genérica em português devolve apostila repetindo a versão
+// antiga, que foi o que deixou o cálculo de cristaloide desatualizado.
+const TAVILY_DOMINIOS_OFICIAIS=[
+  'gov.br','planalto.gov.br','in.gov.br','stf.jus.br','stj.jus.br','tst.jus.br',
+  'senado.leg.br','camara.leg.br','cnj.jus.br','who.int','ms.gov.br','anvisa.gov.br',
+  'scielo.br','bvsalud.org','ncbi.nlm.nih.gov','pubmed.ncbi.nlm.nih.gov',
+];
+function tavilyAtivo(){ return !!(db.tavilyApiKey||'').trim(); }
+
+// Uma busca. Devolve {texto, fontes} — texto é o conteúdo bruto das páginas,
+// que vira a ÚNICA fonte permitida pro Gemini escrever.
+async function tavilyBuscar(consulta,opts){
+  const key=(db.tavilyApiKey||'').trim();
+  if(!key)throw new Error('sem chave do Tavily');
+  const corpo={
+    query:consulta,
+    search_depth:(opts&&opts.profundo)?'advanced':'basic',
+    max_results:(opts&&opts.max)||6,
+    include_answer:false,
+    include_raw_content:true,
+  };
+  // Filtro de domínio é opcional de propósito: restringir demais pode voltar
+  // vazio, e aí é melhor uma busca ampla do que nenhuma (ver tavilyPesquisar).
+  if(opts&&opts.oficial)corpo.include_domains=TAVILY_DOMINIOS_OFICIAIS;
+  const res=await fetch('https://api.tavily.com/search',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+    body:JSON.stringify(corpo),
+  });
+  if(!res.ok){
+    let d=(await res.text()).slice(0,160);
+    try{d=(JSON.parse(d)?.detail?.error||JSON.parse(d)?.error||d);}catch(e){}
+    throw new Error(`${res.status} ${d}`);
+  }
+  const data=await res.json();
+  const itens=(data.results||[]).filter(r=>r&&r.url);
+  return{
+    fontes:itens.map(r=>({url:r.url,titulo:r.title||''})),
+    texto:itens.map((r,i)=>
+      `[FONTE ${i+1}] ${r.title||''}\nURL: ${r.url}\n${String(r.raw_content||r.content||'').slice(0,6000)}`
+    ).join('\n\n---\n\n'),
+  };
+}
+
+// Duas rodadas: primeiro só em fonte oficial, depois aberta pra completar. Uma
+// busca só, restrita, costuma voltar magra; e uma só, aberta, volta com blog.
+async function tavilyPesquisar(assunto,contexto){
+  const ano=new Date().getFullYear();
+  const consultas=[
+    `${assunto} ${contexto||''} atualização ${ano}`.trim(),
+    `${assunto} diretriz OR lei OR protocolo vigente ${ano}`.trim(),
+  ];
+  const fontes=[]; const partes=[]; const erros=[];
+  const oficialPrimeiro=db.tavilySoOficial!==false;
+  for(let i=0;i<consultas.length;i++){
+    try{
+      const r=await tavilyBuscar(consultas[i],{oficial:oficialPrimeiro&&i===0,profundo:i===0,max:6});
+      if(r.fontes.length){fontes.push(...r.fontes);partes.push(r.texto);}
+    }catch(e){erros.push(`"${consultas[i]}": ${e.message}`);}
+  }
+  const unicas=fontes.filter((f,i,a)=>a.findIndex(x=>x.url===f.url)===i).slice(0,12);
+  return{texto:partes.join('\n\n===\n\n'),fontes:unicas,consultas,erros};
+}
+
+// Envelopa o prompt original amarrando a resposta ao material recuperado. Sem
+// esse cerco, o modelo lê os trechos e mesmo assim responde de memória — foi o
+// que aconteceu com o grounding do Google.
+function tavilyPromptComFontes(promptOriginal,material){
+  return`${promptOriginal}
+
+=====================================================================
+MATERIAL PESQUISADO NA INTERNET AGORA (esta é a sua fonte principal)
+=====================================================================
+${material}
+=====================================================================
+
+COMO USAR O MATERIAL ACIMA:
+- Ele foi buscado na internet neste momento. Onde ele contradisser o que você aprendeu no treinamento, o material ACIMA vence — e você diz em uma frase o que mudou.
+- Ao dar número, prazo, dose, fórmula ou classificação, use o valor que está no material e cite entre parênteses a fonte de onde veio (ex: "(FONTE 2)").
+- O que não estiver no material e você só souber de memória: pode usar para a base teórica, mas marque com "(não confirmado na pesquisa)" se for número, prazo ou dose.
+- Se o material não cobrir o assunto, diga isso em vez de preencher com o que você lembra.`;
+}
 function promptRegrasAtualidade(){
   const hoje=new Date();
   const dataBR=hoje.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
@@ -5727,12 +5820,35 @@ async function generateResumoWeb(subId){
     const statusEl=document.querySelector(`#resumo-${subId} .resumo-status-txt`);
     if(statusEl)statusEl.textContent='Pesquisando na internet e gerando o resumo...';
 
-    const{raw,grounded,fontes,consultas,diag}=await callGeminiGenerateSearch(apiKey,resumoPromptWeb(contexto,flashcardsTxt));
+    // Com chave do Tavily, a busca sai dele e o Gemini só redige a partir do que
+    // voltou — chamada comum, sem grounding, que é o que funciona em chave sem
+    // plano pago. Sem chave, segue tentando o grounding do próprio Gemini.
+    let raw,grounded,fontes,consultas,diag,via='gemini';
+    if(tavilyAtivo()){
+      if(statusEl)statusEl.textContent='Pesquisando na internet (Tavily)...';
+      const busca=await tavilyPesquisar(sub.name,`${kingdom.name} — ${topic.name}`);
+      if(busca.texto){
+        if(statusEl)statusEl.textContent='Escrevendo o resumo a partir do que foi encontrado...';
+        raw=await callGeminiGenerate(apiKey,tavilyPromptComFontes(resumoPromptWeb(contexto,flashcardsTxt),busca.texto));
+        grounded=true;fontes=busca.fontes;consultas=busca.consultas;via='tavily';
+        diag=busca.erros.map(e=>({modelo:'tavily',erro:e}));
+      }else{
+        // Tavily configurado mas sem resultado: não some com o erro, e ainda
+        // tenta o grounding do Gemini antes de desistir da busca.
+        const r=await callGeminiGenerateSearch(apiKey,resumoPromptWeb(contexto,flashcardsTxt));
+        ({raw,grounded,fontes,consultas,diag}=r);
+        diag=[...busca.erros.map(e=>({modelo:'tavily',erro:e})),
+              ...(busca.erros.length?[]:[{modelo:'tavily',erro:'a busca não retornou nenhuma página'}]),
+              ...(diag||[])];
+      }
+    }else{
+      ({raw,grounded,fontes,consultas,diag}=await callGeminiGenerateSearch(apiKey,resumoPromptWeb(contexto,flashcardsTxt)));
+    }
 
-    sub.resumo={texto:raw.trim(),geradoEm:new Date().toISOString(),origem:'web',grounded,
+    sub.resumo={texto:raw.trim(),geradoEm:new Date().toISOString(),origem:'web',grounded,via,
                 fontes:fontes||[],consultas:consultas||[],diag:diag||[]};
     saveDB();
-    toast(grounded?'🌐 Resumo gerado com pesquisa na internet!'
+    toast(grounded?(via==='tavily'?`🔎 Resumo gerado com ${(fontes||[]).length} fontes pesquisadas no Tavily!`:'🌐 Resumo gerado com pesquisa na internet!')
       :`⚠️ Gerado SEM pesquisa — ${(diag&&diag[0]&&diag[0].erro)||'a busca não retornou fonte nenhuma'}. Veja o detalhe no resumo.`,
       grounded?'var(--green)':'var(--orange)');
   }catch(e){
@@ -12831,7 +12947,21 @@ function openAISettingsModal(){
         Crie uma chave gratuita em <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--accent)">aistudio.google.com/apikey</a> e cole aqui.
       </p>
       <input type="password" id="gemini-key-input" class="inp" placeholder="Cole sua chave de API do Gemini" value="${hasKey?db.geminiApiKey:''}" style="width:100%;margin-bottom:6px">
-      <div style="font-size:10px;color:var(--muted);margin-bottom:18px">${hasKey?'✅ Chave configurada':'⚠️ Nenhuma chave configurada ainda'} — fica salva só no seu banco de dados, nunca no código do app.</div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:16px">${hasKey?'✅ Chave configurada':'⚠️ Nenhuma chave configurada ainda'} — fica salva só no seu banco de dados, nunca no código do app.</div>
+
+      <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">🔎 Busca na internet (Tavily) — opcional</div>
+      <p style="font-size:11.5px;color:var(--text2);margin-bottom:8px;line-height:1.6">
+        A busca do próprio Gemini exige plano pago; sem ela, o resumo sai do conhecimento treinado, que tem
+        data de corte — e assunto que mudou recentemente sai desatualizado. Com uma chave do
+        <a href="https://tavily.com" target="_blank" rel="noopener" style="color:var(--accent)">Tavily</a>
+        (1.000 buscas grátis por mês), o app pesquisa antes e o Gemini escreve a partir do que foi encontrado.
+      </p>
+      <input type="password" id="tavily-key-input" class="inp" placeholder="Cole sua chave do Tavily (opcional)" value="${(db.tavilyApiKey||'')}" style="width:100%;margin-bottom:6px">
+      <label style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text2);margin-bottom:6px;cursor:pointer">
+        <input type="checkbox" id="tavily-oficial-input" ${db.tavilySoOficial!==false?'checked':''}>
+        Priorizar fonte oficial (lei, diretriz, órgão de governo) em vez de blog e apostila
+      </label>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:18px">${(db.tavilyApiKey||'').trim()?'✅ Busca pelo Tavily ativa':'Sem chave: o app tenta a busca do Gemini e avisa se ela não estiver liberada'}</div>
 
       <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">🔊 Voz da leitura (flashcards e resumos)</div>
       <p style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
@@ -12904,6 +13034,9 @@ function testVoicePreview(){
 }
 function saveGeminiApiKey(){
   const v=(document.getElementById('gemini-key-input')?.value||'').trim();
+  db.tavilyApiKey=(document.getElementById('tavily-key-input')?.value||'').trim();
+  const of=document.getElementById('tavily-oficial-input');
+  if(of)db.tavilySoOficial=!!of.checked;
   const voiceSel=document.getElementById('voice-select-input');
   const geminiVoiceSel=document.getElementById('gemini-voice-select-input');
   db.geminiApiKey=v;
