@@ -5410,7 +5410,7 @@ function resumoPanelHTML(s){
       </div>
       ${isSpeaking?`<div style="font-size:9.5px;color:var(--muted);margin:-4px 0 8px;display:flex;align-items:center;gap:5px">${resumoSpeakMode==='audio'?'<i class=\"fa fa-lock-open\"></i> Áudio da IA — continua tocando com a tela travada.':'<i class=\"fa fa-triangle-exclamation\"></i> Voz do navegador — para se a tela travar (configure sua chave de IA pra ouvir com a tela travada).'}</div>`:''}
       <div class="resumo-body">${s.resumo.texto}</div>
-      ${fontesHTML(s.resumo.fontes,s.resumo.consultas)}
+      ${fontesHTML(s.resumo.fontes,s.resumo.consultas,s.resumo.diag)}
       <div class="resumo-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm}${fonteTxt} — confira sempre a fonte oficial antes de usar na prova.</div>
     `;
   }
@@ -5622,9 +5622,21 @@ async function generateResumo(subId,file){
 // Lista clicável do que a busca realmente leu. É a diferença entre "não confio
 // nesse resumo" e "vejo que ele leu três apostilas e nenhuma diretriz" — sem
 // isso não dá pra distinguir busca ausente de fonte ruim.
-function fontesHTML(fontes,consultas){
+function fontesHTML(fontes,consultas,diag){
   const f=(fontes||[]).filter(x=>x&&x.url);
   const c=(consultas||[]).filter(Boolean);
+  const d=(diag||[]).filter(x=>x&&x.erro);
+  // Sem fonte nenhuma, o que importa é POR QUE não houve busca. Sem isso, "não
+  // pesquisou" é indistinguível de chave sem acesso, modelo inexistente, quota
+  // estourada ou modelo que simplesmente decidiu não buscar.
+  if(!f.length&&d.length)return`
+    <details class="resumo-fontes" open>
+      <summary style="color:var(--red)"><i class="fa fa-triangle-exclamation"></i> Por que não pesquisou na internet</summary>
+      <ol class="resumo-fontes-lista">
+        ${d.map(x=>`<li><code>${String(x.modelo).replace(/</g,'&lt;')}</code> — ${String(x.erro).replace(/</g,'&lt;')}</li>`).join('')}
+      </ol>
+      <div class="resumo-fontes-aviso">Erro 404 = esse nome de modelo não existe mais. 403/PERMISSION = sua chave não tem a busca liberada. 429 = quota. "não usou a busca" = o modelo optou por responder de memória; gerar de novo costuma resolver.</div>
+    </details>`;
   if(!f.length&&!c.length)return '';
   const dominio=u=>{try{return new URL(u).hostname.replace(/^www\./,'');}catch(e){return u.slice(0,40);}};
   return`
@@ -5715,12 +5727,14 @@ async function generateResumoWeb(subId){
     const statusEl=document.querySelector(`#resumo-${subId} .resumo-status-txt`);
     if(statusEl)statusEl.textContent='Pesquisando na internet e gerando o resumo...';
 
-    const{raw,grounded,fontes,consultas}=await callGeminiGenerateSearch(apiKey,resumoPromptWeb(contexto,flashcardsTxt));
+    const{raw,grounded,fontes,consultas,diag}=await callGeminiGenerateSearch(apiKey,resumoPromptWeb(contexto,flashcardsTxt));
 
     sub.resumo={texto:raw.trim(),geradoEm:new Date().toISOString(),origem:'web',grounded,
-                fontes:fontes||[],consultas:consultas||[]};
+                fontes:fontes||[],consultas:consultas||[],diag:diag||[]};
     saveDB();
-    toast(grounded?'🌐 Resumo gerado com pesquisa na internet!':'📄 Resumo gerado (busca na internet indisponível agora — usei o conhecimento da IA)','var(--green)');
+    toast(grounded?'🌐 Resumo gerado com pesquisa na internet!'
+      :`⚠️ Gerado SEM pesquisa — ${(diag&&diag[0]&&diag[0].erro)||'a busca não retornou fonte nenhuma'}. Veja o detalhe no resumo.`,
+      grounded?'var(--green)':'var(--orange)');
   }catch(e){
     toast('❌ '+(e.message||'Erro ao gerar resumo'),'var(--red)');
   }finally{
@@ -12901,15 +12915,25 @@ function saveGeminiApiKey(){
 }
 
 // Tenta gerar conteúdo testando alguns nomes de modelo em sequência — o Google
-// costuma aposentar versões específicas (ex: gemini-2.5-flash) sem muito aviso,
-// então isso evita que a geração quebre de novo no futuro por causa só do nome.
-const GEMINI_MODEL_CANDIDATES=['gemini-3.6-flash','gemini-3.5-flash-lite','gemini-2.5-flash','gemini-flash-latest'];
+// aposenta versões sem muito aviso, então isso evita que a geração quebre no
+// futuro por causa só do nome. Quando nenhum destes serve, listGeminiModels()
+// pergunta à própria chave o que ela tem acesso.
+//
+// Lista revista: 'gemini-2.5-flash' saiu porque é desligado em 16/10/2026, e
+// 'gemini-3.5-flash-lite' saiu porque não existe — era um 404 gasto em toda
+// geração antes de cair no candidato seguinte. Da mais nova pra mais antiga,
+// porque a busca com grounding tem quota gratuita bem maior na geração 3.x.
+const GEMINI_MODEL_CANDIDATES=['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-flash-latest'];
 async function tryGeminiModel(apiKey,model,prompt,opts){
   try{
     const body={contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:(opts&&opts.maxOutputTokens)||8192}};
     // Grounding com Google Search: a IA pesquisa na internet antes de responder, em vez
     // de usar só o que aprendeu no treinamento. Usado no Resumo "sem arquivo".
-    if(opts&&opts.useSearch)body.tools=[{google_search:{}}];
+    // Nome da ferramenta de busca mudou entre gerações do Gemini: 'google_search'
+    // nas 2.x/3.x, 'google_search_retrieval' nas 1.5. Se a primeira falhar com
+    // erro de ferramenta, quem chama tenta a outra — sem isso, um 400 por nome
+    // errado virava silenciosamente "resposta sem busca".
+    if(opts&&opts.useSearch)body.tools=[opts.searchTool==='retrieval'?{google_search_retrieval:{}}:{google_search:{}}];
     const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -12922,7 +12946,7 @@ async function tryGeminiModel(apiKey,model,prompt,opts){
       const err=await response.text();
       let detail=err.slice(0,150);
       try{detail=(JSON.parse(err)?.error?.message||detail).slice(0,150);}catch(e2){}
-      return{ok:false,reason:`${response.status} ${detail}`};
+      return{ok:false,reason:`${response.status} ${detail}`,http:response.status};
     }
     const data=await response.json();
     // Concatena TODAS as partes de texto, não só parts[0] — com tools ativos (ex: busca)
@@ -12949,7 +12973,8 @@ async function tryGeminiModel(apiKey,model,prompt,opts){
       .filter((f,i,a)=>a.findIndex(x=>x.url===f.url)===i)
       .slice(0,12);
     const consultas=((gm&&gm.webSearchQueries)||[]).slice(0,8);
-    return{ok:true,raw,grounded,fontes,consultas};
+    return{ok:true,raw,grounded,fontes,consultas,
+           motivo:grounded?null:'o modelo respondeu, mas não usou a busca (nenhuma fonte veio na resposta)'};
   }catch(e){
     return{ok:false,reason:e.message};
   }
@@ -12996,20 +13021,28 @@ async function callGeminiGenerate(apiKey,prompt){
 // realmente rolou ou não — nunca inventado.
 async function callGeminiGenerateSearch(apiKey,prompt){
   const attempts=[];
-  let fallback=null; // primeira resposta que funcionou mas sem confirmar busca real
+  const diag=[];      // por que a busca não pegou, modelo a modelo
+  let fallback=null;  // primeira resposta que funcionou mas sem confirmar busca real
   for(const model of GEMINI_MODEL_CANDIDATES){
-    const r=await tryGeminiModel(apiKey,model,prompt,{useSearch:true});
+    let r=await tryGeminiModel(apiKey,model,prompt,{useSearch:true});
+    // 400 costuma ser nome de ferramenta que aquele modelo não conhece — tenta o outro
+    if(!r.ok&&r.http===400){
+      const alt=await tryGeminiModel(apiKey,model,prompt,{useSearch:true,searchTool:'retrieval'});
+      if(alt.ok)r=alt; else diag.push({modelo:model,erro:r.reason});
+    }
     if(r.ok){
-      if(r.grounded)return{raw:r.raw,grounded:true,fontes:r.fontes,consultas:r.consultas};
+      if(r.grounded)return{raw:r.raw,grounded:true,fontes:r.fontes,consultas:r.consultas,diag:[]};
+      diag.push({modelo:model,erro:r.motivo});
       if(!fallback)fallback={raw:r.raw,grounded:false,fontes:[],consultas:[]};
       continue;
     }
+    if(!diag.some(d=>d.modelo===model))diag.push({modelo:model,erro:r.reason});
     attempts.push(`${model} (${r.reason})`);
   }
-  if(fallback)return fallback;
+  if(fallback)return{...fallback,diag};
   try{
     const raw=await callGeminiGenerate(apiKey,prompt);
-    return{raw,grounded:false,fontes:[],consultas:[]};
+    return{raw,grounded:false,fontes:[],consultas:[],diag};
   }catch(e){
     throw new Error(`Não foi possível gerar o resumo, nem com busca na internet nem sem ela. Tentativas com busca: ${attempts.join(' · ')||'nenhuma'}. Erro final: ${e.message}`);
   }
@@ -13080,7 +13113,11 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
 // tela travada (a leitura por voz do navegador para nesse caso, na maioria dos
 // aparelhos). Se sua conta/chave não tiver esse recurso liberado, o app cai
 // automaticamente pra voz do navegador (ver resumoToggleSpeak).
-const GEMINI_TTS_MODEL_CANDIDATES=['gemini-2.5-flash-preview-tts','gemini-2.5-pro-preview-tts'];
+// TTS ainda é linha em preview no Gemini — muda de nome com frequência e não tem
+// SLA. Por isso a lista tenta o atual primeiro e mantém os 2.5 como rede: eles
+// são da geração desligada em 16/10/2026, mas enquanto responderem servem de
+// último recurso, e a voz do navegador continua como fallback final no código.
+const GEMINI_TTS_MODEL_CANDIDATES=['gemini-3.1-flash-tts-preview','gemini-2.5-flash-preview-tts','gemini-2.5-pro-preview-tts'];
 const GEMINI_TTS_VOICE_DEFAULT='Kore';
 // Só um recorte das vozes pré-prontas do Gemini TTS (a lista completa tem cerca de 30) —
 // escolhidas por soarem mais neutras/naturais em qualquer idioma, incluindo português.
@@ -13111,7 +13148,7 @@ async function tryGeminiTTS(apiKey,model,text,voiceName){
       const err=await response.text();
       let detail=err.slice(0,150);
       try{detail=(JSON.parse(err)?.error?.message||detail).slice(0,150);}catch(e2){}
-      return{ok:false,reason:`${response.status} ${detail}`};
+      return{ok:false,reason:`${response.status} ${detail}`,http:response.status};
     }
     const data=await response.json();
     const inline=data?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
@@ -13749,7 +13786,113 @@ const SALA_TILESETS=[
   {n:"antigos_Tileset_32x32_7",f:83793,i:"tileset/antigos/Tileset_32x32_7.png",c:10,t:100,w:32,h:32,l:"Acervo antigo: Tileset 32x32 7",cat:"antigos"},
   {n:"antigos_Tileset_32x32_8",f:83893,i:"tileset/antigos/Tileset_32x32_8.png",c:10,t:100,w:32,h:32,l:"Acervo antigo: Tileset 32x32 8",cat:"antigos"},
   {n:"antigos_Tileset_32x32_9",f:83993,i:"tileset/antigos/Tileset_32x32_9.png",c:10,t:100,w:32,h:32,l:"Acervo antigo: Tileset 32x32 9",cat:"antigos"},
-  {n:"antigos_Tilesets",f:84093,i:"tileset/antigos/Tilesets.png",c:40,t:2800,w:32,h:32,l:"Acervo antigo: Acervo antigo completo",cat:"antigos"}
+  {n:"antigos_Tilesets",f:84093,i:"tileset/antigos/Tilesets.png",c:40,t:2800,w:32,h:32,l:"Acervo antigo: Acervo antigo completo",cat:"antigos"},
+  {n:"avulsos_Birthday_Party",f:86893,i:"tileset/avulsos/Birthday_Party.png",c:16,t:320,w:32,h:32,l:"Avulsos: Festa",cat:"avulsos"},
+  {n:"avulsos_Halloween_1",f:87213,i:"tileset/avulsos/Halloween_1.png",c:16,t:1920,w:32,h:32,l:"Avulsos: Halloween (1/2)",cat:"avulsos"},
+  {n:"avulsos_Halloween_2",f:89133,i:"tileset/avulsos/Halloween_2.png",c:16,t:272,w:32,h:32,l:"Avulsos: Halloween (2/2)",cat:"avulsos"},
+  {n:"avulsos_Kitchen_1",f:89405,i:"tileset/avulsos/Kitchen_1.png",c:16,t:1920,w:32,h:32,l:"Avulsos: Cozinha (1/2)",cat:"avulsos"},
+  {n:"avulsos_Kitchen_2",f:91325,i:"tileset/avulsos/Kitchen_2.png",c:16,t:608,w:32,h:32,l:"Avulsos: Cozinha (2/2)",cat:"avulsos"},
+  {n:"avulsos_Conference_Hall",f:91933,i:"tileset/avulsos/Conference_Hall.png",c:16,t:544,w:32,h:32,l:"Avulsos: Auditório",cat:"avulsos"},
+  {n:"avulsos_Basement_1",f:92477,i:"tileset/avulsos/Basement_1.png",c:16,t:1904,w:32,h:32,l:"Avulsos: Porão (1/2)",cat:"avulsos"},
+  {n:"avulsos_Basement_2",f:94381,i:"tileset/avulsos/Basement_2.png",c:16,t:48,w:32,h:32,l:"Avulsos: Porão (2/2)",cat:"avulsos"},
+  {n:"avulsos_Christmas",f:94429,i:"tileset/avulsos/Christmas.png",c:16,t:960,w:32,h:32,l:"Avulsos: Natal",cat:"avulsos"},
+  {n:"avulsos_Grocery_Store_1",f:95389,i:"tileset/avulsos/Grocery_Store_1.png",c:16,t:1936,w:32,h:32,l:"Avulsos: Mercado (1/3)",cat:"avulsos"},
+  {n:"avulsos_Grocery_Store_2",f:97325,i:"tileset/avulsos/Grocery_Store_2.png",c:16,t:1920,w:32,h:32,l:"Avulsos: Mercado (2/3)",cat:"avulsos"},
+  {n:"avulsos_Grocery_Store_3",f:99245,i:"tileset/avulsos/Grocery_Store_3.png",c:16,t:64,w:32,h:32,l:"Avulsos: Mercado (3/3)",cat:"avulsos"},
+  {n:"avulsos_Jail_1",f:99309,i:"tileset/avulsos/Jail_1.png",c:16,t:1904,w:32,h:32,l:"Avulsos: Cadeia (1/2)",cat:"avulsos"},
+  {n:"avulsos_Jail_2",f:101213,i:"tileset/avulsos/Jail_2.png",c:16,t:336,w:32,h:32,l:"Avulsos: Cadeia (2/2)",cat:"avulsos"},
+  {n:"avulsos_Hospital_1",f:101549,i:"tileset/avulsos/Hospital_1.png",c:16,t:1904,w:32,h:32,l:"Avulsos: Hospital (1/3)",cat:"avulsos"},
+  {n:"avulsos_Hospital_2",f:103453,i:"tileset/avulsos/Hospital_2.png",c:16,t:1936,w:32,h:32,l:"Avulsos: Hospital (2/3)",cat:"avulsos"},
+  {n:"avulsos_Hospital_3",f:105389,i:"tileset/avulsos/Hospital_3.png",c:16,t:672,w:32,h:32,l:"Avulsos: Hospital (3/3)",cat:"avulsos"},
+  {n:"avulsos_Japanese_Interiors",f:106061,i:"tileset/avulsos/Japanese_Interiors.png",c:16,t:1136,w:32,h:32,l:"Avulsos: Japonês",cat:"avulsos"},
+  {n:"avulsos_Clothing_Store_1",f:107197,i:"tileset/avulsos/Clothing_Store_1.png",c:16,t:1920,w:32,h:32,l:"Avulsos: Loja de roupa (1/2)",cat:"avulsos"},
+  {n:"avulsos_Clothing_Store_2",f:109117,i:"tileset/avulsos/Clothing_Store_2.png",c:16,t:880,w:32,h:32,l:"Avulsos: Loja de roupa (2/2)",cat:"avulsos"},
+  {n:"avulsos_Museum_1",f:109997,i:"tileset/avulsos/Museum_1.png",c:16,t:1920,w:32,h:32,l:"Avulsos: Museu (1/3)",cat:"avulsos"},
+  {n:"avulsos_Museum_2",f:111917,i:"tileset/avulsos/Museum_2.png",c:16,t:1936,w:32,h:32,l:"Avulsos: Museu (2/3)",cat:"avulsos"},
+  {n:"avulsos_Museum_3",f:113853,i:"tileset/avulsos/Museum_3.png",c:16,t:704,w:32,h:32,l:"Avulsos: Museu (3/3)",cat:"avulsos"},
+  {n:"avulsos_Television_and_Film_Studio",f:114557,i:"tileset/avulsos/Television_and_Film_Studio.png",c:16,t:560,w:32,h:32,l:"Avulsos: Estúdio de TV",cat:"avulsos"},
+  {n:"avulsos_Ice_Cream_Shop",f:115117,i:"tileset/avulsos/Ice_Cream_Shop.png",c:16,t:672,w:32,h:32,l:"Avulsos: Sorveteria",cat:"avulsos"},
+  {n:"avulsos_Shooting_Range",f:115789,i:"tileset/avulsos/Shooting_Range.png",c:16,t:192,w:32,h:32,l:"Avulsos: Tiro ao alvo",cat:"avulsos"},
+  {n:"avulsos_Condominium",f:115981,i:"tileset/avulsos/Condominium.png",c:16,t:944,w:32,h:32,l:"Avulsos: Condomínio",cat:"avulsos"},
+  {n:"avulsos_Living_Room",f:116925,i:"tileset/avulsos/Living_Room.png",c:16,t:1056,w:32,h:32,l:"Avulsos: Sala de estar",cat:"avulsos"},
+  {n:"avulsos_Bathroom",f:117981,i:"tileset/avulsos/Bathroom.png",c:16,t:1360,w:32,h:32,l:"Avulsos: Banheiro",cat:"avulsos"},
+  {n:"avulsos_Bedroom_1",f:119341,i:"tileset/avulsos/Bedroom_1.png",c:16,t:1888,w:32,h:32,l:"Avulsos: Quarto (1/3)",cat:"avulsos"},
+  {n:"avulsos_Bedroom_2",f:121229,i:"tileset/avulsos/Bedroom_2.png",c:16,t:1920,w:32,h:32,l:"Avulsos: Quarto (2/3)",cat:"avulsos"},
+  {n:"avulsos_Bedroom_3",f:123149,i:"tileset/avulsos/Bedroom_3.png",c:16,t:1440,w:32,h:32,l:"Avulsos: Quarto (3/3)",cat:"avulsos"},
+  {n:"avulsos_Classroom_and_Library",f:124589,i:"tileset/avulsos/Classroom_and_Library.png",c:16,t:1888,w:32,h:32,l:"Avulsos: Sala de aula e biblioteca",cat:"avulsos"},
+  {n:"avulsos_Music_and_Sport",f:126477,i:"tileset/avulsos/Music_and_Sport.png",c:16,t:1216,w:32,h:32,l:"Avulsos: Música e esporte",cat:"avulsos"},
+  {n:"avulsos_Art",f:127693,i:"tileset/avulsos/Art.png",c:16,t:320,w:32,h:32,l:"Avulsos: Arte e quadros",cat:"avulsos"},
+  {n:"avulsos_Gym",f:128013,i:"tileset/avulsos/Gym.png",c:16,t:1392,w:32,h:32,l:"Avulsos: Academia",cat:"avulsos"},
+  {n:"avulsos_Fishing",f:129405,i:"tileset/avulsos/Fishing.png",c:16,t:624,w:32,h:32,l:"Avulsos: Pesca",cat:"avulsos"},
+  {n:"avulsos_sombra_Birthday_Party_Black_Shadow",f:130029,i:"tileset/avulsos_sombra/Birthday_Party_Black_Shadow.png",c:16,t:320,w:32,h:32,l:"Avulsos sombra preta: Birthday Party Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Halloween_Black_Shadow_1",f:130349,i:"tileset/avulsos_sombra/Halloween_Black_Shadow_1.png",c:16,t:1920,w:32,h:32,l:"Avulsos sombra preta: Halloween Black Shadow (1/2)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Halloween_Black_Shadow_2",f:132269,i:"tileset/avulsos_sombra/Halloween_Black_Shadow_2.png",c:16,t:272,w:32,h:32,l:"Avulsos sombra preta: Halloween Black Shadow (2/2)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Kitchen_Black_Shadow_1",f:132541,i:"tileset/avulsos_sombra/Kitchen_Black_Shadow_1.png",c:16,t:1920,w:32,h:32,l:"Avulsos sombra preta: Kitchen Black Shadow (1/2)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Kitchen_Black_Shadow_2",f:134461,i:"tileset/avulsos_sombra/Kitchen_Black_Shadow_2.png",c:16,t:592,w:32,h:32,l:"Avulsos sombra preta: Kitchen Black Shadow (2/2)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Conference_Hall_Black_Shadow",f:135053,i:"tileset/avulsos_sombra/Conference_Hall_Black_Shadow.png",c:16,t:544,w:32,h:32,l:"Avulsos sombra preta: Conference Hall Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Basement_Black_Shadow",f:135597,i:"tileset/avulsos_sombra/Basement_Black_Shadow.png",c:16,t:1808,w:32,h:32,l:"Avulsos sombra preta: Basement Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Christmas_Black_Shadow",f:137405,i:"tileset/avulsos_sombra/Christmas_Black_Shadow.png",c:16,t:960,w:32,h:32,l:"Avulsos sombra preta: Christmas Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Grocery_Store_Black_Shadow_1",f:138365,i:"tileset/avulsos_sombra/Grocery_Store_Black_Shadow_1.png",c:16,t:1936,w:32,h:32,l:"Avulsos sombra preta: Grocery Store Black Shadow (1/2)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Grocery_Store_Black_Shadow_2",f:140301,i:"tileset/avulsos_sombra/Grocery_Store_Black_Shadow_2.png",c:16,t:1920,w:32,h:32,l:"Avulsos sombra preta: Grocery Store Black Shadow (2/2)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Jail_Black_Shadow_1",f:142221,i:"tileset/avulsos_sombra/Jail_Black_Shadow_1.png",c:16,t:1904,w:32,h:32,l:"Avulsos sombra preta: Jail Black Shadow (1/2)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Jail_Black_Shadow_2",f:144125,i:"tileset/avulsos_sombra/Jail_Black_Shadow_2.png",c:16,t:336,w:32,h:32,l:"Avulsos sombra preta: Jail Black Shadow (2/2)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Hospital_Black_Shadow_1",f:144461,i:"tileset/avulsos_sombra/Hospital_Black_Shadow_1.png",c:16,t:1904,w:32,h:32,l:"Avulsos sombra preta: Hospital Black Shadow (1/2)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Hospital_Black_Shadow_2",f:146365,i:"tileset/avulsos_sombra/Hospital_Black_Shadow_2.png",c:16,t:1616,w:32,h:32,l:"Avulsos sombra preta: Hospital Black Shadow (2/2)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Japanese_Interiors_Black_Shadow",f:147981,i:"tileset/avulsos_sombra/Japanese_Interiors_Black_Shadow.png",c:16,t:1072,w:32,h:32,l:"Avulsos sombra preta: Japanese Interiors Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Clothing_Store_Black_Shadow_1",f:149053,i:"tileset/avulsos_sombra/Clothing_Store_Black_Shadow_1.png",c:16,t:1920,w:32,h:32,l:"Avulsos sombra preta: Clothing Store Black Shadow (1/2)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Clothing_Store_Black_Shadow_2",f:150973,i:"tileset/avulsos_sombra/Clothing_Store_Black_Shadow_2.png",c:16,t:880,w:32,h:32,l:"Avulsos sombra preta: Clothing Store Black Shadow (2/2)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Museum_Black_Shadow_1",f:151853,i:"tileset/avulsos_sombra/Museum_Black_Shadow_1.png",c:16,t:1904,w:32,h:32,l:"Avulsos sombra preta: Museum Black Shadow (1/3)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Museum_Black_Shadow_2",f:153757,i:"tileset/avulsos_sombra/Museum_Black_Shadow_2.png",c:16,t:1936,w:32,h:32,l:"Avulsos sombra preta: Museum Black Shadow (2/3)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Museum_Black_Shadow_3",f:155693,i:"tileset/avulsos_sombra/Museum_Black_Shadow_3.png",c:16,t:704,w:32,h:32,l:"Avulsos sombra preta: Museum Black Shadow (3/3)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Television_and_Film_Studio_Black_Shadow",f:156397,i:"tileset/avulsos_sombra/Television_and_Film_Studio_Black_Shadow.png",c:16,t:560,w:32,h:32,l:"Avulsos sombra preta: Television and Film Studio Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Ice_Cream_Shop_Black_Shadow",f:156957,i:"tileset/avulsos_sombra/Ice_Cream_Shop_Black_Shadow.png",c:16,t:672,w:32,h:32,l:"Avulsos sombra preta: Ice Cream Shop Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Shooting_Range_Black_Shadow",f:157629,i:"tileset/avulsos_sombra/Shooting_Range_Black_Shadow.png",c:16,t:192,w:32,h:32,l:"Avulsos sombra preta: Shooting Range Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Condominium_Black_Shadow",f:157821,i:"tileset/avulsos_sombra/Condominium_Black_Shadow.png",c:16,t:944,w:32,h:32,l:"Avulsos sombra preta: Condominium Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_LivingRoom_Black_Shadow",f:158765,i:"tileset/avulsos_sombra/LivingRoom_Black_Shadow.png",c:16,t:1056,w:32,h:32,l:"Avulsos sombra preta: LivingRoom Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Bathroom_Black_Shadow",f:159821,i:"tileset/avulsos_sombra/Bathroom_Black_Shadow.png",c:16,t:1328,w:32,h:32,l:"Avulsos sombra preta: Bathroom Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Bedroom_Black_Shadow_1",f:161149,i:"tileset/avulsos_sombra/Bedroom_Black_Shadow_1.png",c:16,t:1936,w:32,h:32,l:"Avulsos sombra preta: Bedroom Black Shadow (1/3)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Bedroom_Black_Shadow_2",f:163085,i:"tileset/avulsos_sombra/Bedroom_Black_Shadow_2.png",c:16,t:1888,w:32,h:32,l:"Avulsos sombra preta: Bedroom Black Shadow (2/3)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Bedroom_Black_Shadow_3",f:164973,i:"tileset/avulsos_sombra/Bedroom_Black_Shadow_3.png",c:16,t:1808,w:32,h:32,l:"Avulsos sombra preta: Bedroom Black Shadow (3/3)",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Classroom_and_Library_Black_Shadow",f:166781,i:"tileset/avulsos_sombra/Classroom_and_Library_Black_Shadow.png",c:16,t:736,w:32,h:32,l:"Avulsos sombra preta: Classroom and Library Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Music_and_Sport_Black_Shadow",f:167517,i:"tileset/avulsos_sombra/Music_and_Sport_Black_Shadow.png",c:16,t:1888,w:32,h:32,l:"Avulsos sombra preta: Music and Sport Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Art_Black_Shadow",f:169405,i:"tileset/avulsos_sombra/Art_Black_Shadow.png",c:16,t:320,w:32,h:32,l:"Avulsos sombra preta: Art Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Gym_Black_Shadow",f:169725,i:"tileset/avulsos_sombra/Gym_Black_Shadow.png",c:16,t:1392,w:32,h:32,l:"Avulsos sombra preta: Gym Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_sombra_Fishing_Black_Shadow",f:171117,i:"tileset/avulsos_sombra/Fishing_Black_Shadow.png",c:16,t:624,w:32,h:32,l:"Avulsos sombra preta: Fishing Black Shadow",cat:"avulsos_sombra"},
+  {n:"avulsos_semsombra_Birthday_Party",f:171741,i:"tileset/avulsos_semsombra/Birthday_Party.png",c:16,t:176,w:32,h:32,l:"Avulsos sem sombra: Festa",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Halloween_1",f:171917,i:"tileset/avulsos_semsombra/Halloween_1.png",c:16,t:1920,w:32,h:32,l:"Avulsos sem sombra: Halloween (1/2)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Halloween_2",f:173837,i:"tileset/avulsos_semsombra/Halloween_2.png",c:16,t:176,w:32,h:32,l:"Avulsos sem sombra: Halloween (2/2)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Kitchen_1",f:174013,i:"tileset/avulsos_semsombra/Kitchen_1.png",c:16,t:1920,w:32,h:32,l:"Avulsos sem sombra: Cozinha (1/2)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Kitchen_2",f:175933,i:"tileset/avulsos_semsombra/Kitchen_2.png",c:16,t:592,w:32,h:32,l:"Avulsos sem sombra: Cozinha (2/2)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Conference_Hall",f:176525,i:"tileset/avulsos_semsombra/Conference_Hall.png",c:16,t:544,w:32,h:32,l:"Avulsos sem sombra: Auditório",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Basement",f:177069,i:"tileset/avulsos_semsombra/Basement.png",c:16,t:1776,w:32,h:32,l:"Avulsos sem sombra: Porão",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Christmas",f:178845,i:"tileset/avulsos_semsombra/Christmas.png",c:16,t:944,w:32,h:32,l:"Avulsos sem sombra: Natal",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Grocery_Store_1",f:179789,i:"tileset/avulsos_semsombra/Grocery_Store_1.png",c:16,t:1936,w:32,h:32,l:"Avulsos sem sombra: Mercado (1/2)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Grocery_Store_2",f:181725,i:"tileset/avulsos_semsombra/Grocery_Store_2.png",c:16,t:1792,w:32,h:32,l:"Avulsos sem sombra: Mercado (2/2)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Jail_1",f:183517,i:"tileset/avulsos_semsombra/Jail_1.png",c:16,t:1904,w:32,h:32,l:"Avulsos sem sombra: Cadeia (1/2)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Jail_2",f:185421,i:"tileset/avulsos_semsombra/Jail_2.png",c:16,t:336,w:32,h:32,l:"Avulsos sem sombra: Cadeia (2/2)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Hospital_1",f:185757,i:"tileset/avulsos_semsombra/Hospital_1.png",c:16,t:1904,w:32,h:32,l:"Avulsos sem sombra: Hospital (1/3)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Hospital_2",f:187661,i:"tileset/avulsos_semsombra/Hospital_2.png",c:16,t:1936,w:32,h:32,l:"Avulsos sem sombra: Hospital (2/3)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Hospital_3",f:189597,i:"tileset/avulsos_semsombra/Hospital_3.png",c:16,t:400,w:32,h:32,l:"Avulsos sem sombra: Hospital (3/3)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Japanese_Interiors",f:189997,i:"tileset/avulsos_semsombra/Japanese_Interiors.png",c:16,t:1072,w:32,h:32,l:"Avulsos sem sombra: Japonês",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Clothing_Store_1",f:191069,i:"tileset/avulsos_semsombra/Clothing_Store_1.png",c:16,t:1920,w:32,h:32,l:"Avulsos sem sombra: Loja de roupa (1/2)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Clothing_Store_2",f:192989,i:"tileset/avulsos_semsombra/Clothing_Store_2.png",c:16,t:880,w:32,h:32,l:"Avulsos sem sombra: Loja de roupa (2/2)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Museum_1",f:193869,i:"tileset/avulsos_semsombra/Museum_1.png",c:16,t:1888,w:32,h:32,l:"Avulsos sem sombra: Museu (1/3)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Museum_2",f:195757,i:"tileset/avulsos_semsombra/Museum_2.png",c:16,t:1936,w:32,h:32,l:"Avulsos sem sombra: Museu (2/3)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Museum_3",f:197693,i:"tileset/avulsos_semsombra/Museum_3.png",c:16,t:688,w:32,h:32,l:"Avulsos sem sombra: Museu (3/3)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Television_and_Film_Studio",f:198381,i:"tileset/avulsos_semsombra/Television_and_Film_Studio.png",c:16,t:560,w:32,h:32,l:"Avulsos sem sombra: Estúdio de TV",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Ice_Cream_Shop_Shadowless",f:198941,i:"tileset/avulsos_semsombra/Ice_Cream_Shop_Shadowless.png",c:16,t:672,w:32,h:32,l:"Avulsos sem sombra: Ice Cream Shop Shadowless",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Shooting_Range",f:199613,i:"tileset/avulsos_semsombra/Shooting_Range.png",c:16,t:192,w:32,h:32,l:"Avulsos sem sombra: Tiro ao alvo",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Condominium",f:199805,i:"tileset/avulsos_semsombra/Condominium.png",c:16,t:944,w:32,h:32,l:"Avulsos sem sombra: Condomínio",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Living_Room",f:200749,i:"tileset/avulsos_semsombra/Living_Room.png",c:16,t:1040,w:32,h:32,l:"Avulsos sem sombra: Sala de estar",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Bathroom",f:201789,i:"tileset/avulsos_semsombra/Bathroom.png",c:16,t:1328,w:32,h:32,l:"Avulsos sem sombra: Banheiro",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Bedroom_1",f:203117,i:"tileset/avulsos_semsombra/Bedroom_1.png",c:16,t:1904,w:32,h:32,l:"Avulsos sem sombra: Quarto (1/3)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Bedroom_2",f:205021,i:"tileset/avulsos_semsombra/Bedroom_2.png",c:16,t:1936,w:32,h:32,l:"Avulsos sem sombra: Quarto (2/3)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Bedroom_3",f:206957,i:"tileset/avulsos_semsombra/Bedroom_3.png",c:16,t:1456,w:32,h:32,l:"Avulsos sem sombra: Quarto (3/3)",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Classroom_and_Library",f:208413,i:"tileset/avulsos_semsombra/Classroom_and_Library.png",c:16,t:720,w:32,h:32,l:"Avulsos sem sombra: Sala de aula e biblioteca",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Music_and_Sport_Shadowless",f:209133,i:"tileset/avulsos_semsombra/Music_and_Sport_Shadowless.png",c:16,t:1888,w:32,h:32,l:"Avulsos sem sombra: Music and Sport Shadowless",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Art",f:211021,i:"tileset/avulsos_semsombra/Art.png",c:16,t:320,w:32,h:32,l:"Avulsos sem sombra: Arte e quadros",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Gym",f:211341,i:"tileset/avulsos_semsombra/Gym.png",c:16,t:1392,w:32,h:32,l:"Avulsos sem sombra: Academia",cat:"avulsos_semsombra"},
+  {n:"avulsos_semsombra_Fishing",f:212733,i:"tileset/avulsos_semsombra/Fishing.png",c:16,t:624,w:32,h:32,l:"Avulsos sem sombra: Pesca",cat:"avulsos_semsombra"}
 ];
 const SALA_TS_BY_NAME={};SALA_TILESETS.forEach(t=>{t.key='ts_'+t.n;SALA_TS_BY_NAME[t.n]=t;});
 // Ambientes prontos de 6_Home_Designs: salas inteiras já desenhadas. Cada uma
@@ -14402,9 +14545,13 @@ function renderMapEditor(){
   if(!isAdmin()){showScreen('dashboard');return;}
   const sel=document.getElementById('maped-ts');
   if(sel&&!sel.options.length){
-    const GRUPOS=[['','Temas'],['construcao','Construção'],['pacote','Versão do pacote'],
-                  ['design','Ambientes prontos'],['sombra','Sombra preta'],
-                  ['semsombra','Sem sombra'],['antigos','Acervo antigo']];
+    // Ordem pensada pro uso: os avulsos vêm logo depois dos temas porque cada
+    // arquivo ali já é UM móvel, então o clique-pega-a-peça acerta sempre.
+    const GRUPOS=[['','Temas'],['avulsos','Móveis avulsos'],['construcao','Construção'],
+                  ['design','Ambientes prontos'],['pacote','Versão do pacote'],
+                  ['sombra','Sombra preta'],['semsombra','Sem sombra'],
+                  ['avulsos_sombra','Avulsos sombra preta'],['avulsos_semsombra','Avulsos sem sombra'],
+                  ['antigos','Acervo antigo']];
     sel.innerHTML=GRUPOS.map(([cat,rot])=>{
       const itens=SALA_TILESETS.filter(t=>(t.cat||(t.d?'design':''))===cat);
       if(!itens.length)return '';
