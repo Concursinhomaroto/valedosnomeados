@@ -2002,6 +2002,7 @@ nav{
     <button class="btn btn-sm btn-ghost" onclick="mapedNovo()"><i class="fa fa-file"></i> Novo do zero</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedAbrir('publicado')"><i class="fa fa-folder-open"></i> Abrir o atual</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedAbrir('padrao')"><i class="fa fa-school"></i> Abrir o campus padrão</button>
+    <button class="btn btn-sm btn-ghost" onclick="mapedRascunhos()"><i class="fa fa-floppy-disk"></i> Rascunhos</button>
     <span class="maped-sep"></span>
     <button class="btn btn-sm" onclick="mapedRestaurarPadrao()"><i class="fa fa-rotate"></i> Despublicar</button>
     <button class="btn btn-sm btn-primary" onclick="mapedSalvar()"><i class="fa fa-cloud-arrow-up"></i> Publicar</button>
@@ -14200,6 +14201,10 @@ function renderMapEditor(){
   if(mapedMapa){mapedDraw();return;}
   document.getElementById('maped-info').innerHTML='<i class="fa fa-spinner fa-spin"></i> Carregando o mapa...';
   mapedAbrir('publicado');
+  // Avisa que sobrou trabalho não publicado da última vez. Sem isso o autosave
+  // só seria descoberto por quem abrisse o painel de rascunhos por acaso.
+  const auto=mapedAutoGuardado();
+  if(auto)setTimeout(()=>toast('Você tem trabalho guardado de '+mapedQuando(auto.em)+' — veja em Rascunhos.','var(--accent)'),900);
 }
 function mapedSetMode(m,el){
   mapedModo=m;
@@ -14429,6 +14434,7 @@ function mapedDraw(){
 // ------------------------------------------------------------------- edição ---
 function mapedSnapshot(){
   mapedSujo=true;
+  mapedAutoSalvar();
   mapedUndoStack.push(JSON.stringify(mapedMapa));
   if(mapedUndoStack.length>40)mapedUndoStack.shift();
 }
@@ -14587,6 +14593,110 @@ function mapedSolid(){
   return l;
 }
 
+// =============================== RASCUNHOS ===================================
+// Publicar troca a planta de todo mundo na hora — não serve pra guardar coisa
+// pela metade. Rascunho é o contrário: fica só seu, dá pra ter vários, e nada
+// muda pra ninguém até você publicar.
+//
+// Duas camadas, que resolvem problemas diferentes:
+// 1) autosave no próprio navegador, a cada edição — protege de fechar a aba,
+//    travar, cair a luz. Não pede nome nem clique.
+// 2) rascunhos com nome no Firebase — versões que você quer manter e comparar,
+//    e que acompanham você em outro computador.
+const MAPED_LS='vdn_mapa_rascunho_auto';
+let mapedAutoT=null;
+function mapedAutoSalvar(){
+  if(mapedAutoT)clearTimeout(mapedAutoT);
+  mapedAutoT=setTimeout(()=>{
+    try{
+      localStorage.setItem(MAPED_LS,JSON.stringify({em:Date.now(),json:JSON.stringify(mapedMapa)}));
+    }catch(e){ /* cota estourada: o rascunho nomeado continua sendo o caminho seguro */ }
+  },800);
+}
+function mapedAutoLimpar(){try{localStorage.removeItem(MAPED_LS);}catch(e){}}
+function mapedAutoGuardado(){
+  try{
+    const v=JSON.parse(localStorage.getItem(MAPED_LS)||'null');
+    return v&&v.json?v:null;
+  }catch(e){return null;}
+}
+function mapedQuando(ts){
+  const d=new Date(ts),h=(Date.now()-ts)/3600000;
+  if(h<1)return Math.max(1,Math.round(h*60))+' min atrás';
+  if(h<24)return Math.round(h)+'h atrás';
+  return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+async function mapedRascunhos(){
+  let lista={};
+  try{
+    const snap=await firebaseDB.ref('sala_mapa/rascunhos').once('value');
+    lista=snap.val()||{};
+  }catch(e){toast('Não deu pra ler os rascunhos: '+e.message,'var(--danger)');}
+  const auto=mapedAutoGuardado();
+  const itens=Object.entries(lista).sort((a,b)=>(b[1].em||0)-(a[1].em||0)).map(([id,r])=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:9px 11px;border:1.5px solid var(--border2);border-radius:10px;margin-bottom:7px">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:800;font-size:13px">${(r.nome||'sem nome').replace(/</g,'&lt;')}</div>
+        <div style="font-size:11px;color:var(--muted)">${r.w||'?'}x${r.h||'?'} tiles · ${mapedQuando(r.em||0)}</div>
+      </div>
+      <button class="btn btn-xs" onclick="mapedAbrirRascunho('${id}')"><i class="fa fa-folder-open"></i> Abrir</button>
+      <button class="btn btn-xs btn-ghost" onclick="mapedApagarRascunho('${id}')"><i class="fa fa-trash"></i></button>
+    </div>`).join('');
+  openModal('💾 Rascunhos do mapa',`
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+      Rascunho fica só pra você. Ninguém na Sala vê nada até você clicar em Publicar.
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-bottom:14px" onclick="mapedSalvarRascunho()">
+      <i class="fa fa-floppy-disk"></i> Salvar o que está aberto como rascunho
+    </button>
+    ${auto?`<div style="padding:9px 11px;border:1.5px dashed rgba(124,58,237,0.5);border-radius:10px;margin-bottom:12px">
+      <div style="font-weight:800;font-size:12px;color:var(--accent)">Recuperação automática</div>
+      <div style="font-size:11px;color:var(--muted);margin:2px 0 7px">Guardado neste navegador ${mapedQuando(auto.em)}, sem você pedir.</div>
+      <button class="btn btn-xs" onclick="mapedRecuperarAuto()"><i class="fa fa-rotate-left"></i> Recuperar</button>
+    </div>`:''}
+    <div style="font-size:11px;font-weight:800;color:var(--muted);margin-bottom:7px">SALVOS COM NOME</div>
+    ${itens||'<div style="font-size:12px;color:var(--muted)">Nenhum rascunho salvo ainda.</div>'}`);
+}
+async function mapedSalvarRascunho(){
+  const nome=(prompt('Nome do rascunho:','Rascunho de '+new Date().toLocaleDateString('pt-BR'))||'').trim();
+  if(!nome)return;
+  try{
+    // Id derivado do nome: salvar de novo com o mesmo nome sobrescreve em vez de
+    // encher a lista de cópias quase iguais.
+    const id=nome.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60)||('r'+Date.now());
+    await firebaseDB.ref('sala_mapa/rascunhos/'+id).set({
+      nome,em:Date.now(),w:mapedMapa.width,h:mapedMapa.height,
+      json:JSON.stringify(mapedMapa),porUid:currentUser?currentUser.uid:null});
+    mapedSujo=false;mapedRefreshInfo();
+    closeModal();
+    toast('💾 Rascunho "'+nome+'" salvo. Nada mudou pra quem está na Sala.','var(--accent)');
+  }catch(e){toast('Não deu pra salvar: '+e.message,'var(--danger)');}
+}
+async function mapedAbrirRascunho(id){
+  if(!mapedDescartar('Abrir esse rascunho'))return;
+  try{
+    const snap=await firebaseDB.ref('sala_mapa/rascunhos/'+id).once('value');
+    const r=snap.val();
+    if(!r||!r.json){toast('Esse rascunho não existe mais','var(--danger)');return;}
+    closeModal();mapedCarregar(JSON.parse(r.json));
+    toast('Rascunho "'+(r.nome||id)+'" aberto.','var(--accent)');
+  }catch(e){toast('Não deu pra abrir: '+e.message,'var(--danger)');}
+}
+async function mapedApagarRascunho(id){
+  if(!confirm('Apagar esse rascunho? Não dá pra desfazer.'))return;
+  try{await firebaseDB.ref('sala_mapa/rascunhos/'+id).remove();mapedRascunhos();}
+  catch(e){toast('Não deu pra apagar: '+e.message,'var(--danger)');}
+}
+function mapedRecuperarAuto(){
+  const auto=mapedAutoGuardado();
+  if(!auto)return;
+  if(!mapedDescartar('Recuperar o trabalho guardado'))return;
+  closeModal();
+  mapedCarregar(JSON.parse(auto.json));
+  mapedSujo=true;mapedRefreshInfo();
+  toast('Recuperado. Salve como rascunho ou publique.','var(--accent)');
+}
+
 // --------------------------------------------------------- tamanho / publicar ---
 function mapedResize(){
   const w=parseInt(prompt('Largura em tiles (hoje '+mapedMapa.width+'):',mapedMapa.width),10);
@@ -14622,7 +14732,7 @@ async function mapedSalvar(){
       atualizadoEm:Date.now(),
       porUid:currentUser?currentUser.uid:null,
     });
-    salaMapaJSON=null;mapedSujo=false;
+    salaMapaJSON=null;mapedSujo=false;mapedAutoLimpar();
     mapedDerrubaSala();
     toast('🧱 Mapa publicado! Quem entrar na Sala já vê a planta nova.','var(--accent)');
   }catch(e){
