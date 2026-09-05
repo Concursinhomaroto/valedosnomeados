@@ -7317,7 +7317,29 @@ function simNormalizaQuestao(q,formato){
            explicacao:String(q.explicacao||'').trim(),formato:'certoerrado'};
   }
   if(!q.questao||!Array.isArray(q.alternativas)||!q.correta)return null;
-  return{...q,formato:'multipla'};
+  // Ter enunciado, alternativas e um campo "correta" preenchido nao basta: se a
+  // letra do gabarito nao existir entre as alternativas, a questao nao pode ser
+  // acertada por ninguem. Ela contava como erro, puxava a estatistica do assunto
+  // pra baixo, virava flashcard no Banco de Erros e — desde que o aproveitamento
+  // corrigido alimenta a Fila de Hoje — fazia o assunto aparecer como fraco.
+  const alts=q.alternativas
+    .map(a=>({letra:String(a&&a.letra||'').trim().toUpperCase().replace(/[^A-Z]/g,'').charAt(0),
+              texto:String(a&&a.texto||'').trim()}))
+    .filter(a=>a.letra&&a.texto);
+  if(alts.length<2)return null;
+  const letras=alts.map(a=>a.letra);
+  if(new Set(letras).size!==letras.length)return null;   // letras repetidas
+  let correta=String(q.correta).trim().toUpperCase().replace(/[^A-Z]/g,'').charAt(0);
+  if(!letras.includes(correta)){
+    // A IA as vezes devolve o TEXTO da alternativa certa no lugar da letra.
+    // Quando da pra recuperar sem ambiguidade, recupera — descartar uma questao
+    // boa custa uma chamada de API a mais.
+    const alvo=normalizeForDedup(q.correta);
+    const achadas=alts.filter(a=>alvo&&normalizeForDedup(a.texto)===alvo);
+    if(achadas.length===1)correta=achadas[0].letra;
+    else return null;
+  }
+  return{...q,alternativas:alts,correta,formato:'multipla'};
 }
 
 async function generateQuestionsForSubject(apiKey,kingdom,topic,sub,quantidade,opts){
@@ -12349,8 +12371,13 @@ function fcNextInterval(card){
 function fcNextReview(card){
   const last=card.ultimaRevisao||card.criacao;
   if(!last)return null;
-  const d=new Date(last);d.setDate(d.getDate()+fcNextInterval(card));
-  return d.toISOString().slice(0,10);
+  // ultimaRevisao e um carimbo de tempo completo. Derivar o dia dele com
+  // toISOString() dava a data em UTC, enquanto fcStatus compara com todayStr(),
+  // que e Brasilia — entre 21h e 24h o UTC ja virou o dia seguinte e a carta
+  // inteira vencia um dia atrasada. Aqui o dia sai em Brasilia primeiro, e so
+  // depois anda no calendario.
+  const base=localDateStrFromDate(new Date(last));
+  return addDays(base,fcNextInterval(card));
 }
 
 // Agrupa o intervalo real (que agora varia livremente, tipo 1,6,9,15,37,90...) nos mesmos 4
