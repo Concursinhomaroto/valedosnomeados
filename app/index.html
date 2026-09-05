@@ -472,6 +472,48 @@ nav{
 .sg-cont-on{color:var(--accent);background:rgba(108,71,255,0.12);}
 .sg-oculto{display:none!important;}
 .sg-vazio{font-size:11.5px;font-weight:700;color:var(--muted);padding:12px 4px;}
+.sg-edital-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;
+  padding:9px 12px;border-radius:10px;background:rgba(108,71,255,0.08);
+  border:1px solid var(--border2);font-size:11.5px;font-weight:700;color:var(--text2);}
+/* ===== Conteúdo programático dentro do cartão do edital ===== */
+.ed-conteudo{border-top:1px dashed var(--border);margin-top:10px;padding-top:8px;}
+.ed-cob-head{display:flex;align-items:center;gap:9px;cursor:pointer;padding:4px 2px;
+  border-radius:8px;user-select:none;}
+.ed-cob-head:hover{background:rgba(108,71,255,0.06);}
+.ed-chev{font-size:9px;color:var(--muted);width:9px;flex-shrink:0;transition:transform .15s;}
+.ed-chev.aberto{transform:rotate(90deg);}
+.ed-cob-titulo{font-size:11px;font-weight:900;color:var(--text2);letter-spacing:.4px;white-space:nowrap;}
+.ed-cob-pct{font-size:14px;font-weight:900;font-variant-numeric:tabular-nums;}
+.ed-cob-det{font-size:10px;font-weight:700;color:var(--muted);flex:1;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* Uma barra, três faixas: estudado, cadastrado e a lacuna que nem existe no Vale. */
+.ed-cob-barra{display:flex;height:6px;border-radius:999px;overflow:hidden;
+  background:var(--bg2);margin:6px 0 2px;}
+.ed-cob-barra i{display:block;}
+.ed-vazio{padding:10px 2px;font-size:11.5px;color:var(--muted);font-weight:600;line-height:1.5;}
+.ed-textarea{width:100%;min-height:110px;margin:8px 0;font-size:11.5px;line-height:1.5;resize:vertical;}
+.ed-vazio-acoes{display:flex;gap:8px;flex-wrap:wrap;}
+.ed-discs{margin-top:10px;display:flex;flex-direction:column;gap:12px;}
+.ed-disc{border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--panel2);}
+.ed-disc-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px;}
+.ed-disc-nome{flex:1;min-width:120px;font-size:12.5px;font-weight:900;color:var(--text);}
+.ed-disc-q{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:var(--muted);}
+.ed-disc-q input{width:52px;padding:3px 6px;font-size:11px;text-align:center;}
+.ed-disc-cob{font-size:11px;font-weight:900;font-variant-numeric:tabular-nums;}
+.ed-disc-falta{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px;
+  padding:7px 10px;border-radius:9px;background:rgba(220,38,38,0.08);
+  border:1px solid rgba(220,38,38,0.25);font-size:10.5px;font-weight:700;color:var(--text2);}
+.ed-assuntos{display:flex;flex-direction:column;gap:3px;}
+.ed-assunto{display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:8px;font-size:11.5px;}
+.ed-assunto:hover{background:rgba(108,71,255,0.06);}
+.ed-estudado .ed-assunto-nome{color:var(--muted);}
+.ed-marca{width:14px;flex-shrink:0;font-weight:900;text-align:center;}
+.ed-assunto-nome{flex:1;min-width:0;font-weight:700;color:var(--text2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ed-prev{flex-shrink:0;cursor:pointer;font-size:10px;letter-spacing:-2px;min-width:34px;text-align:right;}
+.ed-prev-vazia{letter-spacing:0;color:var(--muted);font-weight:700;font-size:9px;
+  border:1px dashed var(--border2);border-radius:6px;padding:1px 5px;}
+.ed-discs-rodape{display:flex;gap:8px;flex-wrap:wrap;}
 @media (prefers-reduced-motion:reduce){.sg-chev{transition:none;}}
 .sg-pesq-row{display:flex;align-items:center;gap:9px;margin-top:12px;font-size:11.5px;
   font-weight:800;color:var(--text2);cursor:pointer;}
@@ -7674,6 +7716,17 @@ function simGeralConfigHTML(){
   // chefoes; abre-se so o que interessa.
   const totalAssuntos=kingdoms.reduce((n,k)=>n+topicsPorPrioridade(k.id)
     .reduce((m,t)=>m+(t.subtopics||[]).filter(s=>s.studied).length,0),0);
+  // Com um edital em foco, da pra marcar de uma vez tudo o que ele cobra e ja
+  // esta cadastrado — o caminho mais curto entre "quero estudar pra essa prova" e
+  // "gera a prova".
+  const foco=edFocoIndice();
+  if(foco){
+    const n=Object.keys(foco.idx).length;
+    html+=`<div class="sg-edital-row">
+      <span>${foco.edital.icon} <b>${escapeHtml(foco.edital.nome)}</b> está em foco — ${n} assunto(s) dele já existem no Vale.</span>
+      <button class="btn btn-xs btn-primary" onclick="sgMarcarEdital()"><i class="fa fa-crosshairs"></i> Marcar só o que cai nele</button>
+    </div>`;
+  }
   html+=`<div class="sg-busca-row">
     <div class="sg-busca">
       <i class="fa fa-magnifying-glass"></i>
@@ -7908,6 +7961,22 @@ function sgUnidades(){
     n+=(m>1&&m===cbs.length)?1:m;
   });
   return n;
+}
+// Marca exatamente os assuntos do edital em foco, desmarcando o resto.
+function sgMarcarEdital(){
+  const foco=edFocoIndice();
+  if(!foco)return;
+  simGeralConfig.selectedSubIds=new Set();
+  let achados=0;
+  document.querySelectorAll('#sg-picker input[data-sub]').forEach(cb=>{
+    const dentro=!!foco.idx[cb.dataset.sub];
+    cb.checked=dentro;
+    if(dentro){simGeralConfig.selectedSubIds.add(cb.dataset.sub);achados++;}
+  });
+  sgUpdateSummary();
+  toast(achados?`🎯 ${achados} assunto(s) de "${foco.edital.nome}" marcados.`
+               :`⚠️ Nenhum assunto de "${foco.edital.nome}" está entre os já estudados.`,
+        achados?'var(--accent)':'var(--orange)');
 }
 function sgMarcarTodos(marcar){
   document.querySelectorAll('#sg-picker input[data-sub]').forEach(cb=>{
@@ -9899,8 +9968,21 @@ function raridadeChip(prio){
 // Antes tudo acima de 60 saia verde, entao 73% e 100% tinham a mesma cara.
 function faixaCor(pct){return pct>=80?'var(--green)':pct>=50?'var(--orange)':'var(--red)';}
 
+// Assuntos do edital em foco, por subId, com o peso que o edital dá a eles.
+// Vazio quando nao ha edital em foco — e ai a fila segue o criterio geral.
+function edFocoIndice(){
+  const e=db.editalFoco?edFind(db.editalFoco):null;
+  if(!e)return null;
+  const idx={};
+  e.disciplinas.forEach(d=>d.assuntos.forEach(a=>{
+    if(a.subId)idx[a.subId]={peso:d.questoes>0?d.questoes:5,prev:a.prev||1,disciplina:d.nome};
+  }));
+  return Object.keys(idx).length?{edital:e,idx}:null;
+}
+
 function computeStudyRecommendations(){
   const today=todayStr();
+  const foco=edFocoIndice();
   const items=[];
   db.kingdoms.forEach(k=>{
     (db.topics[k.id]||[]).forEach(t=>{
@@ -9937,10 +10019,17 @@ function computeStudyRecommendations(){
           tipo='fraco';reason=`fraco · ${weakPct}%`;reasonIcon='🎯';reasonBonus=100+(60-weakPct);
         }
 
+        // Com um edital em foco, o que cai nele sobe — e sobe na medida do peso
+        // que o proprio edital da (questoes da disciplina x prevalencia que voce
+        // marcou). O que nao cai continua na fila, so depois.
+        const noEdital=foco&&foco.idx[s.id];
+        const bonusEdital=noEdital?100000+noEdital.peso*noEdital.prev*100:0;
         items.push({
           subId:s.id,subName:s.name,topicName:t.name,
           kingdomName:k.name,kingdomIcon:k.icon,priority:s.priority,
-          reason,reasonIcon,tipo,score:s.priority*1000+reasonBonus
+          reason,reasonIcon,tipo,
+          edital:noEdital?foco.edital.icon:null,
+          score:bonusEdital+s.priority*1000+reasonBonus
         });
       });
     });
@@ -10073,14 +10162,15 @@ function renderNextSteps(){
     return;
   }
   const items=todos.slice(0,8);
-  if(conta)conta.innerHTML=`<b>${items.length}</b> de ${todos.length} · <span class="dash-verlink" onclick="abrirRevisoesAtrasadas()">ver tudo</span>`;
+  const foco=edFocoIndice();
+  if(conta)conta.innerHTML=`${foco?`<span title="Priorizando ${escapeHtml(foco.edital.nome)}">${foco.edital.icon} ${escapeHtml(foco.edital.nome)}</span> · `:''}<b>${items.length}</b> de ${todos.length} · <span class="dash-verlink" onclick="abrirRevisoesAtrasadas()">ver tudo</span>`;
   const cls={revisao:'fila-rev',novo:'fila-novo',fraco:'fila-fraco'};
   el.innerHTML=items.map((it,i)=>`
     <div class="next-step-item" onclick="goToSubtopic('${it.subId}')">
       <div class="next-step-rank">${i+1}</div>
       <div class="next-step-info">
-        <div class="next-step-name">${it.subName}</div>
-        <div class="next-step-sub">${it.kingdomIcon} ${it.kingdomName} · ${it.topicName}</div>
+        <div class="next-step-name">${it.edital?`<span title="Cai no edital em foco">${it.edital}</span> `:''}${escapeHtml(it.subName)}</div>
+        <div class="next-step-sub">${it.kingdomIcon} ${escapeHtml(it.kingdomName)} · ${escapeHtml(it.topicName)}</div>
       </div>
       <span class="fila-chip ${cls[it.tipo]||'fila-novo'}">${it.reasonIcon} ${it.reason}</span>
     </div>
@@ -10831,7 +10921,236 @@ function updateEditaisBadge(){
   if(urgent>0){b.textContent=urgent;b.style.display='inline';}else{b.style.display='none';}
 }
 
+let edAbertos=new Set();   // editais com a dobra de conteúdo aberta (não persiste)
+let edExtraindo=new Set();
+
+// ===== CONTEÚDO PROGRAMÁTICO DO EDITAL =====
+// O edital era só data e status: nao dava pra cruzar com o que voce estudou porque
+// ele nao sabia o que cobra. Agora ele carrega o conteudo, e a hierarquia espelha a
+// que o app ja usa: DISCIPLINA do edital <-> chefao, ASSUNTO <-> miniboss.
+//
+// prev = prevalencia na banca, marcada A MAO pelo usuario (1 a 3 chamas, 0 = nao
+// marcada). E dado dele, nao estimativa de IA — a pesquisa sobre "o que mais cai"
+// devolve blog de cursinho, e um numero desses ao lado dos dados reais mentiria
+// com cara de verdade.
+function edMigrar(e){
+  if(!Array.isArray(e.disciplinas))e.disciplinas=[];
+  e.disciplinas.forEach(d=>{
+    if(!Array.isArray(d.assuntos))d.assuntos=[];
+    if(typeof d.questoes!=='number')d.questoes=0;
+  });
+  return e;
+}
+function edFind(id){return (db.editais||[]).map(edMigrar).find(e=>e.id===id);}
+
+// Indice de todos os minibosses por nome normalizado, pra casar o assunto do
+// edital com o que ja existe no Vale sem depender de digitacao identica.
+function edIndiceMinibosses(){
+  const idx={};
+  db.kingdoms.forEach(k=>{
+    (db.topics[k.id]||[]).forEach(t=>{
+      (t.subtopics||[]).forEach(s=>{
+        const chave=normalizeForDedup(s.name);
+        if(chave&&!idx[chave])idx[chave]={sub:s,topic:t,kingdom:k};
+      });
+    });
+  });
+  return idx;
+}
+// Recasa todos os assuntos do edital. Roda a cada renderizacao: minibosses novos
+// (criados a mao ou pelo botao "criar os que faltam") passam a contar sozinhos.
+function edVincular(e){
+  const idx=edIndiceMinibosses();
+  e.disciplinas.forEach(d=>d.assuntos.forEach(a=>{
+    const achado=idx[normalizeForDedup(a.nome)];
+    a.subId=achado?achado.sub.id:null;
+  }));
+  return e;
+}
+function edSubDe(a){
+  if(!a.subId)return null;
+  for(const k of db.kingdoms)
+    for(const t of (db.topics[k.id]||[])){
+      const s=(t.subtopics||[]).find(x=>x.id===a.subId);
+      if(s)return s;
+    }
+  return null;
+}
+// Tres estados, e o terceiro e o que o painel nao mostrava: assunto que cai na
+// prova e que voce nem cadastrou — a lacuna invisivel.
+function edEstado(a){
+  const sub=edSubDe(a);
+  if(!sub)return 'falta';
+  return sub.studied?'estudado':'cadastrado';
+}
+function edCobertura(e){
+  let total=0,estudados=0,cadastrados=0,faltam=0;
+  e.disciplinas.forEach(d=>d.assuntos.forEach(a=>{
+    total++;
+    const st=edEstado(a);
+    if(st==='estudado')estudados++;else if(st==='cadastrado')cadastrados++;else faltam++;
+  }));
+  return{total,estudados,cadastrados,faltam,pct:total?Math.round(estudados/total*100):0};
+}
+function edCoberturaDisc(d){
+  const total=d.assuntos.length;
+  const estudados=d.assuntos.filter(a=>edEstado(a)==='estudado').length;
+  return{total,estudados,pct:total?Math.round(estudados/total*100):0};
+}
+// Ordem do que estudar: peso da disciplina (numero de questoes que o proprio
+// edital declara — fato, nao palpite) x prevalencia marcada por voce x ainda nao
+// estudado. Assunto ja estudado sai da conta.
+function edPrioridade(a,d){
+  if(edEstado(a)==='estudado')return 0;
+  const peso=d.questoes>0?d.questoes:5;
+  const prev=a.prev||1;
+  const lacuna=edEstado(a)==='falta'?1.15:1;   // nem cadastrado pesa um pouco mais
+  return Math.round(peso*prev*lacuna*10);
+}
+
+function edToggleConteudo(id){
+  if(edAbertos.has(id))edAbertos.delete(id);else edAbertos.add(id);
+  renderEditais();
+}
+function edSalvar(){saveDB();renderEditais();}
+function edAddDisciplina(id){
+  const e=edFind(id);if(!e)return;
+  const nome=prompt('Nome da disciplina (como está no edital):');
+  if(!nome||!nome.trim())return;
+  e.disciplinas.push({id:genId(),nome:nome.trim(),questoes:0,assuntos:[]});
+  edAbertos.add(id);edSalvar();
+}
+function edDelDisciplina(id,discId){
+  const e=edFind(id);if(!e)return;
+  const d=e.disciplinas.find(x=>x.id===discId);
+  if(!d)return;
+  if(!confirm(`Remover a disciplina "${d.nome}" e seus ${d.assuntos.length} assunto(s) deste edital?\n\nIsso não apaga nenhum miniboss — só tira do conteúdo do edital.`))return;
+  e.disciplinas=e.disciplinas.filter(x=>x.id!==discId);edSalvar();
+}
+function edAddAssunto(id,discId){
+  const e=edFind(id);if(!e)return;
+  const d=e.disciplinas.find(x=>x.id===discId);if(!d)return;
+  const nome=prompt('Nome do assunto:');
+  if(!nome||!nome.trim())return;
+  d.assuntos.push({id:genId(),nome:nome.trim(),subId:null,prev:0});
+  edSalvar();
+}
+function edDelAssunto(id,discId,assId){
+  const e=edFind(id);if(!e)return;
+  const d=e.disciplinas.find(x=>x.id===discId);if(!d)return;
+  d.assuntos=d.assuntos.filter(a=>a.id!==assId);edSalvar();
+}
+function edSetQuestoes(id,discId,valor){
+  const e=edFind(id);if(!e)return;
+  const d=e.disciplinas.find(x=>x.id===discId);if(!d)return;
+  d.questoes=Math.max(0,Math.min(200,parseInt(valor,10)||0));
+  edSalvar();
+}
+// Prevalência marcada a mão, ciclando: sem marca → 1 → 2 → 3 → sem marca.
+function edCiclarPrev(id,discId,assId){
+  const e=edFind(id);if(!e)return;
+  const d=e.disciplinas.find(x=>x.id===discId);if(!d)return;
+  const a=d.assuntos.find(x=>x.id===assId);if(!a)return;
+  a.prev=((a.prev||0)+1)%4;
+  edSalvar();
+}
+function edLimparConteudo(id){
+  const e=edFind(id);if(!e)return;
+  if(!confirm('Apagar todo o conteúdo programático deste edital?\n\nOs minibosses do Vale não são tocados.'))return;
+  e.disciplinas=[];edSalvar();
+}
+// A Fila de Hoje passa a priorizar o que cai neste edital (ver computeStudyRecommendations).
+function edFocar(id){
+  db.editalFoco=id||null;
+  saveDB();
+  renderEditais();
+  const e=id?edFind(id):null;
+  toast(e?`🎯 Focando em "${e.nome}" — a Fila de Hoje prioriza o que cai nele.`:'Foco removido — a Fila de Hoje volta ao critério geral.','var(--accent)');
+}
+
+// Cria no Vale os assuntos que o edital cobra e que ainda não existem. A
+// disciplina vira um chefão dentro do reino escolhido, e cada assunto vira um
+// miniboss — a mesma hierarquia que o app já usa, então tudo o mais (revisão,
+// simulado, flashcard) passa a valer pra eles sem nenhum caso especial.
+function edCriarFaltantes(id,discId){
+  const e=edFind(id);if(!e)return;
+  const d=e.disciplinas.find(x=>x.id===discId);if(!d)return;
+  const reinoId=document.getElementById('ed-reino-'+discId)?.value;
+  const k=db.kingdoms.find(x=>x.id===reinoId);
+  if(!k){toast('⚠️ Escolha o reino de destino','var(--red)');return;}
+  const faltantes=d.assuntos.filter(a=>edEstado(a)==='falta');
+  if(!faltantes.length)return;
+  if(!confirm(`Criar ${faltantes.length} miniboss(es) em "${k.name}", dentro de um chefão chamado "${d.nome}"?`))return;
+  if(!db.topics[k.id])db.topics[k.id]=[];
+  let topic=db.topics[k.id].find(t=>normalizeForDedup(t.name)===normalizeForDedup(d.nome));
+  if(!topic){
+    topic={id:genId(),name:d.nome,icon:'⚔️',priority:2,subtopics:[],createdAt:todayStr()};
+    db.topics[k.id].push(topic);
+  }
+  faltantes.forEach(a=>{
+    // prevalência alta que você marcou vira miniboss lendário; sem marca, raro
+    const priority=a.prev>=3?100:a.prev===1?30:70;
+    topic.subtopics.push({id:genId(),name:a.nome,priority,createdAt:todayStr(),studied:false,note:''});
+  });
+  saveDB();
+  renderEditais();
+  toast(`✅ ${faltantes.length} miniboss(es) criado(s) em ${k.icon||''} ${k.name} › ${d.nome}`,'var(--green)');
+}
+
+// Extrai o conteúdo programático colado. Sem Tavily de propósito: o texto ja veio
+// do usuario, pesquisar aqui so gastaria credito pra reencontrar o que ele colou.
+async function edExtrairIA(id){
+  const e=edFind(id);if(!e)return;
+  const texto=(document.getElementById('ed-txt-'+id)?.value||'').trim();
+  if(!texto){toast('⚠️ Cole o conteúdo programático primeiro','var(--red)');return;}
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey){toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');openAISettingsModal();return;}
+  if(edExtraindo.has(id))return;
+  edExtraindo.add(id);
+  toast('📖 Lendo o conteúdo programático...','var(--accent)');
+  try{
+    const prompt=`Você recebe o CONTEÚDO PROGRAMÁTICO de um edital de concurso público brasileiro, copiado direto do documento.
+
+TAREFA: separe em disciplinas e, dentro de cada uma, na lista de assuntos.
+
+REGRAS:
+- Preserve os nomes como estão no edital; só corrija numeração solta ("1.2 -"), espaçamento e MAIÚSCULAS desnecessárias.
+- Um assunto por item. Se o edital juntar vários com ponto e vírgula ou vírgula numa linha só, separe em itens.
+- Não invente assunto que não esteja no texto, e não resuma vários num só.
+- Se o texto disser quantas questões a disciplina tem, coloque em "questoes"; se não disser, use 0.
+- Ignore instruções administrativas (inscrição, prazos, recursos) — só o conteúdo a estudar.
+
+CONTEÚDO PROGRAMÁTICO:
+${texto.slice(0,30000)}
+
+RESPONDA APENAS COM JSON, sem markdown:
+{"disciplinas":[{"nome":"Conhecimentos Específicos","questoes":30,"assuntos":["...","..."]}]}`;
+    const{parsed}=await callGeminiJSON(apiKey,prompt,false,8192);
+    const discs=(parsed&&Array.isArray(parsed.disciplinas))?parsed.disciplinas:[];
+    if(!discs.length)throw new Error('A IA não conseguiu separar as disciplinas desse texto.');
+    let nAss=0;
+    e.disciplinas=discs.map(d=>{
+      const assuntos=(Array.isArray(d.assuntos)?d.assuntos:[])
+        .map(x=>String(x||'').trim()).filter(Boolean);
+      nAss+=assuntos.length;
+      return{id:genId(),nome:String(d.nome||'Disciplina').trim(),
+             questoes:Math.max(0,parseInt(d.questoes,10)||0),
+             assuntos:assuntos.map(nome=>({id:genId(),nome,subId:null,prev:0}))};
+    }).filter(d=>d.assuntos.length);
+    edVincular(e);
+    const c=edCobertura(e);
+    saveDB();
+    renderEditais();
+    toast(`📚 ${e.disciplinas.length} disciplina(s) e ${nAss} assunto(s) · ${c.estudados} você já estudou, ${c.faltam} ainda não existem no Vale.`,'var(--green)');
+  }catch(err){
+    toast('❌ '+(err.message||'Erro ao ler o conteúdo'),'var(--red)');
+  }finally{
+    edExtraindo.delete(id);
+  }
+}
+
 function renderEditais(){
+  (db.editais||[]).forEach(e=>edVincular(edMigrar(e)));
   const today=todayStr();
   let list=(db.editais||[]);
   if(edFilter!=='all')list=list.filter(e=>e.status===edFilter);
@@ -10894,14 +11213,104 @@ function renderEditais(){
           <span>${new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</span>
         </div>
         <div class="edital-actions">
+          ${db.editalFoco===e.id
+            ?`<button class="btn btn-xs" style="background:${e.color};color:#fff;border:none" onclick="edFocar(null)" title="Parar de priorizar este edital na Fila de Hoje"><i class="fa fa-crosshairs"></i> Em foco</button>`
+            :`<button class="btn btn-xs btn-ghost" onclick="edFocar('${e.id}')" title="A Fila de Hoje passa a priorizar o que cai neste edital"><i class="fa fa-crosshairs"></i> Focar</button>`}
           <select class="inp" style="font-size:10px;padding:4px 8px;border-radius:8px" onchange="changeEditalStatus('${e.id}',this.value)">
             ${Object.entries(ED_STATUS_MAP).map(([k,v])=>`<option value="${k}"${e.status===k?' selected':''}>${v.label}</option>`).join('')}
           </select>
           <button class="btn btn-xs btn-danger" onclick="deleteEdital('${e.id}')"><i class="fa fa-trash"></i></button>
         </div>
       </div>
+      ${edConteudoHTML(e)}
     </div>`;
   }).join('');
+}
+
+// ---- A dobra de conteúdo dentro do cartão do edital ----
+function edConteudoHTML(e){
+  const c=edCobertura(e);
+  const aberto=edAbertos.has(e.id);
+  const barra=c.total?`
+    <div class="ed-cob-barra" title="${c.estudados} estudados · ${c.cadastrados} cadastrados sem estudar · ${c.faltam} sem cadastro">
+      <i style="width:${c.total?c.estudados/c.total*100:0}%;background:var(--green)"></i>
+      <i style="width:${c.total?c.cadastrados/c.total*100:0}%;background:var(--orange)"></i>
+      <i style="width:${c.total?c.faltam/c.total*100:0}%;background:var(--red)"></i>
+    </div>`:'';
+  return`
+  <div class="ed-conteudo">
+    <div class="ed-cob-head" onclick="edToggleConteudo('${e.id}')">
+      <i class="fa fa-chevron-right ed-chev${aberto?' aberto':''}"></i>
+      <span class="ed-cob-titulo">📚 Conteúdo & cobertura</span>
+      ${c.total?`<span class="ed-cob-pct" style="color:${c.pct>=70?'var(--green)':c.pct>=35?'var(--orange)':'var(--red)'}">${c.pct}%</span>
+        <span class="ed-cob-det">${c.estudados}/${c.total} estudados${c.faltam?` · <b style="color:var(--red)">${c.faltam} sem cadastro</b>`:''}</span>`
+        :`<span class="ed-cob-det">nenhum conteúdo cadastrado ainda</span>`}
+    </div>
+    ${barra}
+    ${aberto?edConteudoCorpo(e):''}
+  </div>`;
+}
+
+// Corpo da dobra: cada disciplina com seu peso, seu reino de destino e a lista de
+// assuntos. A ordem dentro da disciplina segue edPrioridade — o que falta estudar
+// e tem mais peso sobe.
+function edConteudoCorpo(e){
+  if(!e.disciplinas.length){
+    return`<div class="ed-vazio">
+      <p>Cole aqui o conteúdo programático do edital — o bloco com as disciplinas e seus assuntos. A IA separa em lista; depois é só conferir.</p>
+      <textarea class="inp ed-textarea" id="ed-txt-${e.id}" placeholder="CONHECIMENTOS ESPECÍFICOS: 1. Sistematização da Assistência de Enfermagem. 2. Vacinação: calendário e rede de frio. 3. Urgência e emergência..."></textarea>
+      <div class="ed-vazio-acoes">
+        <button class="btn btn-sm btn-primary" onclick="edExtrairIA('${e.id}')"><i class="fa fa-wand-magic-sparkles"></i> Extrair com IA</button>
+        <button class="btn btn-sm btn-ghost" onclick="edAddDisciplina('${e.id}')"><i class="fa fa-plus"></i> Adicionar à mão</button>
+      </div>
+    </div>`;
+  }
+  const reinos=db.kingdoms.map(k=>`<option value="${k.id}">${escapeHtml(k.icon||'🏰')} ${escapeHtml(k.name)}</option>`).join('');
+  return`<div class="ed-discs">
+    ${e.disciplinas.map(d=>{
+      const cd=edCoberturaDisc(d);
+      const faltam=d.assuntos.filter(a=>edEstado(a)==='falta').length;
+      const ordenados=[...d.assuntos].sort((a,b)=>edPrioridade(b,d)-edPrioridade(a,d));
+      return`<div class="ed-disc">
+        <div class="ed-disc-head">
+          <span class="ed-disc-nome">${escapeHtml(d.nome)}</span>
+          <label class="ed-disc-q" title="Quantas questões desta disciplina o edital cobra — é o peso que ordena o que estudar">
+            <input type="number" min="0" max="200" class="inp" value="${d.questoes||''}" placeholder="—"
+                   onchange="edSetQuestoes('${e.id}','${d.id}',this.value)"> questões
+          </label>
+          <span class="ed-disc-cob" style="color:${cd.pct>=70?'var(--green)':cd.pct>=35?'var(--orange)':'var(--red)'}">${cd.estudados}/${cd.total}</span>
+          <button class="btn btn-xs btn-ghost" onclick="edAddAssunto('${e.id}','${d.id}')" title="Adicionar assunto"><i class="fa fa-plus"></i></button>
+          <button class="btn btn-xs btn-danger" onclick="edDelDisciplina('${e.id}','${d.id}')" title="Remover disciplina"><i class="fa fa-trash"></i></button>
+        </div>
+        ${faltam?`<div class="ed-disc-falta">
+          <span><b>${faltam}</b> assunto${faltam>1?'s':''} que cai${faltam>1?'em':''} na prova e ainda não existe${faltam>1?'m':''} no Vale.</span>
+          <select class="inp" id="ed-reino-${d.id}" style="font-size:10px;padding:3px 7px;width:auto">${reinos}</select>
+          <button class="btn btn-xs btn-primary" onclick="edCriarFaltantes('${e.id}','${d.id}')"><i class="fa fa-wand-sparkles"></i> Criar ${faltam}</button>
+        </div>`:''}
+        <div class="ed-assuntos">
+          ${ordenados.map(a=>{
+            const st=edEstado(a);
+            const marca={estudado:{i:'✅',c:'var(--green)',t:'Estudado'},
+                         cadastrado:{i:'◐',c:'var(--orange)',t:'Cadastrado, não estudado'},
+                         falta:{i:'✗',c:'var(--red)',t:'Não existe no Vale'}}[st];
+            return`<div class="ed-assunto ed-${st}">
+              <span class="ed-marca" style="color:${marca.c}" title="${marca.t}">${marca.i}</span>
+              <span class="ed-assunto-nome"${st==='estudado'?` onclick="goToSubtopic('${a.subId}')" style="cursor:pointer" title="Abrir o miniboss"`:''}>${escapeHtml(a.nome)}</span>
+              <span class="ed-prev" onclick="edCiclarPrev('${e.id}','${d.id}','${a.id}')"
+                    title="Prevalência na banca — clique para marcar (você que define: sem marca → baixa → média → alta)">
+                ${a.prev?'🔥'.repeat(a.prev):'<span class="ed-prev-vazia">marcar</span>'}
+              </span>
+              <button class="btn btn-xs btn-ghost" onclick="edDelAssunto('${e.id}','${d.id}','${a.id}')" title="Remover"><i class="fa fa-xmark"></i></button>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('')}
+    <div class="ed-discs-rodape">
+      <button class="btn btn-xs btn-ghost" onclick="edAddDisciplina('${e.id}')"><i class="fa fa-plus"></i> Disciplina</button>
+      <button class="btn btn-xs btn-ghost" onclick="edLimparConteudo('${e.id}')"><i class="fa fa-eraser"></i> Limpar conteúdo</button>
+    </div>
+  </div>`;
 }
 
 // ===== REPERTÓRIO =====
