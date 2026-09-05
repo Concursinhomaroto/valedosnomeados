@@ -454,6 +454,19 @@ nav{
 /* Certo/errado sao duas alternativas: lado a lado leem como gabarito de prova,
    empilhadas pareciam uma multipla escolha capenga. */
 .sim-alts-ce{display:flex;flex-direction:row;gap:10px;}
+/* Aproveitamento separado por formato de prova */
+.sim-fmt-row{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;
+  padding:6px 0;border-bottom:1px dashed var(--border);}
+.sim-fmt-row:last-child{border-bottom:none;}
+.sim-fmt-nome{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text2);}
+.sim-fmt-qtd{color:var(--muted);font-size:10px;white-space:nowrap;flex-shrink:0;}
+.sim-fmt-pct{width:36px;text-align:right;flex-shrink:0;}
+.sim-fmt-extra{font-size:9px;color:var(--muted);font-weight:700;white-space:nowrap;flex-shrink:0;}
+.sim-fmt-split{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px;
+  font-size:10.5px;font-weight:800;color:var(--text2);}
+.sim-fmt-split i{font-style:normal;color:var(--muted);font-weight:700;}
+.sg-formato-linha{text-align:center;font-size:11px;font-weight:800;color:var(--muted);margin-top:8px;}
+.sg-formato-linha b{color:var(--text2);}
 .sim-alts-ce .sim-alt{flex:1;text-align:center;font-weight:800;}
 .sg-kingdom{margin-bottom:14px;}
 .sg-kingdom:last-child{margin-bottom:0;}
@@ -733,7 +746,7 @@ nav{
 .fila-fraco{background:rgba(234,88,12,0.1);color:var(--orange);border-color:rgba(234,88,12,0.3)}
 /* bloco de cima do cartao de divida */
 .div-topo{display:flex;align-items:center;gap:13px;margin-bottom:10px}
-.div-num{font-size:42px;font-weight:900;line-height:.85;color:var(--red)}
+.div-num{font-size:33px;font-weight:900;line-height:.9;color:var(--red)}
 .div-txt{font-size:10.5px;font-weight:800;color:var(--muted);line-height:1.35;padding-bottom:3px}
 .div-txt b{color:var(--text2);display:block;font-size:11.5px}
 .div-barra{display:flex;height:11px;border-radius:999px;overflow:hidden;margin-bottom:7px;background:var(--bg2)}
@@ -749,7 +762,7 @@ nav{
 .faixa-trilho i{display:block;height:100%;border-radius:999px}
 /* destaque do cartao de flashcards: o numero primeiro, o grafico depois */
 .fc-topo{display:flex;align-items:baseline;gap:11px;margin-bottom:8px}
-.fc-num{font-size:40px;font-weight:900;line-height:.85}
+.fc-num{font-size:32px;font-weight:900;line-height:.9}
 .fc-lbl{font-size:10.5px;font-weight:800;color:var(--muted);line-height:1.35}
 .fc-lbl b{display:block;color:var(--text2);font-size:11.5px}
 .dash-sec{margin-bottom:10px;font-size:11px;letter-spacing:1.2px}
@@ -1866,6 +1879,7 @@ nav{
       <div class="sec-title dash-sec">🎯 Desempenho em simulados</div>
       <div id="sim-global-stats" class="sim-global-grid"></div>
       <div class="dash-scroll">
+        <div id="sim-por-formato"></div>
         <div id="sim-kingdom-breakdown"></div>
         <div class="sec-title dash-sec dash-sec-sub">🏅 Ranking de reinos</div>
         <div id="kingdom-ranking"></div>
@@ -7068,7 +7082,13 @@ function simPanelHTML(s){
   const stats=s.simStats;
   return`
     <div class="sim-header"><div class="sim-title"><i class="fa fa-list-check"></i> Simulado rápido</div></div>
-    ${stats?`<div style="text-align:center"><span class="sim-stat-badge"><i class="fa fa-chart-simple"></i> Histórico: ${stats.acertosTotal}/${stats.questoesTotal} acertos (${Math.round(stats.acertosTotal/stats.questoesTotal*100)}%) em ${stats.tentativas} simulado${stats.tentativas>1?'s':''}</span></div>`:''}
+    ${stats?(()=>{
+      const linhas=Object.keys(stats.porFormato||{}).filter(f=>stats.porFormato[f].questoes>0)
+        .map(f=>simResumoFormato(f,stats.porFormato[f]));
+      return`<div style="text-align:center"><span class="sim-stat-badge"><i class="fa fa-chart-simple"></i> Histórico: ${stats.acertosTotal}/${stats.questoesTotal} acertos (${Math.round(stats.acertosTotal/stats.questoesTotal*100)}%) em ${stats.tentativas} simulado${stats.tentativas>1?'s':''}</span></div>
+      ${linhas.length>1?`<div class="sim-fmt-split">${linhas.map(f=>
+        `<span><b style="color:${f.cor}">${f.corrigido}%</b> ${f.lbl} <i>(${f.acertos}/${f.questoes}${f.formato==='certoerrado'?` · bruto ${f.pct}% · saldo ${f.saldo>=0?'+':''}${f.saldo}`:''})</i></span>`).join('')}</div>`:''}`;
+    })():''}
     <div class="sim-empty">Gere questões pra treinar este assunto.${(s.note||'').trim()?' <b style="color:var(--pink)">Vai usar sua anotação como referência.</b>':' <span title="Adicione uma anotação neste miniboss pra deixar as questões mais precisas ao seu recorte de estudo">Sem anotação — a IA vai gerar com base só no nome do assunto.</span>'}${tavilyAtivo()?' <b style="color:var(--accent)">🔎 Vai pesquisar na internet antes de elaborar.</b>':''}</div>
     <div class="sim-config-row">
       <label style="font-size:11px;color:var(--muted);font-weight:700">Formato:</label>
@@ -7148,22 +7168,79 @@ function criarFlashcardDeQuestaoErrada(subId,q){
   const id=genId();
   db.flashcards[id]={id,mbId:topicId,pergunta,resposta,tags:'banco-de-erros',dificuldade:2,acertos:0,erros:0,lastConf:0,criacao:new Date().toISOString(),ultimaRevisao:null};
 }
+// Num item de duas alternativas, 50% e o resultado do chute. Somar certo/errado
+// e multipla escolha no mesmo balde compara coisas diferentes: 70% num
+// certo/errado vale bem menos que 70% numa prova de cinco alternativas. Por isso
+// as estatisticas passam a guardar os dois separados, e o aproveitamento do
+// certo/errado ganha uma versao corrigida, que desconta o acerto por acaso.
+function simPctCorrigido(pct,formato){
+  if(formato!=='certoerrado')return pct;
+  return Math.max(0,Math.round(pct*2-100));
+}
+const SIM_FMT_LBL={multipla:'Múltipla escolha',certoerrado:'Certo/Errado'};
+
+// Acumula o resultado de uma correcao em sub.simStats, tanto no total (que ja
+// existia e continua valendo pra quem tem historico antigo, sem formato) quanto
+// separado por formato.
+function simAcumulaStats(sub,questoes){
+  const total=questoes.length;
+  const acertos=questoes.filter(q=>q.userAnswer===q.correta).length;
+  sub.simStats=sub.simStats||{tentativas:0,questoesTotal:0,acertosTotal:0};
+  sub.simStats.tentativas++;
+  sub.simStats.questoesTotal+=total;
+  sub.simStats.acertosTotal+=acertos;
+  if(!sub.simStats.porFormato)sub.simStats.porFormato={};
+  const grupos={};
+  questoes.forEach(q=>{const f=q.formato||'multipla';(grupos[f]=grupos[f]||[]).push(q);});
+  Object.keys(grupos).forEach(f=>{
+    const qs=grupos[f];
+    const pf=sub.simStats.porFormato[f]=sub.simStats.porFormato[f]||{tentativas:0,questoes:0,acertos:0};
+    pf.tentativas++;
+    pf.questoes+=qs.length;
+    pf.acertos+=qs.filter(q=>q.userAnswer===q.correta).length;
+  });
+  return{total,acertos};
+}
+// Aproveitamento de um assunto ja descontando o acaso onde couber: media
+// ponderada dos corrigidos de cada formato. O que foi respondido antes desta
+// versao nao tem formato registrado e entra pelo valor bruto, como sempre foi.
+function simPctEfetivo(st){
+  if(!st||!st.questoesTotal)return null;
+  const bruto=Math.round(st.acertosTotal/st.questoesTotal*100);
+  const pf=st.porFormato||{};
+  const chaves=Object.keys(pf).filter(f=>pf[f].questoes>0);
+  if(!chaves.length)return{bruto,corrigido:bruto};
+  let soma=0,cobertas=0;
+  chaves.forEach(f=>{
+    const p=Math.round(pf[f].acertos/pf[f].questoes*100);
+    soma+=simPctCorrigido(p,f)*pf[f].questoes;
+    cobertas+=pf[f].questoes;
+  });
+  const resto=Math.max(0,st.questoesTotal-cobertas);
+  if(resto>0)soma+=bruto*resto;
+  return{bruto,corrigido:Math.round(soma/st.questoesTotal)};
+}
+// Linha de resumo de um formato: acertos, aproveitamento e — no certo/errado — o
+// saldo no criterio Cebraspe (acertos menos erros) e o aproveitamento corrigido.
+function simResumoFormato(f,pf){
+  const pct=pf.questoes?Math.round(pf.acertos/pf.questoes*100):0;
+  const corr=simPctCorrigido(pct,f);
+  const erros=pf.questoes-pf.acertos;
+  return{formato:f,lbl:SIM_FMT_LBL[f]||f,questoes:pf.questoes,acertos:pf.acertos,erros,
+         pct,corrigido:corr,saldo:pf.acertos-erros,cor:faixaCor(corr)};
+}
+
 function simCorrigir(subId){
   const active=simActive[subId];
   if(!active||active.corrected)return;
   const sub=simFindSub(subId);
   if(!sub)return;
-  const total=active.questoes.length;
-  const acertos=active.questoes.filter(q=>q.userAnswer===q.correta).length;
   active.corrected=true;
-  sub.simStats=sub.simStats||{tentativas:0,questoesTotal:0,acertosTotal:0};
-  sub.simStats.tentativas++;
-  sub.simStats.questoesTotal+=total;
-  sub.simStats.acertosTotal+=acertos;
+  const{total,acertos}=simAcumulaStats(sub,active.questoes);
   sub.simHistorico=sub.simHistorico||[];
   const histId=genId();
   active.histId=histId;
-  sub.simHistorico.unshift({id:histId,data:new Date().toISOString(),quantidade:total,acertos,erros:total-acertos,questoes:active.questoes});
+  sub.simHistorico.unshift({id:histId,data:new Date().toISOString(),quantidade:total,acertos,erros:total-acertos,questoes:active.questoes,formato:active.formato||'multipla',nivel:active.nivel});
   sub.simHistorico=sub.simHistorico.slice(0,5);
   db.simSessionsCount=(db.simSessionsCount||0)+1;
   active.questoes.filter(q=>q.userAnswer!==q.correta).forEach(q=>criarFlashcardDeQuestaoErrada(subId,q));
@@ -7461,7 +7538,7 @@ function simGeralConfigHTML(){
       ${hist.slice(0,10).map(h=>{
         const pct=h.quantidade?Math.round(h.acertos/h.quantidade*100):0;
         return`<div class="sg-hist-row">
-          <div><b>${new Date(h.data).toLocaleDateString('pt-BR')}</b> · ${h.quantidade} questões · ${h.assuntos.length} assunto(s) · ⏱ ${fmtHMS(h.tempoGastoSec||0)}</div>
+          <div><b>${new Date(h.data).toLocaleDateString('pt-BR')}</b> · ${h.formato==='certoerrado'?'✔️✖️ C/E':'🔤 Múltipla'} · ${h.quantidade} questões · ${h.assuntos.length} assunto(s) · ⏱ ${fmtHMS(h.tempoGastoSec||0)}</div>
           <div style="color:${pct>=60?'var(--green)':'var(--red)'};font-weight:800">${h.acertos}/${h.quantidade} (${pct}%)</div>
         </div>`;
       }).join('')}
@@ -7663,11 +7740,7 @@ function simGeralCorrigir(){
     const sub=simFindSub(subId);
     if(!sub)return;
     const qs=bySub[subId];
-    const acertosSub=qs.filter(q=>q.userAnswer===q.correta).length;
-    sub.simStats=sub.simStats||{tentativas:0,questoesTotal:0,acertosTotal:0};
-    sub.simStats.tentativas++;
-    sub.simStats.questoesTotal+=qs.length;
-    sub.simStats.acertosTotal+=acertosSub;
+    const acertosSub=simAcumulaStats(sub,qs).acertos;
     sub.simHistorico=sub.simHistorico||[];
     const histId=genId();
     // Marca cada questão com onde ela foi parar (subId/histórico/índice) pra o botão
@@ -7675,7 +7748,7 @@ function simGeralCorrigir(){
     // mesmas referências de objeto usadas em simGeralActive.questoes, isso já fica
     // visível ali também sem precisar de nenhuma outra sincronização.
     qs.forEach((q,idx)=>{q._histId=histId;q._qIdxInHist=idx;});
-    sub.simHistorico.unshift({id:histId,data:new Date().toISOString(),quantidade:qs.length,acertos:acertosSub,erros:qs.length-acertosSub,questoes:qs,geral:true});
+    sub.simHistorico.unshift({id:histId,data:new Date().toISOString(),quantidade:qs.length,acertos:acertosSub,erros:qs.length-acertosSub,questoes:qs,geral:true,formato:simGeralActive.formato||'multipla',nivel:simGeralActive.nivel});
     sub.simHistorico=sub.simHistorico.slice(0,5);
     assuntosResumo.push({subId,subName:sub.name,acertos:acertosSub,total:qs.length});
     qs.filter(q=>q.userAnswer!==q.correta).forEach(q=>criarFlashcardDeQuestaoErrada(subId,q));
@@ -7710,6 +7783,7 @@ function simGeralCorrigir(){
     id:genId(),data:new Date().toISOString(),
     quantidade:simGeralActive.questoes.length,acertos:totalAcertos,
     tempoGastoSec:simGeralActive.tempoGastoSec,limiteSec:simGeralActive.limiteSec,
+    formato:simGeralActive.formato||'multipla',nivel:simGeralActive.nivel,
     assuntos:assuntosResumo
   });
   db.simGeral.historico=db.simGeral.historico.slice(0,20);
@@ -7732,7 +7806,12 @@ function simGeralResultsHTML(){
   const total=active.questoes.length;
   const acertos=active.questoes.filter(q=>q.userAnswer===q.correta).length;
   const pct=total?Math.round(acertos/total*100):0;
-  const good=pct>=60;
+  const ce=(active.formato||'multipla')==='certoerrado';
+  // Numa prova de duas alternativas o 60% de sempre nao serve de corte: 50% e o
+  // chute. O banner passa a julgar pelo aproveitamento ja corrigido.
+  const efetivo=simPctCorrigido(pct,active.formato);
+  const good=efetivo>=60;
+  const saldo=acertos-(total-acertos);
 
   const bySub={};
   active.questoes.forEach(q=>{
@@ -7745,6 +7824,8 @@ function simGeralResultsHTML(){
   <div class="section-card">
     <div class="sec-title" style="margin-bottom:10px">🏁 Resultado do Simulado Geral</div>
     <div class="sim-score-banner ${good?'sim-good':'sim-bad'}">${acertos}/${total} acertos (${pct}%) · ⏱ ${fmtHMS(active.tempoGastoSec||0)}</div>
+    <div class="sg-formato-linha">${ce?'✔️✖️ Certo/Errado':'🔤 Múltipla escolha'} · ${simNivelLbl(active.nivel)}${
+      ce?` · <b title="No certo/errado 50% é o que o chute dá; o corrigido desconta esse acaso (2×${pct}−100)">corrigido: ${efetivo}%</b> · saldo Cebraspe: <b>${saldo>=0?'+':''}${saldo}</b>`:''}</div>
     <div class="sg-breakdown">
       ${Object.values(bySub).map(b=>{
         const bp=b.total?Math.round(b.acertos/b.total*100):0;
@@ -9454,7 +9535,9 @@ function computeStudyRecommendations(){
         const notStudied=!s.studied;
         let weakPct=null;
         if(s.simStats&&s.simStats.questoesTotal>0){
-          weakPct=Math.round(s.simStats.acertosTotal/s.simStats.questoesTotal*100);
+          // Corrigido, nao bruto: um assunto treinado so em certo/errado com 65%
+          // esta perto do chute, e a fila de hoje precisa enxergar isso.
+          weakPct=simPctEfetivo(s.simStats).corrigido;
         }
         const isWeak=weakPct!==null&&weakPct<60;
         if(!overdueCount&&!notStudied&&!isWeak)return;
@@ -9497,19 +9580,34 @@ function computeStudyRecommendations(){
 // simCorrigir() e simGeralCorrigir(), independente de quantos assuntos ela cobriu.
 function computeSimuladoStats(){
   let questoes=0,acertos=0;
+  const porFormato={};
   db.kingdoms.forEach(k=>{
     (db.topics[k.id]||[]).forEach(t=>{
       (t.subtopics||[]).forEach(s=>{
         if(s.simStats){
           questoes+=s.simStats.questoesTotal||0;
           acertos+=s.simStats.acertosTotal||0;
+          const pf=s.simStats.porFormato||{};
+          Object.keys(pf).forEach(f=>{
+            const acc=porFormato[f]=porFormato[f]||{tentativas:0,questoes:0,acertos:0};
+            acc.tentativas+=pf[f].tentativas||0;
+            acc.questoes+=pf[f].questoes||0;
+            acc.acertos+=pf[f].acertos||0;
+          });
         }
       });
     });
   });
   const erros=questoes-acertos;
   const pct=questoes>0?Math.round(acertos/questoes*100):0;
-  return{tentativas:db.simSessionsCount||0,questoes,acertos,erros,pct};
+  // Só vale mostrar a separação quando os dois formatos têm resultado: com um
+  // formato só, a linha extra repetiria o número de cima. Histórico anterior a
+  // esta versão não tem formato registrado e continua contando só no total.
+  const formatos=Object.keys(porFormato).filter(f=>porFormato[f].questoes>0)
+    .map(f=>simResumoFormato(f,porFormato[f]))
+    .sort((a,b)=>b.questoes-a.questoes);
+  const semFormato=questoes-formatos.reduce((a,f)=>a+f.questoes,0);
+  return{tentativas:db.simSessionsCount||0,questoes,acertos,erros,pct,formatos,semFormato};
 }
 function renderSimGlobalStats(){
   const el=document.getElementById('sim-global-stats');
@@ -9526,6 +9624,19 @@ function renderSimGlobalStats(){
     {icon:'📝',val:st.questoes,lbl:'Questões',color:'var(--text)'},
     {icon:'🎯',val:st.pct+'%',lbl:'Aproveitamento',color:faixaCor(st.pct)},
   ].map(s=>`<div class="stat-card"><span class="stat-icon">${s.icon}</span><div class="stat-val" style="color:${s.color}">${s.val}</div><div class="stat-lbl">${s.lbl}</div></div>`).join('');
+  const fmtEl=document.getElementById('sim-por-formato');
+  if(fmtEl){
+    fmtEl.innerHTML=st.formatos.length>1?st.formatos.map(f=>`
+      <div class="sim-fmt-row" title="${f.formato==='certoerrado'
+        ?`No certo/errado, 50% é o que o chute dá. O número em destaque desconta esse acaso (2×${f.pct}−100). Saldo Cebraspe: ${f.acertos} acertos − ${f.erros} erros.`
+        :'Aproveitamento bruto — em cinco alternativas o chute vale 20%.'}">
+        <span class="sim-fmt-nome">${f.formato==='certoerrado'?'✔️✖️':'🔤'} ${f.lbl}</span>
+        <span class="sim-fmt-qtd">${f.acertos}/${f.questoes}</span>
+        <div class="faixa-trilho"><i style="width:${f.corrigido}%;background:${f.cor}"></i></div>
+        <span class="sim-fmt-pct" style="color:${f.cor}">${f.corrigido}%</span>
+        ${f.formato==='certoerrado'?`<span class="sim-fmt-extra">bruto ${f.pct}% · saldo ${f.saldo>=0?'+':''}${f.saldo}</span>`:''}
+      </div>`).join(''):'';
+  }
   renderSimKingdomBreakdown();
 }
 // Quebra o desempenho de simulados por reino (matéria), pior aproveitamento primeiro —
@@ -9535,15 +9646,24 @@ function computeSimuladoStatsByKingdom(){
   const rows=[];
   db.kingdoms.forEach(k=>{
     let questoes=0,acertos=0;
+    const pf={};
     (db.topics[k.id]||[]).forEach(t=>{
       (t.subtopics||[]).forEach(s=>{
         if(s.simStats){
           questoes+=s.simStats.questoesTotal||0;
           acertos+=s.simStats.acertosTotal||0;
+          const p=s.simStats.porFormato||{};
+          Object.keys(p).forEach(f=>{
+            const acc=pf[f]=pf[f]||{questoes:0,acertos:0};
+            acc.questoes+=p[f].questoes||0;acc.acertos+=p[f].acertos||0;
+          });
         }
       });
     });
-    if(questoes>0)rows.push({kingdom:k,questoes,acertos,pct:Math.round(acertos/questoes*100)});
+    if(questoes>0){
+      const ef=simPctEfetivo({questoesTotal:questoes,acertosTotal:acertos,porFormato:pf});
+      rows.push({kingdom:k,questoes,acertos,pct:ef.corrigido,bruto:ef.bruto});
+    }
   });
   rows.sort((a,b)=>a.pct-b.pct);
   return rows;
@@ -9558,7 +9678,7 @@ function renderSimKingdomBreakdown(){
     return `<div class="sim-kb-row">
       <div class="sim-kb-kingdom">${r.kingdom.icon} ${r.kingdom.name}</div>
       <div class="sim-kb-bar-wrap"><div class="sim-kb-bar" style="width:${r.pct}%;background:${color}"></div></div>
-      <div class="sim-kb-pct" style="color:${color}">${r.pct}%</div>
+      <div class="sim-kb-pct" style="color:${color}" title="${r.bruto!==r.pct?`Bruto ${r.bruto}% — o valor mostrado desconta o acerto por acaso dos itens certo/errado.`:'Aproveitamento bruto'}">${r.pct}%</div>
       <div class="sim-kb-qtd">${r.acertos}/${r.questoes}</div>
     </div>`;
   }).join('');
