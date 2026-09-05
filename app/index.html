@@ -2857,8 +2857,44 @@ try{
   useLocalFallback=true;
 }
 
+// Guarda no banco so o que o app volta a mostrar depois de recarregar a pagina.
+// O Banco de Erros e a unica tela que le simHistorico numa sessao nova, e ele so
+// mostra as questoes ERRADAS — as certas nunca voltam pra tela, entao alternativas
+// e explicacao delas eram peso morto: a maior parte dos ~700 bytes de cada questao.
+// Como saveDB() reescreve o registro inteiro a cada gravacao, esse peso era pago
+// de novo a cada resposta marcada e a cada cronometro parado.
+//
+// A questao continua no array, so mais magra: o Banco de Erros endereca cada uma
+// por (subId, histId, indice), e furar o array quebraria as marcacoes de "revisado"
+// e "problematica" que ja estao salvas.
+//
+// Isso fica no caminho de GRAVACAO, nao no de correcao, por dois motivos: a sessao
+// atual continua com a questao inteira em memoria (a tela de resultado mostra as
+// alternativas logo depois de corrigir), e o historico que ja esta gravado encolhe
+// sozinho no proximo salvamento, sem precisar de migracao.
+function enxugarHistoricos(copia){
+  (copia.kingdoms||[]).forEach(k=>{
+    (((copia.topics||{})[k.id])||[]).forEach(t=>{
+      (t.subtopics||[]).forEach(s=>{
+        (s.simHistorico||[]).forEach(h=>{
+          if(!Array.isArray(h.questoes))return;
+          h.questoes=h.questoes.map(q=>{
+            // errada (ou nao respondida) volta pra tela no Banco de Erros: fica inteira
+            if(!q||q.userAnswer!==q.correta)return q;
+            const magra={questao:q.questao,correta:q.correta,userAnswer:q.userAnswer};
+            if(q.formato)magra.formato=q.formato;
+            if(q.revisado)magra.revisado=true;
+            if(q.problematico)magra.problematico=true;
+            return magra;
+          });
+        });
+      });
+    });
+  });
+  return copia;
+}
 function sanitizeForFirebase(obj){
-  return JSON.parse(JSON.stringify(obj));
+  return enxugarHistoricos(JSON.parse(JSON.stringify(obj)));
 }
 
 // ===== AUTENTICAÇÃO (Firebase Auth — Google + e-mail/senha) =====
@@ -9472,6 +9508,15 @@ function toggleQuestaoProblematica(subId,histId,qIdx){
   const sign=marking?-1:1;
   sub.simStats.questoesTotal=Math.max(0,sub.simStats.questoesTotal+sign);
   if(wasCorrect)sub.simStats.acertosTotal=Math.max(0,sub.simStats.acertosTotal+sign);
+  // O mesmo ajuste tem que valer no recorte por formato, senao o total e a
+  // separacao "multipla x certo/errado" passam a contar coisas diferentes — e e a
+  // separacao que alimenta o aproveitamento corrigido e a Fila de Hoje.
+  const fmt=q.formato||'multipla';
+  const pf=sub.simStats.porFormato&&sub.simStats.porFormato[fmt];
+  if(pf){
+    pf.questoes=Math.max(0,(pf.questoes||0)+sign);
+    if(wasCorrect)pf.acertos=Math.max(0,(pf.acertos||0)+sign);
+  }
 
   saveDB();
   updateErrosBadge();
