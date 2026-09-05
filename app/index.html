@@ -5976,6 +5976,20 @@ const TAVILY_DOMINIOS_OFICIAIS=[
 ];
 function tavilyAtivo(){ return !!(db.tavilyApiKey||'').trim(); }
 
+// Corta o texto da pagina no fim de uma frase, nao no meio de uma palavra. Um
+// corte seco em 6000 caracteres entrega ao modelo um fragmento sem fim, e ele
+// tende a completar a frase pela conta dele — foi por ai que apareceram frases
+// tortas no resumo. Se nao houver pontuacao na reta final, corta no ultimo espaco.
+function cortarNoPonto(texto,limite){
+  if(texto.length<=limite)return texto;
+  const pedaco=texto.slice(0,limite);
+  const ponto=Math.max(pedaco.lastIndexOf('. '),pedaco.lastIndexOf('.\n'),
+                       pedaco.lastIndexOf('! '),pedaco.lastIndexOf('? '));
+  if(ponto>limite*0.6)return pedaco.slice(0,ponto+1);
+  const espaco=pedaco.lastIndexOf(' ');
+  return (espaco>limite*0.6?pedaco.slice(0,espaco):pedaco)+'…';
+}
+
 // Uma busca. Devolve {texto, fontes} — texto é o conteúdo bruto das páginas,
 // que vira a ÚNICA fonte permitida pro Gemini escrever.
 async function tavilyBuscar(consulta,opts){
@@ -6006,7 +6020,7 @@ async function tavilyBuscar(consulta,opts){
   return{
     fontes:itens.map(r=>({url:r.url,titulo:r.title||''})),
     texto:itens.map((r,i)=>
-      `[FONTE ${i+1}] ${r.title||''}\nURL: ${r.url}\n${String(r.raw_content||r.content||'').slice(0,6000)}`
+      `[FONTE ${i+1}] ${r.title||''}\nURL: ${r.url}\n${cortarNoPonto(String(r.raw_content||r.content||''),6000)}`
     ).join('\n\n---\n\n'),
   };
 }
@@ -6067,7 +6081,13 @@ COMO USAR O MATERIAL ACIMA:
 - Ele foi buscado na internet neste momento. Onde ele contradisser o que você aprendeu no treinamento, o material ACIMA vence — e você diz em uma frase o que mudou.
 - Ao dar número, prazo, dose, fórmula ou classificação, use o valor que está no material e cite entre parênteses a fonte de onde veio (ex: "(FONTE 2)").
 - O que não estiver no material e você só souber de memória: pode usar para a base teórica, mas marque com "(não confirmado na pesquisa)" se for número, prazo ou dose.
-- Se o material não cobrir o assunto, diga isso em vez de preencher com o que você lembra.`;
+- Se o material não cobrir o assunto, diga isso em vez de preencher com o que você lembra.
+
+COMO ESCREVER (o material acima é texto bruto de páginas da web, não um modelo de redação):
+- Escreva em PORTUGUÊS BRASILEIRO correto e natural. Parte do material pode estar em inglês ou em outra língua: traduza o CONTEÚDO, nunca a estrutura da frase. Nada de decalque do inglês ("é recomendado que seja feito", "baseado em", ordem de palavras estrangeira).
+- Não copie trechos do material palavra por palavra. Reescreva com suas palavras, em frases completas.
+- O material foi recortado da página e pode conter frase cortada no meio, menu de navegação, aviso de cookie, legenda de figura e referência solta. Ignore tudo isso e nunca repasse um fragmento truncado para a sua resposta.
+- Revise antes de responder: concordância verbal e nominal, regência, crase e pontuação. Cada frase precisa terminar.`;
 }
 function promptRegrasAtualidade(){
   const hoje=new Date();
@@ -6108,7 +6128,8 @@ REGRAS:
 - Destaque conceitos-chave, definições, exceções, prazos, números, classificações e, principalmente, alterações recentes relevantes pra concurso.
 - Ao dar número, prazo, dose, fórmula ou classificação, diga entre parênteses de qual edição/ano é a fonte. Ex: "(diretriz de 2024)".
 - Se não tiver certeza sobre uma informação específica (data exata, número de lei, etc.), sinalize isso como algo a confirmar, em vez de inventar.
-- Escreva em texto corrido organizado por tópicos, sem markdown (sem #, sem **, sem bullets com símbolos especiais), porque esse texto também vai ser lido em voz alta.`;
+- Escreva em texto corrido organizado por tópicos, sem markdown (sem #, sem **, sem bullets com símbolos especiais), porque esse texto também vai ser lido em voz alta.
+- Português brasileiro correto e natural, em frases completas. Revise concordância verbal e nominal, regência, crase e pontuação antes de responder — este texto vai ser estudado e também lido em voz alta, então frase truncada ou torta atrapalha de verdade.`;
 }
 
 async function generateResumoWeb(subId){
@@ -7390,7 +7411,8 @@ function simNormalizaQuestao(q,formato){
     else if(gab==='E'||gab.startsWith('ERRAD')||gab==='F'||gab==='FALSE')letra='E';
     if(!texto||!letra)return null;
     return{questao:texto,alternativas:SIM_ALTS_CE.map(a=>({...a})),correta:letra,
-           explicacao:String(q.explicacao||'').trim(),formato:'certoerrado'};
+           explicacao:String(q.explicacao||'').trim(),formato:'certoerrado',
+           ...(q.assunto!==undefined?{assunto:q.assunto}:{})};
   }
   if(!q.questao||!Array.isArray(q.alternativas)||!q.correta)return null;
   // Ter enunciado, alternativas e um campo "correta" preenchido nao basta: se a
@@ -7466,6 +7488,15 @@ ${ce?`[{"afirmacao":"...","gabarito":"C","explicacao":"..."},{"afirmacao":"...",
   // depois de algumas tentativas — assim o simulado sempre sai com o número escolhido
   // (ou, na pior hipótese, avisa exatamente quantas faltaram, em vez de simplesmente
   // entregar menos sem avisar).
+  const questoes=await gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,rotulo:sub.name});
+  return{questoes,busca};
+}
+
+// O laco de retentativa e o mesmo para os dois escopos (um assunto ou um chefao
+// inteiro), entao mora aqui: a IA as vezes devolve menos itens do que o pedido,
+// ou tem a resposta cortada por limite de tokens, e completar pedindo so o que
+// falta e o que faz o simulado sair com o numero escolhido.
+async function gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,rotulo}){
   const questoes=[];
   const vistas=new Set();
   let tentativas=0;
@@ -7473,7 +7504,7 @@ ${ce?`[{"afirmacao":"...","gabarito":"C","explicacao":"..."},{"afirmacao":"...",
   while(questoes.length<quantidade&&tentativas<MAX_TENTATIVAS){
     const faltam=quantidade-questoes.length;
     const base=buildPrompt(faltam,questoes.map(q=>q.questao));
-    const prompt=busca.material?tavilyPromptComFontes(base,busca.material):base;
+    const prompt=busca&&busca.material?tavilyPromptComFontes(base,busca.material):base;
     tentativas++;
     let arr;
     try{
@@ -7494,10 +7525,77 @@ ${ce?`[{"afirmacao":"...","gabarito":"C","explicacao":"..."},{"afirmacao":"...",
       questoes.push({...q,userAnswer:null});
     }
   }
-  if(!questoes.length)throw new Error(`IA não retornou questões válidas para "${sub.name}".`);
+  if(!questoes.length)throw new Error(`IA não retornou questões válidas para "${rotulo}".`);
   if(questoes.length<quantidade){
-    toast(`⚠️ "${sub.name}": só foi possível gerar ${questoes.length} de ${quantidade} questões pedidas — a IA repetiu ou não completou a quantidade após algumas tentativas.`,'var(--orange)');
+    toast(`⚠️ "${rotulo}": só foi possível gerar ${questoes.length} de ${quantidade} questões pedidas — a IA repetiu ou não completou a quantidade após algumas tentativas.`,'var(--orange)');
   }
+  return questoes;
+}
+
+// Prova do CHEFAO inteiro numa chamada so. Quando o usuario marca todos os
+// assuntos de um chefao, gerar assunto por assunto e desperdicio puro: 24 chamadas
+// ao modelo e 48 buscas no Tavily pra montar 20 questoes que ele quer distribuidas
+// pelo tema. Aqui a lista de assuntos vira o recorte de UMA chamada, e cada questao
+// declara de qual assunto da lista ela e — e isso que devolve a questao pro assunto
+// certo nas estatisticas e no Banco de Erros.
+async function generateQuestionsForTopic(apiKey,kingdom,topic,subs,quantidade,opts){
+  const formato=(opts&&opts.formato)||'multipla';
+  const nivel=(opts&&opts.nivel)||'dificil';
+  const pesquisar=!(opts&&opts.pesquisar===false);
+  const ce=formato==='certoerrado';
+  const lista=subs.map((s,i)=>`${i+1}. ${s.name}${(s.note||'').trim()?` — anotação do aluno: ${(s.note||'').trim().slice(0,400)}`:''}`).join('\n');
+  const buildPrompt=(qtd,evitar)=>`Você é um elaborador de questões de concurso público brasileiro, especializado em ${ce?'itens de julgamento CERTO/ERRADO no estilo Cebraspe (Cespe)':'questões de múltipla escolha'}.
+
+${promptRegrasAtualidadeCurta()}
+
+TAREFA: Gere EXATAMENTE ${qtd} ${ce?'itens de julgamento (CERTO ou ERRADO)':'questões de múltipla escolha'} inéditos sobre o tema abaixo, distribuídos entre os assuntos da lista — nem mais, nem menos que ${qtd}.
+
+${simNivelDesc(nivel)}
+
+REINO/ÁREA: ${kingdom.name}
+TEMA CENTRAL (CHEFÃO): ${topic.name}
+
+ASSUNTOS QUE COMPÕEM ESTE TEMA (o recorte a cobrar é este, e só este):
+${lista}
+
+DISTRIBUIÇÃO: espalhe as ${qtd} questões pelos assuntos da lista, priorizando os que mais caem em prova. Não precisa cobrir todos se ${qtd} for menor que a lista, e pode repetir um assunto se ${qtd} for maior — mas não concentre tudo em um só.
+${evitar&&evitar.length?`\nJÁ FORAM GERADAS as questões abaixo neste mesmo tema — NÃO repita nenhuma delas nem gere variações muito parecidas:\n${evitar.map(q=>'- '+q).join('\n')}\n`:''}
+REGRAS:
+- O array JSON da resposta deve ter exatamente ${qtd} elementos.
+- CADA item traz o campo "assunto" com o NÚMERO do assunto da lista acima que ele cobre (1 a ${subs.length}). Esse número é obrigatório.
+${ce?`- Cada item é UMA afirmação a ser julgada como CERTA ou ERRADA. Escreva a afirmação direta, sem "Julgue o item" na frente e sem alternativas.
+- No estilo Cebraspe, o item errado costuma estar errado por UM detalhe (um número trocado, uma conduta fora de ordem, uma exceção ignorada, um "sempre/nunca" indevido) — não por ser absurdo.
+- Distribua o gabarito de forma equilibrada entre CERTO e ERRADO.
+- A explicação deve dizer POR QUE está certo ou, se errado, exatamente qual parte da afirmação está incorreta.`
+    :`- Cada questão tem exatamente 5 alternativas (A a E), com apenas uma correta.
+- A letra correta deve variar entre A, B, C, D e E ao longo das ${qtd} questões, o mais equilibrado possível.
+- Inclua uma explicação curta (1 a 3 frases) do porquê a alternativa correta está certa.`}
+- Evite pegadinhas de português; o foco é o conteúdo técnico.
+- Se for citar lei/norma específica, use apenas referência que você tenha certeza que existe.
+
+RESPONDA APENAS COM UM JSON (array de ${qtd} itens), sem markdown, no formato exato:
+${ce?`[{"assunto":1,"afirmacao":"...","gabarito":"C","explicacao":"..."}]`
+    :`[{"assunto":1,"questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"..."}]`}`;
+
+  // Uma pesquisa para o tema inteiro, no lugar de uma por assunto.
+  let busca={material:'',fontes:[],via:null,diag:[]};
+  if(pesquisar&&tavilyAtivo()){
+    busca=await buscarMaterial(topic.name,`${kingdom.name} — ${subs.slice(0,6).map(s=>s.name).join(', ')}`,25000);
+  }
+  const questoes=await gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,rotulo:topic.name});
+  // Devolve cada questao ao assunto que ela cobre. Indice invalido cai no assunto
+  // cujo nome mais aparece no enunciado; sem isso tambem, no primeiro da lista —
+  // atribuir errado e melhor que a questao nao contar em lugar nenhum.
+  questoes.forEach(q=>{
+    const i=parseInt(q.assunto,10);
+    let alvo=(i>=1&&i<=subs.length)?subs[i-1]:null;
+    if(!alvo){
+      const texto=normalizeForDedup(q.questao);
+      alvo=subs.find(s=>texto.includes(normalizeForDedup(s.name)))||subs[0];
+    }
+    q._sub=alvo;
+    delete q.assunto;
+  });
   return{questoes,busca};
 }
 
@@ -7621,7 +7719,10 @@ function simGeralConfigHTML(){
   html+=`<div class="sg-vazio" id="sg-vazio" style="display:none">Nenhum assunto com esse nome.</div>`;
 
   html+=`
-    <div id="sg-summary" style="margin:14px 0;font-size:11px;font-weight:800;color:var(--accent)">${simGeralConfig.selectedSubIds.size} de ${totalAssuntos} assunto(s) selecionado(s)</div>
+    <div style="margin:14px 0;font-size:11px;font-weight:800;color:var(--accent)">
+      <span id="sg-summary">${simGeralConfig.selectedSubIds.size} de ${totalAssuntos} assunto(s) selecionado(s)</span><span id="sg-chamadas" style="color:var(--muted);font-weight:700"></span>
+      <div style="font-size:10px;color:var(--muted);font-weight:700;margin-top:3px">Marcar o chefão inteiro gera uma prova do tema em uma chamada só; marcar assuntos soltos gera uma chamada por assunto.</div>
+    </div>
     <div class="sg-config-row">
       <div>
         <label class="sg-config-lbl">Total de questões</label>
@@ -7778,17 +7879,36 @@ function sgUpdateSummary(){
     const cb=bloco.querySelector('input[data-reino-cb]');
     if(cb){cb.checked=m>0&&m===cbs.length;cb.indeterminate=m>0&&m<cbs.length;}
   });
+  // O custo segue as UNIDADES de geracao, nao os assuntos: chefao inteiro marcado
+  // e uma chamada e uma pesquisa, nao uma por assunto (ver generateSimuladoGeral).
   const custo=document.getElementById('sg-custo');
   if(custo){
-    const n=simGeralConfig.selectedSubIds.size;
-    // 2 buscas por assunto; o Tavily cobra ~1,5 credito na busca avancada
-    custo.textContent=n?`— ${n*2} busca${n*2>1?'s':''} no Tavily (≈ ${Math.round(n*3)} créditos)`:'— nenhum assunto selecionado ainda';
+    const u=sgUnidades();
+    custo.textContent=u?`— ${u*2} busca${u*2>1?'s':''} no Tavily (≈ ${Math.round(u*3)} créditos)`:'— nenhum assunto selecionado ainda';
+  }
+  const chamadas=document.getElementById('sg-chamadas');
+  if(chamadas){
+    const u=sgUnidades();
+    chamadas.textContent=u?` · ${u} chamada${u>1?'s':''} à IA`:'';
   }
 }
 // Os dois botoes tratam a busca de forma diferente de proposito: "Marcar todos" e
 // uma acao em lote sobre o que voce esta vendo (com filtro ativo, marca os
 // resultados da busca); "Limpar" e um reset e limpa tudo, filtrado ou nao — senao
 // clicar em Limpar deixaria selecoes invisiveis para tras.
+// Quantas chamadas ao modelo a selecao atual vai custar: chefao com TODOS os
+// assuntos marcados conta 1; fora isso, 1 por assunto marcado. E a mesma regra
+// que generateSimuladoGeral aplica na hora de gerar.
+function sgUnidades(){
+  let n=0;
+  document.querySelectorAll('#sg-picker .sg-chefao').forEach(bloco=>{
+    const cbs=[...bloco.querySelectorAll('input[data-sub]')];
+    const m=cbs.filter(c=>c.checked).length;
+    if(!m)return;
+    n+=(m>1&&m===cbs.length)?1:m;
+  });
+  return n;
+}
 function sgMarcarTodos(marcar){
   document.querySelectorAll('#sg-picker input[data-sub]').forEach(cb=>{
     const oculto=cb.closest('.sg-sub-row').classList.contains('sg-oculto');
@@ -7824,13 +7944,36 @@ async function generateSimuladoGeral(){
   });
   if(!subjects.length)return;
 
-  // Distribuir a quantidade total o mais igual possível entre os assuntos escolhidos
-  const base=Math.floor(totalQtd/subjects.length);
-  let resto=totalQtd-base*subjects.length;
-  const plano=subjects.map(s=>{
+  // ===== Agrupamento por chefao =====
+  // Marcar o chefao inteiro e um pedido diferente de marcar assunto por assunto:
+  // "quero uma prova de Urgência e Emergência", nao "quero uma questao de cada um
+  // dos 24 assuntos". Quando TODOS os assuntos estudados de um chefao estao
+  // selecionados, ele vira UMA unidade — uma chamada ao modelo e uma pesquisa pro
+  // tema inteiro, no lugar de 24 de cada. Selecao parcial continua assunto a
+  // assunto, que e quando o recorte fino e o que se quer.
+  const porTopico={};
+  subjects.forEach(x=>{(porTopico[x.topic.id]=porTopico[x.topic.id]||{topic:x.topic,kingdom:x.kingdom,subs:[]}).subs.push(x.sub);});
+  const unidades=[];
+  Object.values(porTopico).forEach(g=>{
+    const estudados=(g.topic.subtopics||[]).filter(s=>s.studied);
+    const completo=g.subs.length>1&&g.subs.length===estudados.length;
+    if(completo)unidades.push({tipo:'chefao',topic:g.topic,kingdom:g.kingdom,subs:g.subs,rotulo:g.topic.name});
+    else g.subs.forEach(sub=>unidades.push({tipo:'assunto',topic:g.topic,kingdom:g.kingdom,sub,rotulo:sub.name}));
+  });
+
+  // Distribui a quantidade entre as unidades. Se houver mais unidades que
+  // questoes, sorteia quais entram em vez de dar 1 pra cada — antes o Math.max(1,q)
+  // fazia um pedido de 20 questoes voltar com 24 quando havia 24 assuntos.
+  let alvos=unidades;
+  if(unidades.length>totalQtd){
+    alvos=[...unidades].sort(()=>Math.random()-0.5).slice(0,totalQtd);
+  }
+  const base=Math.floor(totalQtd/alvos.length);
+  let resto=totalQtd-base*alvos.length;
+  const plano=alvos.map(u=>{
     const q=base+(resto>0?1:0);
     if(resto>0)resto--;
-    return{...s,quantidade:Math.max(1,q)};
+    return{...u,quantidade:Math.max(1,q)};
   });
 
   const container=document.getElementById('simgeral-content');
@@ -7844,13 +7987,20 @@ async function generateSimuladoGeral(){
   const falhas=[];
   for(let i=0;i<plano.length;i++){
     const p=plano[i];
-    if(container)container.innerHTML=`<div class="section-card"><div class="empty"><i class="fa fa-spinner fa-spin"></i><p>${pesquisar&&tavilyAtivo()?'Pesquisando na internet e gerando':'Gerando'} questões... (${i+1}/${plano.length} assuntos)<br><span style="font-size:10px">${p.sub.name}</span></p></div></div>`;
+    if(container)container.innerHTML=`<div class="section-card"><div class="empty"><i class="fa fa-spinner fa-spin"></i><p>${pesquisar&&tavilyAtivo()?'Pesquisando na internet e gerando':'Gerando'} questões... (${i+1}/${plano.length})<br><span style="font-size:10px">${escapeHtml(p.rotulo)}${p.tipo==='chefao'?` · chefão inteiro (${p.subs.length} assuntos)`:''}</span></p></div></div>`;
     try{
-      const r=await generateQuestionsForSubject(apiKey,p.kingdom,p.topic,p.sub,p.quantidade,{formato,nivel,pesquisar});
+      const r=p.tipo==='chefao'
+        ?await generateQuestionsForTopic(apiKey,p.kingdom,p.topic,p.subs,p.quantidade,{formato,nivel,pesquisar})
+        :await generateQuestionsForSubject(apiKey,p.kingdom,p.topic,p.sub,p.quantidade,{formato,nivel,pesquisar});
       if(r.busca.via==='tavily')pesquisados++;
-      questoes.push(...r.questoes.map(q=>({...q,subId:p.sub.id,subName:p.sub.name,topicName:p.topic.name,kingdomId:p.kingdom.id,kingdomName:p.kingdom.name,kingdomIcon:p.kingdom.icon})));
+      questoes.push(...r.questoes.map(q=>{
+        const sub=p.tipo==='chefao'?(q._sub||p.subs[0]):p.sub;
+        const{_sub,...limpa}=q;
+        return{...limpa,subId:sub.id,subName:sub.name,topicName:p.topic.name,
+               kingdomId:p.kingdom.id,kingdomName:p.kingdom.name,kingdomIcon:p.kingdom.icon};
+      }));
     }catch(e){
-      falhas.push(`${p.sub.name} (${e.message||'erro'})`);
+      falhas.push(`${p.rotulo} (${e.message||'erro'})`);
     }
     if(i<plano.length-1)await new Promise(r=>setTimeout(r,4000));
   }
@@ -7865,7 +8015,8 @@ async function generateSimuladoGeral(){
     if(falhas.length){
       toast(`⚠️ Simulado gerado com ${questoes.length} questões, mas ${falhas.length} assunto${falhas.length>1?'s falharam':' falhou'} (provável limite de requisições da API). Pode gerar de novo depois pra cobrir o resto.`,'var(--orange)');
     }else{
-      toast(`🏛️ Simulado ${formato==='certoerrado'?'certo/errado':'de múltipla escolha'} (${simNivelLbl(nivel).toLowerCase()}) gerado! ${questoes.length} questões de ${subjects.length} assunto(s)${pesquisados?` · ${pesquisados} pesquisado${pesquisados>1?'s':''} na internet`:''}.`,'var(--accent)');
+      const chefoes=plano.filter(u=>u.tipo==='chefao').length;
+      toast(`🏛️ Simulado ${formato==='certoerrado'?'certo/errado':'de múltipla escolha'} (${simNivelLbl(nivel).toLowerCase()}) gerado! ${questoes.length} questões de ${subjects.length} assunto(s) em ${plano.length} chamada${plano.length>1?'s':''}${chefoes?` (${chefoes} chefão${chefoes>1?'es':''} inteiro${chefoes>1?'s':''})`:''}${pesquisados?` · ${pesquisados} pesquisa${pesquisados>1?'s':''} na internet`:''}.`,'var(--accent)');
     }
   }
   renderSimGeralScreen();
