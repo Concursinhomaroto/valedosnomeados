@@ -11115,16 +11115,20 @@ TAREFA: separe em disciplinas e, dentro de cada uma, na lista de assuntos.
 
 REGRAS:
 - Preserve os nomes como estão no edital; só corrija numeração solta ("1.2 -"), espaçamento e MAIÚSCULAS desnecessárias.
+- Use o NÍVEL MAIS PROFUNDO da numeração como assunto. Se existe "5 Domínio da estrutura morfossintática do período. 5.1 Emprego das classes de palavras. 5.2 Relações de coordenação...", os assuntos são "5.1 Emprego das classes de palavras", "5.2 Relações de coordenação..." e assim por diante — o item 5 é só o título do grupo e NÃO vira assunto sozinho. Um item sem subitens (como "3 Domínio da ortografia oficial") vira assunto normalmente.
 - Um assunto por item. Se o edital juntar vários com ponto e vírgula ou vírgula numa linha só, separe em itens.
 - Não invente assunto que não esteja no texto, e não resuma vários num só.
 - Se o texto disser quantas questões a disciplina tem, coloque em "questoes"; se não disser, use 0.
 - Ignore instruções administrativas (inscrição, prazos, recursos) — só o conteúdo a estudar.
+- O texto foi copiado de um PDF de Diário Oficial: pode ter CABEÇALHO DE PÁGINA no meio de uma frase (nome do diário, cidade, data, número da edição, "Edição Eletrônica Certificada Digitalmente", número de lei de certificação). Apague esses trechos e REMENDE a frase que eles cortaram — o item que ficou partido em dois é um só.
+- Um bloco de itens numerados que apareça SEM título de disciplina, logo depois das disciplinas básicas, é o de CONHECIMENTOS ESPECÍFICOS do cargo. Nomeie-o assim e não o gruda na disciplina anterior.
 
 CONTEÚDO PROGRAMÁTICO:
 ${texto.slice(0,30000)}
 
 RESPONDA APENAS COM JSON, sem markdown:
 {"disciplinas":[{"nome":"Conhecimentos Específicos","questoes":30,"assuntos":["...","..."]}]}`;
+    if(typeof window!=='undefined')window.__ultimoPromptEdital=prompt;   // usado pelo teste
     const{parsed}=await callGeminiJSON(apiKey,prompt,false,8192);
     const discs=(parsed&&Array.isArray(parsed.disciplinas))?parsed.disciplinas:[];
     if(!discs.length)throw new Error('A IA não conseguiu separar as disciplinas desse texto.');
