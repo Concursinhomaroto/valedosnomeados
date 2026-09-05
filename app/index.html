@@ -2014,6 +2014,7 @@ nav{
     <button class="btn btn-sm btn-ghost" onclick="mapedAbrir('publicado')"><i class="fa fa-folder-open"></i> Abrir o atual</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedAbrir('padrao')"><i class="fa fa-school"></i> Abrir o campus padrão</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedRascunhos()"><i class="fa fa-floppy-disk"></i> Rascunhos</button>
+    <button class="btn btn-sm btn-ghost" onclick="mapedBloquearMoveis()"><i class="fa fa-couch"></i> Bloquear móveis</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedLiberarMoveis()"><i class="fa fa-person-walking"></i> Liberar móveis</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedMarcarParedes()"><i class="fa fa-wand-magic-sparkles"></i> Marcar paredes</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedLimparColisao()"><i class="fa fa-broom"></i> Limpar paredes</button>
@@ -15400,7 +15401,45 @@ function mapedDiagnostico(){
 // Conserta de uma vez o mapa que ficou intransitável: tira o bloqueio de TODOS
 // os móveis, deixando de pé só o desenho da camada Parede e o chão de parede.
 // Sem isso, um mapa montado com ambientes carimbados só se salvava tile a tile.
+// Espelho do "Liberar móveis": faz TODO móvel do mapa voltar a barrar o
+// jogador. Existe porque o carimbo de ambiente entra como decoração, e depois
+// de montar a sala você quer que a mesa seja mesa, não chão.
+//
+// Mede o alcance antes e depois: mobília demais bloqueando é o que já fechou um
+// mapa inteiro antes, então o número tem que aparecer na hora, não na hora de
+// publicar.
+function mapedBloquearMoveis(){
+  const antes=mapedDiagnostico();
+  // Snapshot ANTES de mexer: tirado depois, ele guardava o estado já alterado e
+  // o Desfazer não voltava nada.
+  mapedSnapshot();
+  let n=0;
+  mapedMapa.layers.forEach(l=>{
+    if(l.type!=='objectgroup'||l.name==='Chair')return;
+    l.objects.forEach(o=>{
+      const cp=(o.properties||[]).find(p=>p.name==='collide');
+      if(cp&&cp.value===true)return;
+      o.properties=(o.properties||[]).filter(p=>p.name!=='collide');
+      o.properties.push({name:'collide',type:'bool',value:true});
+      n++;
+    });
+  });
+  if(!n){mapedUndoStack.pop();toast('Todos os móveis já estavam bloqueando.','var(--muted)');return;}
+  document.getElementById('maped-vercol').checked=true;
+  mapedDraw();
+  const dep=mapedDiagnostico();
+  if(dep.preso){
+    toast(`⚠️ ${n} móveis bloqueados, mas a ENTRADA ficou em cima de um deles. Mova a entrada ou use Desfazer.`,'var(--danger)');
+    return;
+  }
+  const perdeu=antes.alcance-dep.alcance;
+  toast(`🪑 ${n} móveis agora barram o jogador. Andável: ${dep.alcance} tiles`+
+        (perdeu>0?` (${perdeu} a menos que antes).`:'.')+
+        (dep.alcance<dep.livre*0.5?' Ficou apertado — confira o vermelho.':''),
+        dep.alcance<dep.livre*0.5?'var(--orange)':'var(--accent)');
+}
 function mapedLiberarMoveis(){
+  mapedSnapshot();   // antes de mexer, senão o Desfazer não volta
   let n=0;
   mapedMapa.layers.forEach(l=>{
     if(l.type!=='objectgroup'||l.name==='Chair')return;
@@ -15412,9 +15451,9 @@ function mapedLiberarMoveis(){
       n++;
     });
   });
-  if(!n){toast('Nenhum móvel estava bloqueando.','var(--muted)');return;}
+  if(!n){mapedUndoStack.pop();toast('Nenhum móvel estava bloqueando.','var(--muted)');return;}
   const antes=mapedDiagnostico();
-  mapedSnapshot();mapedDraw();
+  mapedDraw();
   toast(`🚶 ${n} móveis liberados. Agora dá pra andar por ${antes.alcance} tiles. `+
         `Use o modo Parede pras paredes.`,'var(--accent)');
 }
