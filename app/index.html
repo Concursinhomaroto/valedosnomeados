@@ -665,10 +665,8 @@ nav{
 }
 .sim-global-card{margin-bottom:0;}
 .sim-global-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px;}
-.dash-sim-next-row{display:grid;grid-template-columns:1fr 1.35fr;gap:16px;align-items:stretch;margin-bottom:18px;}
 @media(max-width:900px){
-  .dash-sim-next-row{grid-template-columns:1fr;}
-}
+  }
 .sim-kb-title{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:0.5px;margin:16px 0 8px;padding-top:14px;border-top:1.5px solid var(--border2);}
 .sim-kb-row{display:flex;align-items:center;gap:10px;padding:7px 0;}
 .sim-kb-kingdom{flex:0 0 34%;min-width:0;font-size:11.5px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -677,7 +675,57 @@ nav{
 .sim-kb-pct{flex-shrink:0;font-size:11.5px;font-weight:800;width:36px;text-align:right;}
 .sim-kb-qtd{flex-shrink:0;font-size:9.5px;color:var(--muted);font-weight:600;width:48px;text-align:right;}
 
-.dash-gamify-row{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:18px;align-items:stretch;}
+/* ===== PRIMEIRA DOBRA DO PAINEL =====
+   Altura travada na janela pra tudo caber sem rolar a página. O desconto de
+   120px cobre o respiro do #main-content e o título da tela; abaixo de 1100px
+   de largura ou 640px de altura a trava sai e volta a ser lista rolável, senão
+   em tela pequena os cartões viram tiras ilegíveis. */
+.dash-fold{display:grid;gap:12px;margin-bottom:18px;
+  grid-template-columns:repeat(6,1fr);
+  grid-template-rows:auto minmax(0,1.92fr) minmax(0,0.82fr) minmax(0,1.06fr);
+  height:calc(100vh - 120px);min-height:560px;}
+.dash-r1{grid-column:1/-1;display:grid;grid-template-columns:170px 210px 1fr;gap:12px;align-items:stretch}
+.dash-r1>.section-card{margin-bottom:0}
+.dash-card{grid-column:span 2;margin-bottom:0;min-width:0;min-height:0;overflow:hidden;
+  display:flex;flex-direction:column;padding:12px 14px}
+.dash-wide{grid-column:span 3}
+.dash-sec{margin-bottom:8px;font-size:10px;letter-spacing:1.2px}
+.dash-sec-sub{margin:12px 0 8px;padding-top:10px;border-top:1px dashed var(--border)}
+.dash-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.dash-head-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.dash-grow{flex:1;min-height:0}
+.dash-foot{text-align:center;font-size:10px;color:var(--muted);font-weight:700;margin-top:6px}
+.dash-foot-inline{margin:0;text-align:right;white-space:nowrap}
+/* Rola por dentro do cartao. O esmaecido no rodape faz o item cortado ler como
+   "tem mais abaixo" em vez de parecer quebrado. */
+.dash-scroll{flex:1;min-height:0;overflow-y:auto;padding-right:4px;
+  -webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 11px),transparent);
+  mask-image:linear-gradient(180deg,#000 calc(100% - 11px),transparent)}
+.dash-scroll::-webkit-scrollbar{width:5px}
+.dash-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.dash-fold .sim-global-grid{margin-bottom:8px}
+/* A agenda dentro da primeira dobra: 7 dias sempre lado a lado, em versão
+   compacta. Fora da dobra ela segue com o auto-fill de 200px, que é o certo
+   quando tem a largura da tela inteira. */
+.dash-fold .week-plan-grid{grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;height:100%}
+.dash-fold .day-col{padding:7px 6px;border-radius:9px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.dash-fold .day-header{font-size:9px;letter-spacing:.3px;margin-bottom:6px;flex-wrap:wrap;gap:2px}
+.dash-fold .day-today-pill{padding:1px 5px;font-size:7.5px}
+.dash-fold .plan-item{padding:4px 6px;margin-bottom:4px;border-radius:6px;gap:5px}
+.dash-fold .plan-item-dot{width:6px;height:6px;margin-top:3px}
+.dash-fold .plan-item-text{font-size:9px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-fold .plan-item-sub{font-size:7.5px;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-fold .plan-add-btn{font-size:11px!important;padding:0!important;width:18px;height:18px;line-height:1}
+/* "＋ Adicionar assunto" e "Descanso" não cabem numa coluna de ~100px: viram só
+   o sinal e o emoji, com o texto no title pra não perder a informação. */
+.dash-fold .plan-empty-day{font-size:10px;padding:5px 3px;line-height:1.2;overflow:hidden;
+  white-space:nowrap;text-align:center;margin-top:auto}
+.dash-fold .plan-lbl{display:none}
+@media(max-width:1100px),(max-height:640px){
+  .dash-fold{height:auto;min-height:0;grid-template-columns:1fr;grid-template-rows:none}
+  .dash-card,.dash-wide{grid-column:1/-1;max-height:340px}
+  .dash-r1{grid-template-columns:1fr;grid-column:1/-1}
+}
 .gamify-card{display:flex;align-items:center;gap:10px;margin-bottom:0;flex:1 1 165px;padding:14px 16px;}
 .gamify-goal{cursor:pointer;transition:all 0.2s;}
 .gamify-goal:hover{transform:translateY(-2px);box-shadow:var(--shadow2);border-color:var(--border2);}
@@ -745,7 +793,6 @@ nav{
 .badge-chip.unlocked .badge-name{color:var(--tier-color,var(--text2));}
 
 @media(max-width:768px){
-  .dash-gamify-row{flex-direction:column;}
   .gamify-card,.gamify-badges-card{flex:1 1 100%;}
   .badges-row{gap:6px;}
   .badge-name{display:none;}
@@ -1345,9 +1392,7 @@ nav{
   [style*="grid-template-columns:repeat(4"]{grid-template-columns:repeat(2,1fr)!important;}
   .timer-display{font-size:30px;}
   .stats-grid{grid-template-columns:repeat(2,1fr)!important;}
-  .dash-hero-row{grid-template-columns:1fr!important;}
-  .dash-two-col{grid-template-columns:1fr!important;}
-  .dash-top-row{grid-template-columns:1fr!important;}
+      .dash-top-row{grid-template-columns:1fr!important;}
 }
 @media(max-width:400px){#kingdoms-container{grid-template-columns:1fr;}}
 
@@ -1617,109 +1662,104 @@ nav{
   <!-- Streak + Meta diária + Conquistas, na mesma linha (quebra sozinha em telas
        estreitas, já que a badges-card tem largura mínima de 420px) — essa linha já
        fica antes de "Desempenho em Simulados"/"O que estudar agora" logo abaixo. -->
-  <div class="dash-gamify-row">
-    <div class="section-card gamify-card" id="streak-card">
-      <div class="gamify-icon streak-flame" id="streak-flame">🔥</div>
-      <div class="gamify-info">
-        <div class="gamify-val" id="streak-val">0</div>
-        <div class="gamify-lbl" id="streak-lbl">dias seguidos</div>
-      </div>
-    </div>
-    <div class="section-card gamify-card gamify-goal" id="goal-card" onclick="openDailyGoalModal()" title="Clique para ajustar sua meta diária">
-      <div class="goal-ring-wrap" id="goal-ring-wrap"></div>
-      <div class="gamify-info">
-        <div class="gamify-val" style="font-size:11px">Meta diária</div>
-        <div class="gamify-lbl" id="goal-lbl">0 / 60 min</div>
-      </div>
-    </div>
-    <div class="section-card gamify-badges-card" onclick="showScreen('conquistas')" title="Ver todas as conquistas">
-      <div class="gamify-badges-title">🏅 CONQUISTAS <span id="dash-badges-summary" class="gamify-badges-summary"></span></div>
-      <div class="badges-row" id="dash-badges"></div>
-    </div>
-  </div>
+  <!-- ===== PRIMEIRA DOBRA =====
+       Dez seções numa tela só, sem rolagem. Grade de 6 colunas iguais: as duas
+       faixas do meio usam 2 colunas por cartão (três cartões) e a de baixo usa 3
+       (dois cartões), então a borda de todo cartão cai na mesma régua vertical.
+       Cada cartão rola por dentro quando o conteúdo passa da altura da faixa —
+       a rolagem some da página e fica dentro da caixa. -->
+  <div class="dash-fold">
 
-  <!-- Desempenho em simulados + O que estudar agora, lado a lado -->
-  <div class="dash-sim-next-row">
-    <div class="section-card sim-global-card">
-      <div class="sec-title" style="margin-bottom:10px">🎯 DESEMPENHO EM SIMULADOS</div>
+    <div class="dash-r1">
+      <div class="section-card gamify-card" id="streak-card">
+        <div class="gamify-icon streak-flame" id="streak-flame">🔥</div>
+        <div class="gamify-info">
+          <div class="gamify-val" id="streak-val">0</div>
+          <div class="gamify-lbl" id="streak-lbl">dias seguidos</div>
+        </div>
+      </div>
+      <div class="section-card gamify-card gamify-goal" id="goal-card" onclick="openDailyGoalModal()" title="Clique para ajustar sua meta diária">
+        <div class="goal-ring-wrap" id="goal-ring-wrap"></div>
+        <div class="gamify-info">
+          <div class="gamify-val" style="font-size:11px">Meta diária</div>
+          <div class="gamify-lbl" id="goal-lbl">0 / 60 min</div>
+        </div>
+      </div>
+      <div class="section-card gamify-badges">
+        <div class="gamify-badges-title">🏅 CONQUISTAS <span id="dash-badges-summary" class="gamify-badges-summary"></span></div>
+        <div class="badges-row" id="dash-badges"></div>
+      </div>
+    </div>
+
+    <div class="section-card dash-card">
+      <div class="sec-title dash-sec">🎯 Desempenho em simulados</div>
       <div id="sim-global-stats" class="sim-global-grid"></div>
-      <div id="sim-kingdom-breakdown"></div>
+      <div class="dash-scroll">
+        <div id="sim-kingdom-breakdown"></div>
+        <div class="sec-title dash-sec dash-sec-sub">🏅 Ranking de reinos</div>
+        <div id="kingdom-ranking"></div>
+      </div>
     </div>
 
-    <div class="section-card next-steps-card">
-      <div class="sec-title" style="margin-bottom:4px">🧭 O QUE ESTUDAR AGORA</div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:10px;font-weight:600">Prioridade do miniboss conta mais, depois revisão atrasada, depois desempenho fraco em simulados</div>
-      <div id="next-steps-list"></div>
+    <div class="section-card dash-card">
+      <div class="sec-title dash-sec">🧭 O que estudar agora</div>
+      <div class="dash-scroll"><div id="next-steps-list"></div></div>
     </div>
-  </div>
 
-  <!-- Stats 3+3 + Gráfico ao lado -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;align-items:stretch" class="dash-hero-row">
-    <div class="stats-grid" id="dash-stats" style="grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:8px;margin-bottom:0;height:100%"></div>
-    <div class="section-card" style="margin-bottom:0">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">
-        <div class="sec-title" style="margin-bottom:0;font-size:11px">📊 TEMPO ESTUDADO</div>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <div class="section-card dash-card">
+      <div class="dash-head">
+        <div class="sec-title dash-sec">⚠️ Revisões atrasadas</div>
+        <button id="notif-permission-btn" class="btn btn-xs btn-ghost" style="display:none" onclick="requestNotifPermission()" title="Receber um aviso quando houver revisões atrasadas">🔔 Lembretes</button>
+      </div>
+      <div class="dash-scroll" id="dash-overdue-revs"></div>
+    </div>
+
+    <div class="section-card dash-card">
+      <div class="sec-title dash-sec">📚 Assuntos da semana</div>
+      <div class="dash-scroll" id="week-study-chart"></div>
+      <div id="week-study-total" class="dash-foot"></div>
+    </div>
+
+    <div class="section-card dash-card">
+      <div class="sec-title dash-sec">📈 Aproveitamento nos flashcards</div>
+      <div class="dash-scroll" id="fc-trend-chart"></div>
+      <div id="fc-trend-total" class="dash-foot"></div>
+    </div>
+
+    <div class="section-card dash-card">
+      <div class="sec-title dash-sec">⚠️ Reinos que precisam de atenção</div>
+      <div class="dash-scroll" id="avg-time-list"></div>
+    </div>
+
+    <div class="section-card dash-card dash-wide">
+      <div class="dash-head">
+        <div class="sec-title dash-sec">📊 Tempo estudado</div>
+        <div class="dash-head-tools">
+          <span id="study-chart-total" class="dash-foot dash-foot-inline"></span>
           <div class="chart-tabs">
             <button class="chart-tab active" id="ct-day" onclick="setChartTab('day',this)">Diário</button>
             <button class="chart-tab" id="ct-week" onclick="setChartTab('week',this)">Semanal</button>
             <button class="chart-tab" id="ct-month" onclick="setChartTab('month',this)">Mensal</button>
           </div>
-          <button class="btn btn-xs btn-ghost" onclick="exportStudyCSV()" title="Baixar histórico de estudos em CSV"><i class="fa fa-download"></i> CSV</button>
-          <button class="btn btn-xs btn-ghost" onclick="exportHistoryPDF()" title="Gerar PDF do histórico de estudos e desempenho"><i class="fa fa-file-pdf"></i> PDF</button>
+          <button class="btn btn-xs btn-ghost" onclick="exportStudyCSV()" title="Baixar histórico de estudos em CSV"><i class="fa fa-download"></i></button>
+          <button class="btn btn-xs btn-ghost" onclick="exportHistoryPDF()" title="Gerar PDF do histórico de estudos e desempenho"><i class="fa fa-file-pdf"></i></button>
         </div>
       </div>
-      <div class="chart-svg-wrap" id="study-chart-wrap"></div>
-      <div id="study-chart-total" style="text-align:center;font-size:10px;color:var(--muted);margin-top:6px;font-weight:700"></div>
+      <div class="chart-svg-wrap dash-grow" id="study-chart-wrap"></div>
     </div>
-  </div>
 
-  <!-- Revisões Atrasadas (metade) + O que estudei esta semana (metade) -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px" class="dash-two-col">
-    <div class="section-card" style="margin-bottom:0;display:flex;flex-direction:column">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
-        <div class="sec-title" style="margin-bottom:4px">⚠️ REVISÕES ATRASADAS</div>
-        <button id="notif-permission-btn" class="btn btn-xs btn-ghost" style="display:none" onclick="requestNotifPermission()" title="Receber um aviso quando houver revisões atrasadas">🔔 Ativar lembretes</button>
+    <div class="section-card dash-card dash-wide">
+      <div class="dash-head">
+        <div class="sec-title dash-sec">📅 Agenda semanal de estudos</div>
+        <div class="dash-foot dash-foot-inline">Clique num dia para adicionar</div>
       </div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:10px;font-weight:600">Revisões cujo prazo já passou</div>
-      <div id="dash-overdue-revs" style="overflow-y:auto;flex:1;padding-right:4px;max-height:300px"></div>
+      <div class="dash-scroll dash-grow" id="weekly-plan"></div>
     </div>
-    <div class="section-card" style="margin-bottom:0;display:flex;flex-direction:column">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div class="sec-title" style="margin-bottom:0;font-size:11px">📚 ASSUNTOS ESTUDADOS NA SEMANA</div>
-      </div>
-      <div id="week-study-chart" style="width:100%;flex:1;min-height:0;overflow-y:auto;padding-right:4px;max-height:300px"></div>
-      <div id="week-study-total" style="text-align:center;font-size:11px;color:var(--muted);margin-top:8px;font-weight:700"></div>
-    </div>
+
   </div>
 
-  <!-- Agenda Semanal -->
-  <div class="section-card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-      <div class="sec-title" style="margin-bottom:0">📅 AGENDA SEMANAL DE ESTUDOS</div>
-      <div style="font-size:10px;color:var(--muted);font-weight:600">Clique em um dia para adicionar assuntos</div>
-    </div>
-    <div id="weekly-plan"></div>
-  </div>
-
-  <!-- Ranking -->
-  <div class="section-card">
-    <div class="sec-title" style="margin-bottom:12px">🏅 RANKING DE REINOS</div>
-    <div id="kingdom-ranking"></div>
-  </div>
-
-  <!-- Analytics avançado -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px" class="dash-two-col">
-    <div class="section-card" style="margin-bottom:0">
-      <div class="sec-title" style="margin-bottom:10px">📈 APROVEITAMENTO NOS FLASHCARDS</div>
-      <div id="fc-trend-chart"></div>
-      <div id="fc-trend-total" style="text-align:center;font-size:10px;color:var(--muted);margin-top:6px;font-weight:700"></div>
-    </div>
-    <div class="section-card" style="margin-bottom:0">
-      <div class="sec-title" style="margin-bottom:10px">⚠️ REINOS QUE PRECISAM DE ATENÇÃO</div>
-      <div id="avg-time-list"></div>
-    </div>
-  </div>
+  <!-- Abaixo da dobra: o resto continua existindo, só sai da primeira tela -->
+  <div class="stats-grid" id="dash-stats" style="grid-template-columns:repeat(6,1fr);gap:8px"></div>
 
   <!-- Frase motivacional -->
   <div id="motive-card" onclick="rotatePhrase()" style="background:linear-gradient(135deg,var(--accent),#4f46e5);border-radius:18px;padding:22px 28px;text-align:center;margin-bottom:18px;box-shadow:0 6px 28px rgba(108,71,255,0.25);cursor:pointer;transition:transform 0.2s" title="Clique para outra frase">
@@ -9678,8 +9718,8 @@ function renderWeeklyPlan(){
         ${!isSun?`<button class="plan-add-btn" onclick="openAddPlanItem('${day.ds}')" title="Adicionar assunto">＋</button>`:''}
       </div>
       ${isSun
-        ?`<div class="plan-empty-day">🌟 Descanso</div>`
-        :`${itemsHtml}${!itemsHtml?'<div class="plan-empty-day" style="cursor:pointer" onclick="openAddPlanItem(\''+day.ds+'\')">＋ Adicionar assunto</div>':''}`
+        ?`<div class="plan-empty-day" title="Domingo é dia de descanso">🌟<span class="plan-lbl"> Descanso</span></div>`
+        :`${itemsHtml}${!itemsHtml?'<div class="plan-empty-day" style="cursor:pointer" title="Adicionar assunto" onclick="openAddPlanItem(\''+day.ds+'\')">＋<span class="plan-lbl"> Adicionar assunto</span></div>':''}`
       }
     </div>`;
   }).join('')}</div>`;
