@@ -2336,6 +2336,7 @@ nav{
     <button class="btn btn-sm btn-ghost" onclick="mapedRascunhos()"><i class="fa fa-floppy-disk"></i> Rascunhos</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedBloquearMoveis()"><i class="fa fa-couch"></i> Bloquear móveis</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedLiberarMoveis()"><i class="fa fa-person-walking"></i> Liberar móveis</button>
+    <button class="btn btn-sm btn-ghost" onclick="mapedMarcarAssentos()" title="Marca como assento toda cadeira da folha «Cadeiras» que estiver no mapa — sem isso a cadeira é só desenho e ninguém senta nela"><i class="fa fa-chair"></i> Marcar cadeiras</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedMarcarParedes()"><i class="fa fa-wand-magic-sparkles"></i> Marcar paredes</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedLimparColisao()"><i class="fa fa-broom"></i> Limpar paredes</button>
     <span class="maped-sep"></span>
@@ -7551,7 +7552,7 @@ ${ce?`[{"afirmacao":"...","gabarito":"C","explicacao":"..."},{"afirmacao":"...",
   // desligada, o fluxo é exatamente o de antes.
   let busca={material:'',fontes:[],via:null,diag:[]};
   if(pesquisar&&tavilyAtivo()){
-    busca=await buscarMaterial(sub.name,`${kingdom.name} — ${topic.name}`,25000);
+    busca=await buscarMaterial(sub.name,`${kingdom.name} — ${topic.name}`,materialParaQtd(quantidade));
   }
 
   // A IA às vezes ignora a instrução de quantidade (ou tem a resposta cortada por limite de
@@ -7568,6 +7569,19 @@ ${ce?`[{"afirmacao":"...","gabarito":"C","explicacao":"..."},{"afirmacao":"...",
 // inteiro), entao mora aqui: a IA as vezes devolve menos itens do que o pedido,
 // ou tem a resposta cortada por limite de tokens, e completar pedindo so o que
 // falta e o que faz o simulado sair com o numero escolhido.
+// Quanto material de pesquisa mandar junto. Medido numa prova de 20 questoes: o
+// material era 86% do prompt (25.782 de 29.753 caracteres). Uma prova de 10
+// questoes nao precisa da mesma fonte que uma de 50 — o teto continua em 25k, mas
+// o normal passa a ser proporcional ao que se pede.
+function materialParaQtd(qtd){
+  return Math.min(25000,Math.max(6000,(qtd||10)*1200));
+}
+// Na retentativa o material vai cortado: a chamada seguinte so pede as questoes
+// que faltaram, e reenviar os 25k inteiros dobrava o custo da geracao sem dobrar
+// a qualidade. Fica o comeco do material, que e onde estao as fontes oficiais
+// (a primeira busca do Tavily e a restrita a dominio oficial).
+const RETENTATIVA_MATERIAL=6000;
+
 async function gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,rotulo}){
   const questoes=[];
   const vistas=new Set();
@@ -7576,7 +7590,10 @@ async function gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,
   while(questoes.length<quantidade&&tentativas<MAX_TENTATIVAS){
     const faltam=quantidade-questoes.length;
     const base=buildPrompt(faltam,questoes.map(q=>q.questao));
-    const prompt=busca&&busca.material?tavilyPromptComFontes(base,busca.material):base;
+    const material=busca&&busca.material
+      ?(tentativas===0?busca.material:cortarNoPonto(busca.material,RETENTATIVA_MATERIAL))
+      :'';
+    const prompt=material?tavilyPromptComFontes(base,material):base;
     tentativas++;
     let arr;
     try{
@@ -7652,7 +7669,7 @@ ${ce?`[{"assunto":1,"afirmacao":"...","gabarito":"C","explicacao":"..."}]`
   // Uma pesquisa para o tema inteiro, no lugar de uma por assunto.
   let busca={material:'',fontes:[],via:null,diag:[]};
   if(pesquisar&&tavilyAtivo()){
-    busca=await buscarMaterial(topic.name,`${kingdom.name} — ${subs.slice(0,6).map(s=>s.name).join(', ')}`,25000);
+    busca=await buscarMaterial(topic.name,`${kingdom.name} — ${subs.slice(0,6).map(s=>s.name).join(', ')}`,materialParaQtd(quantidade));
   }
   const questoes=await gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,rotulo:topic.name});
   // Devolve cada questao ao assunto que ela cobre. Indice invalido cai no assunto
@@ -16194,6 +16211,16 @@ function salaMapaCreateGame(){
             p.setDepth(nearest.depth+shift[2]);
             p.play(p.charKey+'_sit_'+nearest.direction,true);
             p.playerBehavior='sitting';
+          }else if(!(this.assentos||[]).length){
+            // Apertar E e nao acontecer NADA nao diz se o problema e a distancia
+            // ou se o mapa nao tem assento nenhum — que e o caso de todo mapa
+            // montado no editor sem passar pelo modo Sentar.
+            if(!this.avisouSemAssento){
+              this.avisouSemAssento=true;
+              toast(isAdmin()
+                ?'⚠️ Este mapa não tem nenhum assento marcado. No editor: "Marcar cadeiras" ou pinte no modo Sentar.'
+                :'⚠️ Este mapa ainda não tem lugares para sentar.','var(--orange)');
+            }
           }
         }
       }
@@ -16900,6 +16927,59 @@ function mapedSit(){
   return l;
 }
 const MAPED_SIT_SETA={1:'▼',2:'◀',3:'▶',4:'▲'};
+
+// Direcao do assento por FRAME da folha "chair", conferida no mapa campus (208
+// cadeiras ja marcadas): o frame 1 e cadeira de frente (senta virado pra baixo) e
+// o 5 e de costas (senta virado pra cima). Os outros 21 frames dessa folha eu nao
+// tenho como afirmar sem conferir um por um, entao entram como 'baixo' e ficam
+// pro modo Sentar ajustar — sentar virado pro lado errado e muito melhor que nao
+// sentar, e o ajuste e um clique.
+const MAPED_CHAIR_DIR={1:1,5:4};   // frame -> valor da camada Sit (1=baixo, 4=cima)
+
+// Marca como assento toda cadeira da folha "chair" que estiver no mapa. E o passo
+// que faltava: colocar a cadeira no editor cria um OBJETO decorativo, e quem faz
+// sentar e a camada Sit — sem isso o mapa fica cheio de cadeira que ninguem usa.
+function mapedMarcarAssentos(){
+  const ts=SALA_TS_BY_NAME.chair;
+  if(!ts){toast('Folha de cadeiras não encontrada no catálogo','var(--red)');return;}
+  const camada=mapedMapa.layers.find(l=>l.name==='Obj_chair');
+  const objs=(camada&&camada.objects)||[];
+  if(!objs.length){
+    toast('Nenhuma cadeira da folha "Cadeiras" neste mapa. Para poltrona, sofá ou banco de outra folha, use o modo Sentar e clique em cima.','var(--orange)');
+    return;
+  }
+  mapedSnapshot();
+  const sit=mapedSit();
+  let marcados=0,chutados=0;
+  objs.forEach(o=>{
+    const frame=o.gid-ts.f;
+    // o objeto e ancorado no canto inferior esquerdo (padrao do Tiled)
+    const tx=Math.floor(o.x/32), ty=Math.floor((o.y-1)/32);
+    if(tx<0||ty<0||tx>=mapedMapa.width||ty>=mapedMapa.height)return;
+    const i=ty*mapedMapa.width+tx;
+    if(sit.data[i])return;   // ja marcado a mao: nao mexe
+    const dir=MAPED_CHAIR_DIR[frame];
+    sit.data[i]=dir||1;
+    marcados++;
+    if(!dir)chutados++;
+  });
+  if(!marcados){
+    mapedUndoStack.pop();
+    toast('Todas as cadeiras já estavam marcadas como assento.','var(--green)');
+    return;
+  }
+  mapedSujo=true;mapedDraw();
+  toast(chutados
+    ? `🪑 ${marcados} assento(s) marcado(s). Em ${chutados} eu não sei o lado da cadeira e deixei "para baixo" — corrija no modo Sentar se ficar torto.`
+    : `🪑 ${marcados} assento(s) marcado(s). Publique pra valer pra todo mundo.`,'var(--green)');
+}
+// Quantos assentos o mapa tem, das duas fontes que o jogo le.
+function mapedContaAssentos(){
+  const sit=mapedMapa.layers.find(l=>l.name==='Sit');
+  const nSit=sit?sit.data.filter(Boolean).length:0;
+  const ch=mapedMapa.layers.find(l=>l.name==='Chair');
+  return nSit+((ch&&ch.objects&&ch.objects.length)||0);
+}
 function mapedSolid(){
   let l=mapedMapa.layers.find(x=>x.name==='Solid');
   if(!l){
@@ -17308,6 +17388,10 @@ async function mapedSalvar(){
   if(!isAdmin())return;
   const vazio=mapedGround().data.every(v=>!v);
   if(vazio&&!confirm('O piso está todo vazio. Publicar assim mesmo?'))return;
+  // Publicar um mapa sem assento nenhum e o erro silencioso mais comum: as
+  // cadeiras aparecem, mas ninguem consegue sentar em nenhuma.
+  if(!mapedContaAssentos()&&
+     !confirm('Este mapa não tem NENHUM assento marcado — as cadeiras vão aparecer, mas ninguém vai conseguir sentar.\n\nUse "Marcar cadeiras" ou o modo Sentar antes.\n\nPublicar assim mesmo?'))return;
   // Publicar troca a planta de todo mundo. Antes disso, anda pelo mapa a partir
   // da entrada: mapa em que não dá pra sair do lugar era exatamente o que
   // acontecia sem esta conferência.
