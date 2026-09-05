@@ -703,6 +703,43 @@ nav{
 .dash-card{grid-column:span 2;margin-bottom:0;min-width:0;min-height:0;overflow:hidden;
   display:flex;flex-direction:column;padding:14px 16px}
 .dash-wide{grid-column:span 3}
+.dash-x4{grid-column:span 4}
+/* contador "6 de 43 · ver tudo" no cabecalho: o rolador escondia a escala, e o
+   numero que mede a divida (43) so aparecia na bolinha da barra lateral */
+.dash-conta{font-size:10px;font-weight:800;color:var(--muted);white-space:nowrap}
+.dash-conta b{color:var(--text2)}
+.dash-verlink{font-size:10px;font-weight:900;color:var(--accent);cursor:pointer;white-space:nowrap}
+.dash-verlink:hover{text-decoration:underline}
+/* Raridade deixa de disputar o vermelho com atraso: dourado, azul e cinza. */
+.rar-chip{font-size:9.5px;font-weight:900;border-radius:999px;padding:2px 8px;
+  border:1px solid;white-space:nowrap;flex-shrink:0}
+/* chip do motivo na fila de hoje */
+.fila-chip{font-size:9.5px;font-weight:900;border-radius:999px;padding:3px 9px;
+  border:1px solid;white-space:nowrap;flex-shrink:0}
+.fila-rev{background:rgba(220,38,38,0.1);color:var(--red);border-color:rgba(220,38,38,0.3)}
+.fila-novo{background:rgba(108,71,255,0.1);color:var(--accent);border-color:var(--border2)}
+.fila-fraco{background:rgba(234,88,12,0.1);color:var(--orange);border-color:rgba(234,88,12,0.3)}
+/* bloco de cima do cartao de divida */
+.div-topo{display:flex;align-items:center;gap:13px;margin-bottom:10px}
+.div-num{font-size:42px;font-weight:900;line-height:.85;color:var(--red)}
+.div-txt{font-size:10.5px;font-weight:800;color:var(--muted);line-height:1.35;padding-bottom:3px}
+.div-txt b{color:var(--text2);display:block;font-size:11.5px}
+.div-barra{display:flex;height:11px;border-radius:999px;overflow:hidden;margin-bottom:7px;background:var(--bg2)}
+.div-barra i{display:block}
+.div-leg{display:flex;flex-wrap:wrap;gap:9px;font-size:9.5px;font-weight:800;color:var(--muted);margin-bottom:10px}
+.div-leg span{display:flex;align-items:center;gap:4px}
+.div-pt{width:8px;height:8px;border-radius:3px;display:inline-block;flex-shrink:0}
+.div-btn{width:100%;border:none;border-radius:11px;padding:9px;font-size:11.5px;font-weight:900;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;cursor:pointer;margin-bottom:10px}
+.div-btn:hover{filter:brightness(1.08)}
+/* trilho de porcentagem, com cor por faixa (nao verde pra tudo) */
+.faixa-trilho{height:7px;border-radius:999px;background:var(--bg2);overflow:hidden;flex:1;min-width:26px}
+.faixa-trilho i{display:block;height:100%;border-radius:999px}
+/* destaque do cartao de flashcards: o numero primeiro, o grafico depois */
+.fc-topo{display:flex;align-items:baseline;gap:11px;margin-bottom:8px}
+.fc-num{font-size:40px;font-weight:900;line-height:.85}
+.fc-lbl{font-size:10.5px;font-weight:800;color:var(--muted);line-height:1.35}
+.fc-lbl b{display:block;color:var(--text2);font-size:11.5px}
 .dash-sec{margin-bottom:10px;font-size:11px;letter-spacing:1.2px}
 .dash-sec-sub{margin:12px 0 8px;padding-top:10px;border-top:1px dashed var(--border)}
 .dash-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
@@ -756,8 +793,9 @@ nav{
 .dash-fold #week-study-chart>div>div>div>div:first-child{font-size:12px!important}
 .dash-fold #week-study-chart>div>div>div>div:last-child{font-size:9.5px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* mesma régua pros dois vizinhos de linha, pra ficarem organizados juntos */
-.dash-fold #avg-time-list>div{padding:7px 10px!important;margin-bottom:6px!important;
-  border-radius:10px!important;background:var(--bg2);border-left:3px solid var(--border2)}
+.dash-fold #avg-time-list>div{display:flex;align-items:center;gap:9px;
+  padding:7px 10px;margin-bottom:6px;border-radius:10px;background:var(--bg2);
+  border:1px solid var(--border)}
 .dash-fold #avg-time-list>div:last-child{margin-bottom:0!important}
 .dash-fold #avg-time-list{font-size:12px}
 /* O gráfico sai com height:auto no style inline (130px de viewBox), o que
@@ -772,6 +810,14 @@ nav{
 .dash-fold #notif-permission-btn{padding:2px 6px!important;font-size:9.5px!important;white-space:nowrap}
 .dash-fold .dash-head-tools{flex-wrap:nowrap}
 .dash-fold .chart-tab{padding:3px 9px;font-size:10.5px}
+/* Com duas colunas, titulo + total + 3 abas + 2 botoes nao cabem numa linha so.
+   Neste cartao (e so nele) as ferramentas descem pra segunda linha. */
+.dash-fold .dash-card-tempo .dash-head{flex-wrap:wrap;row-gap:7px;margin-bottom:4px}
+.dash-fold .dash-card-tempo .dash-head-tools{flex:1 0 100%;justify-content:flex-end;flex-wrap:nowrap}
+/* a fileira de medalhas esmaece na direita em vez de cortar a ultima no meio */
+.dash-fold .badges-row{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 14px),transparent);
+  mask-image:linear-gradient(90deg,#000 calc(100% - 14px),transparent)}
+.dash-fold #divida-resumo{margin-top:2px}
 .dash-fold .dash-head .btn{padding:2px 6px!important;font-size:10px!important}
 /* fileira de conquistas rola de lado em vez de virar duas linhas */
 /* faixa de cima enxuta: 98px pra três cartões de uma linha era altura tirada
@@ -780,7 +826,11 @@ nav{
 .dash-fold .gamify-icon{font-size:26px}
 .dash-fold .gamify-val{font-size:20px}
 .dash-fold .gamify-lbl{font-size:10px}
-.dash-fold .gamify-badges{padding:10px 14px}
+.dash-fold .gamify-badges{padding:10px 14px;display:flex;align-items:center;gap:12px}
+.dash-fold .gamify-badges-title{margin:0;white-space:nowrap;flex-shrink:0}
+.dash-fold .gamify-badges-summary{white-space:nowrap;flex-shrink:0}
+.dash-fold .gamify-badges .badges-row{flex:1;min-width:0;margin:0}
+.dash-fold .gamify-badges .dash-verlink{flex-shrink:0}
 .dash-fold .gamify-badges-title{margin-bottom:5px}
 .dash-fold .badges-row{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
 .dash-fold .badges-row::-webkit-scrollbar{height:4px}
@@ -1776,21 +1826,27 @@ nav{
         </div>
       </div>
       <div class="section-card gamify-badges">
-        <div class="gamify-badges-title">🏅 CONQUISTAS <span id="dash-badges-summary" class="gamify-badges-summary"></span></div>
+        <div class="gamify-badges-title">🏅 CONQUISTAS</div>
+        <span id="dash-badges-summary" class="gamify-badges-summary"></span>
         <div class="badges-row" id="dash-badges"></div>
+        <a class="dash-verlink" onclick="showScreen('conquistas')">ver todas →</a>
       </div>
     </div>
 
     <div class="section-card dash-card">
-      <div class="sec-title dash-sec">🧭 O que estudar agora</div>
+      <div class="dash-head">
+        <div class="sec-title dash-sec">🧭 Fila de hoje</div>
+        <div class="dash-conta" id="fila-conta"></div>
+      </div>
       <div class="dash-scroll"><div id="next-steps-list"></div></div>
     </div>
 
     <div class="section-card dash-card">
       <div class="dash-head">
-        <div class="sec-title dash-sec">⚠️ Revisões atrasadas</div>
+        <div class="sec-title dash-sec">⚠️ Dívida de revisão</div>
         <button id="notif-permission-btn" class="btn btn-xs btn-ghost" style="display:none" onclick="requestNotifPermission()" title="Receber um aviso quando houver revisões atrasadas">🔔 Lembretes</button>
       </div>
+      <div id="divida-resumo"></div>
       <div class="dash-scroll" id="dash-overdue-revs"></div>
     </div>
 
@@ -1821,7 +1877,7 @@ nav{
       <div class="dash-scroll" id="avg-time-list"></div>
     </div>
 
-    <div class="section-card dash-card dash-wide">
+    <div class="section-card dash-card dash-card-tempo">
       <div class="dash-head">
         <div class="sec-title dash-sec">📊 Tempo estudado</div>
         <div class="dash-head-tools">
@@ -1838,7 +1894,7 @@ nav{
       <div class="chart-svg-wrap dash-grow" id="study-chart-wrap"></div>
     </div>
 
-    <div class="section-card dash-card dash-wide">
+    <div class="section-card dash-card dash-x4">
       <div class="dash-head">
         <div class="sec-title dash-sec">📅 Agenda semanal de estudos</div>
         <div class="dash-foot dash-foot-inline">Clique num dia para adicionar</div>
@@ -8602,7 +8658,10 @@ function renderStudyChart(){
 
   const maxSec=Math.max(1,...bars.map(b=>b.seconds));
   const totalSec=bars.reduce((a,b)=>a+b.seconds,0);
-  const W=Math.max(400, wrap.clientWidth||500);
+  // Sem piso artificial: um viewBox mais largo que a caixa e reduzido pelo
+  // width:100% e leva a altura junto — era o que encolhia o grafico quando o
+  // cartao ficou com duas colunas.
+  const W=Math.max(160, Math.round(wrap.clientWidth)||500);
   // A altura vem da caixa, nao de um numero fixo: dentro da primeira dobra o
   // #study-chart-wrap e flex:1, entao clientHeight ja e o espaco que sobrou no
   // cartao. Com H fixo em 130 a faixa do grafico precisava de 203px sempre, e era
@@ -8630,7 +8689,10 @@ function renderStudyChart(){
     if(b.seconds>0){
       svgValues+=`<text x="${x+bw/2}" y="${y-3}" text-anchor="middle" font-size="8" fill="${b.isToday?'#6c47ff':'#9ca3af'}" font-weight="700">${fmtTime(b.seconds)}</text>`;
     }
-    svgLabels+=`<text x="${x+bw/2}" y="${H-4}" text-anchor="middle" font-size="9" fill="${b.isToday?'#6c47ff':'#9ca3af'}" font-weight="${b.isToday?'900':'600'}">${b.label}</text>`;
+    // Com o cartao em duas colunas nao cabe uma data por barra: mostra uma sim,
+    // uma nao quando a barra fica estreita (o "hoje" nunca some).
+    const cabe=bw>=34||b.isToday||i%2===0;
+    if(cabe)svgLabels+=`<text x="${x+bw/2}" y="${H-4}" text-anchor="middle" font-size="9" fill="${b.isToday?'#6c47ff':'#9ca3af'}" font-weight="${b.isToday?'900':'600'}">${b.label}</text>`;
   });
 
   wrap.innerHTML=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;overflow:visible">
@@ -8681,28 +8743,49 @@ function renderFCAccuracyTrend(){
     if(totalEl)totalEl.textContent='';
     return;
   }
-  const W=Math.max(300,wrap.clientWidth||400),H=110,padL=4,padR=4,padT=14,padB=20;
+  // O aproveitamento e a comparacao com o periodo anterior sao o que se le de
+  // relance; o grafico vira apoio, num terco da altura. Antes eram 110px de
+  // grade quase vazia (2 barras em 14 dias) ocupando o centro da tela.
+  const comDados=days.filter(d=>d.pct!==null);
+  const media=comDados.length?Math.round(comDados.reduce((a,d)=>a+d.pct,0)/comDados.length):0;
+  const metade=Math.ceil(days.length/2);
+  const ant=days.slice(0,metade).filter(d=>d.pct!==null);
+  const rec=days.slice(metade).filter(d=>d.pct!==null);
+  let delta='';
+  if(ant.length&&rec.length){
+    const mA=Math.round(ant.reduce((a,d)=>a+d.pct,0)/ant.length);
+    const mR=Math.round(rec.reduce((a,d)=>a+d.pct,0)/rec.length);
+    const dif=mR-mA;
+    if(dif!==0)delta=`<span style="color:${dif>0?'var(--green)':'var(--red)'}">${dif>0?'▲':'▼'} ${Math.abs(dif)} ponto${Math.abs(dif)===1?'':'s'}</span> vs. a semana anterior`;
+  }
+  const W=Math.max(160,Math.round(wrap.clientWidth)||400),H=64,padL=4,padR=4,padT=6,padB=16;
   const bw=Math.floor((W-padL-padR)/days.length);
   const gap=3,barW=bw-gap,chartH=H-padT-padB;
   let svgBars='',svgLabels='';
   days.forEach((d,i)=>{
     const x=padL+i*bw;
     const hasData=d.pct!==null;
-    const barH=hasData?Math.max(4,Math.round(d.pct/100*chartH)):0;
+    const barH=hasData?Math.max(4,Math.round(d.pct/100*chartH)):3;
     const y=padT+chartH-barH;
-    const color=!hasData?'rgba(0,0,0,0.06)':d.pct>=70?'var(--green)':d.pct>=40?'var(--orange)':'var(--red)';
+    const color=!hasData?'var(--border)':faixaCor(d.pct);
     svgBars+=`<rect x="${x+gap/2}" y="${y}" width="${barW}" height="${barH}" rx="3" fill="${color}"
       onmouseover="document.getElementById('fc-trend-tip').textContent='${d.label}: ${hasData?d.pct+'% ('+d.total+' revisões)':'sem revisões'}'"
       onmouseout="document.getElementById('fc-trend-tip').textContent=''"
       style="cursor:default"/>`;
     svgLabels+=i%2===0?`<text x="${x+bw/2}" y="${H-4}" text-anchor="middle" font-size="8" fill="var(--muted)" font-weight="600">${d.label}</text>`:'';
   });
-  wrap.innerHTML=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;overflow:visible">
+  wrap.innerHTML=`
+  <div class="fc-topo">
+    <div class="fc-num" style="color:${faixaCor(media)}">${media}%</div>
+    <div class="fc-lbl"><b>de acerto</b>${totalReviews} revisõe${totalReviews===1?'':'s'} nos últimos 14 dias${delta?'<br>'+delta:''}</div>
+  </div>
+  <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;overflow:visible">
     <line x1="${padL}" y1="${padT+chartH}" x2="${W-padR}" y2="${padT+chartH}" stroke="var(--border)" stroke-width="1"/>
     ${svgBars}${svgLabels}
   </svg>
   <div id="fc-trend-tip" style="text-align:center;font-size:10px;color:var(--accent);font-weight:800;min-height:14px;margin-top:2px"></div>`;
-  if(totalEl)totalEl.textContent=`${totalReviews} revisões nos últimos 14 dias`;
+  // a contagem subiu pro destaque; repetir no rodape era a mesma frase duas vezes
+  if(totalEl)totalEl.textContent='';
 }
 // Substitui o antigo "tempo médio por assunto" (número solto, sem ação) por um
 // ranking de reinos que realmente precisam de atenção agora: revisões atrasadas
@@ -8728,12 +8811,15 @@ function renderKingdomsNeedingAttention(){
   }
   // Prioriza quem tem mais revisões atrasadas; empate desempata pelo pior aproveitamento
   rows.sort((a,b)=>b.overdue-a.overdue||(a.pct??100)-(b.pct??100));
-  el.innerHTML=rows.slice(0,6).map((r,i)=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;${i<rows.length-1?'border-bottom:1px solid var(--border)':''}">
-      <span style="font-size:18px;flex-shrink:0">${r.icon}</span>
-      <div style="flex:1;min-width:0;font-size:12px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}</div>
-      ${r.overdue>0?`<span style="background:rgba(220,38,38,0.1);color:var(--red);border-radius:8px;padding:2px 8px;font-size:10px;font-weight:900;flex-shrink:0">🔔 ${r.overdue} atrasada${r.overdue!==1?'s':''}</span>`:''}
-      ${r.pct!==null?`<span style="background:${r.pct>=70?'rgba(22,163,74,0.1)':r.pct>=40?'rgba(234,88,12,0.1)':'rgba(220,38,38,0.1)'};color:${r.pct>=70?'var(--green)':r.pct>=40?'var(--orange)':'var(--red)'};border-radius:8px;padding:2px 8px;font-size:10px;font-weight:900;flex-shrink:0">🎯 ${r.pct}%</span>`:''}
+  // A barra colorida por faixa e o que separa "sabe e nao revisou" (100% com 17
+  // atrasadas) de "nao sabe" (12%) — antes as duas saiam com o mesmo chip rosa.
+  el.innerHTML=rows.slice(0,6).map(r=>`
+    <div>
+      <span style="font-size:16px;flex-shrink:0">${r.icon}</span>
+      <div style="flex:1;min-width:0;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}</div>
+      ${r.overdue>0?`<span style="background:rgba(220,38,38,0.1);color:var(--red);border-radius:999px;padding:2px 8px;font-size:9.5px;font-weight:900;flex-shrink:0">🔔 ${r.overdue} atrasada${r.overdue!==1?'s':''}</span>`:''}
+      ${r.pct!==null?`<div class="faixa-trilho" style="max-width:62px"><i style="width:${r.pct}%;background:${faixaCor(r.pct)}"></i></div>
+        <span style="color:${faixaCor(r.pct)};font-size:11px;font-weight:900;flex-shrink:0;width:34px;text-align:right">${r.pct}%</span>`:''}
     </div>`).join('');
 }
 
@@ -9193,6 +9279,18 @@ function updateErrosBadge(){
 
 // Recomendação de estudo: prioridade do miniboss pesa mais que revisão atrasada,
 // que pesa mais que desempenho fraco em simulados (nessa ordem de desempate).
+// Vermelho passa a ser exclusivo de atraso. A raridade do miniboss ganha cor
+// propria (dourado/azul/cinza) pra parar de competir com o sinal de urgencia,
+// que era o motivo de tudo na tela parecer igualmente grave.
+const RARIDADE={30:{l:'Comum',c:'var(--muted)'},70:{l:'Raro',c:'#3b82f6'},100:{l:'Lendário',c:'var(--gold)'}};
+function raridadeChip(prio){
+  const r=RARIDADE[prio]; if(!r)return '';
+  return `<span class="rar-chip" style="color:${r.c};border-color:${r.c}55;background:${r.c}18">${r.l}</span>`;
+}
+// Faixa de desempenho: abaixo de 50 e problema, 50-79 e atencao, 80+ esta bom.
+// Antes tudo acima de 60 saia verde, entao 73% e 100% tinham a mesma cara.
+function faixaCor(pct){return pct>=80?'var(--green)':pct>=50?'var(--orange)':'var(--red)';}
+
 function computeStudyRecommendations(){
   const today=todayStr();
   const items=[];
@@ -9213,26 +9311,34 @@ function computeStudyRecommendations(){
         const isWeak=weakPct!==null&&weakPct<60;
         if(!overdueCount&&!notStudied&&!isWeak)return;
 
-        let reason,reasonIcon,reasonBonus;
+        let reason,reasonIcon,reasonBonus,tipo;
         if(overdueCount>0){
-          reason=`${overdueCount} revisão${overdueCount>1?'ões':''} atrasada${overdueCount>1?'s':''}`;
-          reasonIcon='🔔';reasonBonus=300+overdueCount*5;
+          // O atraso em dias diz mais que a contagem: "72d" ordena a cabeca do
+          // usuario, "1 revisão atrasada" era igual em todas as linhas.
+          let pior=0;
+          revs.forEach((r,i)=>{
+            const prevDone=revs.slice(0,i).every(p=>p.completed);
+            if(!r.completed&&prevDone&&s.studied&&r.date<today)pior=Math.max(pior,daysDiff(r.date,today));
+          });
+          tipo='revisao';reason=`revisão · ${pior}d`;reasonIcon='🔁';reasonBonus=300+overdueCount*5;
         }else if(notStudied){
-          reason='Ainda não estudado';reasonIcon='📖';reasonBonus=200;
+          tipo='novo';reason='nunca estudado';reasonIcon='✨';reasonBonus=200;
         }else{
-          reason=`Desempenho fraco (${weakPct}% de acerto)`;reasonIcon='🎯';reasonBonus=100+(60-weakPct);
+          tipo='fraco';reason=`fraco · ${weakPct}%`;reasonIcon='🎯';reasonBonus=100+(60-weakPct);
         }
 
         items.push({
           subId:s.id,subName:s.name,topicName:t.name,
           kingdomName:k.name,kingdomIcon:k.icon,priority:s.priority,
-          reason,reasonIcon,score:s.priority*1000+reasonBonus
+          reason,reasonIcon,tipo,score:s.priority*1000+reasonBonus
         });
       });
     });
   });
   items.sort((a,b)=>b.score-a.score);
-  return items.slice(0,7);
+  // Devolve a lista inteira: quem corta e quem desenha, pra o cabecalho poder
+  // dizer "6 de 43" em vez de esconder a escala atras do rolador.
+  return items;
 }
 // Agrega s.simStats de todos os minibosses pra questões/acertos (esses somam certinho,
 // cada questão pertence a um assunto só). "Simulados feitos" NÃO pode vir dessa mesma
@@ -9265,12 +9371,12 @@ function renderSimGlobalStats(){
     el.innerHTML=`<div class="empty" style="padding:16px;grid-column:1/-1"><i class="fa fa-list-check"></i><p>Nenhum simulado respondido ainda. Gere um em qualquer miniboss (botão "Simulado") pra começar a acompanhar aqui.</p></div>`;
     return;
   }
+  // Acertos e erros sairam: 105 e 24 ja estao dentro de 129 questoes e 81%, e
+  // cinco caixas numa coluna de um terco viravam cinco tiras ilegiveis.
   el.innerHTML=[
-    {icon:'🎲',val:st.tentativas,lbl:'Simulados feitos',color:'var(--pink)'},
-    {icon:'📝',val:st.questoes,lbl:'Questões respondidas',color:'var(--accent)'},
-    {icon:'✅',val:st.acertos,lbl:'Acertos',color:'var(--green)'},
-    {icon:'❌',val:st.erros,lbl:'Erros',color:'var(--red)'},
-    {icon:'🎯',val:st.pct+'%',lbl:'Aproveitamento geral',color:st.pct>=60?'var(--green)':'var(--red)'},
+    {icon:'🎲',val:st.tentativas,lbl:'Simulados',color:'var(--accent)'},
+    {icon:'📝',val:st.questoes,lbl:'Questões',color:'var(--text)'},
+    {icon:'🎯',val:st.pct+'%',lbl:'Aproveitamento',color:faixaCor(st.pct)},
   ].map(s=>`<div class="stat-card"><span class="stat-icon">${s.icon}</span><div class="stat-val" style="color:${s.color}">${s.val}</div><div class="stat-lbl">${s.lbl}</div></div>`).join('');
   renderSimKingdomBreakdown();
 }
@@ -9300,7 +9406,7 @@ function renderSimKingdomBreakdown(){
   const rows=computeSimuladoStatsByKingdom();
   if(rows.length<2){el.innerHTML='';return;}
   el.innerHTML=`<div class="sim-kb-title">📚 DESEMPENHO POR REINO</div>`+rows.map(r=>{
-    const color=r.pct>=60?'var(--green)':'var(--red)';
+    const color=faixaCor(r.pct);
     return `<div class="sim-kb-row">
       <div class="sim-kb-kingdom">${r.kingdom.icon} ${r.kingdom.name}</div>
       <div class="sim-kb-bar-wrap"><div class="sim-kb-bar" style="width:${r.pct}%;background:${color}"></div></div>
@@ -9312,20 +9418,24 @@ function renderSimKingdomBreakdown(){
 function renderNextSteps(){
   const el=document.getElementById('next-steps-list');
   if(!el)return;
-  const items=computeStudyRecommendations();
-  if(!items.length){
+  const todos=computeStudyRecommendations();
+  const conta=document.getElementById('fila-conta');
+  if(!todos.length){
     el.innerHTML=`<div class="empty" style="padding:16px"><i class="fa fa-champagne-glasses"></i><p>Tudo em dia! Sem pendências prioritárias agora. 🎉</p></div>`;
+    if(conta)conta.innerHTML='';
     return;
   }
-  const priLbl={30:'🟢 Comum',70:'🟠 Raro',100:'🔴 Lendário'};
+  const items=todos.slice(0,8);
+  if(conta)conta.innerHTML=`<b>${items.length}</b> de ${todos.length} · <span class="dash-verlink" onclick="abrirRevisoesAtrasadas()">ver tudo</span>`;
+  const cls={revisao:'fila-rev',novo:'fila-novo',fraco:'fila-fraco'};
   el.innerHTML=items.map((it,i)=>`
     <div class="next-step-item" onclick="goToSubtopic('${it.subId}')">
       <div class="next-step-rank">${i+1}</div>
       <div class="next-step-info">
         <div class="next-step-name">${it.subName}</div>
-        <div class="next-step-sub">${it.kingdomIcon} ${it.kingdomName} · ${it.topicName} · ${priLbl[it.priority]||''}</div>
+        <div class="next-step-sub">${it.kingdomIcon} ${it.kingdomName} · ${it.topicName}</div>
       </div>
-      <div class="next-step-reason">${it.reasonIcon} ${it.reason}</div>
+      <span class="fila-chip ${cls[it.tipo]||'fila-novo'}">${it.reasonIcon} ${it.reason}</span>
     </div>
   `).join('');
 }
@@ -9571,8 +9681,6 @@ function renderWeekStudyChart(){
     return;
   }
 
-  const priColor={30:'var(--green)',70:'var(--orange)',100:'var(--red)'};
-  const priLabel={30:'🟢 Comum',70:'🟠 Raro',100:'🔴 Lendário'};
 
   el.innerHTML=`<div style="display:flex;flex-direction:column;gap:6px">
     ${studied.map(s=>`
@@ -9582,7 +9690,7 @@ function renderWeekStudyChart(){
           <div style="font-size:12px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div>
           <div style="font-size:10px;color:var(--muted);font-weight:600">${s.topic} · ${s.kingdom}</div>
         </div>
-        <span style="font-size:9px;font-weight:900;color:${priColor[s.prio]||'var(--accent)'};flex-shrink:0">${priLabel[s.prio]||''}</span>
+        ${raridadeChip(s.prio)}
         <span style="font-size:9px;color:var(--muted);flex-shrink:0">${s.date.slice(5).replace('-','/')}</span>
       </div>`).join('')}
   </div>`;
@@ -9733,26 +9841,48 @@ function renderDashboard(){
     {icon:dashLvl.icon,val:(db.xp||0).toLocaleString(),lbl:`Nível ${dashLvl.level} · ${dashLvl.titulo}`,color:'var(--gold)'},
   ].map(s=>`<div class="stat-card"><span class="stat-icon">${s.icon}</span><div class="stat-val" style="color:${s.color}">${s.val}</div><div class="stat-lbl">${s.lbl}</div></div>`).join('');
 
-  // Overdue revisions (dashboard — only truly late, respeitando encadeamento)
-  let overdueItems=getAllRevItems().filter(i=>!i.completed&&!i.locked&&i.studied&&i.date<today);
-  overdueItems.sort((a,b)=>a.date.localeCompare(b.date));
-  overdueItems=overdueItems.slice(0,8);
+  // Dívida de revisão: o cartão passa a medir, não a listar. Listar 5 de 37 numa
+  // caixa rolante escondia o tamanho do problema e repetia "75d atraso" cinco
+  // vezes; o número, a mais antiga e a barra por reino é que dizem o que atacar.
+  const todasAtrasadas=getAllRevItems().filter(i=>!i.completed&&!i.locked&&i.studied&&i.date<today)
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  const rEl=document.getElementById('divida-resumo');
   const oEl=document.getElementById('dash-overdue-revs');
-  if(!overdueItems.length){
+  if(!todasAtrasadas.length){
+    if(rEl)rEl.innerHTML='';
     oEl.innerHTML=`<div class="empty" style="padding:20px"><i class="fa fa-party-horn"></i><p>Sem revisões atrasadas! Continue assim! 🎉</p></div>`;
   }else{
-    const rnCls=['rn-1','rn-2','rn-3','rn-4'];
-    oEl.innerHTML=overdueItems.map(item=>{
+    const porReino={};
+    todasAtrasadas.forEach(i=>{
+      const nome=i.kingdomName||'—';
+      if(!porReino[nome])porReino[nome]={n:0,icon:i.kingdomIcon,cor:i.kingdomColor};
+      porReino[nome].n++;
+    });
+    const paleta=['#8b5cf6','#ec4899','#f59e0b','#10b981','#0891b2','#ef4444'];
+    const reinos=Object.entries(porReino).sort((a,b)=>b[1].n-a[1].n)
+      .map(([nome,v],i)=>({nome,n:v.n,cor:v.cor||paleta[i%paleta.length]}));
+    const total=todasAtrasadas.length;
+    const maisAntiga=daysDiff(todasAtrasadas[0].date,today);
+    const lote=todasAtrasadas.slice(0,5).map(i=>i.subId);
+    if(rEl)rEl.innerHTML=`
+      <div class="div-topo">
+        <div class="div-num">${total}</div>
+        <div class="div-txt"><b>revisõe${total===1?'':'s'} atrasada${total===1?'':'s'}</b>
+          a mais antiga há ${maisAntiga} dia${maisAntiga===1?'':'s'}<br>
+          ${reinos[0].n} só em ${reinos[0].nome}</div>
+      </div>
+      <div class="div-barra">${reinos.map(r=>`<i style="width:${(r.n/total*100).toFixed(1)}%;background:${r.cor}" title="${r.nome}: ${r.n}"></i>`).join('')}</div>
+      <div class="div-leg">${reinos.slice(0,4).map(r=>`<span><i class="div-pt" style="background:${r.cor}"></i>${r.nome} ${r.n}</span>`).join('')}</div>
+      <button class="div-btn" onclick="abrirRevisoesAtrasadas()">Atacar as ${Math.min(5,total)} mais antiga${Math.min(5,total)===1?'':'s'} →</button>`;
+    // Sobram só as duas mais antigas como amostra, com um botão por linha em vez
+    // de dois empilhados — eram eles que esticavam a linha pra 75px.
+    oEl.innerHTML=todasAtrasadas.slice(0,2).map(item=>{
       const d=daysDiff(item.date,today);
       return`<div class="rev-item overdue">
-        <div class="rev-num-badge ${rnCls[item.idx]||'rn-1'}">${item.idx+1}</div>
-        <span style="font-size:18px">${item.kingdomIcon}</span>
-        <div class="rev-info"><div class="rev-name">${item.subName}</div><div class="rev-sub">${item.kingdomName} · ${item.date}</div></div>
-        <span class="rev-cd cd-over">${d}d atraso</span>
-        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
-          <button class="btn btn-xs btn-green-s" onclick="openRevQualityPicker('${item.subId}',${item.idx},'dashboard')"${!item.studied?' style="opacity:0.35;cursor:not-allowed;"':''}>✓</button>
-          <button class="btn btn-xs btn-ghost" title="Já reestudei esse assunto — recomeçar o agendamento de revisão a partir de hoje" onclick="resetarRevisoes('${item.subId}');renderDashboard()"><i class="fa fa-rotate"></i></button>
-        </div>
+        <button class="btn btn-xs btn-green-s" title="Marcar como revisada" onclick="openRevQualityPicker('${item.subId}',${item.idx},'dashboard')">✓</button>
+        <div class="rev-info"><div class="rev-name">${item.subName}</div><div class="rev-sub">${item.kingdomName} · ${item.topicName||item.date}</div></div>
+        <span class="rev-cd cd-over">${d}d</span>
+        <button class="btn btn-xs btn-ghost" title="Já reestudei esse assunto — recomeçar o agendamento de revisão a partir de hoje" onclick="resetarRevisoes('${item.subId}');renderDashboard()"><i class="fa fa-rotate"></i></button>
       </div>`;
     }).join('');
   }
@@ -9787,6 +9917,15 @@ function renderDashboard(){
   renderKingdomsNeedingAttention();
 }
 
+// O botao de lote leva pra aba "Atrasadas" das Revisoes, que ja e a tela feita
+// pra resolver varias de uma vez — nao inventa um fluxo novo em cima do painel.
+function abrirRevisoesAtrasadas(){
+  showScreen('revisions');
+  setTimeout(()=>{
+    const aba=document.querySelector('#screen-revisions .filter-row .chip[onclick*="overdue"]');
+    if(aba)aba.click();
+  },80);
+}
 function setMbFilter(id,el){
   mbFilter=id;
   document.querySelectorAll('#mb-filter-row .chip').forEach(c=>c.classList.remove('active'));
