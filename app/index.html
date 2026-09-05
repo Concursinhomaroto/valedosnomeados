@@ -682,7 +682,7 @@ nav{
    em tela pequena os cartões viram tiras ilegíveis. */
 .dash-fold{display:grid;gap:12px;margin-bottom:18px;
   grid-template-columns:repeat(6,1fr);
-  grid-template-rows:auto minmax(0,1.92fr) minmax(0,0.82fr) minmax(0,1.06fr);
+  grid-template-rows:auto minmax(0,1.12fr) minmax(0,1fr) minmax(0,1fr);
   height:calc(100vh - 120px);min-height:560px;}
 .dash-r1{grid-column:1/-1;display:grid;grid-template-columns:170px 210px 1fr;gap:12px;align-items:stretch}
 .dash-r1>.section-card{margin-bottom:0}
@@ -704,6 +704,49 @@ nav{
 .dash-scroll::-webkit-scrollbar{width:5px}
 .dash-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 .dash-fold .sim-global-grid{margin-bottom:8px}
+/* ===== Versão compacta dos componentes DENTRO da primeira dobra =====
+   Os componentes reais são bem maiores que a maquete: o cartão de revisão tem
+   14px de respiro e quebra em duas linhas, o item do "estudar agora" tem 12.5px
+   e envolve o nome, e as caixas de simulado são cartões de 12px em grade de 3.
+   Numa coluna de um terço da tela isso estoura e só aparecem duas linhas. Aqui
+   eles ficam em versão de uma linha, com o nome cortado por reticências em vez
+   de embrulhar. Fora da dobra continuam do tamanho original. */
+.dash-fold .rev-item{padding:6px 9px;border-radius:9px;gap:7px;margin-bottom:5px;
+  flex-wrap:nowrap;box-shadow:none}
+.dash-fold .rev-info{min-width:0}
+.dash-fold .rev-name{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-fold .rev-sub{font-size:9px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-fold .rev-cd{font-size:10.5px;min-width:0;white-space:nowrap}
+.dash-fold .rev-num-badge{width:19px;height:19px;font-size:9.5px}
+.dash-fold .rev-item .btn{padding:2px 6px!important;font-size:10px!important}
+.dash-fold .next-step-item{padding:6px 9px;border-radius:9px;gap:8px;margin-bottom:5px}
+.dash-fold .next-step-rank{width:19px;height:19px;font-size:10px}
+.dash-fold .next-step-name{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-fold .next-step-sub{font-size:9px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-fold .next-step-item>*:last-child{white-space:nowrap;font-size:9.5px}
+/* as seis caixas de simulado numa fileira só */
+.dash-fold .sim-global-grid{grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:5px}
+.dash-fold .stat-card{padding:5px 3px;border-radius:8px;box-shadow:none}
+.dash-fold .stat-icon{font-size:12px}
+.dash-fold .stat-val{font-size:14px}
+.dash-fold .stat-lbl{font-size:7.5px;line-height:1.15}
+.dash-fold .rank-row{padding:4px 6px;gap:7px;margin-bottom:4px}
+.dash-fold .rank-row span{font-size:15px!important}
+.dash-fold .rank-pos{font-size:11px}
+/* O gráfico sai com height:auto no style inline (130px de viewBox), o que
+   estoura a faixa baixa. Dentro da dobra ele passa a ocupar a altura que
+   sobrar, mantendo a proporção pelo viewBox. */
+/* cabeçalho numa linha só: quebrando em duas ele comia 65px dos ~180 úteis */
+.dash-fold .dash-head{flex-wrap:nowrap;align-items:center}
+.dash-fold .dash-head-tools{flex-wrap:nowrap}
+.dash-fold .chart-tab{padding:2px 7px;font-size:9.5px}
+.dash-fold .dash-head .btn{padding:2px 6px!important;font-size:10px!important}
+/* fileira de conquistas rola de lado em vez de virar duas linhas */
+.dash-fold .badges-row{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
+.dash-fold .badges-row::-webkit-scrollbar{height:4px}
+.dash-fold .badges-row::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.dash-fold #study-chart-wrap{display:flex;overflow:hidden}
+.dash-fold #study-chart-wrap svg{width:100%!important;height:100%!important;overflow:hidden!important}
 /* A agenda dentro da primeira dobra: 7 dias sempre lado a lado, em versão
    compacta. Fora da dobra ela segue com o auto-fill de 200px, que é o certo
    quando tem a largura da tela inteira. */
@@ -2035,6 +2078,7 @@ nav{
       <button class="maped-mode" data-mode="cadeira" onclick="mapedSetMode('cadeira',this)"><i class="fa fa-chair"></i> Cadeira</button>
       <button class="maped-mode" data-mode="ambiente" onclick="mapedSetMode('ambiente',this)"><i class="fa fa-house"></i> Ambiente pronto</button>
       <button class="maped-mode" data-mode="parede" onclick="mapedSetMode('parede',this)"><i class="fa fa-border-all"></i> Parede</button>
+      <button class="maped-mode" data-mode="sentar" onclick="mapedSetMode('sentar',this)"><i class="fa fa-chair"></i> Sentar</button>
       <button class="maped-mode" data-mode="borracha" onclick="mapedSetMode('borracha',this)"><i class="fa fa-eraser"></i> Apagar</button>
       <button class="maped-mode" data-mode="spawn" onclick="mapedSetMode('spawn',this)"><i class="fa fa-street-view"></i> Entrada</button>
     </div>
@@ -2042,6 +2086,12 @@ nav{
     <label class="maped-chk"><input type="checkbox" id="maped-collide" checked onchange="mapedRefreshInfo()"> bloqueia passagem</label>
     <label class="maped-chk"><input type="checkbox" id="maped-grid" checked onchange="mapedDraw()"> grade</label>
     <label class="maped-chk"><input type="checkbox" id="maped-vercol" onchange="mapedDraw()"> ver colisão</label>
+    <label class="maped-chk" id="maped-sitdir-wrap" style="display:none">virado pra
+      <select id="maped-sitdir" class="inp" style="font-size:11px;padding:2px 5px;width:auto">
+        <option value="1">baixo</option><option value="4">cima</option>
+        <option value="2">esquerda</option><option value="3">direita</option>
+      </select>
+    </label>
     <span class="maped-sep"></span>
     <button class="btn btn-sm btn-ghost" onclick="mapedZoom(-1)"><i class="fa fa-magnifying-glass-minus"></i></button>
     <span id="maped-zoom-label" class="maped-chk">100%</span>
@@ -14544,6 +14594,13 @@ function salaMapaCreateGame(){
       // Cadeiras — igual às outras camadas de objeto, mas guardam a direção (do Tiled)
       // pra saber em que pose sentar e pra que lado deslocar o jogador (SALA_SITTING_SHIFT).
       this.chairs=this.physics.add.staticGroup();
+      // Lista única de onde dá pra sentar. Vem de duas fontes: a camada 'Chair'
+      // (cadeiras da folha items/chair.png, do campus padrão) e a camada 'Sit'
+      // que o editor pinta. A segunda existe porque só a primeira significava
+      // que uma cadeira desenhada com qualquer outra folha — ou vinda de um
+      // ambiente carimbado — não dava pra sentar, que era o caso de todo mapa
+      // montado à mão.
+      this.assentos=[];
       const chairTileset=map.getTileset('chair');
       const chairLayer=map.getObjectLayer('Chair');
       if(chairLayer&&chairTileset){
@@ -14553,7 +14610,19 @@ function salaMapaCreateGame(){
           const sprite=this.chairs.get(actualX,actualY,SALA_TS_BY_NAME.chair.key,obj.gid-chairTileset.firstgid).setDepth(actualY);
           const dirProp=(obj.properties||[]).find(p=>p.name==='direction');
           sprite.direction=dirProp?dirProp.value:'down';
+          this.assentos.push(sprite);
         });
+      }
+
+      const sitLayer=(this.cache.tilemap.get('tilemap').data.layers||[]).find(l=>l.name==='Sit');
+      if(sitLayer&&sitLayer.data){
+        const DIRS={1:'down',2:'left',3:'right',4:'up'};
+        for(let i=0;i<sitLayer.data.length;i++){
+          const v=sitLayer.data[i];
+          if(!v)continue;
+          const tx=i%map.width,ty=(i/map.width)|0;
+          this.assentos.push({x:tx*32+16,y:ty*32+16,depth:ty*32+16,direction:DIRS[v]||'down'});
+        }
       }
 
       this.cursors={...this.input.keyboard.createCursorKeys(),...this.input.keyboard.addKeys('W,S,A,D')};
@@ -14609,7 +14678,7 @@ function salaMapaCreateGame(){
           p.play(p.charKey+'_idle_down',true);
         }else{
           let nearest=null,nearestDist=Infinity;
-          this.chairs.getChildren().forEach(c=>{
+          (this.assentos||[]).forEach(c=>{
             const d=Phaser.Math.Distance.Between(p.x,p.y,c.x,c.y);
             if(d<nearestDist){nearestDist=d;nearest=c;}
           });
@@ -14703,7 +14772,8 @@ function mapedCamada(nome){
 // colisão, também tilelayer), pegar a primeira daria a errada num mapa em que a
 // ordem venha diferente.
 function mapedGround(){
-  return mapedMapa.layers.find(l=>l.name==='Ground')||mapedMapa.layers.find(l=>l.type==='tilelayer');
+  return mapedMapa.layers.find(l=>l.name==='Ground')
+      ||mapedMapa.layers.find(l=>l.type==='tilelayer'&&l.name!=='Solid'&&l.name!=='Sit');
 }
 
 // ---------------------------------------------------------------- abertura ---
@@ -14823,6 +14893,9 @@ function mapedSetMode(m,el){
   // Uma sala do pacote tem 150+ tiles de móvel. Carimbar tudo como bloqueio
   // fecha o mapa — o padrão aqui é decorar; parede se desenha no modo Parede.
   if(amb){mapedRenderGaleria();document.getElementById('maped-collide').checked=false;}
+  const sw=document.getElementById('maped-sitdir-wrap');
+  if(sw)sw.style.display=m==='sentar'?'flex':'none';
+  if(m==='sentar')document.getElementById('maped-collide').checked=true;
   if(m==='parede'){
     document.getElementById('maped-vercol').checked=true;   // pintar às cegas não funciona
     document.getElementById('maped-collide').checked=true;
@@ -14850,6 +14923,7 @@ function mapedRefreshInfo(){
     borracha:'Clique pra tirar a peça mais de cima daquele tile. O piso não é apagado — pinte por cima no modo Piso.',
     spawn:'Clique onde as pessoas devem aparecer ao entrar na sala.',
     ambiente:'Escolha a sala ao lado e clique: ela entra inteira, chão e móveis. Os móveis NÃO barram o jogador (marque "bloqueia passagem" antes de carimbar se quiser que barrem). Quem fecha a sala é o modo Parede.',
+    sentar:'Clique (ou arraste) em cima de uma cadeira, banco ou sofá pra marcar que dá pra sentar ali, virado pro lado escolhido. Vale pra qualquer móvel, de qualquer folha. Desmarque "bloqueia passagem" pra apagar o assento.',
     parede:'Arraste sobre o mapa pra marcar em RETÂNGULO onde não se passa (vermelho, invisível no jogo). Desmarque "bloqueia passagem" e o mesmo arrasto vira borracha, liberando a área — inclusive os móveis que estiverem nela.'};
   const g=mapedGround();
   i.innerHTML=(dicas[mapedModo]||'')+
@@ -15054,6 +15128,20 @@ function mapedDraw(){
       }
     }
   }
+  const sit=mapedMapa.layers.find(l=>l.name==='Sit');
+  if(sit){
+    ctx.fillStyle='rgba(52,211,153,0.34)';
+    ctx.font='bold 15px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';
+    for(let i=0;i<sit.data.length;i++){
+      const v=sit.data[i];if(!v)continue;
+      const x=(i%W)*MAPED_T,y=Math.floor(i/W)*MAPED_T;
+      ctx.fillStyle='rgba(52,211,153,0.34)';
+      ctx.fillRect(x,y,MAPED_T,MAPED_T);
+      ctx.fillStyle='#065f46';
+      ctx.fillText(MAPED_SIT_SETA[v]||'▼',x+MAPED_T/2,y+MAPED_T/2);
+    }
+    ctx.textAlign='start';ctx.textBaseline='alphabetic';
+  }
   const sp=(mapedMapa.properties||[]).find(p=>p.name==='spawn');
   if(sp){
     const [tx,ty]=String(sp.value).split(',').map(Number);
@@ -15088,6 +15176,14 @@ function mapedNextId(){
 function mapedAplicar(tx,ty){
   if(tx<0||ty<0||tx>=mapedMapa.width||ty>=mapedMapa.height)return;
   if(mapedModo==='ambiente'){mapedCarimbarAmbiente(tx,ty);return;}
+  if(mapedModo==='sentar'){
+    const l=mapedSit();
+    // Marcado põe assento na direção escolhida; desmarcado apaga — mesma lógica
+    // do pincel de parede, pra não inventar um gesto novo.
+    l.data[ty*mapedMapa.width+tx]=document.getElementById('maped-collide').checked
+      ?parseInt(document.getElementById('maped-sitdir').value,10)||1:0;
+    mapedDraw();return;
+  }
   if(mapedModo==='parede'){
     const bloq=document.getElementById('maped-collide').checked;
     mapedSolid().data[ty*mapedMapa.width+tx]=bloq?1:0;
@@ -15201,11 +15297,19 @@ function mapedCanvasDown(ev){
   // Parede é retângulo: clica num canto, arrasta até o outro, solta. Marcar
   // tile a tile uma parede de 20 tiles é trabalho demais, e marcar por TIPO de
   // tile erra quando o chão alterna dois desenhos — pinta metade do piso.
+  if(mapedModo==='sentar'){
+    const l=mapedSit();
+    // Marcado põe assento na direção escolhida; desmarcado apaga — mesma lógica
+    // do pincel de parede, pra não inventar um gesto novo.
+    l.data[ty*mapedMapa.width+tx]=document.getElementById('maped-collide').checked
+      ?parseInt(document.getElementById('maped-sitdir').value,10)||1:0;
+    mapedDraw();return;
+  }
   if(mapedModo==='parede'){mapedParedeArrasta(ev);return;}
   mapedSnapshot();
   const p=mapedCanvasTile(ev);
   mapedAplicar(p.tx,p.ty);
-  if(mapedModo!=='piso'&&mapedModo!=='borracha')return;
+  if(mapedModo!=='piso'&&mapedModo!=='borracha'&&mapedModo!=='sentar')return;
   mapedPintando=true;
   let ult=p.tx+','+p.ty;
   const mv=e=>{
@@ -15275,6 +15379,22 @@ function mapedCarimbarAmbiente(tx,ty){
 // serve pra mapa montado à mão (parede pode vir de qualquer folha). A camada
 // 'Solid' é um desenho separado de onde não se passa — invisível no jogo,
 // vermelho hachurado aqui.
+// Camada de assentos. Qualquer tile pode virar cadeira: o jogo lê daqui, não do
+// desenho. Antes só a folha items/chair.png colocada no modo Cadeira gerava
+// assento, então cadeira vinda de folha de tema ou de ambiente carimbado era
+// pura decoração — que é todo mapa montado à mão.
+// Valores: 1 baixo, 2 esquerda, 3 direita, 4 cima. 0 = não é assento.
+function mapedSit(){
+  let l=mapedMapa.layers.find(x=>x.name==='Sit');
+  if(!l){
+    l={data:new Array(mapedMapa.width*mapedMapa.height).fill(0),width:mapedMapa.width,
+       height:mapedMapa.height,id:mapedMapa.layers.length+1,name:'Sit',opacity:1,
+       type:'tilelayer',visible:false,x:0,y:0};
+    mapedMapa.layers.push(l);
+  }
+  return l;
+}
+const MAPED_SIT_SETA={1:'▼',2:'◀',3:'▶',4:'▲'};
 function mapedSolid(){
   let l=mapedMapa.layers.find(x=>x.name==='Solid');
   if(!l){
@@ -15669,7 +15789,7 @@ function mapedTilesetsUsados(m){
     if(a)usados.add(a.n);
   };
   m.layers.forEach(l=>{
-    if(l.type==='tilelayer'&&l.name!=='Solid')l.data.forEach(marca);
+    if(l.type==='tilelayer'&&l.name!=='Solid'&&l.name!=='Sit')l.data.forEach(marca);
     else if(l.type==='objectgroup')l.objects.forEach(o=>marca(o.gid));
   });
   return (m.tilesets||mapedTilesetsDoCatalogo()).filter(t=>usados.has(t.name));
