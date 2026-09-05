@@ -442,11 +442,37 @@ nav{
 .err-skipped{font-size:11px;color:var(--orange);margin-top:8px;font-weight:700;}
 
 /* ===== SIMULADO GERAL ===== */
-.sg-picker{max-height:400px;overflow-y:auto;border:1.5px solid var(--border);border-radius:12px;padding:12px;background:var(--panel2);}
-/* Com dezenas de assuntos por reino, 400px so mostra o primeiro chefao e o
-   usuario rola dentro de uma caixinha. Ampliada, a lista usa a tela. */
-.sg-picker-alto{max-height:calc(100vh - 260px);}
-.sg-picker-tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+/* Arvore dobravel: com 300+ assuntos, a lista aberta obrigava a rolar dezenas de
+   linhas de um chefao so pra descobrir que existiam outros. Fechada, cabe inteira
+   na tela e o teto de 460px quase nunca e alcancado. */
+.sg-picker{max-height:460px;overflow-y:auto;border:1.5px solid var(--border);border-radius:12px;padding:8px;background:var(--panel2);}
+.sg-busca-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
+.sg-busca{position:relative;flex:1;min-width:190px;}
+.sg-busca i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:11px;pointer-events:none;}
+.sg-busca input{width:100%;padding-left:30px;font-size:12px;}
+.sg-reino{border-radius:10px;margin-bottom:4px;}
+.sg-reino:last-child{margin-bottom:0;}
+.sg-chefao{border-radius:8px;}
+/* Os filhos so aparecem quando o bloco esta aberto — e o unico seletor que
+   controla o dobramento, nos dois niveis. */
+.sg-reino>.sg-filhos,.sg-chefao>.sg-filhos{display:none;}
+.sg-reino.aberto>.sg-filhos,.sg-chefao.aberto>.sg-filhos{display:block;}
+.sg-linha{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;
+  cursor:pointer;user-select:none;}
+.sg-linha:hover{background:rgba(108,71,255,0.07);}
+.sg-linha-reino{font-size:13px;color:var(--text);background:var(--panel);border:1px solid var(--border);}
+.sg-linha-chefao{font-size:12px;color:var(--text2);margin-left:14px;}
+.sg-linha input{cursor:pointer;flex-shrink:0;margin:0;}
+.sg-linha-nome{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:800;}
+.sg-chev{font-size:9px;color:var(--muted);width:9px;flex-shrink:0;transition:transform .15s;}
+.aberto>.sg-linha>.sg-chev{transform:rotate(90deg);}
+.sg-prio{font-size:9px;letter-spacing:-3px;flex-shrink:0;opacity:.85;}
+.sg-cont{font-size:10px;font-weight:900;color:var(--muted);flex-shrink:0;
+  background:var(--bg2);border-radius:999px;padding:2px 8px;font-variant-numeric:tabular-nums;}
+.sg-cont-on{color:var(--accent);background:rgba(108,71,255,0.12);}
+.sg-oculto{display:none!important;}
+.sg-vazio{font-size:11.5px;font-weight:700;color:var(--muted);padding:12px 4px;}
+@media (prefers-reduced-motion:reduce){.sg-chev{transition:none;}}
 .sg-pesq-row{display:flex;align-items:center;gap:9px;margin-top:12px;font-size:11.5px;
   font-weight:800;color:var(--text2);cursor:pointer;}
 .sg-pesq-row input{cursor:pointer;}
@@ -474,7 +500,10 @@ nav{
 .sg-topic{margin-left:22px;margin-bottom:8px;}
 .sg-topic-name{font-size:11px;font-weight:800;color:var(--muted);margin-bottom:4px;}
 .sg-subs{display:flex;flex-direction:column;gap:4px;margin-left:14px;}
-.sg-sub-row{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text2);cursor:pointer;}
+.sg-sub-row{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text2);
+  cursor:pointer;padding:5px 10px 5px 46px;border-radius:8px;}
+.sg-sub-row:hover{background:rgba(108,71,255,0.07);}
+.sg-sub-row input{flex-shrink:0;margin:0;}
 .sg-config-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;}
 .sg-config-lbl{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px;}
 .sg-hist-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);margin-bottom:6px;font-size:11px;color:var(--text2);}
@@ -7525,6 +7554,9 @@ function renderSimGeralScreen(){
   }
   sgStopTimerTick();
   container.innerHTML=simGeralConfigHTML();
+  // sem isto, os contadores por chefao/reino e o custo do Tavily nasceriam
+  // zerados mesmo com assuntos ja selecionados de uma visita anterior
+  sgUpdateSummary();
 }
 function simGeralConfigHTML(){
   const kingdoms=db.kingdoms.filter(k=>(db.topics[k.id]||[]).some(t=>(t.subtopics||[]).some(s=>s.studied)));
@@ -7538,31 +7570,58 @@ function simGeralConfigHTML(){
     return html;
   }
 
-  html+=`<div class="sg-picker-tools">
-    <button class="btn btn-xs btn-ghost" onclick="sgTogglePickerAltura(this)" id="sg-altura-btn">${db.sgPickerAlto?'<i class="fa fa-compress"></i> Reduzir lista':'<i class="fa fa-expand"></i> Ampliar lista'}</button>
-    <button class="btn btn-xs btn-ghost" onclick="sgMarcarTodos(true)"><i class="fa fa-check-double"></i> Marcar todos</button>
-    <button class="btn btn-xs btn-ghost" onclick="sgMarcarTodos(false)"><i class="fa fa-eraser"></i> Limpar</button>
+  // A lista e uma arvore dobravel, com os chefoes fechados por padrao. Com 300+
+  // assuntos, a lista aberta exigia rolar por dezenas de linhas de um chefao so
+  // pra descobrir que existiam outros. Fechada, o primeiro olhar mostra o mapa de
+  // chefoes; abre-se so o que interessa.
+  const totalAssuntos=kingdoms.reduce((n,k)=>n+topicsPorPrioridade(k.id)
+    .reduce((m,t)=>m+(t.subtopics||[]).filter(s=>s.studied).length,0),0);
+  html+=`<div class="sg-busca-row">
+    <div class="sg-busca">
+      <i class="fa fa-magnifying-glass"></i>
+      <input id="sg-busca" class="inp" placeholder="Buscar assunto pelo nome…" oninput="sgFiltrar(this.value)" autocomplete="off">
+    </div>
+    <button class="btn btn-xs btn-ghost" onclick="sgAbrirTudo(false)" title="Fechar todos os chefões"><i class="fa fa-compress"></i> Fechar tudo</button>
+    <button class="btn btn-xs btn-ghost" onclick="sgAbrirTudo(true)" title="Abrir todos os chefões"><i class="fa fa-expand"></i> Abrir tudo</button>
+    <button class="btn btn-xs btn-ghost" onclick="sgMarcarTodos(true)" title="Marca todos os assuntos à vista — com a busca ativa, marca só os resultados dela"><i class="fa fa-check-double"></i> Marcar todos</button>
+    <button class="btn btn-xs btn-ghost" onclick="sgMarcarTodos(false)" title="Desmarca tudo, inclusive o que a busca está escondendo"><i class="fa fa-eraser"></i> Limpar</button>
   </div>`;
-  html+=`<div id="sg-picker" class="sg-picker${db.sgPickerAlto?' sg-picker-alto':''}">`;
+  html+=`<div id="sg-picker" class="sg-picker">`;
   kingdoms.forEach(k=>{
     const topics=topicsPorPrioridade(k.id).filter(t=>(t.subtopics||[]).some(s=>s.studied));
-    html+=`<div class="sg-kingdom">
-      <label class="sg-kingdom-row"><input type="checkbox" onchange="sgToggleKingdom('${k.id}',this.checked)"> <b>${k.icon} ${k.name}</b></label>`;
+    const nK=topics.reduce((n,t)=>n+(t.subtopics||[]).filter(s=>s.studied).length,0);
+    const abertoK=db.sgReinosFechados&&db.sgReinosFechados[k.id]?'':' aberto';
+    html+=`<div class="sg-reino${abertoK}" data-reino="${k.id}">
+      <div class="sg-linha sg-linha-reino" onclick="sgDobrar(this)">
+        <i class="fa fa-chevron-right sg-chev"></i>
+        <input type="checkbox" onclick="event.stopPropagation()" onchange="sgToggleKingdom('${k.id}',this.checked)" data-reino-cb="${k.id}">
+        <span class="sg-linha-nome"><b>${k.icon||'🏰'} ${escapeHtml(k.name)}</b></span>
+        <span class="sg-cont" id="sg-cont-k-${k.id}">0/${nK}</span>
+      </div>
+      <div class="sg-filhos">`;
     topics.forEach(t=>{
-      html+=`<div class="sg-topic">
-        <div class="sg-topic-name">${t.icon||'⚔️'} ${t.name}</div>
-        <div class="sg-subs">`;
-      (t.subtopics||[]).filter(s=>s.studied).forEach(s=>{
-        html+=`<label class="sg-sub-row"><input type="checkbox" data-kingdom="${k.id}" data-sub="${s.id}" onchange="sgToggleSub('${s.id}',this.checked)" ${simGeralConfig.selectedSubIds.has(s.id)?'checked':''}> ${s.name}</label>`;
+      const subs=(t.subtopics||[]).filter(s=>s.studied);
+      html+=`<div class="sg-chefao" data-chefao="${t.id}">
+        <div class="sg-linha sg-linha-chefao" onclick="sgDobrar(this)">
+          <i class="fa fa-chevron-right sg-chev"></i>
+          <input type="checkbox" onclick="event.stopPropagation()" onchange="sgToggleChefao('${t.id}',this.checked)" data-chefao-cb="${t.id}">
+          <span class="sg-linha-nome">${t.icon||'⚔️'} ${escapeHtml(t.name)}</span>
+          <span class="sg-prio" title="Prioridade">${'🔥'.repeat(t.priority||1)}</span>
+          <span class="sg-cont" id="sg-cont-t-${t.id}">0/${subs.length}</span>
+        </div>
+        <div class="sg-filhos">`;
+      subs.forEach(s=>{
+        html+=`<label class="sg-sub-row" data-nome="${escapeHtml(String(s.name||'').toLowerCase())}"><input type="checkbox" data-kingdom="${k.id}" data-chefao="${t.id}" data-sub="${s.id}" onchange="sgToggleSub('${s.id}',this.checked)" ${simGeralConfig.selectedSubIds.has(s.id)?'checked':''}> ${escapeHtml(s.name)}</label>`;
       });
       html+=`</div></div>`;
     });
-    html+=`</div>`;
+    html+=`</div></div>`;
   });
   html+=`</div>`;
+  html+=`<div class="sg-vazio" id="sg-vazio" style="display:none">Nenhum assunto com esse nome.</div>`;
 
   html+=`
-    <div id="sg-summary" style="margin:14px 0;font-size:11px;font-weight:800;color:var(--accent)">${simGeralConfig.selectedSubIds.size} assunto(s) selecionado(s)</div>
+    <div id="sg-summary" style="margin:14px 0;font-size:11px;font-weight:800;color:var(--accent)">${simGeralConfig.selectedSubIds.size} de ${totalAssuntos} assunto(s) selecionado(s)</div>
     <div class="sg-config-row">
       <div>
         <label class="sg-config-lbl">Total de questões</label>
@@ -7603,9 +7662,9 @@ function simGeralConfigHTML(){
     </div>
     <label class="sg-pesq-row" title="${tavilyAtivo()?'Cada assunto vira duas buscas no Tavily antes da IA elaborar as questões':'Configure a chave do Tavily no painel de IA pra ativar'}">
       <input type="checkbox" id="sg-pesquisar" ${tavilyAtivo()?'':'disabled'} ${db.simPesquisar!==false&&tavilyAtivo()?'checked':''}>
-      <span>🔎 Pesquisar na internet antes de elaborar${tavilyAtivo()
-        ?` <b style="color:var(--muted);font-weight:700">— gasta busca do Tavily por assunto (${simGeralConfig.selectedSubIds.size} selecionado${simGeralConfig.selectedSubIds.size===1?'':'s'})</b>`
-        :' <b style="color:var(--muted);font-weight:700">— sem chave do Tavily configurada</b>'}</span>
+      <span>🔎 Pesquisar na internet antes de elaborar ${tavilyAtivo()
+        ?`<b id="sg-custo" style="color:var(--muted);font-weight:700">— nenhum assunto selecionado ainda</b>`
+        :'<b style="color:var(--muted);font-weight:700">— sem chave do Tavily configurada</b>'}</span>
     </label>
     <button id="sg-gerar-btn" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:14px" onclick="generateSimuladoGeral()" ${simGeralConfig.selectedSubIds.size===0?'disabled':''}><i class="fa fa-wand-magic-sparkles"></i> Gerar Simulado Geral</button>
   </div>`;
@@ -7630,34 +7689,114 @@ function sgToggleSub(subId,checked){
 }
 function sgToggleKingdom(kingdomId,checked){
   document.querySelectorAll(`#sg-picker input[data-kingdom="${kingdomId}"]`).forEach(cb=>{
+    if(cb.closest('.sg-sub-row')&&cb.closest('.sg-sub-row').classList.contains('sg-oculto'))return; // respeita o filtro de busca
     cb.checked=checked;
     const subId=cb.dataset.sub;
     if(checked)simGeralConfig.selectedSubIds.add(subId);else simGeralConfig.selectedSubIds.delete(subId);
   });
   sgUpdateSummary();
 }
+function sgToggleChefao(topicId,checked){
+  document.querySelectorAll(`#sg-picker input[data-chefao="${topicId}"]`).forEach(cb=>{
+    if(cb.closest('.sg-sub-row')&&cb.closest('.sg-sub-row').classList.contains('sg-oculto'))return;
+    cb.checked=checked;
+    const subId=cb.dataset.sub;
+    if(checked)simGeralConfig.selectedSubIds.add(subId);else simGeralConfig.selectedSubIds.delete(subId);
+  });
+  sgUpdateSummary();
+}
+// Dobra/desdobra clicando na linha inteira. O estado do REINO fica salvo (sao
+// poucos e a escolha e estavel); os chefoes nascem fechados toda vez de
+// proposito — sao dezenas, e a lista aberta e exatamente o problema.
+function sgDobrar(linha){
+  const bloco=linha.parentElement;
+  bloco.classList.toggle('aberto');
+  if(bloco.classList.contains('sg-reino')){
+    if(!db.sgReinosFechados)db.sgReinosFechados={};
+    if(bloco.classList.contains('aberto'))delete db.sgReinosFechados[bloco.dataset.reino];
+    else db.sgReinosFechados[bloco.dataset.reino]=1;
+    saveDB();
+  }
+}
+function sgAbrirTudo(abrir){
+  document.querySelectorAll('#sg-picker .sg-reino,#sg-picker .sg-chefao')
+    .forEach(b=>b.classList.toggle('aberto',abrir));
+  if(!db.sgReinosFechados)db.sgReinosFechados={};
+  document.querySelectorAll('#sg-picker .sg-reino').forEach(b=>{
+    if(abrir)delete db.sgReinosFechados[b.dataset.reino];
+    else db.sgReinosFechados[b.dataset.reino]=1;
+  });
+  saveDB();
+}
+// Busca por nome: esconde o que nao casa e abre sozinho os blocos que sobraram,
+// pra achar um assunto entre centenas sem ter que lembrar em que chefao ele esta.
+function sgFiltrar(termo){
+  const q=String(termo||'').trim().toLowerCase();
+  const picker=document.getElementById('sg-picker');
+  if(!picker)return;
+  picker.classList.toggle('sg-buscando',!!q);
+  let achou=0;
+  picker.querySelectorAll('.sg-sub-row').forEach(row=>{
+    const bate=!q||(row.dataset.nome||'').includes(q);
+    row.classList.toggle('sg-oculto',!bate);
+    if(bate)achou++;
+  });
+  picker.querySelectorAll('.sg-chefao').forEach(bloco=>{
+    const visiveis=bloco.querySelectorAll('.sg-sub-row:not(.sg-oculto)').length;
+    bloco.classList.toggle('sg-oculto',q&&!visiveis);
+    if(q&&visiveis)bloco.classList.add('aberto');
+  });
+  picker.querySelectorAll('.sg-reino').forEach(bloco=>{
+    const visiveis=bloco.querySelectorAll('.sg-chefao:not(.sg-oculto)').length;
+    bloco.classList.toggle('sg-oculto',q&&!visiveis);
+    if(q&&visiveis)bloco.classList.add('aberto');
+  });
+  const vazio=document.getElementById('sg-vazio');
+  if(vazio)vazio.style.display=(q&&!achou)?'block':'none';
+}
+// Cada linha dobrada precisa dizer quanto tem selecionado dentro dela — senao
+// fechar o chefao esconde a informacao junto com os assuntos.
 function sgUpdateSummary(){
+  const total=document.querySelectorAll('#sg-picker input[data-sub]').length;
   const el=document.getElementById('sg-summary');
-  if(el)el.textContent=`${simGeralConfig.selectedSubIds.size} assunto(s) selecionado(s)`;
+  if(el)el.textContent=`${simGeralConfig.selectedSubIds.size} de ${total} assunto(s) selecionado(s)`;
   const btn=document.getElementById('sg-gerar-btn');
   if(btn)btn.disabled=simGeralConfig.selectedSubIds.size===0;
+  document.querySelectorAll('#sg-picker .sg-chefao').forEach(bloco=>{
+    const cbs=[...bloco.querySelectorAll('input[data-sub]')];
+    const m=cbs.filter(c=>c.checked).length;
+    const cont=bloco.querySelector('.sg-cont');
+    if(cont){cont.textContent=`${m}/${cbs.length}`;cont.classList.toggle('sg-cont-on',m>0);}
+    const cb=bloco.querySelector('input[data-chefao-cb]');
+    if(cb){cb.checked=m>0&&m===cbs.length;cb.indeterminate=m>0&&m<cbs.length;}
+  });
+  document.querySelectorAll('#sg-picker .sg-reino').forEach(bloco=>{
+    const cbs=[...bloco.querySelectorAll('input[data-sub]')];
+    const m=cbs.filter(c=>c.checked).length;
+    const cont=bloco.querySelector('.sg-linha-reino .sg-cont');
+    if(cont){cont.textContent=`${m}/${cbs.length}`;cont.classList.toggle('sg-cont-on',m>0);}
+    const cb=bloco.querySelector('input[data-reino-cb]');
+    if(cb){cb.checked=m>0&&m===cbs.length;cb.indeterminate=m>0&&m<cbs.length;}
+  });
+  const custo=document.getElementById('sg-custo');
+  if(custo){
+    const n=simGeralConfig.selectedSubIds.size;
+    // 2 buscas por assunto; o Tavily cobra ~1,5 credito na busca avancada
+    custo.textContent=n?`— ${n*2} busca${n*2>1?'s':''} no Tavily (≈ ${Math.round(n*3)} créditos)`:'— nenhum assunto selecionado ainda';
+  }
 }
-// Ampliar/reduzir a caixa da lista de assuntos. Fica salvo no db pra a escolha
-// sobreviver ao proximo simulado — nao adianta ter que reampliar toda vez.
-function sgTogglePickerAltura(btn){
-  db.sgPickerAlto=!db.sgPickerAlto;
-  saveDB();
-  const box=document.getElementById('sg-picker');
-  if(box)box.classList.toggle('sg-picker-alto',!!db.sgPickerAlto);
-  if(btn)btn.innerHTML=db.sgPickerAlto?'<i class="fa fa-compress"></i> Reduzir lista':'<i class="fa fa-expand"></i> Ampliar lista';
-}
+// Os dois botoes tratam a busca de forma diferente de proposito: "Marcar todos" e
+// uma acao em lote sobre o que voce esta vendo (com filtro ativo, marca os
+// resultados da busca); "Limpar" e um reset e limpa tudo, filtrado ou nao — senao
+// clicar em Limpar deixaria selecoes invisiveis para tras.
 function sgMarcarTodos(marcar){
   document.querySelectorAll('#sg-picker input[data-sub]').forEach(cb=>{
+    const oculto=cb.closest('.sg-sub-row').classList.contains('sg-oculto');
+    if(marcar&&oculto)return;
     cb.checked=marcar;
     if(marcar)simGeralConfig.selectedSubIds.add(cb.dataset.sub);
     else simGeralConfig.selectedSubIds.delete(cb.dataset.sub);
   });
-  document.querySelectorAll('#sg-picker .sg-kingdom-row input').forEach(cb=>{cb.checked=marcar;});
   sgUpdateSummary();
 }
 
