@@ -514,6 +514,32 @@ nav{
 .ed-prev-vazia{letter-spacing:0;color:var(--muted);font-weight:700;font-size:9px;
   border:1px dashed var(--border2);border-radius:6px;padding:1px 5px;}
 .ed-discs-rodape{display:flex;gap:8px;flex-wrap:wrap;}
+.ed-vinc{flex-shrink:0;opacity:.45;}
+.ed-assunto:hover .ed-vinc{opacity:1;}
+.ed-manual{color:var(--accent);font-weight:900;margin-left:5px;}
+/* ---- modal de vínculo ---- */
+.ed-vinc-modal{font-size:12px;}
+.ed-vinc-alvo{font-size:13.5px;font-weight:900;color:var(--text);padding:10px 12px;
+  border-radius:10px;background:var(--bg2);border-left:3px solid var(--accent);margin-bottom:10px;}
+.ed-vinc-atual{font-size:11.5px;font-weight:700;color:var(--text2);margin-bottom:14px;
+  display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.ed-vinc-secao{font-size:10px;font-weight:900;letter-spacing:.9px;text-transform:uppercase;
+  color:var(--muted);margin:14px 0 7px;}
+.ed-vinc-lista{max-height:280px;overflow-y:auto;border:1px solid var(--border);
+  border-radius:10px;padding:5px;background:var(--panel2);margin-top:7px;}
+.ed-vinc-item{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;cursor:pointer;}
+.ed-vinc-item:hover{background:rgba(108,71,255,0.12);}
+.ed-vinc-sug{background:rgba(108,71,255,0.06);}
+.ed-vinc-nome{flex:1;min-width:0;font-weight:800;color:var(--text2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ed-vinc-caminho{font-size:9.5px;color:var(--muted);font-weight:700;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:38%;}
+.ed-vinc-badge{font-size:8.5px;font-weight:900;color:var(--accent);background:rgba(108,71,255,0.14);
+  border-radius:999px;padding:2px 7px;flex-shrink:0;}
+.ed-vinc-vazio{padding:14px;text-align:center;color:var(--muted);font-weight:700;}
+.ed-vinc-criar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.ed-vinc-criar select{flex:1;min-width:150px;}
+.ed-vinc-nota{font-size:10px;color:var(--muted);font-weight:600;margin-top:8px;line-height:1.5;}
 @media (prefers-reduced-motion:reduce){.sg-chev{transition:none;}}
 .sg-pesq-row{display:flex;align-items:center;gap:9px;margin-top:12px;font-size:11.5px;
   font-weight:800;color:var(--text2);cursor:pointer;}
@@ -10943,29 +10969,56 @@ function edMigrar(e){
 }
 function edFind(id){return (db.editais||[]).map(edMigrar).find(e=>e.id===id);}
 
-// Indice de todos os minibosses por nome normalizado, pra casar o assunto do
-// edital com o que ja existe no Vale sem depender de digitacao identica.
+// O nome do assunto e guardado como esta no edital, com a numeracao ("5.1 Emprego
+// das classes de palavras"), porque e assim que voce o encontra no documento. Mas
+// o miniboss no Vale se chama so "Emprego das classes de palavras" — comparar com
+// o numero na frente nunca casava, e TUDO aparecia como "nao existe no Vale".
+// A numeracao sai so na hora de comparar.
+function edChaveNome(nome){
+  return normalizeForDedup(String(nome||'').replace(/^\s*\d+(\.\d+)*\s*[.)\-–—]?\s*/,''));
+}
 function edIndiceMinibosses(){
   const idx={};
   db.kingdoms.forEach(k=>{
     (db.topics[k.id]||[]).forEach(t=>{
       (t.subtopics||[]).forEach(s=>{
-        const chave=normalizeForDedup(s.name);
+        const chave=edChaveNome(s.name);
         if(chave&&!idx[chave])idx[chave]={sub:s,topic:t,kingdom:k};
       });
     });
   });
   return idx;
 }
-// Recasa todos os assuntos do edital. Roda a cada renderizacao: minibosses novos
-// (criados a mao ou pelo botao "criar os que faltam") passam a contar sozinhos.
+// Recasa os assuntos. Roda a cada renderizacao, entao miniboss novo passa a contar
+// sozinho. Casa APENAS no nome exato (ja sem numeracao): um palpite errado aqui
+// mostraria "estudado" pra quem nao estudou, que e pior do que nao achar. O que
+// nao casa fica pro vinculo manual, que sugere os parecidos.
+// Vinculo feito a mao (a.manual) nunca e desfeito por aqui — so se o miniboss
+// tiver sido apagado.
 function edVincular(e){
   const idx=edIndiceMinibosses();
   e.disciplinas.forEach(d=>d.assuntos.forEach(a=>{
-    const achado=idx[normalizeForDedup(a.nome)];
+    if(a.manual){
+      if(a.subId&&!edSubDe(a)){a.subId=null;a.manual=false;}   // miniboss apagado
+      return;
+    }
+    const achado=idx[edChaveNome(a.nome)];
     a.subId=achado?achado.sub.id:null;
   }));
   return e;
+}
+// Sugestoes pro vinculo manual: pontua por palavras em comum entre o nome do
+// assunto e o do miniboss. Nao vincula nada sozinho — so ordena a lista.
+function edSugestoes(nomeAssunto){
+  const alvo=edChaveNome(nomeAssunto).split(' ').filter(w=>w.length>3);
+  const todos=[];
+  db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>(t.subtopics||[]).forEach(s=>{
+    const chave=edChaveNome(s.name);
+    const palavras=chave.split(' ').filter(w=>w.length>3);
+    const comuns=alvo.filter(w=>palavras.includes(w)).length;
+    todos.push({sub:s,topic:t,kingdom:k,score:comuns});
+  })));
+  return todos.sort((a,b)=>b.score-a.score||a.sub.name.localeCompare(b.sub.name));
 }
 function edSubDe(a){
   if(!a.subId)return null;
@@ -11090,11 +11143,108 @@ function edCriarFaltantes(id,discId){
   faltantes.forEach(a=>{
     // prevalência alta que você marcou vira miniboss lendário; sem marca, raro
     const priority=a.prev>=3?100:a.prev===1?30:70;
-    topic.subtopics.push({id:genId(),name:a.nome,priority,createdAt:todayStr(),studied:false,note:''});
+    // sem a numeração do edital no nome: o miniboss é seu, o número é do documento
+    const nomeLimpo=String(a.nome).replace(/^\s*\d+(\.\d+)*\s*[.)\-–—]?\s*/,'').trim()||a.nome;
+    const novo={id:genId(),name:nomeLimpo,priority,createdAt:todayStr(),studied:false,note:''};
+    topic.subtopics.push(novo);
+    a.subId=novo.id;a.manual=true;
   });
   saveDB();
   renderEditais();
   toast(`✅ ${faltantes.length} miniboss(es) criado(s) em ${k.icon||''} ${k.name} › ${d.nome}`,'var(--green)');
+}
+
+// ---- Vínculo manual: o casamento automático só acerta o nome idêntico, e o
+// edital raramente usa o mesmo nome que você deu ao miniboss. Aqui você resolve
+// caso a caso: vincular ao que já existe (com sugestões por palavras em comum),
+// desvincular, ou criar o miniboss na hora.
+let edVincAlvo=null;
+function edAbrirVinculo(editalId,discId,assId){
+  const e=edFind(editalId);if(!e)return;
+  const d=e.disciplinas.find(x=>x.id===discId);if(!d)return;
+  const a=d.assuntos.find(x=>x.id===assId);if(!a)return;
+  edVincAlvo={editalId,discId,assId};
+  openModal('🔗 Vincular assunto',edVincHTML(a));
+  setTimeout(()=>document.getElementById('ed-vinc-busca')?.focus(),80);
+}
+function edVincHTML(a){
+  const atual=edSubDe(a);
+  const sugestoes=edSugestoes(a.nome);
+  const reinos=db.kingdoms.map(k=>`<option value="${k.id}">${escapeHtml(k.icon||'🏰')} ${escapeHtml(k.name)}</option>`).join('');
+  return`
+  <div class="ed-vinc-modal">
+    <div class="ed-vinc-alvo">${escapeHtml(a.nome)}</div>
+    ${atual?`<div class="ed-vinc-atual">
+      Hoje está vinculado a <b>${escapeHtml(atual.name)}</b> ${atual.studied?'<span style="color:var(--green)">· já estudado</span>':'<span style="color:var(--orange)">· ainda não estudado</span>'}
+      <button class="btn btn-xs btn-danger" onclick="edDesvincular()"><i class="fa fa-link-slash"></i> Desvincular</button>
+    </div>`:`<div class="ed-vinc-atual" style="color:var(--muted)">Ainda não está vinculado a nenhum miniboss.</div>`}
+
+    <div class="ed-vinc-secao">Já existe no Vale? Escolha qual é:</div>
+    <input class="inp" id="ed-vinc-busca" placeholder="Filtrar minibosses pelo nome…" oninput="edVincFiltrar(this.value)" autocomplete="off">
+    <div class="ed-vinc-lista" id="ed-vinc-lista">
+      ${sugestoes.map(x=>`
+        <div class="ed-vinc-item${x.score>0?' ed-vinc-sug':''}" data-nome="${escapeHtml(edChaveNome(x.sub.name))}"
+             onclick="edVincularEm('${x.sub.id}')">
+          <span class="ed-vinc-nome">${x.sub.studied?'✅':'◐'} ${escapeHtml(x.sub.name)}</span>
+          <span class="ed-vinc-caminho">${escapeHtml(x.kingdom.icon||'🏰')} ${escapeHtml(x.kingdom.name)} › ${escapeHtml(x.topic.name)}</span>
+          ${x.score>0?'<span class="ed-vinc-badge">parecido</span>':''}
+        </div>`).join('')||'<div class="ed-vinc-vazio">Nenhum miniboss cadastrado ainda.</div>'}
+    </div>
+
+    <div class="ed-vinc-secao">Não existe? Crie agora:</div>
+    <div class="ed-vinc-criar">
+      <select class="inp" id="ed-vinc-reino">${reinos}</select>
+      <button class="btn btn-sm btn-primary" onclick="edCriarUm()"><i class="fa fa-wand-sparkles"></i> Criar este miniboss</button>
+    </div>
+    <div class="ed-vinc-nota">O miniboss é criado com o nome do assunto (sem a numeração do edital), dentro de um chefão com o nome da disciplina.</div>
+  </div>`;
+}
+function edVincFiltrar(termo){
+  const q=normalizeForDedup(termo||'');
+  document.querySelectorAll('#ed-vinc-lista .ed-vinc-item').forEach(el=>{
+    el.style.display=(!q||(el.dataset.nome||'').includes(q))?'':'none';
+  });
+}
+function edVincAtual(){
+  if(!edVincAlvo)return null;
+  const e=edFind(edVincAlvo.editalId);if(!e)return null;
+  const d=e.disciplinas.find(x=>x.id===edVincAlvo.discId);if(!d)return null;
+  const a=d.assuntos.find(x=>x.id===edVincAlvo.assId);if(!a)return null;
+  return{e,d,a};
+}
+function edVincularEm(subId){
+  const alvo=edVincAtual();if(!alvo)return;
+  alvo.a.subId=subId;
+  alvo.a.manual=true;   // decisão sua: o casamento automático não desfaz mais
+  saveDB();closeModal();renderEditais();
+  const sub=edSubDe(alvo.a);
+  toast(`🔗 "${alvo.a.nome}" ligado a "${sub?sub.name:''}"${sub&&sub.studied?' — já estudado ✅':''}`,'var(--green)');
+}
+function edDesvincular(){
+  const alvo=edVincAtual();if(!alvo)return;
+  alvo.a.subId=null;alvo.a.manual=false;
+  saveDB();closeModal();renderEditais();
+  toast('Desvinculado — volta a valer o casamento automático pelo nome.','var(--accent)');
+}
+// Cria UM miniboss a partir do assunto, sem precisar do botão em lote.
+function edCriarUm(){
+  const alvo=edVincAtual();if(!alvo)return;
+  const reinoId=document.getElementById('ed-vinc-reino')?.value;
+  const k=db.kingdoms.find(x=>x.id===reinoId);
+  if(!k){toast('⚠️ Escolha o reino','var(--red)');return;}
+  const nomeLimpo=String(alvo.a.nome).replace(/^\s*\d+(\.\d+)*\s*[.)\-–—]?\s*/,'').trim()||alvo.a.nome;
+  if(!db.topics[k.id])db.topics[k.id]=[];
+  let topic=db.topics[k.id].find(t=>edChaveNome(t.name)===edChaveNome(alvo.d.nome));
+  if(!topic){
+    topic={id:genId(),name:alvo.d.nome,icon:'⚔️',priority:2,subtopics:[],createdAt:todayStr()};
+    db.topics[k.id].push(topic);
+  }
+  const novo={id:genId(),name:nomeLimpo,priority:alvo.a.prev>=3?100:alvo.a.prev===1?30:70,
+              createdAt:todayStr(),studied:false,note:''};
+  topic.subtopics.push(novo);
+  alvo.a.subId=novo.id;alvo.a.manual=true;
+  saveDB();closeModal();renderEditais();
+  toast(`✅ "${nomeLimpo}" criado em ${k.icon||''} ${k.name} › ${topic.name}`,'var(--green)');
 }
 
 // Extrai o conteúdo programático colado. Sem Tavily de propósito: o texto ja veio
@@ -11297,9 +11447,14 @@ function edConteudoCorpo(e){
             const marca={estudado:{i:'✅',c:'var(--green)',t:'Estudado'},
                          cadastrado:{i:'◐',c:'var(--orange)',t:'Cadastrado, não estudado'},
                          falta:{i:'✗',c:'var(--red)',t:'Não existe no Vale'}}[st];
+            const sub=edSubDe(a);
             return`<div class="ed-assunto ed-${st}">
-              <span class="ed-marca" style="color:${marca.c}" title="${marca.t}">${marca.i}</span>
-              <span class="ed-assunto-nome"${st==='estudado'?` onclick="goToSubtopic('${a.subId}')" style="cursor:pointer" title="Abrir o miniboss"`:''}>${escapeHtml(a.nome)}</span>
+              <span class="ed-marca" style="color:${marca.c}" title="${marca.t}${a.manual?' · vinculado por você':''}">${marca.i}</span>
+              <span class="ed-assunto-nome"${sub?` onclick="goToSubtopic('${a.subId}')" style="cursor:pointer" title="Abrir o miniboss «${escapeHtml(sub.name)}»"`:''}>${escapeHtml(a.nome)}${a.manual?'<span class="ed-manual" title="Você vinculou este à mão">·</span>':''}</span>
+              <button class="btn btn-xs btn-ghost ed-vinc" onclick="edAbrirVinculo('${e.id}','${d.id}','${a.id}')"
+                      title="${sub?`Vinculado a «${escapeHtml(sub.name)}» — clique para trocar ou desvincular`:'Este assunto existe no Vale com outro nome? Vincule aqui. Ou crie o miniboss.'}">
+                <i class="fa fa-${sub?'link':'link-slash'}"></i>
+              </button>
               <span class="ed-prev" onclick="edCiclarPrev('${e.id}','${d.id}','${a.id}')"
                     title="Prevalência na banca — clique para marcar (você que define: sem marca → baixa → média → alta)">
                 ${a.prev?'🔥'.repeat(a.prev):'<span class="ed-prev-vazia">marcar</span>'}
