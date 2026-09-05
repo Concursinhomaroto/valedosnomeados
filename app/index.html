@@ -686,7 +686,11 @@ nav{
      5 itens em "estudar agora" e em "revisões", 4 em "assuntos da semana", e o
      gráfico de tempo nos seus 130px. Com proporção pura, apertar uma faixa
      sempre roubava da outra e o quinto item vivia caindo fora. */
-  grid-template-rows:auto minmax(256px,1.3fr) minmax(212px,1fr) 203px;
+  /* Os mínimos são o piso, não o alvo: cobrem 4 revisões e 3 assuntos da semana,
+     que é o que cabe numa janela baixa. Onde sobra altura o fr distribui e os
+     mesmos cartões passam a mostrar 6 e 4 sem mudar nada. Piso alto demais fazia
+     a dobra não caber e cair na lista rolável — que era o painel gigante. */
+  grid-template-rows:auto minmax(216px,1.3fr) minmax(175px,1fr) 203px;
   /* 78px = os 60px acima da dobra (respiro do #main-content + titulo da tela) mais
      os 18px da margem de baixo. Com 120px sobrava uma tira preta de 60px embaixo. */
   height:calc(100vh - 78px);min-height:0;}
@@ -794,9 +798,10 @@ nav{
 .dash-fold .plan-empty-day{font-size:10px;padding:5px 3px;line-height:1.2;overflow:hidden;
   white-space:nowrap;text-align:center;margin-top:auto}
 .dash-fold .plan-lbl{display:none}
-/* Abaixo de 861px de altura a soma dos minimos (70+256+212+203+36 de vao = 777)
-   nao cabe em 100vh-78px, entao a dobra volta a ser lista rolavel. */
-@media(max-width:1100px),(max-height:860px){
+/* Soma dos mínimos: 70+216+175+203 + 36 de vão = 700px, que cabe em 100vh-78px
+   a partir de 778px de janela. Só abaixo disso (ou de 1000px de largura) a dobra
+   vira lista rolável. */
+@media(max-width:1000px),(max-height:777px){
   .dash-fold{height:auto;min-height:0;grid-template-columns:1fr;grid-template-rows:none}
   .dash-card,.dash-wide{grid-column:1/-1;max-height:340px}
   .dash-r1{grid-template-columns:1fr;grid-column:1/-1}
@@ -1742,7 +1747,10 @@ nav{
        faixas do meio usam 2 colunas por cartão (três cartões) e a de baixo usa 3
        (dois cartões), então a borda de todo cartão cai na mesma régua vertical.
        Cada cartão rola por dentro quando o conteúdo passa da altura da faixa —
-       a rolagem some da página e fica dentro da caixa. -->
+       a rolagem some da página e fica dentro da caixa.
+       A ordem é a da pergunta "o que eu faço hoje?": o que estudar agora e as
+       revisões atrasadas ocupam o canto superior esquerdo, onde o olho cai
+       primeiro; o que é acompanhamento (simulados, flashcards, tempo) vem depois. -->
   <div class="dash-fold">
 
     <div class="dash-r1">
@@ -1767,16 +1775,6 @@ nav{
     </div>
 
     <div class="section-card dash-card">
-      <div class="sec-title dash-sec">🎯 Desempenho em simulados</div>
-      <div id="sim-global-stats" class="sim-global-grid"></div>
-      <div class="dash-scroll">
-        <div id="sim-kingdom-breakdown"></div>
-        <div class="sec-title dash-sec dash-sec-sub">🏅 Ranking de reinos</div>
-        <div id="kingdom-ranking"></div>
-      </div>
-    </div>
-
-    <div class="section-card dash-card">
       <div class="sec-title dash-sec">🧭 O que estudar agora</div>
       <div class="dash-scroll"><div id="next-steps-list"></div></div>
     </div>
@@ -1787,6 +1785,16 @@ nav{
         <button id="notif-permission-btn" class="btn btn-xs btn-ghost" style="display:none" onclick="requestNotifPermission()" title="Receber um aviso quando houver revisões atrasadas">🔔 Lembretes</button>
       </div>
       <div class="dash-scroll" id="dash-overdue-revs"></div>
+    </div>
+
+    <div class="section-card dash-card">
+      <div class="sec-title dash-sec">🎯 Desempenho em simulados</div>
+      <div id="sim-global-stats" class="sim-global-grid"></div>
+      <div class="dash-scroll">
+        <div id="sim-kingdom-breakdown"></div>
+        <div class="sec-title dash-sec dash-sec-sub">🏅 Ranking de reinos</div>
+        <div id="kingdom-ranking"></div>
+      </div>
     </div>
 
     <div class="section-card dash-card">
