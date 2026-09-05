@@ -5634,7 +5634,7 @@ function resumoPanelHTML(s){
         </div>
       </div>
       ${isSpeaking?`<div style="font-size:9.5px;color:var(--muted);margin:-4px 0 8px;display:flex;align-items:center;gap:5px">${resumoSpeakMode==='audio'?'<i class=\"fa fa-lock-open\"></i> Áudio da IA — continua tocando com a tela travada.':'<i class=\"fa fa-triangle-exclamation\"></i> Voz do navegador — para se a tela travar (configure sua chave de IA pra ouvir com a tela travada).'}</div>`:''}
-      <div class="resumo-body">${s.resumo.texto}</div>
+      <div class="resumo-body">${escapeHtml(s.resumo.texto)}</div>
       ${fontesHTML(s.resumo.fontes,s.resumo.consultas,s.resumo.diag)}
       <div class="resumo-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm}${fonteTxt} — confira sempre a fonte oficial antes de usar na prova.</div>
     `;
@@ -5847,6 +5847,15 @@ async function generateResumo(subId,file){
 // Lista clicável do que a busca realmente leu. É a diferença entre "não confio
 // nesse resumo" e "vejo que ele leu três apostilas e nenhuma diretriz" — sem
 // isso não dá pra distinguir busca ausente de fonte ruim.
+// O href vinha da resposta do Tavily sem tratamento: uma URL com aspas fecharia o
+// atributo e emendaria um manipulador de evento, e um "javascript:" executaria no
+// clique. Aqui so passa http/https, e o texto vai escapado como todo o resto.
+function urlSegura(u){
+  try{
+    const p=new URL(String(u));
+    return (p.protocol==='http:'||p.protocol==='https:')?p.href:'#';
+  }catch(e){return '#';}
+}
 function fontesHTML(fontes,consultas,diag){
   const f=(fontes||[]).filter(x=>x&&x.url);
   const c=(consultas||[]).filter(Boolean);
@@ -5858,7 +5867,7 @@ function fontesHTML(fontes,consultas,diag){
     <details class="resumo-fontes" open>
       <summary style="color:var(--red)"><i class="fa fa-triangle-exclamation"></i> Por que não pesquisou na internet</summary>
       <ol class="resumo-fontes-lista">
-        ${d.map(x=>`<li><code>${String(x.modelo).replace(/</g,'&lt;')}</code> — ${String(x.erro).replace(/</g,'&lt;')}</li>`).join('')}
+        ${d.map(x=>`<li><code>${escapeHtml(x.modelo)}</code> — ${escapeHtml(x.erro)}</li>`).join('')}
       </ol>
       <div class="resumo-fontes-aviso">Erro 404 = esse nome de modelo não existe mais. 403/PERMISSION = sua chave não tem a busca liberada. 429 = quota. "não usou a busca" = o modelo optou por responder de memória; gerar de novo costuma resolver.</div>
     </details>`;
@@ -5867,9 +5876,9 @@ function fontesHTML(fontes,consultas,diag){
   return`
     <details class="resumo-fontes">
       <summary><i class="fa fa-link"></i> Fontes usadas na pesquisa (${f.length})</summary>
-      ${c.length?`<div class="resumo-fontes-q">Buscou por: ${c.map(q=>`<span>${String(q).replace(/</g,'&lt;')}</span>`).join(' · ')}</div>`:''}
+      ${c.length?`<div class="resumo-fontes-q">Buscou por: ${c.map(q=>`<span>${escapeHtml(q)}</span>`).join(' · ')}</div>`:''}
       <ol class="resumo-fontes-lista">
-        ${f.map(x=>`<li><a href="${x.url}" target="_blank" rel="noopener noreferrer">${(x.titulo||dominio(x.url)).replace(/</g,'&lt;')}</a> <em>${dominio(x.url)}</em></li>`).join('')}
+        ${f.map(x=>`<li><a href="${escapeHtml(urlSegura(x.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(x.titulo||dominio(x.url))}</a> <em>${escapeHtml(dominio(x.url))}</em></li>`).join('')}
       </ol>
       <div class="resumo-fontes-aviso">Confira a fonte antes de decorar número, prazo, dose ou fórmula. Apostila e blog não confirmam versão vigente.</div>
     </details>`;
@@ -7040,9 +7049,9 @@ function simPanelHTML(s){
       <div class="sim-header"><div class="sim-title"><i class="fa fa-list-check"></i> Simulado (${active.questoes.length} questões)</div></div>
       ${active.questoes.map((q,i)=>`
         <div class="sim-q">
-          <div class="sim-q-text">${i+1}. ${q.questao}</div>
+          <div class="sim-q-text">${i+1}. ${escapeHtml(q.questao)}</div>
           <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
-            ${(q.alternativas||[]).map(alt=>`<div class="sim-alt${q.userAnswer===alt.letra?' sim-selected':''}" onclick="simSelectAnswer('${s.id}',${i},'${alt.letra}')"><b>${alt.letra})</b> ${alt.texto}</div>`).join('')}
+            ${(q.alternativas||[]).map(alt=>`<div class="sim-alt${q.userAnswer===alt.letra?' sim-selected':''}" onclick="simSelectAnswer('${s.id}',${i},'${alt.letra}')"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`).join('')}
           </div>
         </div>
       `).join('')}
@@ -7062,16 +7071,16 @@ function simPanelHTML(s){
       <div class="sim-score-banner ${good?'sim-good':'sim-bad'}">${acertos}/${total} acertos (${pct}%)</div>
       ${active.questoes.map((q,i)=>`
         <div class="sim-q${q.problematico?' sim-q-flagged':''}">
-          <div class="sim-q-text">${i+1}. ${q.questao}</div>
+          <div class="sim-q-text">${i+1}. ${escapeHtml(q.questao)}</div>
           <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
             ${(q.alternativas||[]).map(alt=>{
               let cls='';
               if(alt.letra===q.correta)cls=' sim-correct';
               else if(alt.letra===q.userAnswer)cls=' sim-wrong';
-              return`<div class="sim-alt${cls}"><b>${alt.letra})</b> ${alt.texto}</div>`;
+              return`<div class="sim-alt${cls}"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`;
             }).join('')}
           </div>
-          ${q.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${q.explicacao}</div>`:''}
+          ${q.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${escapeHtml(q.explicacao)}</div>`:''}
           ${q.problematico?'<div class="sim-flagged-banner"><i class="fa fa-flag"></i> Marcada como problemática — não conta nas suas estatísticas.</div>':''}
           <button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="toggleQuestaoProblematica('${s.id}','${active.histId}',${i})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>
         </div>
@@ -7666,9 +7675,9 @@ function simGeralExamHTML(){
       ${active.questoes.map((q,i)=>`
         <div class="sim-q sg-q">
           <div class="sg-q-tag">${q.kingdomIcon} ${q.kingdomName} · ${q.topicName} · ${q.subName}</div>
-          <div class="sim-q-text">${i+1}. ${q.questao}</div>
+          <div class="sim-q-text">${i+1}. ${escapeHtml(q.questao)}</div>
           <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
-            ${(q.alternativas||[]).map(alt=>`<div class="sim-alt${q.userAnswer===alt.letra?' sim-selected':''}" onclick="sgSelectAnswer(${i},'${alt.letra}')"><b>${alt.letra})</b> ${alt.texto}</div>`).join('')}
+            ${(q.alternativas||[]).map(alt=>`<div class="sim-alt${q.userAnswer===alt.letra?' sim-selected':''}" onclick="sgSelectAnswer(${i},'${alt.letra}')"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`).join('')}
           </div>
         </div>
       `).join('')}
@@ -7840,16 +7849,16 @@ function simGeralResultsHTML(){
       ${active.questoes.map((q,i)=>`
         <div class="sim-q${q.problematico?' sim-q-flagged':''}">
           <div class="sg-q-tag">${q.kingdomIcon} ${q.kingdomName} · ${q.topicName} · ${q.subName}</div>
-          <div class="sim-q-text">${i+1}. ${q.questao}</div>
+          <div class="sim-q-text">${i+1}. ${escapeHtml(q.questao)}</div>
           <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
             ${(q.alternativas||[]).map(alt=>{
               let cls='';
               if(alt.letra===q.correta)cls=' sim-correct';
               else if(alt.letra===q.userAnswer)cls=' sim-wrong';
-              return`<div class="sim-alt${cls}"><b>${alt.letra})</b> ${alt.texto}</div>`;
+              return`<div class="sim-alt${cls}"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`;
             }).join('')}
           </div>
-          ${q.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${q.explicacao}</div>`:''}
+          ${q.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${escapeHtml(q.explicacao)}</div>`:''}
           ${q.problematico?'<div class="sim-flagged-banner"><i class="fa fa-flag"></i> Marcada como problemática — não conta nas suas estatísticas.</div>':''}
           <button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="toggleQuestaoProblematica('${q.subId}','${q._histId}',${q._qIdxInHist})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>
         </div>
@@ -9484,17 +9493,17 @@ function renderErrosScreen(){
         </div>
       </div>
       ${it.problematico?'<div class="sim-flagged-banner"><i class="fa fa-flag"></i> Marcada como problemática — não conta nas suas estatísticas.</div>':''}
-      <div class="err-q-text">${it.questao}</div>
+      <div class="err-q-text">${escapeHtml(it.questao)}</div>
       <div class="sim-alts">
         ${(it.alternativas||[]).map(alt=>{
           let cls='';
           if(alt.letra===it.correta)cls=' sim-correct';
           else if(alt.letra===it.userAnswer)cls=' sim-wrong';
-          return`<div class="sim-alt${cls}"><b>${alt.letra})</b> ${alt.texto}</div>`;
+          return`<div class="sim-alt${cls}"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`;
         }).join('')}
       </div>
       ${!it.userAnswer?`<div class="err-skipped"><i class="fa fa-circle-exclamation"></i> Você não respondeu esta questão no simulado.</div>`:''}
-      ${it.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${it.explicacao}</div>`:''}
+      ${it.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${escapeHtml(it.explicacao)}</div>`:''}
       <button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="goToSubtopic('${it.subId}')"><i class="fa fa-location-arrow"></i> Ir para o assunto</button>
     </div>
   `).join('');
@@ -11713,7 +11722,7 @@ function rdCardHTML(r){
     </div>
 
     <!-- Observações -->
-    ${r.obs?`<div style="background:var(--bg2);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text2);line-height:1.5"><i class="fa fa-note-sticky" style="color:var(--accent)"></i> ${r.obs}</div>`:''}
+    ${r.obs?`<div style="background:var(--bg2);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text2);line-height:1.5"><i class="fa fa-note-sticky" style="color:var(--accent)"></i> ${escapeHtml(r.obs)}</div>`:''}
 
     <!-- Texto da redação -->
     ${r.texto?`
@@ -11721,7 +11730,7 @@ function rdCardHTML(r){
         <button onclick="rdToggleText('${r.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;font-weight:800;color:var(--accent);padding:0">
           <i class="fa fa-${expanded?'eye-slash':'eye'}"></i> ${expanded?'Ocultar':'Ver'} redação
         </button>
-        <div class="rd-text-preview${expanded?' expanded':''}" id="rdtxt-${r.id}" style="display:${expanded?'block':'none'}">${r.texto}</div>
+        <div class="rd-text-preview${expanded?' expanded':''}" id="rdtxt-${r.id}" style="display:${expanded?'block':'none'}">${escapeHtml(r.texto)}</div>
       </div>`:''}
 
     <!-- Feedback da IA -->
@@ -12016,13 +12025,13 @@ function rdDedupErros(erros){
 }
 function rdAiFeedbackHTML(fb){
   if(!fb)return'';
-  const fortes=(fb.pontosFortes||[]).map(p=>`<li style="color:var(--green)">${p}</li>`).join('');
-  const faltantes=(fb.pontosFaltantes||[]).map(p=>`<li style="color:var(--orange)">${p}</li>`).join('');
-  const erros=rdDedupErros(fb.erros).map(e=>`<div class="rd-ai-erro"><span class="rd-ai-erro-trecho">"${e.trecho||''}"</span>${e.tipo?` <span style="color:var(--muted)">(${rdCriterioLabel(e.tipo)})</span>`:''}${e.sugestao?`<div class="rd-ai-erro-sugestao">→ ${e.sugestao}</div>`:''}</div>`).join('');
+  const fortes=(fb.pontosFortes||[]).map(p=>`<li style="color:var(--green)">${escapeHtml(p)}</li>`).join('');
+  const faltantes=(fb.pontosFaltantes||[]).map(p=>`<li style="color:var(--orange)">${escapeHtml(p)}</li>`).join('');
+  const erros=rdDedupErros(fb.erros).map(e=>`<div class="rd-ai-erro"><span class="rd-ai-erro-trecho">"${escapeHtml(e.trecho||'')}"</span>${e.tipo?` <span style="color:var(--muted)">(${rdCriterioLabel(e.tipo)})</span>`:''}${e.sugestao?`<div class="rd-ai-erro-sugestao">→ ${escapeHtml(e.sugestao)}</div>`:''}</div>`).join('');
   const criterios=fb.criterios?RD_CRITERIOS.map(c=>rdCriterioBarHTML(c,fb.criterios[c.id])).join(''):'';
   return`<div class="rd-ai-panel">
     <div class="rd-ai-title"><i class="fa fa-wand-magic-sparkles"></i> Feedback da IA ${typeof fb.nc==='number'?`· sugestão NC: ${fb.nc}`:''} ${typeof fb.ne==='number'?`· sugestão NE: ${fb.ne}`:''}</div>
-    ${fb.comentario?`<div class="rd-ai-comment">${fb.comentario}</div>`:''}
+    ${fb.comentario?`<div class="rd-ai-comment">${escapeHtml(fb.comentario)}</div>`:''}
     ${rdQuesitosHTML(fb)}
     ${criterios?`<div class="rd-criterios-grid">${criterios}</div>`:''}
     ${(fortes||faltantes)?`<div class="rd-ai-cols">
@@ -12853,9 +12862,9 @@ function fcGridHTML(cards){
         <div style="font-size:9px;font-weight:900;color:${color}">${fcStatusLabel(st,c)}</div>
         <div class="fc-card-diff">${[1,2,3,4,5].map(n=>`<div class="fc-card-diff-dot" style="background:${n<=(c.dificuldade||3)?DIFF_COLORS[c.dificuldade||3]:'var(--border)'}"></div>`).join('')}</div>
       </div>
-      <div class="fc-card-q" id="fcgc-${c.id}" onclick="fcFlipGridCard('${c.id}')" style="cursor:pointer">${c.pergunta}</div>
+      <div class="fc-card-q" id="fcgc-${c.id}" onclick="fcFlipGridCard('${c.id}')" style="cursor:pointer">${escapeHtml(c.pergunta)}</div>
       <!-- Resposta (oculta inicialmente) -->
-      <div id="fcga-${c.id}" style="display:none;font-size:12px;color:var(--text2);line-height:1.5;margin:8px 0;padding:10px;background:var(--bg2);border-radius:8px;white-space:pre-wrap">${c.resposta}</div>
+      <div id="fcga-${c.id}" style="display:none;font-size:12px;color:var(--text2);line-height:1.5;margin:8px 0;padding:10px;background:var(--bg2);border-radius:8px;white-space:pre-wrap">${escapeHtml(c.resposta)}</div>
       <!-- Botões acerto/erro (aparecem ao virar) -->
       <div id="fcbtn-${c.id}" style="display:none;gap:6px;margin:8px 0" onclick="event.stopPropagation()">
         <div style="font-size:10px;font-weight:800;color:var(--muted);text-align:center;margin-bottom:6px">Como foi?</div>
@@ -13065,8 +13074,8 @@ function fcTimelineHTML(cards){
         ${gc.map(c=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="fcFlipGridCard('${c.id}')">
           <div style="width:6px;height:6px;border-radius:50%;background:${g.color};flex-shrink:0"></div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:700;color:var(--text);overflow-wrap:break-word" id="fcgc-${c.id}">${c.pergunta}</div>
-            <div id="fcga-${c.id}" style="display:none;font-size:11px;color:var(--text2);margin-top:4px;padding:6px 8px;background:var(--bg2);border-radius:6px;white-space:pre-wrap">${c.resposta}</div>
+            <div style="font-size:12px;font-weight:700;color:var(--text);overflow-wrap:break-word" id="fcgc-${c.id}">${escapeHtml(c.pergunta)}</div>
+            <div id="fcga-${c.id}" style="display:none;font-size:11px;color:var(--text2);margin-top:4px;padding:6px 8px;background:var(--bg2);border-radius:6px;white-space:pre-wrap">${escapeHtml(c.resposta)}</div>
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
             <button class="btn btn-xs" style="background:rgba(108,71,255,0.08);color:var(--accent);border:1px solid var(--border)" onclick="fcEditCard('${c.id}')"><i class="fa fa-pen"></i></button>
@@ -13123,7 +13132,7 @@ function fcStudyHTML(cards){
           <div class="fc-face-scroll">
             <div class="fc-face-inner">
               <div class="fc-face-hint">📋 Pergunta · clique para ver a resposta</div>
-              <div class="fc-face-text" style="white-space:pre-wrap">${c.pergunta}</div>
+              <div class="fc-face-text" style="white-space:pre-wrap">${escapeHtml(c.pergunta)}</div>
               <div style="margin-top:12px;font-size:9px;font-weight:800;color:rgba(255,255,255,0.6)">${fcStatusLabel(st,c)}</div>
               <div class="fc-diff-dots">${[1,2,3,4,5].map(n=>`<div class="fc-diff-dot" style="background:${n<=(c.dificuldade||3)?DIFF_COLORS[c.dificuldade||3]:'rgba(255,255,255,0.2)'}"></div>`).join('')}</div>
               <div class="fc-scroll-cue"><span>role pra ler mais ⌄</span></div>
@@ -13134,7 +13143,7 @@ function fcStudyHTML(cards){
           <div class="fc-face-scroll">
             <div class="fc-face-inner">
               <div class="fc-face-hint">💡 Resposta</div>
-              <div class="fc-face-text" style="white-space:pre-wrap">${c.resposta}</div>
+              <div class="fc-face-text" style="white-space:pre-wrap">${escapeHtml(c.resposta)}</div>
               ${c.tags?`<div style="margin-top:12px;display:flex;gap:4px;flex-wrap:wrap;justify-content:center">${c.tags.split(',').filter(t=>t.trim()).map(t=>`<span class="fc-card-tag">#${t.trim()}</span>`).join('')}</div>`:''}
               <div class="fc-scroll-cue"><span>role pra ler mais ⌄</span></div>
             </div>
