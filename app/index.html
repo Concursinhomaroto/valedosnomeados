@@ -15809,6 +15809,17 @@ function salaMapaBootAfterPicker(){
     if(viewport)viewport.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;font-size:12px;text-align:center;padding:20px">Não deu pra carregar a sala agora. Confira sua conexão e tente de novo.</div>';
   });
 }
+// O jogo ignora o teclado quando quem deveria receber e um campo de texto ou um
+// modal aberto por cima da Sala.
+function salaTecladoOcupado(){
+  const m=document.getElementById('modal');
+  if(m&&m.classList.contains('open'))return true;
+  const e=document.activeElement;
+  if(!e)return false;
+  if(e.isContentEditable)return true;
+  const t=(e.tagName||'').toUpperCase();
+  return t==='INPUT'||t==='TEXTAREA'||t==='SELECT';
+}
 function salaMapaPause(){
   if(salaMapaGame)salaMapaGame.scene.pause('salaMapaScene');
   // Pausar a cena NÃO solta a captura de teclado do Phaser — WASD/setas/espaço
@@ -15822,9 +15833,8 @@ function salaMapaPause(){
 }
 function salaMapaResume(){
   if(salaMapaGame)salaMapaGame.scene.resume('salaMapaScene');
-  if(salaMapaSceneRef&&salaMapaSceneRef.input&&salaMapaSceneRef.input.keyboard){
-    salaMapaSceneRef.input.keyboard.enableGlobalCapture();
-  }
+  // NAO religa a captura global: ela e o que fazia as teclas do jogo sumirem dos
+  // campos de texto do resto do site (ver disableGlobalCapture no create).
   if(salaMapaSceneRef)salaPresenceJoin(salaMapaSceneRef);
 }
 function salaMapaZoom(delta){
@@ -16149,6 +16159,12 @@ function salaMapaCreateGame(){
 
       this.cursors={...this.input.keyboard.createCursorKeys(),...this.input.keyboard.addKeys('W,S,A,D')};
       this.keyE=this.input.keyboard.addKey('E');
+      // O Phaser liga "captura" em toda tecla registrada, e capturar significa
+      // preventDefault na PAGINA INTEIRA. Com a Sala aberta, digitar num campo de
+      // qualquer modal por cima dela perdia W, A, S, D, E e espaco — "Wanda Sawyer
+      // descreve algo" virava "nyrcrvlgo". A captura so serviria pra impedir a
+      // pagina de rolar com as setas, e a Sala nao rola: fica desligada.
+      this.input.keyboard.disableGlobalCapture();
 
       salaPresenceJoin(this);
     }
@@ -16194,6 +16210,19 @@ function salaMapaCreateGame(){
     }
     update(){
       const p=this.player,cur=this.cursors;
+      // Sem captura, a tecla chega ao campo de texto — mas tambem continua
+      // chegando ao jogo, e o boneco andava enquanto voce digitava. Enquanto o
+      // foco esta num campo (ou ha um modal aberto), o jogo fica quieto.
+      if(salaTecladoOcupado()){
+        if(p.playerBehavior==='idle'){
+          p.setVelocity(0,0);
+          const{dir}=salaAnimStateDir(p);
+          const parado=p.charKey+'_idle_'+dir;
+          if(!p.anims.currentAnim||p.anims.currentAnim.key!==parado)p.play(parado,true);
+        }
+        p.nameText.setPosition(p.x,p.y-34);
+        return;
+      }
       if(Phaser.Input.Keyboard.JustDown(this.keyE)){
         if(p.playerBehavior==='sitting'){
           p.playerBehavior='idle';
