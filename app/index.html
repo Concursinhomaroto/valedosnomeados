@@ -443,6 +443,18 @@ nav{
 
 /* ===== SIMULADO GERAL ===== */
 .sg-picker{max-height:400px;overflow-y:auto;border:1.5px solid var(--border);border-radius:12px;padding:12px;background:var(--panel2);}
+/* Com dezenas de assuntos por reino, 400px so mostra o primeiro chefao e o
+   usuario rola dentro de uma caixinha. Ampliada, a lista usa a tela. */
+.sg-picker-alto{max-height:calc(100vh - 260px);}
+.sg-picker-tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+.sg-pesq-row{display:flex;align-items:center;gap:9px;margin-top:12px;font-size:11.5px;
+  font-weight:800;color:var(--text2);cursor:pointer;}
+.sg-pesq-row input{cursor:pointer;}
+.sg-pesq-row input:disabled{cursor:not-allowed;}
+/* Certo/errado sao duas alternativas: lado a lado leem como gabarito de prova,
+   empilhadas pareciam uma multipla escolha capenga. */
+.sim-alts-ce{display:flex;flex-direction:row;gap:10px;}
+.sim-alts-ce .sim-alt{flex:1;text-align:center;font-weight:800;}
 .sg-kingdom{margin-bottom:14px;}
 .sg-kingdom:last-child{margin-bottom:0;}
 .sg-kingdom-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin-bottom:8px;}
@@ -7015,7 +7027,7 @@ function simPanelHTML(s){
       ${active.questoes.map((q,i)=>`
         <div class="sim-q">
           <div class="sim-q-text">${i+1}. ${q.questao}</div>
-          <div class="sim-alts">
+          <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
             ${(q.alternativas||[]).map(alt=>`<div class="sim-alt${q.userAnswer===alt.letra?' sim-selected':''}" onclick="simSelectAnswer('${s.id}',${i},'${alt.letra}')"><b>${alt.letra})</b> ${alt.texto}</div>`).join('')}
           </div>
         </div>
@@ -7037,7 +7049,7 @@ function simPanelHTML(s){
       ${active.questoes.map((q,i)=>`
         <div class="sim-q${q.problematico?' sim-q-flagged':''}">
           <div class="sim-q-text">${i+1}. ${q.questao}</div>
-          <div class="sim-alts">
+          <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
             ${(q.alternativas||[]).map(alt=>{
               let cls='';
               if(alt.letra===q.correta)cls=' sim-correct';
@@ -7057,8 +7069,19 @@ function simPanelHTML(s){
   return`
     <div class="sim-header"><div class="sim-title"><i class="fa fa-list-check"></i> Simulado rápido</div></div>
     ${stats?`<div style="text-align:center"><span class="sim-stat-badge"><i class="fa fa-chart-simple"></i> Histórico: ${stats.acertosTotal}/${stats.questoesTotal} acertos (${Math.round(stats.acertosTotal/stats.questoesTotal*100)}%) em ${stats.tentativas} simulado${stats.tentativas>1?'s':''}</span></div>`:''}
-    <div class="sim-empty">Gere questões de múltipla escolha (dificuldade moderada a alta) pra treinar este assunto.${(s.note||'').trim()?' <b style="color:var(--pink)">Vai usar sua anotação como referência.</b>':' <span title="Adicione uma anotação neste miniboss pra deixar as questões mais precisas ao seu recorte de estudo">Sem anotação — a IA vai gerar com base só no nome do assunto.</span>'}</div>
+    <div class="sim-empty">Gere questões pra treinar este assunto.${(s.note||'').trim()?' <b style="color:var(--pink)">Vai usar sua anotação como referência.</b>':' <span title="Adicione uma anotação neste miniboss pra deixar as questões mais precisas ao seu recorte de estudo">Sem anotação — a IA vai gerar com base só no nome do assunto.</span>'}${tavilyAtivo()?' <b style="color:var(--accent)">🔎 Vai pesquisar na internet antes de elaborar.</b>':''}</div>
     <div class="sim-config-row">
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Formato:</label>
+      <select id="sim-fmt-${s.id}" class="inp" style="width:auto;padding:6px 10px">
+        <option value="multipla"${(db.simFormato||'multipla')==='multipla'?' selected':''}>Múltipla escolha (A–E)</option>
+        <option value="certoerrado"${db.simFormato==='certoerrado'?' selected':''}>Certo / Errado</option>
+      </select>
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Nível:</label>
+      <select id="sim-niv-${s.id}" class="inp" style="width:auto;padding:6px 10px">
+        <option value="moderado"${db.simNivel==='moderado'?' selected':''}>Moderado</option>
+        <option value="dificil"${(db.simNivel||'dificil')==='dificil'?' selected':''}>Difícil</option>
+        <option value="muitodificil"${db.simNivel==='muitodificil'?' selected':''}>Muito difícil</option>
+      </select>
       <label style="font-size:11px;color:var(--muted);font-weight:700">Quantidade:</label>
       <select id="sim-qtd-${s.id}" class="inp" style="width:auto;padding:6px 10px">
         <option value="5">5 questões</option>
@@ -7117,7 +7140,11 @@ function criarFlashcardDeQuestaoErrada(subId,q){
   const jaExiste=Object.values(db.flashcards).some(c=>c.mbId===topicId&&normalizeForDedup(c.pergunta)===chave);
   if(jaExiste)return;
   const altCorreta=(q.alternativas||[]).find(a=>a.letra===q.correta);
-  const resposta=`Resposta certa: ${q.correta}) ${altCorreta?altCorreta.texto:''}${q.explicacao?'\n\n'+q.explicacao:''}`;
+  // Num item certo/errado, "Resposta certa: E) Errado" nao ensina nada sozinho —
+  // o que vale e o gabarito mais a explicacao de qual parte estava errada.
+  const resposta=q.formato==='certoerrado'
+    ?`Gabarito: ${q.correta==='C'?'CERTO':'ERRADO'}${q.explicacao?'\n\n'+q.explicacao:''}`
+    :`Resposta certa: ${q.correta}) ${altCorreta?altCorreta.texto:''}${q.explicacao?'\n\n'+q.explicacao:''}`;
   const id=genId();
   db.flashcards[id]={id,mbId:topicId,pergunta,resposta,tags:'banco-de-erros',dificuldade:2,acertos:0,erros:0,lastConf:0,criacao:new Date().toISOString(),ultimaRevisao:null};
 }
@@ -7165,11 +7192,61 @@ function normalizeForDedup(s){
   return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim();
 }
 
-async function generateQuestionsForSubject(apiKey,kingdom,topic,sub,quantidade){
-  const nota=(sub.note||'').trim();
-  const buildPrompt=(qtd,evitar)=>`Você é um elaborador de questões de concurso público brasileiro, especializado em múltipla escolha.
+// ===== Formato e nivel do simulado =====
+// Certo/errado nao ganha um caminho de renderizacao proprio: um item Cebraspe e,
+// estruturalmente, uma questao de duas alternativas (C=Certo, E=Errado). Modelando
+// assim, toda a tela de responder, corrigir, historico, banco de erros e
+// flashcard-de-questao-errada continua funcionando sem nenhuma alteracao.
+const SIM_ALTS_CE=[{letra:'C',texto:'Certo'},{letra:'E',texto:'Errado'}];
+const SIM_NIVEIS={
+  moderado:{lbl:'Moderado',desc:'DIFICULDADE MODERADA: cobre o conteúdo central do assunto exigindo compreensão, não decoreba literal.'},
+  dificil:{lbl:'Difícil',desc:`DIFICULDADE ALTA — nível de prova concorrida (FGV/Cebraspe para cargos disputados). Exigências obrigatórias:
+- Nada de questão que se responda só reconhecendo a definição do termo. Toda questão deve exigir aplicação, comparação ou raciocínio a partir do conteúdo.
+- Use caso clínico/prático ou situação-problema em pelo menos metade das questões.
+- Cobre exceções, limites, contraindicações, prazos e o que diferencia conceitos vizinhos que costumam ser confundidos.
+- Os distratores devem ser plausíveis para quem estudou por cima: erros conceituais comuns, valores próximos do correto, condutas certas na situação errada. Nada de alternativa absurda que se elimina de cara.`},
+  muitodificil:{lbl:'Muito difícil',desc:`DIFICULDADE MUITO ALTA — questões de desempate, do tipo que separa os primeiros colocados. Exigências obrigatórias:
+- Toda questão parte de uma situação-problema ou de um confronto entre duas regras/condutas.
+- Cobre detalhe fino: exceção da exceção, ordem de prioridade entre condutas, valor de corte, prazo específico, mudança recente de entendimento.
+- Todos os distratores devem ser defensáveis por alguém que estudou o assunto — a diferença entre certa e errada mora em uma palavra ou em um detalhe da situação descrita.
+- Nunca use "todas as anteriores", "nenhuma das anteriores" nem alternativa obviamente eliminável.`},
+};
+function simNivelDesc(nivel){return (SIM_NIVEIS[nivel]||SIM_NIVEIS.dificil).desc;}
+function simNivelLbl(nivel){return (SIM_NIVEIS[nivel]||SIM_NIVEIS.dificil).lbl;}
 
-TAREFA: Gere EXATAMENTE ${qtd} questões de múltipla escolha inéditas sobre o assunto abaixo — nem mais, nem menos que ${qtd} — no padrão de bancas como FGV/Cebraspe, com DIFICULDADE ENTRE MODERADA E ALTA (nunca questões triviais ou puramente decorativas — exija raciocínio, interpretação ou aplicação prática do conteúdo).
+// Normaliza o que a IA devolveu para o formato interno unico
+// ({questao, alternativas:[{letra,texto}], correta, explicacao}).
+// No certo/errado o modelo devolve so a afirmacao e o gabarito: as duas
+// alternativas sao montadas aqui, em vez de confiar que ele emita o array certo.
+function simNormalizaQuestao(q,formato){
+  if(!q)return null;
+  if(formato==='certoerrado'){
+    const texto=String(q.afirmacao||q.questao||'').trim();
+    const gab=String(q.gabarito||q.correta||'').trim().toUpperCase();
+    let letra=null;
+    if(gab==='C'||gab.startsWith('CERTO')||gab==='V'||gab==='TRUE')letra='C';
+    else if(gab==='E'||gab.startsWith('ERRAD')||gab==='F'||gab==='FALSE')letra='E';
+    if(!texto||!letra)return null;
+    return{questao:texto,alternativas:SIM_ALTS_CE.map(a=>({...a})),correta:letra,
+           explicacao:String(q.explicacao||'').trim(),formato:'certoerrado'};
+  }
+  if(!q.questao||!Array.isArray(q.alternativas)||!q.correta)return null;
+  return{...q,formato:'multipla'};
+}
+
+async function generateQuestionsForSubject(apiKey,kingdom,topic,sub,quantidade,opts){
+  const formato=(opts&&opts.formato)||'multipla';
+  const nivel=(opts&&opts.nivel)||'dificil';
+  const pesquisar=!(opts&&opts.pesquisar===false);
+  const nota=(sub.note||'').trim();
+  const ce=formato==='certoerrado';
+  const buildPrompt=(qtd,evitar)=>`Você é um elaborador de questões de concurso público brasileiro, especializado em ${ce?'itens de julgamento CERTO/ERRADO no estilo Cebraspe (Cespe)':'questões de múltipla escolha'}.
+
+${promptRegrasAtualidadeCurta()}
+
+TAREFA: Gere EXATAMENTE ${qtd} ${ce?'itens de julgamento (CERTO ou ERRADO)':'questões de múltipla escolha'} inéditos sobre o assunto abaixo — nem mais, nem menos que ${qtd}.
+
+${simNivelDesc(nivel)}
 
 REINO/ÁREA: ${kingdom.name}
 CHEFÃO/TÓPICO: ${topic.name}
@@ -7177,14 +7254,27 @@ MINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}
 ${nota?`\nANOTAÇÃO DO ALUNO SOBRE ESTE ASSUNTO (use como referência principal do recorte a cobrar — as questões devem ser sobre o que está anotado aqui, não só sobre o nome genérico do assunto):\n${nota}\n`:''}${evitar&&evitar.length?`\nJÁ FORAM GERADAS as questões abaixo sobre este mesmo assunto — NÃO repita nenhuma delas nem gere variações muito parecidas, cubra ângulos/subtemas diferentes:\n${evitar.map(q=>'- '+q).join('\n')}\n`:''}
 REGRAS:
 - O array JSON da resposta deve ter exatamente ${qtd} elementos.
-- Cada questão tem exatamente 5 alternativas (A a E), com apenas uma correta.
+${ce?`- Cada item é UMA afirmação a ser julgada como CERTA ou ERRADA. Escreva a afirmação direta, sem "Julgue o item" na frente e sem alternativas.
+- No estilo Cebraspe, o item errado costuma estar errado por UM detalhe (um número trocado, uma conduta fora de ordem, uma exceção ignorada, um "sempre/nunca" indevido) — não por ser absurdo.
+- Distribua o gabarito de forma equilibrada entre CERTO e ERRADO ao longo dos ${qtd} itens (nem tudo certo, nem tudo errado).
+- A explicação deve dizer POR QUE está certo ou, se errado, exatamente qual parte da afirmação está incorreta e qual seria a correta.`
+    :`- Cada questão tem exatamente 5 alternativas (A a E), com apenas uma correta.
+- IMPORTANTE — distribuição das respostas: a letra correta deve variar entre A, B, C, D e E ao longo das ${qtd} questões, o mais equilibrado possível (evite concentrar a resposta certa sempre nas mesmas letras, como só B/C — cada letra de A a E deve aparecer como correta em uma proporção parecida das questões geradas).
+- Inclua uma explicação curta (1 a 3 frases) do porquê a alternativa correta está certa.`}
 - Evite pegadinhas de português; o foco é o conteúdo técnico do assunto.
 - Se for citar lei/norma específica, use apenas referência que você tenha certeza que existe; se não tiver certeza do número exato, formule a questão sem citar número de lei.
-- Inclua uma explicação curta (1 a 3 frases) do porquê a alternativa correta está certa.
-- IMPORTANTE — distribuição das respostas: a letra correta deve variar entre A, B, C, D e E ao longo das ${qtd} questões, o mais equilibrado possível (evite concentrar a resposta certa sempre nas mesmas letras, como só B/C — cada letra de A a E deve aparecer como correta em uma proporção parecida das questões geradas).
 
-RESPONDA APENAS COM UM JSON (array de ${qtd} itens), sem markdown, no formato exato (o "correta" abaixo é só ilustrativo do formato — varie a letra certa em cada questão real, seguindo a regra de distribuição acima):
-[{"questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"..."}]`;
+RESPONDA APENAS COM UM JSON (array de ${qtd} itens), sem markdown, no formato exato:
+${ce?`[{"afirmacao":"...","gabarito":"C","explicacao":"..."},{"afirmacao":"...","gabarito":"E","explicacao":"..."}]`
+    :`[{"questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"..."}]`}`;
+
+  // Pesquisa uma vez só, antes do laço de tentativas: o assunto é o mesmo em
+  // todas elas, e cada busca custa crédito do Tavily. Sem chave, ou com a busca
+  // desligada, o fluxo é exatamente o de antes.
+  let busca={material:'',fontes:[],via:null,diag:[]};
+  if(pesquisar&&tavilyAtivo()){
+    busca=await buscarMaterial(sub.name,`${kingdom.name} — ${topic.name}`,25000);
+  }
 
   // A IA às vezes ignora a instrução de quantidade (ou tem a resposta cortada por limite de
   // tokens) e devolve menos itens do que o pedido. Em vez de aceitar a quantidade errada,
@@ -7198,19 +7288,20 @@ RESPONDA APENAS COM UM JSON (array de ${qtd} itens), sem markdown, no formato ex
   const MAX_TENTATIVAS=4;
   while(questoes.length<quantidade&&tentativas<MAX_TENTATIVAS){
     const faltam=quantidade-questoes.length;
-    const prompt=buildPrompt(faltam,questoes.map(q=>q.questao));
+    const base=buildPrompt(faltam,questoes.map(q=>q.questao));
+    const prompt=busca.material?tavilyPromptComFontes(base,busca.material):base;
     tentativas++;
     let arr;
     try{
       const raw=await callGeminiGenerate(apiKey,prompt);
       const parsed=extractAIJson(raw);
-      arr=Array.isArray(parsed)?parsed:(Array.isArray(parsed?.questoes)?parsed.questoes:null);
+      arr=Array.isArray(parsed)?parsed:(Array.isArray(parsed?.questoes)?parsed.questoes:(Array.isArray(parsed?.itens)?parsed.itens:null));
     }catch(e){
       if(!questoes.length&&tentativas>=MAX_TENTATIVAS)throw e;
       arr=null; // deixa tentar de novo (ou parar, se acabaram as tentativas) em vez de propagar o erro já na primeira falha
     }
     if(!arr)continue;
-    const validas=arr.filter(q=>q&&q.questao&&Array.isArray(q.alternativas)&&q.correta);
+    const validas=arr.map(q=>simNormalizaQuestao(q,formato)).filter(Boolean);
     for(const q of validas){
       if(questoes.length>=quantidade)break;
       const chave=normalizeForDedup(q.questao);
@@ -7223,7 +7314,7 @@ RESPONDA APENAS COM UM JSON (array de ${qtd} itens), sem markdown, no formato ex
   if(questoes.length<quantidade){
     toast(`⚠️ "${sub.name}": só foi possível gerar ${questoes.length} de ${quantidade} questões pedidas — a IA repetiu ou não completou a quantidade após algumas tentativas.`,'var(--orange)');
   }
-  return questoes;
+  return{questoes,busca};
 }
 
 async function generateSimulado(subId){
@@ -7243,6 +7334,9 @@ async function generateSimulado(subId){
 
   const qtdSel=document.getElementById('sim-qtd-'+subId);
   const quantidade=parseInt(qtdSel?.value||'10',10);
+  const formato=document.getElementById('sim-fmt-'+subId)?.value||db.simFormato||'multipla';
+  const nivel=document.getElementById('sim-niv-'+subId)?.value||db.simNivel||'dificil';
+  db.simFormato=formato;db.simNivel=nivel;saveDB();
 
   simGenerating.add(subId);
   openSim.add(subId);
@@ -7250,9 +7344,12 @@ async function generateSimulado(subId){
   if(wrap){wrap.classList.add('sim-open');wrap.style.display='';wrap.innerHTML=simPanelHTML(sub);}
 
   try{
-    const questoes=await generateQuestionsForSubject(apiKey,kingdom,topic,sub,quantidade);
-    simActive[subId]={questoes,quantidade:questoes.length,corrected:false};
-    toast('🎯 Simulado gerado! Responda e depois corrija.','var(--pink)');
+    const r=await generateQuestionsForSubject(apiKey,kingdom,topic,sub,quantidade,{formato,nivel});
+    const questoes=r.questoes;
+    simActive[subId]={questoes,quantidade:questoes.length,corrected:false,formato,nivel,fontes:r.busca.fontes};
+    toast(r.busca.via==='tavily'
+      ?`🔎 Simulado ${formato==='certoerrado'?'certo/errado':'de múltipla escolha'} gerado com pesquisa na internet (${r.busca.fontes.length} fontes)!`
+      :'🎯 Simulado gerado! Responda e depois corrija.','var(--pink)');
   }catch(e){
     toast('❌ '+(e.message||'Erro ao gerar simulado'),'var(--red)');
   }finally{
@@ -7286,7 +7383,12 @@ function simGeralConfigHTML(){
     return html;
   }
 
-  html+=`<div id="sg-picker" class="sg-picker">`;
+  html+=`<div class="sg-picker-tools">
+    <button class="btn btn-xs btn-ghost" onclick="sgTogglePickerAltura(this)" id="sg-altura-btn">${db.sgPickerAlto?'<i class="fa fa-compress"></i> Reduzir lista':'<i class="fa fa-expand"></i> Ampliar lista'}</button>
+    <button class="btn btn-xs btn-ghost" onclick="sgMarcarTodos(true)"><i class="fa fa-check-double"></i> Marcar todos</button>
+    <button class="btn btn-xs btn-ghost" onclick="sgMarcarTodos(false)"><i class="fa fa-eraser"></i> Limpar</button>
+  </div>`;
+  html+=`<div id="sg-picker" class="sg-picker${db.sgPickerAlto?' sg-picker-alto':''}">`;
   kingdoms.forEach(k=>{
     const topics=(db.topics[k.id]||[]).filter(t=>(t.subtopics||[]).some(s=>s.studied));
     html+=`<div class="sg-kingdom">
@@ -7328,7 +7430,28 @@ function simGeralConfigHTML(){
           <option value="120">120 min</option>
         </select>
       </div>
+      <div>
+        <label class="sg-config-lbl">Formato da prova</label>
+        <select id="sg-formato" class="inp" style="width:100%">
+          <option value="multipla"${(db.simFormato||'multipla')==='multipla'?' selected':''}>Múltipla escolha (A–E)</option>
+          <option value="certoerrado"${db.simFormato==='certoerrado'?' selected':''}>Certo / Errado (Cebraspe)</option>
+        </select>
+      </div>
+      <div>
+        <label class="sg-config-lbl">Nível das questões</label>
+        <select id="sg-nivel" class="inp" style="width:100%">
+          <option value="moderado"${db.simNivel==='moderado'?' selected':''}>Moderado</option>
+          <option value="dificil"${(db.simNivel||'dificil')==='dificil'?' selected':''}>Difícil (prova concorrida)</option>
+          <option value="muitodificil"${db.simNivel==='muitodificil'?' selected':''}>Muito difícil (desempate)</option>
+        </select>
+      </div>
     </div>
+    <label class="sg-pesq-row" title="${tavilyAtivo()?'Cada assunto vira duas buscas no Tavily antes da IA elaborar as questões':'Configure a chave do Tavily no painel de IA pra ativar'}">
+      <input type="checkbox" id="sg-pesquisar" ${tavilyAtivo()?'':'disabled'} ${db.simPesquisar!==false&&tavilyAtivo()?'checked':''}>
+      <span>🔎 Pesquisar na internet antes de elaborar${tavilyAtivo()
+        ?` <b style="color:var(--muted);font-weight:700">— gasta busca do Tavily por assunto (${simGeralConfig.selectedSubIds.size} selecionado${simGeralConfig.selectedSubIds.size===1?'':'s'})</b>`
+        :' <b style="color:var(--muted);font-weight:700">— sem chave do Tavily configurada</b>'}</span>
+    </label>
     <button id="sg-gerar-btn" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:14px" onclick="generateSimuladoGeral()" ${simGeralConfig.selectedSubIds.size===0?'disabled':''}><i class="fa fa-wand-magic-sparkles"></i> Gerar Simulado Geral</button>
   </div>`;
 
@@ -7364,6 +7487,25 @@ function sgUpdateSummary(){
   const btn=document.getElementById('sg-gerar-btn');
   if(btn)btn.disabled=simGeralConfig.selectedSubIds.size===0;
 }
+// Ampliar/reduzir a caixa da lista de assuntos. Fica salvo no db pra a escolha
+// sobreviver ao proximo simulado — nao adianta ter que reampliar toda vez.
+function sgTogglePickerAltura(btn){
+  db.sgPickerAlto=!db.sgPickerAlto;
+  saveDB();
+  const box=document.getElementById('sg-picker');
+  if(box)box.classList.toggle('sg-picker-alto',!!db.sgPickerAlto);
+  if(btn)btn.innerHTML=db.sgPickerAlto?'<i class="fa fa-compress"></i> Reduzir lista':'<i class="fa fa-expand"></i> Ampliar lista';
+}
+function sgMarcarTodos(marcar){
+  document.querySelectorAll('#sg-picker input[data-sub]').forEach(cb=>{
+    cb.checked=marcar;
+    if(marcar)simGeralConfig.selectedSubIds.add(cb.dataset.sub);
+    else simGeralConfig.selectedSubIds.delete(cb.dataset.sub);
+  });
+  document.querySelectorAll('#sg-picker .sg-kingdom-row input').forEach(cb=>{cb.checked=marcar;});
+  sgUpdateSummary();
+}
+
 async function generateSimuladoGeral(){
   const apiKey=(db.geminiApiKey||'').trim();
   if(!apiKey){toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');openAISettingsModal();return;}
@@ -7372,6 +7514,11 @@ async function generateSimuladoGeral(){
 
   const totalQtd=parseInt(document.getElementById('sg-qtd')?.value||'20',10);
   const tempoMin=parseInt(document.getElementById('sg-tempo')?.value||'60',10);
+  const formato=document.getElementById('sg-formato')?.value||db.simFormato||'multipla';
+  const nivel=document.getElementById('sg-nivel')?.value||db.simNivel||'dificil';
+  const pesquisar=document.getElementById('sg-pesquisar')?.checked!==false;
+  db.simFormato=formato;db.simNivel=nivel;db.simPesquisar=pesquisar;saveDB();
+  let pesquisados=0;
 
   const subjects=[];
   subIds.forEach(subId=>{
@@ -7403,10 +7550,11 @@ async function generateSimuladoGeral(){
   const falhas=[];
   for(let i=0;i<plano.length;i++){
     const p=plano[i];
-    if(container)container.innerHTML=`<div class="section-card"><div class="empty"><i class="fa fa-spinner fa-spin"></i><p>Gerando questões... (${i+1}/${plano.length} assuntos)<br><span style="font-size:10px">${p.sub.name}</span></p></div></div>`;
+    if(container)container.innerHTML=`<div class="section-card"><div class="empty"><i class="fa fa-spinner fa-spin"></i><p>${pesquisar&&tavilyAtivo()?'Pesquisando na internet e gerando':'Gerando'} questões... (${i+1}/${plano.length} assuntos)<br><span style="font-size:10px">${p.sub.name}</span></p></div></div>`;
     try{
-      const qs=await generateQuestionsForSubject(apiKey,p.kingdom,p.topic,p.sub,p.quantidade);
-      questoes.push(...qs.map(q=>({...q,subId:p.sub.id,subName:p.sub.name,topicName:p.topic.name,kingdomId:p.kingdom.id,kingdomName:p.kingdom.name,kingdomIcon:p.kingdom.icon})));
+      const r=await generateQuestionsForSubject(apiKey,p.kingdom,p.topic,p.sub,p.quantidade,{formato,nivel,pesquisar});
+      if(r.busca.via==='tavily')pesquisados++;
+      questoes.push(...r.questoes.map(q=>({...q,subId:p.sub.id,subName:p.sub.name,topicName:p.topic.name,kingdomId:p.kingdom.id,kingdomName:p.kingdom.name,kingdomIcon:p.kingdom.icon})));
     }catch(e){
       falhas.push(`${p.sub.name} (${e.message||'erro'})`);
     }
@@ -7419,11 +7567,11 @@ async function generateSimuladoGeral(){
   }else{
     // Embaralhar pra não ficar tudo agrupado por assunto, como numa prova de verdade
     for(let i=questoes.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[questoes[i],questoes[j]]=[questoes[j],questoes[i]];}
-    simGeralActive={questoes,startedAt:Date.now(),limiteSec:tempoMin>0?tempoMin*60:0,corrected:false};
+    simGeralActive={questoes,startedAt:Date.now(),limiteSec:tempoMin>0?tempoMin*60:0,corrected:false,formato,nivel};
     if(falhas.length){
       toast(`⚠️ Simulado gerado com ${questoes.length} questões, mas ${falhas.length} assunto${falhas.length>1?'s falharam':' falhou'} (provável limite de requisições da API). Pode gerar de novo depois pra cobrir o resto.`,'var(--orange)');
     }else{
-      toast(`🏛️ Simulado geral gerado! ${questoes.length} questões de ${subjects.length} assunto(s).`,'var(--accent)');
+      toast(`🏛️ Simulado ${formato==='certoerrado'?'certo/errado':'de múltipla escolha'} (${simNivelLbl(nivel).toLowerCase()}) gerado! ${questoes.length} questões de ${subjects.length} assunto(s)${pesquisados?` · ${pesquisados} pesquisado${pesquisados>1?'s':''} na internet`:''}.`,'var(--accent)');
     }
   }
   renderSimGeralScreen();
@@ -7442,7 +7590,7 @@ function simGeralExamHTML(){
         <div class="sim-q sg-q">
           <div class="sg-q-tag">${q.kingdomIcon} ${q.kingdomName} · ${q.topicName} · ${q.subName}</div>
           <div class="sim-q-text">${i+1}. ${q.questao}</div>
-          <div class="sim-alts">
+          <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
             ${(q.alternativas||[]).map(alt=>`<div class="sim-alt${q.userAnswer===alt.letra?' sim-selected':''}" onclick="sgSelectAnswer(${i},'${alt.letra}')"><b>${alt.letra})</b> ${alt.texto}</div>`).join('')}
           </div>
         </div>
@@ -7612,7 +7760,7 @@ function simGeralResultsHTML(){
         <div class="sim-q${q.problematico?' sim-q-flagged':''}">
           <div class="sg-q-tag">${q.kingdomIcon} ${q.kingdomName} · ${q.topicName} · ${q.subName}</div>
           <div class="sim-q-text">${i+1}. ${q.questao}</div>
-          <div class="sim-alts">
+          <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
             ${(q.alternativas||[]).map(alt=>{
               let cls='';
               if(alt.letra===q.correta)cls=' sim-correct';
