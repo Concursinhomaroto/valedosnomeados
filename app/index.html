@@ -680,21 +680,17 @@ nav{
    120px cobre o respiro do #main-content e o título da tela; abaixo de 1100px
    de largura ou 640px de altura a trava sai e volta a ser lista rolável, senão
    em tela pequena os cartões viram tiras ilegíveis. */
-.dash-fold{display:grid;gap:12px;margin-bottom:18px;
+.dash-fold{display:grid;gap:16px;margin-bottom:18px;
   grid-template-columns:repeat(6,1fr);
   /* Mínimo explícito por faixa, medido pelo que cada uma precisa mostrar:
      5 itens em "estudar agora" e em "revisões", 4 em "assuntos da semana", e o
      gráfico de tempo nos seus 130px. Com proporção pura, apertar uma faixa
      sempre roubava da outra e o quinto item vivia caindo fora. */
-  /* Os mínimos são o piso, não o alvo: cobrem 3 revisões, 2 assuntos da semana e
-     um gráfico de 77px, que é o que cabe num notebook de 768px com zoom em 100%.
-     Onde sobra altura o fr distribui e os mesmos cartões passam a mostrar 6, 4 e
-     um gráfico de 130px sem mudar nada. Piso alto demais fazia a dobra não caber
-     e cair na lista rolável — que era o painel gigante. */
-  grid-template-rows:auto minmax(176px,1.3fr) minmax(141px,1fr) minmax(150px,1fr);
-  /* 78px = os 60px acima da dobra (respiro do #main-content + titulo da tela) mais
-     os 18px da margem de baixo. Com 120px sobrava uma tira preta de 60px embaixo. */
-  height:calc(100vh - 78px);min-height:0;}
+  /* Alturas fixas, de proposito: amarrar a grade a 100vh fazia o painel depender
+     do zoom do navegador e da altura da janela — a mesma tela cabia a 90% e virava
+     lista rolavel a 100%. Agora as faixas tem tamanho proprio, folgado o bastante
+     pra cada cartao respirar, e quem rola e a pagina. */
+  grid-template-rows:auto 300px 260px 230px;}
 /* minmax(0,1fr) e min-width:0: com 1fr puro a faixa de conquistas nao encolhia
    abaixo do conteudo dela e vazava pra fora da tela, criando rolagem lateral. */
 .dash-r1{grid-column:1/-1;display:grid;grid-template-columns:170px 210px minmax(0,1fr);gap:12px;align-items:stretch}
@@ -705,9 +701,9 @@ nav{
    sobrava uma tira preta embaixo de cada linha (o "espaco morto" reclamado). */
 .dash-fold .section-card{margin-bottom:0!important}
 .dash-card{grid-column:span 2;margin-bottom:0;min-width:0;min-height:0;overflow:hidden;
-  display:flex;flex-direction:column;padding:12px 14px}
+  display:flex;flex-direction:column;padding:14px 16px}
 .dash-wide{grid-column:span 3}
-.dash-sec{margin-bottom:8px;font-size:10px;letter-spacing:1.2px}
+.dash-sec{margin-bottom:10px;font-size:11px;letter-spacing:1.2px}
 .dash-sec-sub{margin:12px 0 8px;padding-top:10px;border-top:1px dashed var(--border)}
 .dash-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .dash-head-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
@@ -729,41 +725,41 @@ nav{
    Numa coluna de um terço da tela isso estoura e só aparecem duas linhas. Aqui
    eles ficam em versão de uma linha, com o nome cortado por reticências em vez
    de embrulhar. Fora da dobra continuam do tamanho original. */
-.dash-fold .rev-item{padding:4px 8px;border-radius:8px;gap:6px;margin-bottom:3px;
+.dash-fold .rev-item{padding:7px 10px;border-radius:10px;gap:8px;margin-bottom:5px;
   flex-wrap:nowrap;box-shadow:none}
 .dash-fold .rev-item:last-child{margin-bottom:0}
 .dash-fold .rev-info{min-width:0}
-.dash-fold .rev-name{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dash-fold .rev-sub{font-size:8.5px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dash-fold .rev-cd{font-size:10.5px;min-width:0;white-space:nowrap}
-.dash-fold .rev-num-badge{width:19px;height:19px;font-size:9.5px}
+.dash-fold .rev-name{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-fold .rev-sub{font-size:9.5px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-fold .rev-cd{font-size:11.5px;min-width:0;white-space:nowrap}
+.dash-fold .rev-num-badge{width:22px;height:22px;font-size:10.5px}
 .dash-fold .rev-item .btn{padding:2px 6px!important;font-size:10px!important}
-.dash-fold .next-step-item{padding:4px 8px;border-radius:8px;gap:7px;margin-bottom:3px}
-.dash-fold .next-step-rank{width:19px;height:19px;font-size:10px}
-.dash-fold .next-step-name{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dash-fold .next-step-sub{font-size:8.5px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dash-fold .next-step-item>*:last-child{white-space:nowrap;font-size:9.5px}
+.dash-fold .next-step-item{padding:7px 10px;border-radius:10px;gap:9px;margin-bottom:5px}
+.dash-fold .next-step-rank{width:22px;height:22px;font-size:11px}
+.dash-fold .next-step-name{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-fold .next-step-sub{font-size:9.5px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-fold .next-step-item>*:last-child{white-space:nowrap;font-size:10.5px}
 /* as seis caixas de simulado numa fileira só */
-.dash-fold .sim-global-grid{grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:5px}
-.dash-fold .stat-card{padding:5px 3px;border-radius:8px;box-shadow:none}
-.dash-fold .stat-icon{font-size:12px}
-.dash-fold .stat-val{font-size:14px}
-.dash-fold .stat-lbl{font-size:7.5px;line-height:1.15}
-.dash-fold .rank-row{padding:4px 6px;gap:7px;margin-bottom:4px}
+.dash-fold .sim-global-grid{grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:7px}
+.dash-fold .stat-card{padding:9px 5px;border-radius:10px;box-shadow:none}
+.dash-fold .stat-icon{font-size:15px}
+.dash-fold .stat-val{font-size:17px}
+.dash-fold .stat-lbl{font-size:8px;line-height:1.15}
+.dash-fold .rank-row{padding:7px 9px;gap:9px;margin-bottom:6px}
 .dash-fold .rank-row span{font-size:15px!important}
 .dash-fold .rank-pos{font-size:11px}
 /* "Assuntos da semana" é montado com style inline no JS, então aqui o alvo é a
    estrutura: o container flex e cada item dentro dele. */
-.dash-fold #week-study-chart>div{gap:3px!important}
-.dash-fold #week-study-chart>div>div{padding:4px 8px!important;border-radius:8px!important;gap:7px!important}
-.dash-fold #week-study-chart>div>div>span:first-child{font-size:14px!important}
-.dash-fold #week-study-chart>div>div>div>div:first-child{font-size:11px!important}
-.dash-fold #week-study-chart>div>div>div>div:last-child{font-size:8.5px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-fold #week-study-chart>div{gap:5px!important}
+.dash-fold #week-study-chart>div>div{padding:7px 10px!important;border-radius:10px!important;gap:9px!important}
+.dash-fold #week-study-chart>div>div>span:first-child{font-size:16px!important}
+.dash-fold #week-study-chart>div>div>div>div:first-child{font-size:12px!important}
+.dash-fold #week-study-chart>div>div>div>div:last-child{font-size:9.5px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* mesma régua pros dois vizinhos de linha, pra ficarem organizados juntos */
-.dash-fold #avg-time-list>div{padding:5px 9px!important;margin-bottom:4px!important;
+.dash-fold #avg-time-list>div{padding:7px 10px!important;margin-bottom:6px!important;
   border-radius:10px!important;background:var(--bg2);border-left:3px solid var(--border2)}
 .dash-fold #avg-time-list>div:last-child{margin-bottom:0!important}
-.dash-fold #avg-time-list{font-size:11px}
+.dash-fold #avg-time-list{font-size:12px}
 /* O gráfico sai com height:auto no style inline (130px de viewBox), o que
    estoura a faixa baixa. Dentro da dobra ele passa a ocupar a altura que
    sobrar, mantendo a proporção pelo viewBox. */
@@ -775,17 +771,16 @@ nav{
 .dash-fold #study-chart-total{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .dash-fold #notif-permission-btn{padding:2px 6px!important;font-size:9.5px!important;white-space:nowrap}
 .dash-fold .dash-head-tools{flex-wrap:nowrap}
-.dash-fold .chart-tab{padding:2px 7px;font-size:9.5px}
+.dash-fold .chart-tab{padding:3px 9px;font-size:10.5px}
 .dash-fold .dash-head .btn{padding:2px 6px!important;font-size:10px!important}
 /* fileira de conquistas rola de lado em vez de virar duas linhas */
 /* faixa de cima enxuta: 98px pra três cartões de uma linha era altura tirada
    de onde faz falta */
-.dash-fold .gamify-card{padding:6px 12px;gap:9px}
-.dash-fold .gamify-icon{font-size:22px}
-.dash-fold .gamify-val{font-size:17px}
-.dash-fold .gamify-lbl{font-size:9px}
-.dash-fold .goal-ring-wrap svg{width:34px;height:34px}
-.dash-fold .gamify-badges{padding:6px 12px}
+.dash-fold .gamify-card{padding:10px 14px;gap:11px}
+.dash-fold .gamify-icon{font-size:26px}
+.dash-fold .gamify-val{font-size:20px}
+.dash-fold .gamify-lbl{font-size:10px}
+.dash-fold .gamify-badges{padding:10px 14px}
 .dash-fold .gamify-badges-title{margin-bottom:5px}
 .dash-fold .badges-row{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
 .dash-fold .badges-row::-webkit-scrollbar{height:4px}
@@ -798,24 +793,23 @@ nav{
    compacta. Fora da dobra ela segue com o auto-fill de 200px, que é o certo
    quando tem a largura da tela inteira. */
 .dash-fold .week-plan-grid{grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;height:100%}
-.dash-fold .day-col{padding:7px 6px;border-radius:9px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
-.dash-fold .day-header{font-size:9px;letter-spacing:.3px;margin-bottom:6px;flex-wrap:wrap;gap:2px}
+.dash-fold .day-col{padding:9px 8px;border-radius:9px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.dash-fold .day-header{font-size:10px;letter-spacing:.3px;margin-bottom:6px;flex-wrap:wrap;gap:2px}
 .dash-fold .day-today-pill{padding:1px 5px;font-size:7.5px}
-.dash-fold .plan-item{padding:4px 6px;margin-bottom:4px;border-radius:6px;gap:5px}
+.dash-fold .plan-item{padding:6px 8px;margin-bottom:5px;border-radius:8px;gap:6px}
 .dash-fold .plan-item-dot{width:6px;height:6px;margin-top:3px}
-.dash-fold .plan-item-text{font-size:9px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dash-fold .plan-item-sub{font-size:7.5px;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-fold .plan-item-text{font-size:10px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-fold .plan-item-sub{font-size:8.5px;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dash-fold .plan-add-btn{font-size:11px!important;padding:0!important;width:18px;height:18px;line-height:1}
 /* "＋ Adicionar assunto" e "Descanso" não cabem numa coluna de ~100px: viram só
    o sinal e o emoji, com o texto no title pra não perder a informação. */
 .dash-fold .plan-empty-day{font-size:10px;padding:5px 3px;line-height:1.2;overflow:hidden;
   white-space:nowrap;text-align:center;margin-top:auto}
 .dash-fold .plan-lbl{display:none}
-/* Soma dos mínimos: 58+176+141+150 + 36 de vão = 561px, que cabe em 100vh-78px
-   a partir de 639px de janela — um notebook de 768px com zoom em 100% entra. Só
-   abaixo disso (ou de 1000px de largura) a dobra vira lista rolável. */
-@media(max-width:1000px),(max-height:638px){
-  .dash-fold{height:auto;min-height:0;grid-template-columns:1fr;grid-template-rows:none}
+/* So a largura decide: abaixo de 1000px tres colunas viram tiras ilegiveis, entao
+   a grade empilha. Altura nao entra mais na conta — a pagina rola. */
+@media(max-width:1000px){
+  .dash-fold{grid-template-columns:1fr;grid-template-rows:none}
   .dash-card,.dash-wide{grid-column:1/-1;max-height:340px}
   .dash-r1{grid-template-columns:1fr;grid-column:1/-1}
 }
