@@ -682,10 +682,20 @@ nav{
    em tela pequena os cartões viram tiras ilegíveis. */
 .dash-fold{display:grid;gap:12px;margin-bottom:18px;
   grid-template-columns:repeat(6,1fr);
-  grid-template-rows:auto minmax(0,1.12fr) minmax(0,1fr) minmax(0,1fr);
-  height:calc(100vh - 120px);min-height:560px;}
+  /* Mínimo explícito por faixa, medido pelo que cada uma precisa mostrar:
+     5 itens em "estudar agora" e em "revisões", 4 em "assuntos da semana", e o
+     gráfico de tempo nos seus 130px. Com proporção pura, apertar uma faixa
+     sempre roubava da outra e o quinto item vivia caindo fora. */
+  grid-template-rows:auto minmax(256px,1.3fr) minmax(212px,1fr) 203px;
+  /* 78px = os 60px acima da dobra (respiro do #main-content + titulo da tela) mais
+     os 18px da margem de baixo. Com 120px sobrava uma tira preta de 60px embaixo. */
+  height:calc(100vh - 78px);min-height:0;}
 .dash-r1{grid-column:1/-1;display:grid;grid-template-columns:170px 210px 1fr;gap:12px;align-items:stretch}
 .dash-r1>.section-card{margin-bottom:0}
+/* .section-card e definido depois daqui no arquivo e traz margin-bottom:18px; sem
+   este !important cada cartao da dobra ficava 18px mais curto que a faixa dele e
+   sobrava uma tira preta embaixo de cada linha (o "espaco morto" reclamado). */
+.dash-fold .section-card{margin-bottom:0!important}
 .dash-card{grid-column:span 2;margin-bottom:0;min-width:0;min-height:0;overflow:hidden;
   display:flex;flex-direction:column;padding:12px 14px}
 .dash-wide{grid-column:span 3}
@@ -694,7 +704,7 @@ nav{
 .dash-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .dash-head-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .dash-grow{flex:1;min-height:0}
-.dash-foot{text-align:center;font-size:10px;color:var(--muted);font-weight:700;margin-top:6px}
+.dash-foot{text-align:center;font-size:9.5px;color:var(--muted);font-weight:700;margin-top:4px}
 .dash-foot-inline{margin:0;text-align:right;white-space:nowrap}
 /* Rola por dentro do cartao. O esmaecido no rodape faz o item cortado ler como
    "tem mais abaixo" em vez de parecer quebrado. */
@@ -711,18 +721,19 @@ nav{
    Numa coluna de um terço da tela isso estoura e só aparecem duas linhas. Aqui
    eles ficam em versão de uma linha, com o nome cortado por reticências em vez
    de embrulhar. Fora da dobra continuam do tamanho original. */
-.dash-fold .rev-item{padding:6px 9px;border-radius:9px;gap:7px;margin-bottom:5px;
+.dash-fold .rev-item{padding:4px 8px;border-radius:8px;gap:6px;margin-bottom:3px;
   flex-wrap:nowrap;box-shadow:none}
+.dash-fold .rev-item:last-child{margin-bottom:0}
 .dash-fold .rev-info{min-width:0}
 .dash-fold .rev-name{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dash-fold .rev-sub{font-size:9px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-fold .rev-sub{font-size:8.5px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dash-fold .rev-cd{font-size:10.5px;min-width:0;white-space:nowrap}
 .dash-fold .rev-num-badge{width:19px;height:19px;font-size:9.5px}
 .dash-fold .rev-item .btn{padding:2px 6px!important;font-size:10px!important}
-.dash-fold .next-step-item{padding:6px 9px;border-radius:9px;gap:8px;margin-bottom:5px}
+.dash-fold .next-step-item{padding:4px 8px;border-radius:8px;gap:7px;margin-bottom:3px}
 .dash-fold .next-step-rank{width:19px;height:19px;font-size:10px}
 .dash-fold .next-step-name{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dash-fold .next-step-sub{font-size:9px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-fold .next-step-sub{font-size:8.5px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dash-fold .next-step-item>*:last-child{white-space:nowrap;font-size:9.5px}
 /* as seis caixas de simulado numa fileira só */
 .dash-fold .sim-global-grid{grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:5px}
@@ -733,20 +744,39 @@ nav{
 .dash-fold .rank-row{padding:4px 6px;gap:7px;margin-bottom:4px}
 .dash-fold .rank-row span{font-size:15px!important}
 .dash-fold .rank-pos{font-size:11px}
+/* "Assuntos da semana" é montado com style inline no JS, então aqui o alvo é a
+   estrutura: o container flex e cada item dentro dele. */
+.dash-fold #week-study-chart>div{gap:3px!important}
+.dash-fold #week-study-chart>div>div{padding:4px 8px!important;border-radius:8px!important;gap:7px!important}
+.dash-fold #week-study-chart>div>div>span:first-child{font-size:14px!important}
+.dash-fold #week-study-chart>div>div>div>div:first-child{font-size:11px!important}
+.dash-fold #week-study-chart>div>div>div>div:last-child{font-size:8.5px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* mesma régua pros dois vizinhos de linha, pra ficarem organizados juntos */
+.dash-fold #avg-time-list>div{padding:5px 9px!important;margin-bottom:4px!important;
+  border-radius:10px!important;background:var(--bg2);border-left:3px solid var(--border2)}
+.dash-fold #avg-time-list>div:last-child{margin-bottom:0!important}
+.dash-fold #avg-time-list{font-size:11px}
 /* O gráfico sai com height:auto no style inline (130px de viewBox), o que
    estoura a faixa baixa. Dentro da dobra ele passa a ocupar a altura que
    sobrar, mantendo a proporção pelo viewBox. */
 /* cabeçalho numa linha só: quebrando em duas ele comia 65px dos ~180 úteis */
-.dash-fold .dash-head{flex-wrap:nowrap;align-items:center}
+.dash-fold .dash-head{flex-wrap:nowrap;align-items:center;min-height:0}
+.dash-fold .dash-head .sec-title{margin-bottom:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-fold #notif-permission-btn{padding:2px 6px!important;font-size:9.5px!important;white-space:nowrap}
 .dash-fold .dash-head-tools{flex-wrap:nowrap}
 .dash-fold .chart-tab{padding:2px 7px;font-size:9.5px}
 .dash-fold .dash-head .btn{padding:2px 6px!important;font-size:10px!important}
 /* fileira de conquistas rola de lado em vez de virar duas linhas */
+/* faixa de cima enxuta: 98px pra três cartões de uma linha era altura tirada
+   de onde faz falta */
+.dash-fold .gamify-card{padding:8px 12px;gap:8px}
+.dash-fold .gamify-badges{padding:8px 12px}
+.dash-fold .gamify-badges-title{margin-bottom:5px}
 .dash-fold .badges-row{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
 .dash-fold .badges-row::-webkit-scrollbar{height:4px}
 .dash-fold .badges-row::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.dash-fold #study-chart-wrap{display:flex;overflow:hidden}
-.dash-fold #study-chart-wrap svg{width:100%!important;height:100%!important;overflow:hidden!important}
+.dash-fold #study-chart-wrap{display:block;overflow:hidden;align-self:stretch}
+.dash-fold #study-chart-wrap svg{width:100%!important;height:auto!important}
 /* A agenda dentro da primeira dobra: 7 dias sempre lado a lado, em versão
    compacta. Fora da dobra ela segue com o auto-fill de 200px, que é o certo
    quando tem a largura da tela inteira. */
@@ -764,7 +794,9 @@ nav{
 .dash-fold .plan-empty-day{font-size:10px;padding:5px 3px;line-height:1.2;overflow:hidden;
   white-space:nowrap;text-align:center;margin-top:auto}
 .dash-fold .plan-lbl{display:none}
-@media(max-width:1100px),(max-height:640px){
+/* Abaixo de 861px de altura a soma dos minimos (70+256+212+203+36 de vao = 777)
+   nao cabe em 100vh-78px, entao a dobra volta a ser lista rolavel. */
+@media(max-width:1100px),(max-height:860px){
   .dash-fold{height:auto;min-height:0;grid-template-columns:1fr;grid-template-rows:none}
   .dash-card,.dash-wide{grid-column:1/-1;max-height:340px}
   .dash-r1{grid-template-columns:1fr;grid-column:1/-1}
