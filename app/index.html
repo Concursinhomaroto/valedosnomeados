@@ -5479,15 +5479,26 @@ function deleteTopic(tid){
   saveDB();renderTopics();renderMap();
 }
 
+// Chefao de prioridade alta primeiro, depois media, depois baixa. Dentro da mesma
+// faixa a ordem de criacao e preservada — o sort do JS e estavel, e reordenar
+// dentro da faixa so embaralharia uma lista que o usuario ja conhece.
+//
+// Ordena uma COPIA: db.topics e o dado gravado, e sort() reordena o array
+// original. Sem a copia, a tela reescreveria o banco a cada renderizacao.
+function topicsPorPrioridade(kingdomId){
+  return [...(db.topics[kingdomId]||[])].sort((a,b)=>(b.priority||1)-(a.priority||1));
+}
+
 function renderTopics(){
   const list=document.getElementById('topics-list');
-  const topics=db.topics[currentKingdom.id]||[];
+  const topics=topicsPorPrioridade(currentKingdom.id);
   if(!topics.length){
     list.innerHTML=`<div class="empty"><i class="fa fa-dragon"></i><p>Nenhum chefão neste reino.<br>Invoque o primeiro acima!</p></div>`;return;
   }
   list.innerHTML='';
   topics.forEach(topic=>{
-    const subs=(topic.subtopics||[]).sort((a,b)=>b.priority-a.priority);
+    // copia antes de ordenar: sort() mexeria na lista gravada de minibosses
+    const subs=[...(topic.subtopics||[])].sort((a,b)=>b.priority-a.priority);
     const pending=subs.reduce((n,s)=>n+countOverdue(s,todayStr()),0);
     const studied=subs.reduce((n,s)=>n+(db.times[s.id]||0),0);
     const el=document.createElement('div');
@@ -5502,7 +5513,7 @@ function renderTopics(){
           <span class="time-chip"><i class="fa fa-clock"></i> ${fmtTime(studied)}</span>
           ${pending>0?`<span style="background:rgba(220,38,38,0.1);color:var(--red);border:1.5px solid rgba(220,38,38,0.3);border-radius:8px;padding:2px 7px;font-size:9px;font-weight:900">${pending} atrasadas!</span>`:''}
         </div>
-        <button class="btn btn-sm" style="background:linear-gradient(135deg,rgba(108,71,255,0.12),rgba(79,70,229,0.12));border:1.5px solid var(--border2);color:var(--accent);font-size:10px" onclick="event.stopPropagation();intensiveTraining('${topic.id}')"><i class="fa fa-fire" style="color:var(--orange)"></i> Intensivo</button>
+        <button class="btn btn-sm" title="Puxa para HOJE a revisão de todos os minibosses já estudados deste chefão. Quem tinha revisão marcada para a frente é antecipado; quem não tinha ganha uma. Não cria revisão para miniboss que você ainda não estudou." style="background:linear-gradient(135deg,rgba(108,71,255,0.12),rgba(79,70,229,0.12));border:1.5px solid var(--border2);color:var(--accent);font-size:10px" onclick="event.stopPropagation();intensiveTraining('${topic.id}')"><i class="fa fa-fire" style="color:var(--orange)"></i> Revisar hoje</button>
         <button class="btn btn-xs" onclick="event.stopPropagation();renameTopic('${topic.id}')" title="Renomear chefão"><i class="fa fa-pen"></i></button>
         <button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteTopic('${topic.id}')"><i class="fa fa-trash"></i></button>
         <i class="fa fa-chevron-down" style="color:var(--muted);font-size:11px;transition:transform 0.2s" id="chev-${topic.id}"></i>
@@ -5534,7 +5545,7 @@ function toggleTopic(id){
 
 // ===== SUBTOPICS =====
 function renderSubsHTML(topic){
-  const subs=(topic.subtopics||[]).sort((a,b)=>b.priority-a.priority);
+  const subs=[...(topic.subtopics||[])].sort((a,b)=>b.priority-a.priority);
   if(!subs.length)return`<div class="empty" style="padding:18px"><i class="fa fa-ghost"></i><p>Nenhum miniboss. Invoque o primeiro!</p></div>`;
   return subs.map(s=>subItemHTML(s,topic.id)).join('');
 }
@@ -7534,7 +7545,7 @@ function simGeralConfigHTML(){
   </div>`;
   html+=`<div id="sg-picker" class="sg-picker${db.sgPickerAlto?' sg-picker-alto':''}">`;
   kingdoms.forEach(k=>{
-    const topics=(db.topics[k.id]||[]).filter(t=>(t.subtopics||[]).some(s=>s.studied));
+    const topics=topicsPorPrioridade(k.id).filter(t=>(t.subtopics||[]).some(s=>s.studied));
     html+=`<div class="sg-kingdom">
       <label class="sg-kingdom-row"><input type="checkbox" onchange="sgToggleKingdom('${k.id}',this.checked)"> <b>${k.icon} ${k.name}</b></label>`;
     topics.forEach(t=>{
@@ -9396,7 +9407,7 @@ function intensiveTraining(topicId){
   const topic=(db.topics[currentKingdom.id]||[]).find(t=>t.id===topicId);
   if(!topic||!topic.subtopics.length){toast('⚠️ Nenhum miniboss neste chefão','var(--orange)');return;}
   const today=todayStr();
-  let added=0;
+  let added=0,jaEraHoje=0;
   topic.subtopics.forEach(s=>{
     if(!s.studied)return;// only studied ones
     if(!db.revisions[s.id])db.revisions[s.id]=[];
@@ -9408,14 +9419,16 @@ function intensiveTraining(topicId){
     const pending=revs.find(r=>!r.completed);
     if(pending){
       if(pending.date>today){pending.date=today;added++;}
+      else jaEraHoje++;   // ja estava hoje ou atrasada: nao ha o que antecipar
     }else{
       revs.push({date:today,completed:false});
       added++;
     }
   });
   saveDB();updateRevBadge();
-  if(added)toast(`🔥 ${added} revisão(ões) intensivas agendadas!`,'var(--accent)');
-  else toast('⚠️ Nenhum miniboss estudado neste chefão','var(--orange)');
+  if(added)toast(`🔥 ${added} miniboss${added>1?'es':''} de "${topic.name}" ${added>1?'entraram':'entrou'} na revisão de hoje.`,'var(--accent)');
+  else if(jaEraHoje)toast(`✅ "${topic.name}" já estava todo na revisão de hoje.`,'var(--green)');
+  else toast('⚠️ Nenhum miniboss estudado neste chefão — só entra na revisão o que você já estudou.','var(--orange)');
 }
 
 // ===== REVISION SCREEN =====
