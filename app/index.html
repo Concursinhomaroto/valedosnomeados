@@ -686,15 +686,19 @@ nav{
      5 itens em "estudar agora" e em "revisões", 4 em "assuntos da semana", e o
      gráfico de tempo nos seus 130px. Com proporção pura, apertar uma faixa
      sempre roubava da outra e o quinto item vivia caindo fora. */
-  /* Os mínimos são o piso, não o alvo: cobrem 4 revisões e 3 assuntos da semana,
-     que é o que cabe numa janela baixa. Onde sobra altura o fr distribui e os
-     mesmos cartões passam a mostrar 6 e 4 sem mudar nada. Piso alto demais fazia
-     a dobra não caber e cair na lista rolável — que era o painel gigante. */
-  grid-template-rows:auto minmax(216px,1.3fr) minmax(175px,1fr) 203px;
+  /* Os mínimos são o piso, não o alvo: cobrem 3 revisões, 2 assuntos da semana e
+     um gráfico de 77px, que é o que cabe num notebook de 768px com zoom em 100%.
+     Onde sobra altura o fr distribui e os mesmos cartões passam a mostrar 6, 4 e
+     um gráfico de 130px sem mudar nada. Piso alto demais fazia a dobra não caber
+     e cair na lista rolável — que era o painel gigante. */
+  grid-template-rows:auto minmax(176px,1.3fr) minmax(141px,1fr) minmax(150px,1fr);
   /* 78px = os 60px acima da dobra (respiro do #main-content + titulo da tela) mais
      os 18px da margem de baixo. Com 120px sobrava uma tira preta de 60px embaixo. */
   height:calc(100vh - 78px);min-height:0;}
-.dash-r1{grid-column:1/-1;display:grid;grid-template-columns:170px 210px 1fr;gap:12px;align-items:stretch}
+/* minmax(0,1fr) e min-width:0: com 1fr puro a faixa de conquistas nao encolhia
+   abaixo do conteudo dela e vazava pra fora da tela, criando rolagem lateral. */
+.dash-r1{grid-column:1/-1;display:grid;grid-template-columns:170px 210px minmax(0,1fr);gap:12px;align-items:stretch}
+.dash-r1>*{min-width:0}
 .dash-r1>.section-card{margin-bottom:0}
 /* .section-card e definido depois daqui no arquivo e traz margin-bottom:18px; sem
    este !important cada cartao da dobra ficava 18px mais curto que a faixa dele e
@@ -765,7 +769,10 @@ nav{
    sobrar, mantendo a proporção pelo viewBox. */
 /* cabeçalho numa linha só: quebrando em duas ele comia 65px dos ~180 úteis */
 .dash-fold .dash-head{flex-wrap:nowrap;align-items:center;min-height:0}
-.dash-fold .dash-head .sec-title{margin-bottom:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* o titulo nao encolhe: quem cede espaco primeiro e o "Total no periodo", que e
+   informacao repetida do proprio grafico. Antes o titulo virava "TEMPO ESTUDADC". */
+.dash-fold .dash-head .sec-title{margin-bottom:0;white-space:nowrap;flex-shrink:0}
+.dash-fold #study-chart-total{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .dash-fold #notif-permission-btn{padding:2px 6px!important;font-size:9.5px!important;white-space:nowrap}
 .dash-fold .dash-head-tools{flex-wrap:nowrap}
 .dash-fold .chart-tab{padding:2px 7px;font-size:9.5px}
@@ -773,13 +780,19 @@ nav{
 /* fileira de conquistas rola de lado em vez de virar duas linhas */
 /* faixa de cima enxuta: 98px pra três cartões de uma linha era altura tirada
    de onde faz falta */
-.dash-fold .gamify-card{padding:8px 12px;gap:8px}
-.dash-fold .gamify-badges{padding:8px 12px}
+.dash-fold .gamify-card{padding:6px 12px;gap:9px}
+.dash-fold .gamify-icon{font-size:22px}
+.dash-fold .gamify-val{font-size:17px}
+.dash-fold .gamify-lbl{font-size:9px}
+.dash-fold .goal-ring-wrap svg{width:34px;height:34px}
+.dash-fold .gamify-badges{padding:6px 12px}
 .dash-fold .gamify-badges-title{margin-bottom:5px}
 .dash-fold .badges-row{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
 .dash-fold .badges-row::-webkit-scrollbar{height:4px}
 .dash-fold .badges-row::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .dash-fold #study-chart-wrap{display:block;overflow:hidden;align-self:stretch}
+/* o viewBox do SVG e desenhado com a altura da propria caixa (ver renderStudyChart),
+   entao height:auto ja da exatamente a altura disponivel — sem corte nem vao */
 .dash-fold #study-chart-wrap svg{width:100%!important;height:auto!important}
 /* A agenda dentro da primeira dobra: 7 dias sempre lado a lado, em versão
    compacta. Fora da dobra ela segue com o auto-fill de 200px, que é o certo
@@ -798,10 +811,10 @@ nav{
 .dash-fold .plan-empty-day{font-size:10px;padding:5px 3px;line-height:1.2;overflow:hidden;
   white-space:nowrap;text-align:center;margin-top:auto}
 .dash-fold .plan-lbl{display:none}
-/* Soma dos mínimos: 70+216+175+203 + 36 de vão = 700px, que cabe em 100vh-78px
-   a partir de 778px de janela. Só abaixo disso (ou de 1000px de largura) a dobra
-   vira lista rolável. */
-@media(max-width:1000px),(max-height:777px){
+/* Soma dos mínimos: 58+176+141+150 + 36 de vão = 561px, que cabe em 100vh-78px
+   a partir de 639px de janela — um notebook de 768px com zoom em 100% entra. Só
+   abaixo disso (ou de 1000px de largura) a dobra vira lista rolável. */
+@media(max-width:1000px),(max-height:638px){
   .dash-fold{height:auto;min-height:0;grid-template-columns:1fr;grid-template-rows:none}
   .dash-card,.dash-wide{grid-column:1/-1;max-height:340px}
   .dash-r1{grid-template-columns:1fr;grid-column:1/-1}
@@ -8528,6 +8541,16 @@ function resetTimer(subId,topicId){
 
 // ===== STUDY TIME CHART =====
 let currentChartTab='day';
+// Como a altura do grafico agora vem da caixa, mudar o tamanho da janela (ou o
+// zoom do navegador, que e a mesma coisa em px de CSS) exige redesenhar.
+let chartResizeTimer=null;
+window.addEventListener('resize',()=>{
+  clearTimeout(chartResizeTimer);
+  chartResizeTimer=setTimeout(()=>{
+    const w=document.getElementById('study-chart-wrap');
+    if(w&&w.offsetParent!==null)renderStudyChart();
+  },150);
+});
 function setChartTab(tab,el){
   currentChartTab=tab;
   document.querySelectorAll('.chart-tab').forEach(c=>c.classList.remove('active'));
@@ -8586,7 +8609,15 @@ function renderStudyChart(){
   const maxSec=Math.max(1,...bars.map(b=>b.seconds));
   const totalSec=bars.reduce((a,b)=>a+b.seconds,0);
   const W=Math.max(400, wrap.clientWidth||500);
-  const H=130,padL=4,padR=4,padT=18,padB=28;
+  // A altura vem da caixa, nao de um numero fixo: dentro da primeira dobra o
+  // #study-chart-wrap e flex:1, entao clientHeight ja e o espaco que sobrou no
+  // cartao. Com H fixo em 130 a faixa do grafico precisava de 203px sempre, e era
+  // ela que impedia a dobra de caber em janela baixa (notebook de 768px, zoom 100%).
+  // O piso e baixo de proposito: se o clamp ficar acima da caixa, o SVG passa da
+  // borda e o overflow:hidden come os rotulos das datas.
+  const H=Math.max(56,Math.min(260,Math.round(wrap.clientHeight||130)));
+  const apertado=H<120;
+  const padL=4,padR=4,padT=apertado?13:18,padB=apertado?21:28;
   const bw=Math.floor((W-padL-padR)/bars.length);
   const gap=3;
   const barW=bw-gap;
