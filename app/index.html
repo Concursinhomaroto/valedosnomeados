@@ -15410,16 +15410,19 @@ async function listGeminiModels(apiKey){
     return models;
   }catch(e){return[];}
 }
-async function callGeminiGenerate(apiKey,prompt){
+// opts repassa maxOutputTokens. Sem isso vale o padrao de 8192, que corta a
+// resposta no meio quando ela e longa — foi o que fez um PDF com 100 perguntas
+// virar 33 flashcards: o JSON estourou o teto e voltou pela metade.
+async function callGeminiGenerate(apiKey,prompt,opts){
   const attempts=[];
   for(const model of GEMINI_MODEL_CANDIDATES){
-    const r=await tryGeminiModel(apiKey,model,prompt);
+    const r=await tryGeminiModel(apiKey,model,prompt,opts);
     if(r.ok)return r.raw;
     attempts.push(`${model} (${r.reason})`);
   }
   const discovered=(await listGeminiModels(apiKey)).filter(m=>!GEMINI_MODEL_CANDIDATES.includes(m));
   for(const model of discovered){
-    const r=await tryGeminiModel(apiKey,model,prompt);
+    const r=await tryGeminiModel(apiKey,model,prompt,opts);
     if(r.ok)return r.raw;
     attempts.push(`${model} (${r.reason})`);
   }
@@ -15634,6 +15637,41 @@ function extractAIJson(raw){
   throw new Error('IA retornou formato inválido. Tente novamente.');
 }
 
+// ===== MATERIAL QUE JA VEM EM PERGUNTA E RESPOSTA =====
+// Quando o documento ja e um caderno de perguntas e respostas, pedir pra IA
+// "gerar flashcards" e o pior caminho possivel: ela reescreve, condensa e ainda
+// esbarra no teto de resposta. Aqui os pares sao recortados do proprio texto,
+// sem IA nenhuma — nao perde nenhum, nao custa token e preserva a redacao exata
+// que voce escreveu.
+function fcExtrairPares(texto){
+  if(!texto||texto.length<40)return[];
+  const t=texto.replace(/\r/g,'');
+  const limpa=s=>String(s||'').replace(/\s+/g,' ').replace(/^[\s.:)\-–—]+/,'').trim();
+  const bom=p=>p.pergunta.length>=10&&p.resposta.length>=2;
+
+  // Formato A, numerado: "Questao 12 ... Resposta: ..." (tambem "Pergunta 12", "Q12").
+  // A fronteira do proximo item usa \s* e nao \s: em PDF a frase anterior as vezes
+  // cola no cabecalho seguinte ("...funcoes publicas.Questao 46"), e exigir espaco
+  // fazia o item seguinte ser engolido pelo anterior.
+  const CAB=`(?:quest[aã]o|pergunta|q)`;
+  const reA=new RegExp(
+    CAB+`\\s*(?:n[º°o]?\\s*)?(\\d{1,4})\\s*[).:\\-–—]?\\s*([\\s\\S]*?)`+
+    `\\bresposta\\s*[:\\-–—]\\s*([\\s\\S]*?)`+
+    `(?=\\s*`+CAB+`\\s*(?:n[º°o]?\\s*)?\\d{1,4}\\b|\\s*$)`,'gi');
+  const A=[];let m;
+  while((m=reA.exec(t))!==null){
+    const par={pergunta:limpa(m[2]),resposta:limpa(m[3])};
+    if(bom(par))A.push(par);
+  }
+  // Formato B, "P: ... R: ..." em linhas separadas.
+  const reB=/(?:^|\n)\s*p\s*[:\-–—]\s*([\s\S]*?)\n\s*r\s*[:\-–—]\s*([\s\S]*?)(?=\n\s*p\s*[:\-–—]|\s*$)/gi;
+  const B=[];
+  while((m=reB.exec(t))!==null){
+    const par={pergunta:limpa(m[1]),resposta:limpa(m[2])};
+    if(bom(par))B.push(par);
+  }
+  return A.length>=B.length?A:B;
+}
 async function fcHandlePDF(file){
   if(!file||file.type!=='application/pdf'){toast('⚠️ Envie um arquivo PDF','var(--red)');return;}
   if(!fcSelectedMb){toast('⚠️ Selecione um chefão primeiro','var(--red)');return;}
@@ -15675,7 +15713,10 @@ async function fcHandlePDF(file){
     // Não ampliar demais: a resposta da IA (lista de flashcards em JSON) também tem teto
     // de tamanho, e um pedaço grande demais gera JSON longo o suficiente pra cortar no
     // meio e falhar o parse — 60000 já é ~2.4x o tamanho anterior, testado e ainda seguro.
-    const CHUNK_SIZE=60000;
+    // O limite que manda aqui NAO e o de entrada, e o de SAIDA: o modelo aguenta ler
+    // 60 mil caracteres numa chamada, mas a lista de flashcards que ele devolve nao
+    // cabe na resposta. Fatia menor = mais chamadas, porem nenhuma resposta cortada.
+    const CHUNK_SIZE=20000;
     const chunks=[];
     {
       let i=0;
@@ -15690,9 +15731,17 @@ async function fcHandlePDF(file){
       }
     }
 
-    const allCards=[];
+    // Antes de gastar um token: o documento ja vem em pergunta e resposta?
+    const pares=fcExtrairPares(texto);
+    let allCards=[];
     const falhas=[];
-    for(let idx=0;idx<chunks.length;idx++){
+    let viaExtracao=false;
+    if(pares.length>=5){
+      viaExtracao=true;
+      allCards=pares.map(p=>({pergunta:p.pergunta,resposta:p.resposta,dificuldade:3,tags:'importado-pdf'}));
+      if(statusTxt)statusTxt.textContent=`${pares.length} pares de pergunta e resposta encontrados no próprio documento — importando sem IA...`;
+    }
+    for(let idx=0;idx<chunks.length&&!viaExtracao;idx++){
       if(statusTxt)statusTxt.textContent=chunks.length>1
         ?`IA gerando flashcards — parte ${idx+1}/${chunks.length} (${texto.length} caracteres no total)...`
         :`IA gerando flashcards (${texto.length} caracteres lidos)...`;
@@ -15717,7 +15766,8 @@ ${chunks[idx]}
 LEMBRE: responda APENAS com o JSON array, comecando com [ e terminando com ]`;
 
       try{
-        const raw=await callGeminiGenerate(apiKey,prompt);
+        // Teto explicito: no padrao de 8192 uma lista longa de cards volta cortada.
+        const raw=await callGeminiGenerate(apiKey,prompt,{maxOutputTokens:32768});
         const parsed=extractAIJson(raw);
         if(Array.isArray(parsed))allCards.push(...parsed);
         else falhas.push(idx+1);
@@ -15763,13 +15813,17 @@ LEMBRE: responda APENAS com o JSON array, comecando com [ e terminando com ]`;
     // é só o que a IA gerou a partir de PDF — antes desses dois contadores, cards vindos
     // de PDF não somavam em NENHUMA conquista de volume de criação.
     db.fcCreatedTotal=(db.fcCreatedTotal||0)+count;
-    db.fcAIGeneratedTotal=(db.fcAIGeneratedTotal||0)+count;
+    // So conta como "gerado por IA" o que a IA realmente gerou; o que foi recortado
+    // do proprio documento nao e criacao dela.
+    if(!viaExtracao)db.fcAIGeneratedTotal=(db.fcAIGeneratedTotal||0)+count;
     saveDB();
     renderFCMbList();renderFCMain();updateFCBadge();
     if(!count&&duplicadas){
       toast(`ℹ️ Nenhum flashcard novo — os ${duplicadas} gerados já existiam pra esse chefão.`,'var(--muted)');
     }else if(falhas.length){
       toast(`🃏 ${count} flashcards gerados!${duplicadas?` (${duplicadas} repetido${duplicadas>1?'s':''} ignorado${duplicadas>1?'s':''})`:''} ⚠️ ${falhas.length} de ${chunks.length} parte(s) do PDF falharam — tente reenviar o mesmo arquivo pra completar.`,'var(--orange)');
+    }else if(viaExtracao){
+      toast(`📄 ${count} flashcards importados do documento, um por pergunta, sem passar pela IA.${duplicadas?` (${duplicadas} repetido${duplicadas>1?'s':''} ignorado${duplicadas>1?'s':''})`:''}`,'var(--green)');
     }else{
       toast(`🃏 ${count} flashcards gerados com sucesso!${duplicadas?` (${duplicadas} repetido${duplicadas>1?'s':''} ignorado${duplicadas>1?'s':''})`:''}`,'var(--green)');
     }
