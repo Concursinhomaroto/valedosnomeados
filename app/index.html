@@ -750,6 +750,10 @@ nav{
 .fluxo-node-acao{background:var(--panel2);border:1.5px solid var(--border);color:var(--text);}
 .fluxo-node-decisao{background:rgba(217,119,6,0.12);border:1.5px solid rgba(217,119,6,0.4);color:#d97706;border-radius:8px;}
 .fluxo-node-fim{background:linear-gradient(135deg,var(--green),#15803d);color:#fff;border-radius:24px;}
+/* Remissão: o ramo chega num nó que já foi desenhado. Fica visivelmente mais
+   discreto que um nó de verdade, pra ninguém ler como se fosse outra etapa. */
+.fluxo-node-ref{background:transparent;border:1.5px dashed var(--border2);color:var(--muted);
+  font-weight:700;font-style:italic;font-size:11px;}
 .fluxo-connector{width:2px;height:16px;background:var(--border);}
 .fluxo-arrow{color:var(--muted);font-size:11px;line-height:1;margin:-3px 0 1px;}
 .fluxo-branches{display:flex;gap:22px;align-items:flex-start;justify-content:center;padding-top:22px;}
@@ -1259,18 +1263,9 @@ nav{
 .rep-eixo-chip{font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.5px;}
 
 /* Seções do tema */
-/* Duas colunas só quando cada uma ainda cabe uma linha de leitura decente.
-   Medido: a 1280px de janela a coluna dava 39 caracteres por linha e a 1440px,
-   48 — abaixo dos 60-75 confortáveis, e quebra demais cansa tanto quanto linha
-   longa demais. Uma coluna com o limite de 68ch entrega 68 em qualquer largura.
-   Acima de 1700px cabem as duas sem apertar (a 1600 a coluna ainda dava 58). */
-.rep-secoes{display:grid;grid-template-columns:1fr;gap:0;border-top:1px solid var(--border);}
-.rep-secao{padding:18px 20px;border-bottom:1px solid var(--border);}
-@media(min-width:1700px){
-  .rep-secoes{grid-template-columns:1fr 1fr;}
-  .rep-secao{border-right:1px solid var(--border);}
-  .rep-secao:nth-child(even){border-right:none;}
-}
+.rep-secoes{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--border);}
+.rep-secao{padding:18px 20px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
+.rep-secao:nth-child(even){border-right:none;}
 .rep-secao-dominada{background:rgba(34,197,94,0.045);}
 .rep-dominado-btn{font-size:15px;cursor:pointer;opacity:.5;transition:opacity .15s;line-height:1;}
 .rep-dominado-btn:hover{opacity:.85;}
@@ -1283,11 +1278,7 @@ nav{
    tela — sem isso, um único parágrafo assim empurra a página inteira de largura no
    celular e o navegador reduz o zoom da página toda pra caber, deixando tudo minúsculo
    (o "fica ruim de ler quando amplia" relatado). */
-.rep-secao-body{font-size:13px;color:var(--text2);line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;
-  /* 160 caracteres por linha a 1920px (medido): o olho perde a linha ao voltar,
-     e é isso que cansa em sessão longa. 68ch põe na faixa confortável de 60-75
-     sem encolher a caixa — o texto para antes da borda, o cartão continua igual. */
-  max-width:68ch;}
+.rep-secao-body{font-size:13px;color:var(--text2);line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;}
 .rep-secao-edit{width:100%;min-height:100px;border:1.5px solid var(--border);border-radius:10px;padding:10px;font-size:13px;font-family:inherit;line-height:1.7;resize:vertical;outline:none;background:var(--panel2);color:var(--text);transition:border-color .2s;}
 .rep-secao-edit:focus{border-color:var(--accent);}
 
@@ -6934,14 +6925,27 @@ function fluxoPanelHTML(s){
 }
 
 // ---- Visualização (modo leitura) ----
-function fluxoRenderNode(nos,id){
+// Isto desenha uma ARVORE, mas o que a IA produz e um GRAFO: num fluxograma de
+// verdade os caminhos convergem ("as tres causas levam ao mesmo desenrolar"), e
+// isso e correto, nao erro dela. Sem marcar quem ja foi desenhado, cada caminho
+// que chega no no compartilhado redesenhava a subarvore inteira — foi assim que
+// um fluxograma apareceu com a mesma sequencia repetida tres vezes lado a lado.
+// O conjunto 'vistos' tambem e o que impede um ciclo (A->B->A) de recursionar
+// pra sempre e derrubar a aba.
+function fluxoRenderNode(nos,id,vistos){
+  vistos=vistos||new Set();
   const node=nos[id];
   if(!node)return`<div class="fluxo-node fluxo-node-fim">Fim</div>`;
+  if(vistos.has(id)){
+    const t=(node.texto||'').trim();
+    return`<div class="fluxo-node fluxo-node-ref" title="Este caminho desemboca num ponto que já aparece no fluxograma">↩ segue em “${escapeHtml(t.length>44?t.slice(0,44)+'…':t)}”</div>`;
+  }
+  vistos.add(id);
   let html=`<div class="fluxo-node fluxo-node-${node.tipo||'acao'}">${escapeHtml(node.texto||'')}</div>`;
   const ramos=node.ramos||[];
   if(!ramos.length)return html;
   if(ramos.length===1){
-    html+=`<div class="fluxo-connector"></div><div class="fluxo-arrow">▼</div>${fluxoRenderNode(nos,ramos[0].to)}`;
+    html+=`<div class="fluxo-connector"></div><div class="fluxo-arrow">▼</div>${fluxoRenderNode(nos,ramos[0].to,vistos)}`;
     return html;
   }
   // Sem div de conector fixo aqui: com 2+ ramos, a ligação (tronco descendo do nó pai +
@@ -6951,7 +6955,7 @@ function fluxoRenderNode(nos,id){
   html+=`<div class="fluxo-branches">${ramos.map(r=>`
     <div class="fluxo-branch">
       <div class="fluxo-branch-label">${escapeHtml(r.rotulo||'')}</div>
-      ${fluxoRenderNode(nos,r.to)}
+      ${fluxoRenderNode(nos,r.to,vistos)}
     </div>`).join('')}</div>`;
   return html;
 }
