@@ -11887,6 +11887,12 @@ function repRenderMain(){
             <span class="rep-eixo-chip" style="background:${e.color}15;color:${e.color}">${e.icon} ${e.nome}</span>
           </div>
           <div class="rep-tema-titulo">${t.nome}</div>
+          ${t.contextoAtualidade?`<div style="margin-top:7px;padding:8px 11px;border-left:3px solid var(--accent);background:var(--panel2);border-radius:0 10px 10px 0;font-size:11.5px;color:var(--text2);line-height:1.5">
+            ${t.contextoAtualidade.recorte?`<div><b>Recorte:</b> ${escapeHtml(t.contextoAtualidade.recorte)}</div>`:''}
+            ${t.contextoAtualidade.gancho?`<div><b>Em pauta porque:</b> ${escapeHtml(t.contextoAtualidade.gancho)}</div>`:''}
+            ${t.contextoAtualidade.contraponto?`<div><b>Contraponto:</b> ${escapeHtml(t.contextoAtualidade.contraponto)}</div>`:''}
+            ${(t.contextoAtualidade.fontes||[]).length?`<div style="margin-top:3px;color:var(--muted)">Fontes: ${t.contextoAtualidade.fontes.map(f=>`<a href="${urlSegura(f.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml((f.titulo||f.url).slice(0,44))}</a>`).join(' · ')}</div>`:''}
+          </div>`:''}
           ${t.geradoEm?`<div style="font-size:10.5px;color:${desatualizado?'var(--orange)':'var(--muted)'};margin-top:4px;font-weight:${desatualizado?'800':'400'}">
             ${desatualizado?'⏰':'🕐'} Gerado por IA em ${repFormatDataCurta(t.geradoEm)}${desatualizado?` (${diasDesdeGeracao} dias atrás) — leis e dados podem ter mudado, considere gerar de novo`:''}
           </div>`:''}
@@ -12049,7 +12055,7 @@ const REP_IA_BATCHES=[
   ['aspectosPositivos','aspectosNegativos','comparacao','solucoes','exemplosAssociados'],
 ];
 
-function repPromptGerarBatch(nomeTema,nomeEixo,campoIds){
+function repPromptGerarBatch(nomeTema,nomeEixo,campoIds,contexto){
   const camposTxt=campoIds.map(id=>`- ${id}: ${REP_CAMPO_INSTRUCOES[id]}`).join('\n');
   const schema='{'+campoIds.map(id=>`"${id}":"..."`).join(',')+'}';
   return`Você é um professor especialista em preparar candidatos para concursos públicos brasileiros e redação dissertativa-argumentativa, montando material de repertório sociocultural sobre um tema.
@@ -12060,7 +12066,7 @@ TAREFA: Use a ferramenta de busca do Google AGORA, antes de escrever qualquer co
 
 EIXO TEMÁTICO: ${nomeEixo||'(não informado)'}
 TEMA: ${nomeTema}
-
+${contexto||''}
 REGRAS OBRIGATÓRIAS:
 - Pesquise na internet antes de responder — não pule essa etapa.
 - Seja específico e factual — cite leis, dados, nomes e instituições reais que você souber ou encontrar na pesquisa.
@@ -12078,7 +12084,7 @@ RESPONDA APENAS COM JSON, sem texto antes ou depois, sem markdown, no formato ex
 ${schema}`;
 }
 
-async function repGerarComIA(id){
+async function repGerarComIA(id,opts){
   repInit();
   const t=db.repertorio.temas[id];if(!t)return;
   if(repGerandoIA)return;
@@ -12090,9 +12096,23 @@ async function repGerarComIA(id){
     return;
   }
   const jaTemConteudo=SECOES.some(s=>t[s.id]&&t[s.id].trim());
-  if(jaTemConteudo&&!confirm('Isso vai substituir o conteúdo já preenchido nas seções deste tema. Continuar?'))return;
+  if(jaTemConteudo&&!(opts&&opts.forcar)
+     &&!confirm('Isso vai substituir o conteúdo já preenchido nas seções deste tema. Continuar?'))return;
 
   const eixo=(db.repertorio.eixos||[]).find(e=>e.id===t.eixoId);
+  // Tema que veio de "Temas em pauta" carrega o recorte, o gancho e os aspectos
+  // apurados na pesquisa. Sem passar isso adiante, a geração escrevia sobre o
+  // nome do tema em geral e jogava fora justamente a parte que tinha fonte.
+  const ctx=t.contextoAtualidade;
+  const contexto=ctx?`
+RECORTE OBRIGATÓRIO (veio de uma pesquisa de atualidade feita para este candidato — não escreva sobre o tema em geral, escreva sobre ESTE ângulo):
+- Recorte: ${ctx.recorte||'—'}
+- Por que está em pauta agora: ${ctx.gancho||'—'}
+- Contraponto que precisa aparecer: ${ctx.contraponto||'—'}${(ctx.aspectos&&ctx.aspectos.length)?`
+- Aspectos que precisam ser cobertos ao longo das seções:
+  - ${ctx.aspectos.join('\n  - ')}`:''}
+`:'';
+  const buscaExtra=ctx&&ctx.recorte?` ${ctx.recorte}`:'';
   repGerandoIA=true;repGerandoIAStep=0;
   repSelectedTema=t;repEditMode=false;
   repRenderMain();
@@ -12103,10 +12123,11 @@ async function repGerarComIA(id){
       repGerandoIAStep=i+1;
       repRenderMain();
       const campos=REP_IA_BATCHES[i];
-      const bR=await buscarMaterial(t.nome,eixo?.nome||'',30000);
+      const bR=await buscarMaterial(t.nome,(eixo?.nome||'')+buscaExtra,30000);
+      const prompt=repPromptGerarBatch(t.nome,eixo?.nome||'',campos,contexto);
       const{raw,grounded}=bR.material
-        ?{raw:await callGeminiGenerate(apiKey,tavilyPromptComFontes(repPromptGerarBatch(t.nome,eixo?.nome||'',campos),bR.material)),grounded:true}
-        :await callGeminiGenerateSearch(apiKey,repPromptGerarBatch(t.nome,eixo?.nome||'',campos));
+        ?{raw:await callGeminiGenerate(apiKey,tavilyPromptComFontes(prompt,bR.material)),grounded:true}
+        :await callGeminiGenerateSearch(apiKey,prompt);
       const data=extractAIJson(raw);
       campos.forEach(cid=>{
         if(typeof data[cid]==='string'&&data[cid].trim())t[cid]=data[cid].trim();
@@ -12508,16 +12529,21 @@ function redCriarTemaSugerido(i,gerar){
   const id='rep_'+genId();
   const tema={id,nome:t.tema,eixoId:s.eixoId,criacao:new Date().toISOString()};
   SECOES.forEach(sec=>tema[sec.id]='');
-  // O gancho e o recorte já são conteúdo de verdade, pesquisado: jogar fora pra
-  // deixar o campo em branco seria desperdiçar a única parte que veio com fonte.
-  const painel=[t.recorte?`RECORTE: ${t.recorte}`:'',t.gancho?`GANCHO (por que está em pauta): ${t.gancho}`:'',
-    t.contraponto?`CONTRAPONTO: ${t.contraponto}`:'',
-    (t.aspectos&&t.aspectos.length)?`ASPECTOS A ABORDAR:\n- ${t.aspectos.join('\n- ')}`:''].filter(Boolean).join('\n\n');
-  if(painel)tema.panorama=painel;
+  // O recorte, o gancho e o contraponto ficam num campo PRÓPRIO, fora das seções.
+  // Antes eu jogava isso dentro do Panorama, e aí a própria geração via "esse tema
+  // já tem conteúdo", parava pra perguntar se podia substituir e não preenchia mais
+  // nada — o tema nascia com uma seção só. Aqui eles viram o recorte que guia TODAS
+  // as seções, e continuam visíveis no cabeçalho do tema.
+  tema.contextoAtualidade={
+    recorte:t.recorte||'',gancho:t.gancho||'',contraponto:t.contraponto||'',
+    aspectos:(t.aspectos||[]).slice(),
+    fontes:(t.fontes||[]).map(n=>s.fontes[n-1]).filter(Boolean).slice(0,6),
+    em:s.em||todayStr(),
+  };
   db.repertorio.temas[id]=tema;
   saveDB();closeModal();repRenderSidebar();repSelectTema(id);
-  if(gerar)repGerarComIA(id);
-  else toast('✅ Tema criado no repertório.','var(--green)');
+  if(gerar)repGerarComIA(id,{forcar:true});
+  else toast('✅ Tema criado no repertório. Use "Gerar com IA" pra preencher as seções.','var(--green)');
 }
 
 function redCriarTopicoRedacao(i){
