@@ -1,0 +1,46 @@
+{
+  "rules": {
+    "users": {
+      ".read": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'leonardobrunotlc@gmail.com')"
+      }
+    },
+    "promo": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'"
+    },
+    "vdn_v1": {
+      ".read": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'"
+    },
+    "sala_mapa": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'"
+    },
+    "sala_presence": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "sala_chat": {
+      ".read": "auth != null",
+      "$msg": {
+        ".write": "auth != null",
+        ".validate": "!newData.exists() || (newData.hasChildren(['uid','nick','txt','ts']) && newData.child('uid').val() === auth.uid && newData.child('txt').isString() && newData.child('txt').val().length <= 300 && newData.child('nick').isString() && newData.child('nick').val().length <= 40)"
+      }
+    },
+    "sala_dm": {
+      "$dono": {
+        ".read": "auth != null && auth.uid === $dono",
+        "$outro": {
+          ".write": "auth != null && (auth.uid === $dono || auth.uid === $outro)",
+          "$msg": {
+            ".validate": "!newData.exists() || (newData.hasChildren(['de','nick','txt','ts']) && newData.child('de').val() === auth.uid && newData.child('txt').isString() && newData.child('txt').val().length <= 300 && newData.child('nick').isString() && newData.child('nick').val().length <= 40)"
+          }
+        }
+      }
+    }
+  }
+}
