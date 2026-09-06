@@ -698,7 +698,13 @@ nav{
 .resumo-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
 .resumo-title{font-size:11px;font-weight:900;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;}
 .resumo-actions{display:flex;gap:6px;flex-wrap:wrap;}
-.resumo-body{font-size:12.5px;color:var(--text2);line-height:1.7;white-space:pre-line;max-height:340px;overflow-y:auto;padding-right:4px;max-width:68ch;}
+/* O resumo é o texto mais longo que se lê aqui, e abria cortado em 340px com
+   rolagem POR DENTRO da caixa — "não abre completo". O painel já é opt-in (só
+   aparece quando se clica em Resumo), então ele abre inteiro e quem fecha é o
+   próprio botão. A coluna de 68ch fica CENTRADA: encostada à esquerda num
+   cartão largo, o vazio à direita parecia defeito de renderização. */
+.resumo-body{font-size:13px;color:var(--text2);line-height:1.75;white-space:pre-line;
+  max-width:68ch;margin-left:auto;margin-right:auto;}
 .resumo-disclaimer{font-size:9.5px;color:var(--muted);margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);display:flex;align-items:center;gap:5px;}
 .resumo-empty{font-size:12px;color:var(--muted);text-align:center;padding:2px 0 10px;}
 .resumo-drop{display:block;border:1.5px dashed rgba(139,92,246,0.4);border-radius:12px;padding:18px 12px;text-align:center;cursor:pointer;transition:all 0.2s;}
