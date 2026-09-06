@@ -6088,6 +6088,8 @@ REGRAS:
 - Cubra TODO o conteúdo relevante do material, sem pular partes importantes.
 - Destaque conceitos-chave, definições, exceções, prazos, números e classificações — é isso que cai em prova.
 - Não invente informação que não esteja no material. Se algo estiver ambíguo ou incompleto no texto, sinalize isso brevemente em vez de completar por conta própria.
+- Depois de apresentar um conceito, critério, classificação ou prazo, ancore-o num EXEMPLO de aplicação, numa linha começando por "Na prática:" — uma situação curta mostrando a teoria acontecendo (uma cena de plantão, um caso, a situação de serviço em que a regra é acionada). Serve pra correlacionar teoria e prática; se o ponto já for autoexplicativo, pule.
+- O exemplo pode ser uma situação hipotética montada a partir do próprio material, mas NÃO pode introduzir número, prazo, dose ou nome de norma que não esteja no material.
 - Escreva em texto corrido organizado por tópicos, sem markdown (sem #, sem **, sem bullets com símbolos especiais — use só quebras de linha e frases objetivas), porque esse texto também vai ser lido em voz alta.
 
 MATERIAL:
@@ -6118,6 +6120,8 @@ REGRAS:
 - Organize por tópicos e subtópicos, com títulos curtos em MAIÚSCULAS seguidos de dois pontos.
 - Elimine repetições entre as partes, mas não perca informação.
 - Não invente nada que não esteja nas anotações abaixo.
+- Depois de apresentar um conceito, critério, classificação ou prazo, ancore-o num EXEMPLO de aplicação, numa linha começando por "Na prática:" — uma situação curta mostrando a teoria acontecendo (uma cena de plantão, um caso, a situação de serviço em que a regra é acionada). Serve pra correlacionar teoria e prática; se o ponto já for autoexplicativo, pule.
+- O exemplo pode ser uma situação hipotética montada a partir do próprio material, mas NÃO pode introduzir número, prazo, dose ou nome de norma que não esteja no material.
 - Texto corrido organizado por tópicos, sem markdown (sem #, sem **, sem bullets com símbolos especiais), porque também vai ser lido em voz alta.
 
 ANOTAÇÕES POR PARTE:
@@ -6475,6 +6479,8 @@ REGRAS:
 - Destaque conceitos-chave, definições, exceções, prazos, números, classificações e, principalmente, alterações recentes relevantes pra concurso.
 - Ao dar número, prazo, dose, fórmula ou classificação, diga entre parênteses de qual edição/ano é a fonte. Ex: "(diretriz de 2024)".
 - Se não tiver certeza sobre uma informação específica (data exata, número de lei, etc.), sinalize isso como algo a confirmar, em vez de inventar.
+- Depois de apresentar um conceito, critério, classificação ou prazo, ancore-o num EXEMPLO de aplicação, numa linha começando por "Na prática:" — uma situação curta (uma ou duas frases) mostrando a teoria acontecendo. Em conteúdo clínico, uma cena de plantão ou um caso de paciente; em norma e legislação, a situação de serviço em que ela é acionada. Serve pra correlacionar teoria e prática, não pra alongar: se o ponto já for autoexplicativo, pule o exemplo.
+- O exemplo PODE ser hipotético, e isso é permitido — mas ele não pode introduzir número, prazo, dose ou nome de norma que você não confirmou na pesquisa. Exemplo ilustrativo usa só dados que já apareceram no próprio resumo.
 - Escreva em texto corrido organizado por tópicos, sem markdown (sem #, sem **, sem bullets com símbolos especiais), porque esse texto também vai ser lido em voz alta.
 - Português brasileiro correto e natural, em frases completas. Revise concordância verbal e nominal, regência, crase e pontuação antes de responder — este texto vai ser estudado e também lido em voz alta, então frase truncada ou torta atrapalha de verdade.`;
 }
@@ -7218,7 +7224,9 @@ REGRAS:
 - "tipo" é sempre um de: "inicio" (só o primeiro nó), "acao" (um ponto-chave, conceito, definição, classificação ou etapa), "decisao" (um ponto onde o assunto se ramifica em 2+ caminhos — pode ser uma decisão sim/não, mas também uma classificação com vários tipos, hipóteses, exceções, ou qualquer "isso se divide em..."), "fim" (um desfecho/conclusão, sem ramos depois).
 - Nós que NÃO são de ramificação têm no máximo 1 item em "ramos" (rotulo sempre null) — é só o próximo passo da sequência. Um nó "fim" tem "ramos":[].
 - Nós de tipo "decisao" têm 2 ou mais itens em "ramos", cada um com um "rotulo" curto nomeando aquele caminho (ex: "Sim"/"Não", ou o nome de cada tipo/classe/exceção/hipótese).
-- Textos de cada passo devem ser curtos e diretos (até ~15 palavras), destacando terminologias, prazos, números, classificações e conceitos-chave — o que cai em prova, não o texto corrido inteiro.
+- Textos de cada passo devem ser curtos e diretos (até ~15 palavras, ou ~20 com o exemplo da regra abaixo), destacando terminologias, prazos, números, classificações e conceitos-chave — o que cai em prova, não o texto corrido inteiro.
+- Nos nós que nomeiam um tipo, uma classificação ou um critério, ancore o conceito num exemplo concreto entre parênteses, curtíssimo (até 6 palavras), no formato "(ex.: ...)". Ex: "Choque hipovolêmico (ex.: hemorragia por trauma)". Use só onde o exemplo ajuda a fixar — se todos os nós tiverem exemplo, o fluxograma vira texto corrido e perde a função.
+- O exemplo entre parênteses não pode introduzir número, prazo, dose ou nome de norma que você não confirmou.
 - O fluxo não precisa ser sequência de procedimento — pode ser a estrutura lógica do assunto (definição → classificações → características de cada uma → exceções → prazos), o que fizer mais sentido pro conteúdo.
 - Não existe limite fixo de nós: cubra o assunto de forma completa, usando quantos passos/ramos forem necessários pra não deixar de fora nenhum ponto que costuma cair em prova. Prefira um fluxograma mais completo a um resumido demais — só evite repetir a mesma informação em nós diferentes.`;
 
