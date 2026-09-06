@@ -1777,6 +1777,7 @@ nav{
     </button>
     <button class="nav-btn" id="nav-sala">
       <span class="nav-icon">👥</span><span class="nav-label">SALA DE ESTUDO</span>
+      <span id="nav-sala-dot" title="Você está visível na sala agora" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(21,128,61,.22);margin-left:auto;flex-shrink:0"></span>
     </button>
     <button class="nav-btn" id="nav-map">
       <span class="nav-icon">🗺️</span><span class="nav-label">MAPA DOS REINOS</span>
@@ -2227,7 +2228,7 @@ nav{
 <div class="screen" id="screen-sala">
   <div class="sala-mapa-top">
     <h2><i class="fa fa-house-chimney"></i> Sala de Estudo</h2>
-    <div class="sala-mapa-hint">WASD ou setas pra andar · E pra sentar/levantar</div>
+    <div class="sala-mapa-hint">WASD ou setas pra andar · E pra sentar/levantar · você continua na sala enquanto estuda em outras telas</div>
   </div>
   <div class="sala-mapa-stage">
     <div class="sala-mapa-viewport" id="sala-mapa-viewport"></div>
@@ -2235,6 +2236,7 @@ nav{
       <button class="sala-zoom-btn" onclick="salaMapaZoom(0.25)" title="Aumentar zoom"><i class="fa fa-plus"></i></button>
       <button class="sala-zoom-btn" onclick="salaMapaZoom(-0.25)" title="Diminuir zoom"><i class="fa fa-minus"></i></button>
       <button class="sala-zoom-btn" onclick="salaOpenNicknamePicker()" title="Trocar visual"><i class="fa fa-user"></i></button>
+      <button class="sala-zoom-btn" onclick="salaSairDaSala()" title="Sair da sala — some do mapa para os outros até você voltar aqui"><i class="fa fa-right-from-bracket"></i></button>
     </div>
   </div>
   <!-- Crédito exigido pela licença do Modern Interiors (LimeZu) — não remover/esconder. -->
@@ -3154,6 +3156,10 @@ function authForgotPassword(){
 function authSignOut(){
   if(!authFirebase)return;
   if(!confirm('Sair da sua conta?'))return;
+  // Agora que a presença sobrevive à troca de tela, o logout é a saída explícita
+  // da Sala. Sem isto ela só sumiria quando o onDisconnect do Firebase percebesse
+  // a queda da conexão — e até lá seu boneco continuaria lá para os outros.
+  try{salaPresenceLeave&&salaPresenceLeave();}catch(e){}
   authFirebase.signOut();
 }
 function authShowLoginScreen(){
@@ -11896,6 +11902,11 @@ function repRenderMain(){
           ${t.geradoEm?`<div style="font-size:10.5px;color:${desatualizado?'var(--orange)':'var(--muted)'};margin-top:4px;font-weight:${desatualizado?'800':'400'}">
             ${desatualizado?'⏰':'🕐'} Gerado por IA em ${repFormatDataCurta(t.geradoEm)}${desatualizado?` (${diasDesdeGeracao} dias atrás) — leis e dados podem ter mudado, considere gerar de novo`:''}
           </div>`:''}
+          ${t.erroGeracao?`<div style="margin-top:7px;padding:8px 11px;border:1.5px solid var(--red);background:rgba(185,28,28,.10);border-radius:10px;font-size:11.5px;color:var(--red);line-height:1.5">
+            <b>A geração não completou.</b> ${t.erroGeracao.campos.length?`Ficaram sem conteúdo: ${t.erroGeracao.campos.map(c=>escapeHtml((SECOES.find(x=>x.id===c)||{}).title||c)).join(', ')}.`:'Nenhuma seção foi preenchida.'}
+            <div style="color:var(--muted);margin-top:3px">Motivo: <code>${escapeHtml(t.erroGeracao.msg||'—')}</code></div>
+            <div style="color:var(--muted)">Clique em <b>Gerar com IA</b> pra tentar de novo — o que já veio não se perde.</div>
+          </div>`:''}
           <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
             <div style="flex:1;max-width:200px">
               <div class="rep-prog-bar"><div class="rep-prog-fill" style="width:${pct}%;background:${pctColor}"></div></div>
@@ -12112,28 +12123,54 @@ RECORTE OBRIGATÓRIO (veio de uma pesquisa de atualidade feita para este candida
 - Aspectos que precisam ser cobertos ao longo das seções:
   - ${ctx.aspectos.join('\n  - ')}`:''}
 `:'';
-  const buscaExtra=ctx&&ctx.recorte?` ${ctx.recorte}`:'';
+  // No PROMPT vai o recorte inteiro; na CONSULTA de busca, não. Frase longa
+  // derruba a qualidade da busca (e o Tavily tem limite de tamanho de query):
+  // aqui entram só as primeiras palavras, cortadas no espaço.
+  const buscaExtra=ctx&&ctx.recorte?' '+cortarNoPonto(ctx.recorte,110).replace(/…$/,''):'';
   repGerandoIA=true;repGerandoIAStep=0;
   repSelectedTema=t;repEditMode=false;
   repRenderMain();
 
+  delete t.erroGeracao;
   try{
     let algumGrounded=false,todosGrounded=true;
+    const falhas=[];
     for(let i=0;i<REP_IA_BATCHES.length;i++){
       repGerandoIAStep=i+1;
       repRenderMain();
       const campos=REP_IA_BATCHES[i];
-      const bR=await buscarMaterial(t.nome,(eixo?.nome||'')+buscaExtra,30000);
-      const prompt=repPromptGerarBatch(t.nome,eixo?.nome||'',campos,contexto);
-      const{raw,grounded}=bR.material
-        ?{raw:await callGeminiGenerate(apiKey,tavilyPromptComFontes(prompt,bR.material)),grounded:true}
-        :await callGeminiGenerateSearch(apiKey,prompt);
-      const data=extractAIJson(raw);
-      campos.forEach(cid=>{
-        if(typeof data[cid]==='string'&&data[cid].trim())t[cid]=data[cid].trim();
-      });
-      algumGrounded=algumGrounded||grounded;
-      todosGrounded=todosGrounded&&grounded;
+      // Um lote que falha NÃO derruba os outros. Antes, um 429 no primeiro lote
+      // custava as treze seções e o tema nascia 0% — que foi exatamente o que
+      // apareceu na tela. Agora cada lote é tentado duas vezes, o que der certo
+      // é salvo na hora, e o que falhar é relatado por nome no fim.
+      let ok=false,ultimoErro=null;
+      for(let tentativa=0;tentativa<2&&!ok;tentativa++){
+        try{
+          if(tentativa)await new Promise(r=>setTimeout(r,2500));
+          const bR=await buscarMaterial(t.nome,(eixo?.nome||'')+buscaExtra,30000);
+          const prompt=repPromptGerarBatch(t.nome,eixo?.nome||'',campos,contexto);
+          const{raw,grounded}=bR.material
+            ?{raw:await callGeminiGenerate(apiKey,tavilyPromptComFontes(prompt,bR.material)),grounded:true}
+            :await callGeminiGenerateSearch(apiKey,prompt);
+          const data=extractAIJson(raw);
+          campos.forEach(cid=>{
+            if(typeof data[cid]==='string'&&data[cid].trim())t[cid]=data[cid].trim();
+          });
+          algumGrounded=algumGrounded||grounded;
+          todosGrounded=todosGrounded&&grounded;
+          ok=true;
+          saveDB();   // salva o que já veio: parar no meio não pode zerar o que deu certo
+        }catch(err){ ultimoErro=err; }
+      }
+      if(!ok)falhas.push({campos,erro:(ultimoErro&&ultimoErro.message)||String(ultimoErro)});
+    }
+    if(falhas.length===REP_IA_BATCHES.length)throw new Error(falhas[0].erro);
+    if(falhas.length){
+      // Erro que some num toast de 2 segundos, numa operação de um minuto, é o
+      // mesmo que erro nenhum: fica gravado no tema até a próxima tentativa.
+      t.erroGeracao={em:new Date().toISOString(),
+        campos:falhas.flatMap(f=>f.campos),
+        msg:falhas[0].erro};
     }
     t.iaGerado=true;
     t.geradoEm=new Date().toISOString();
@@ -12142,11 +12179,15 @@ RECORTE OBRIGATÓRIO (veio de uma pesquisa de atualidade feita para este candida
     if(!db.temasFilledIds.includes(t.id))db.temasFilledIds.push(t.id);
     markDailyActivity(todayStr(),null,'repertorio');
     saveDB();
-    toast(todosGrounded
-      ?'🌐 Repertório gerado com pesquisa na internet! Revise antes de usar.'
-      :(algumGrounded?'🌐🤖 Parte gerada com pesquisa, parte sem — revise antes de usar.':'🤖 Repertório gerado! Revise antes de usar (busca na internet indisponível agora).')
-      ,'var(--green)');
+    toast(t.erroGeracao
+      ?`⚠️ Faltaram ${t.erroGeracao.campos.length} seções — o motivo ficou anotado no tema.`
+      :(todosGrounded
+        ?'🌐 Repertório gerado com pesquisa na internet! Revise antes de usar.'
+        :(algumGrounded?'🌐🤖 Parte gerada com pesquisa, parte sem — revise antes de usar.':'🤖 Repertório gerado! Revise antes de usar (busca na internet indisponível agora).'))
+      ,t.erroGeracao?'var(--orange)':'var(--green)');
   }catch(e){
+    t.erroGeracao={em:new Date().toISOString(),campos:[],msg:(e&&e.message)||String(e)};
+    saveDB();
     toast('❌ '+(e.message||'Erro ao gerar com IA'),'var(--red)');
   }finally{
     repGerandoIA=false;repGerandoIAStep=0;
@@ -16259,7 +16300,7 @@ function salaMapaPause(){
   if(salaMapaSceneRef&&salaMapaSceneRef.input&&salaMapaSceneRef.input.keyboard){
     salaMapaSceneRef.input.keyboard.disableGlobalCapture();
   }
-  salaPresenceLeave(); // sai da sala de verdade — presença só existe enquanto está na tela
+  salaPresenceAusentar(); // continua na sala, marcado como "estudando" — ver salaPresenceAusentar
 }
 function salaMapaResume(){
   if(salaMapaGame)salaMapaGame.scene.resume('salaMapaScene');
@@ -16347,6 +16388,8 @@ let salaOwnPresenceKeyRef=null;
 let salaPresenceWriteFailed=false;
 let salaLastPresenceSend=0;
 const SALA_PRESENCE_THROTTLE_MS=150;
+let salaPresenceBatimento=null;
+const SALA_PRESENCE_BATIMENTO_MS=60000;
 
 // Extrai {state,dir} de uma anim key (ex: 'lucy_media_run_right' -> {state:'run',dir:'right'})
 // tirando o prefixo do PRÓPRIO personagem de quem chama — evita ter que adivinhar onde a
@@ -16363,28 +16406,84 @@ function salaPresenceHandleFail(e){
   console.warn('Falha na presença da Sala de Estudo:',e);
   warnSyncIssue('⚠️ Não consegui sincronizar a Sala de Estudo com outras pessoas agora — provavelmente falta liberar sala_presence nas regras do Firebase.');
 }
-function salaPresenceJoin(scene){
-  if(!firebaseDB||!currentUser||salaPresenceWriteFailed||salaOwnPresenceKeyRef)return;
-  const{state,dir}=salaAnimStateDir(scene.player);
-  salaOwnPresenceKeyRef=firebaseDB.ref('sala_presence/'+currentUser.uid);
-  salaOwnPresenceKeyRef.set({
-    nickname:db.studyNickname,character:db.studyCharacter||SALA_CHARACTERS[0],
-    x:scene.player.x,y:scene.player.y,state,dir,ts:Date.now(),
-  }).catch(e=>salaPresenceHandleFail(e));
-  salaOwnPresenceKeyRef.onDisconnect().remove();
-
+// Liga o listener do nó inteiro — só faz sentido enquanto a cena está na tela,
+// porque é ele que desenha os outros. Fora da Sala isso seria banda à toa.
+function salaPresenceOuvir(scene){
+  if(salaPresenceRef||!firebaseDB||salaPresenceWriteFailed)return;
   salaPresenceRef=firebaseDB.ref('sala_presence');
   salaPresenceRef.on('value',snap=>{
     scene.salaSyncOtherPlayers(snap.val()||{});
   },e=>salaPresenceHandleFail(e));
 }
+function salaPresenceJoin(scene){
+  if(!firebaseDB||!currentUser||salaPresenceWriteFailed)return;
+  if(!salaOwnPresenceKeyRef){
+    const{state,dir}=salaAnimStateDir(scene.player);
+    salaOwnPresenceKeyRef=firebaseDB.ref('sala_presence/'+currentUser.uid);
+    salaOwnPresenceKeyRef.set({
+      nickname:db.studyNickname,character:db.studyCharacter||SALA_CHARACTERS[0],
+      x:scene.player.x,y:scene.player.y,state,dir,fora:false,ts:Date.now(),
+    }).catch(e=>salaPresenceHandleFail(e));
+    // A única saída automática: se a aba fechar, a conexão cair ou o navegador
+    // descartar a página, o Firebase apaga a presença sozinho. É isso que impede
+    // fantasma na sala agora que sair da tela não apaga mais.
+    salaOwnPresenceKeyRef.onDisconnect().remove();
+  }else{
+    salaOwnPresenceKeyRef.update({fora:false,ts:Date.now()}).catch(()=>{});
+  }
+  salaPresenceParaBatimento();
+  salaPresenceOuvir(scene);
+  salaAtualizaIndicador();
+}
+// Sair da TELA não é sair da SALA. Quem está estudando no resto da plataforma
+// continua sentado lá, marcado como "estudando" — que é o ponto de ter uma sala
+// compartilhada: ninguém veria ninguém se a presença sumisse a cada clique no
+// menu. Quem apaga a presença é o logout, o fechar da aba ou o botão de sair.
+function salaPresenceAusentar(){
+  if(salaPresenceRef){salaPresenceRef.off();salaPresenceRef=null;}
+  if(!salaOwnPresenceKeyRef)return;
+  salaOwnPresenceKeyRef.update({fora:true,state:'idle',ts:Date.now()}).catch(()=>{});
+  salaPresenceIniciaBatimento();
+  salaAtualizaIndicador();
+}
+// Enquanto o boneco fica parado, nada é escrito — e um 'ts' velho é
+// indistinguível de uma presença fantasma pra quem for olhar depois. O batimento
+// mantém o carimbo fresco a um custo de uma escrita por minuto.
+function salaPresenceIniciaBatimento(){
+  salaPresenceParaBatimento();
+  salaPresenceBatimento=setInterval(()=>{
+    if(!salaOwnPresenceKeyRef){salaPresenceParaBatimento();return;}
+    salaOwnPresenceKeyRef.update({ts:Date.now()}).catch(()=>{});
+  },SALA_PRESENCE_BATIMENTO_MS);
+}
+function salaPresenceParaBatimento(){
+  if(salaPresenceBatimento){clearInterval(salaPresenceBatimento);salaPresenceBatimento=null;}
+}
+// Saída de verdade: logout, republicação da planta ou o botão "Sair da sala".
 function salaPresenceLeave(){
+  salaPresenceParaBatimento();
   if(salaPresenceRef){salaPresenceRef.off();salaPresenceRef=null;}
   if(salaOwnPresenceKeyRef){
     salaOwnPresenceKeyRef.onDisconnect().cancel();
     salaOwnPresenceKeyRef.remove().catch(()=>{});
     salaOwnPresenceKeyRef=null;
   }
+  salaAtualizaIndicador();
+}
+function salaNaSala(){ return !!salaOwnPresenceKeyRef; }
+// Ficar na sala é o padrão, mas não pode ser uma armadilha: quem quiser sumir do
+// mapa sem deslogar tem este botão.
+function salaSairDaSala(){
+  if(!salaNaSala()){toast('Você já não está na sala.','var(--muted)');return;}
+  salaPresenceLeave();
+  salaAtualizaIndicador();
+  toast('Você saiu da sala — ninguém mais te vê no mapa. Volte quando quiser.','var(--accent)');
+}
+// Fora da Sala não há como saber que você continua visível lá. O pontinho verde
+// no menu é a resposta, sem precisar abrir a tela pra conferir.
+function salaAtualizaIndicador(){
+  const d=document.getElementById('nav-sala-dot');
+  if(d)d.style.display=salaNaSala()?'block':'none';
 }
 function salaPresenceMaybeSend(scene){
   if(!salaOwnPresenceKeyRef||salaPresenceWriteFailed)return;
@@ -16629,7 +16728,13 @@ function salaMapaCreateGame(){
         if(this.anims.exists(wantedKey)&&(!entry.sprite.anims.currentAnim||entry.sprite.anims.currentAnim.key!==wantedKey)){
           entry.sprite.play(wantedKey,true);
         }
-        entry.nameText.setText(data.nickname||'?');
+        // Avatar parado sem explicação parece travado. Quem saiu da tela da Sala
+        // mas continua na plataforma aparece apagado e com a etiqueta — é a
+        // diferença entre "está aí estudando" e "esqueceu a aba aberta".
+        const fora=!!data.fora;
+        entry.nameText.setText((data.nickname||'?')+(fora?' 📖':''));
+        entry.nameText.setColor(fora?'#c9c4ff':'#ffffff');
+        entry.sprite.setAlpha(fora?0.55:1);
       });
       Object.keys(this.otherPlayers).forEach(uid=>{
         if(seen.has(uid))return;
