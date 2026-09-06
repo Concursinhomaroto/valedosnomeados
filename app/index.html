@@ -248,6 +248,19 @@ nav{
 /* ===== SECTION TITLE ===== */
 .sec-title{font-size:12px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:18px;}
 
+/* Selo do backup diário: fica ao lado do título do painel, sempre visível. O backup só
+   se anunciava quando falhava, e por um toast que some — sem estado visível, "está
+   funcionando?" era uma pergunta sem resposta sobre a única rede de segurança dos dados. */
+.backup-badge{margin-left:auto;display:inline-flex;align-items:center;gap:6px;
+  padding:3px 11px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.6px;
+  text-transform:none;cursor:pointer;white-space:nowrap;user-select:none;
+  border:1.5px solid var(--border2);background:var(--panel2);color:var(--muted);
+  transition:filter .15s}
+.backup-badge:hover{filter:brightness(1.08)}
+.backup-badge.bk-ok{color:var(--green);border-color:var(--green);background:rgba(21,128,61,.10)}
+.backup-badge.bk-alerta{color:var(--orange);border-color:var(--orange);background:rgba(194,65,12,.10)}
+.backup-badge.bk-erro{color:var(--red);border-color:var(--red);background:rgba(185,28,28,.10)}
+
 /* ===== MAP WORLD ===== */
 #world-map{
   background:var(--map-bg);
@@ -1911,7 +1924,9 @@ nav{
 
 <!-- ===== DASHBOARD ===== -->
 <div class="screen active" id="screen-dashboard">
-  <div class="sec-title">🏆 Painel do Herói</div>
+  <div class="sec-title">🏆 Painel do Herói
+    <span id="backup-badge" class="backup-badge" style="display:none" onclick="abrirDetalhesBackup()" title="Estado da cópia de segurança automática dos seus dados"></span>
+  </div>
 
   <!-- Aviso de status do plano: período de teste grátis (ativo/acabado) ou acesso pago
        perto do vencimento — a única forma de chegar na tela de pagamento enquanto o
@@ -3874,6 +3889,7 @@ function maybeBackupDB(){
       // Outro dispositivo/aba desta mesma conta já gravou o backup de hoje — só evita
       // ficar checando de novo a cada save nesta sessão.
       try{localStorage.setItem('vdn_backup_last_date',today);}catch(e){}
+      setBackupEstado('ok',today,meta[today]);
       backupCheckInFlight=false;
       return;
     }
@@ -3889,6 +3905,7 @@ function maybeBackupDB(){
     });
     userRef('').update(updates).then(()=>{
       try{localStorage.setItem('vdn_backup_last_date',today);}catch(e){}
+      setBackupEstado('ok',today,Date.now());
       backupCheckInFlight=false;
     }).catch(e=>{
       // Falha silenciosa aqui foi exatamente o que mascarou o bug da migração antiga
@@ -3897,14 +3914,137 @@ function maybeBackupDB(){
       console.error('Falha ao gravar backup diário (dados NÃO estão sendo salvos como cópia de segurança):',e);
       backupFailedThisSession=true;
       backupCheckInFlight=false;
+      setBackupEstado('erro',null,0,(e&&e.message)||String(e));
       warnSyncIssue('⚠️ O backup automático diário falhou (provavelmente falta liberar o caminho vdn_v1_backups nas regras do Firebase). Seus dados normais continuam salvos — só a cópia extra de segurança que não foi.');
     });
   }).catch(e=>{
     console.error('Falha ao checar backups existentes (provável falta de permissão nas regras do Firebase):',e);
     backupFailedThisSession=true;
     backupCheckInFlight=false;
+    setBackupEstado('erro',null,0,(e&&e.message)||String(e));
     warnSyncIssue('⚠️ Não consegui checar/gravar o backup automático diário — confere as regras do Firebase pro caminho vdn_v1_backupMeta.');
   });
+}
+// ===== ESTADO VISÍVEL DO BACKUP =====
+// Ter backup e não saber se ele rodou é quase o mesmo que não ter: a hora em que você
+// descobre que parou é a hora em que você precisou dele. Este selo, ao lado do título do
+// painel, responde a pergunta sem que ninguém precise abrir o console ou o Firebase.
+let backupEstado={estado:'checando',ultima:null,ts:0,erro:''};
+let backupEstadoChecado=false; // uma leitura autoritativa por sessão, direto do servidor
+function setBackupEstado(estado,ultima,ts,erro){
+  // 'ok' e 'nunca' vêm de uma leitura do servidor: a data que chega é a verdade, inclusive
+  // quando é nula (o backup pode ter sido apagado lá). Só 'erro' e 'checando' preservam a
+  // data anterior, porque aí de fato não sabemos — herdar a data velha nos outros casos
+  // fazia o selo continuar dizendo "backup de hoje" depois do backup sumir.
+  const herda=(estado==='erro'||estado==='checando');
+  backupEstado={estado:estado,
+                ultima:herda?(ultima||backupEstado.ultima):(ultima||null),
+                ts:herda?(ts||backupEstado.ts):(ts||0),
+                erro:erro||''};
+  renderBackupBadge();
+}
+function renderBackupBadge(){
+  const el=document.getElementById('backup-badge');
+  if(!el)return;
+  const st=backupEstado.estado,ultima=backupEstado.ultima;
+  if(st==='indisponivel'){el.style.display='none';return;}
+  el.style.display='inline-flex';
+  let cls='',icone='',txt='';
+  if(st==='checando'){icone='fa-spinner fa-spin';txt='verificando backup…';}
+  else if(st==='erro'){cls='bk-erro';icone='fa-triangle-exclamation';txt='backup falhou';}
+  else if(!ultima){cls='bk-erro';icone='fa-triangle-exclamation';txt='sem backup';}
+  else{
+    const dias=daysDiff(ultima,todayStr());
+    if(dias<=0){cls='bk-ok';icone='fa-shield-halved';txt='backup de hoje';}
+    else if(dias===1){cls='bk-ok';icone='fa-shield-halved';txt='backup de ontem';}
+    else if(dias<=3){cls='bk-alerta';icone='fa-shield-halved';txt='backup de '+fmtDateBR(ultima);}
+    else{cls='bk-erro';icone='fa-triangle-exclamation';txt='backup parado há '+dias+' dias';}
+  }
+  el.className='backup-badge'+(cls?' '+cls:'');
+  el.innerHTML='<i class="fa '+icone+'"></i> <span>'+escapeHtml(txt)+'</span>';
+}
+// Lê o vdn_v1_backupMeta uma vez por sessão. O maybeBackupDB() curto-circuita no
+// localStorage quando já gravou hoje neste aparelho — ótimo pra economizar rede, péssimo
+// como fonte de verdade pro selo (o localStorage diria "tudo certo" mesmo que o backup
+// tivesse sido apagado no servidor). Uma leitura de ~30 pares data/carimbo por sessão é
+// barata o bastante pra que o selo mostre o que existe de verdade, não o que este
+// navegador lembra.
+function backupCheckInicial(){
+  if(backupEstadoChecado)return;
+  if(!firebaseReady||useLocalFallback||!DB_REF||!currentUser){setBackupEstado('indisponivel');return;}
+  const metaRef=userRef('vdn_v1_backupMeta');
+  if(!metaRef){setBackupEstado('indisponivel');return;}
+  backupEstadoChecado=true;
+  setBackupEstado('checando');
+  metaRef.once('value').then(snap=>{
+    const meta=snap.val()||{};
+    const datas=Object.keys(meta).sort();
+    const ult=datas.length?datas[datas.length-1]:null;
+    setBackupEstado(ult?'ok':'nunca',ult,ult?meta[ult]:0);
+  }).catch(e=>{
+    console.error('Falha ao ler o estado do backup:',e);
+    setBackupEstado('erro',null,0,(e&&e.message)||String(e));
+  });
+}
+function abrirDetalhesBackup(){
+  const st=backupEstado.estado,ultima=backupEstado.ultima;
+  let corpo='';
+  if(st==='erro'){
+    corpo=`<p style="color:var(--red);font-weight:700;margin:0 0 10px">O backup automático não está funcionando.</p>
+      <p style="margin:0 0 10px">Seus dados normais continuam sendo salvos — o que falhou foi a
+      <b>cópia extra de segurança</b>. Quase sempre é permissão: as regras do Firebase precisam
+      liberar os caminhos <code>vdn_v1_backups</code> e <code>vdn_v1_backupMeta</code> dentro de
+      <code>users/{uid}</code>.</p>
+      ${backupEstado.erro?`<p style="margin:0 0 10px;font-size:12px;color:var(--muted)">Erro relatado: <code>${escapeHtml(backupEstado.erro)}</code></p>`:''}
+      <details style="margin:0 0 12px"><summary style="cursor:pointer;font-size:12.5px;font-weight:700">Como liberar (regra do Firebase)</summary>
+        <p style="margin:8px 0 6px;font-size:12px;color:var(--muted)">No console do Firebase, em
+        <b>Realtime Database → Regras</b>, a regra do usuário precisa valer pro nó inteiro
+        <code>users/$uid</code>, não só pro <code>vdn_v1</code>:</p>
+        <pre style="margin:0;padding:10px;background:var(--panel2);border:1.5px solid var(--border2);border-radius:8px;font-size:11.5px;overflow-x:auto">"users": {
+  "$uid": {
+    ".read":  "$uid === auth.uid",
+    ".write": "$uid === auth.uid"
+  }
+}</pre></details>`;
+  }else if(!ultima){
+    corpo=`<p style="margin:0 0 10px">Ainda não existe nenhuma cópia de segurança. A primeira é
+      gravada sozinha na próxima vez que algo for salvo — ou agora, no botão abaixo.</p>`;
+  }else{
+    const dias=daysDiff(ultima,todayStr());
+    const hora=backupEstado.ts?new Date(backupEstado.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'';
+    corpo=`<p style="margin:0 0 10px">Última cópia completa: <b>${fmtDateBR(ultima)}</b>${hora?` às ${hora}`:''}
+      ${dias<=0?' <span style="color:var(--green);font-weight:700">(hoje)</span>':dias>3?` <span style="color:var(--red);font-weight:700">(há ${dias} dias)</span>`:` <span style="color:var(--orange);font-weight:700">(há ${dias} dia${dias>1?'s':''})</span>`}</p>`;
+  }
+  openModal('🛡️ Cópia de segurança',`
+    ${corpo}
+    <p style="margin:0 0 14px;font-size:12.5px;color:var(--muted)">Uma vez por dia o app grava uma
+    cópia inteira do seu banco num caminho separado, que o uso normal nunca toca. Ficam guardados
+    os últimos ${BACKUP_RETENTION_DAYS} dias, e dá pra voltar pra qualquer um deles em
+    <b>Admin → Backups</b>.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" onclick="forcarBackupAgora()"><i class="fa fa-shield-halved"></i> Fazer backup agora</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+    </div>`);
+}
+// Botão de verificação: derruba os dois curto-circuitos (o do localStorage e o do
+// "já falhou nesta sessão") e força uma gravação de verdade, pra que "o backup está
+// funcionando?" seja uma coisa que se testa em dois cliques, não uma coisa em que se
+// acredita.
+function forcarBackupAgora(){
+  try{localStorage.removeItem('vdn_backup_last_date');}catch(e){}
+  backupFailedThisSession=false;
+  backupCheckInFlight=false;
+  setBackupEstado('checando');
+  toast('Gravando cópia de segurança...');
+  maybeBackupDB();
+  setTimeout(()=>{
+    if(backupEstado.estado==='ok'&&backupEstado.ultima===todayStr()){
+      toast('✅ Backup de hoje gravado com sucesso.','var(--green)');
+      closeModal();
+    }else if(backupEstado.estado==='erro'){
+      toast('❌ O backup falhou — veja o motivo no aviso.','var(--red)');
+    }
+  },2500);
 }
 function adminLoadBackups(){
   const list=document.getElementById('admin-backups-list');
@@ -4103,6 +4243,7 @@ function bootApp(){
     updateFCBadge();
     updateNotifBtn();
     checkOverdueNotifications();
+    backupCheckInicial();
     // Dashboard é a tela ativa, renderizar por último
     setTimeout(()=>renderDashboard(),50);
   });
@@ -10542,6 +10683,7 @@ function renderRenewalBanner(){
   }
 }
 function renderDashboard(){
+  renderBackupBadge(); // o dia pode ter virado com a aba aberta
   renderRenewalBanner();
   const today=todayStr();
   let totBoss=0,totMini=0,totRevDone=0,totRevOver=0,p30=0,p70=0,p100=0;
