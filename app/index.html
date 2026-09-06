@@ -2351,7 +2351,7 @@ nav{
     <button class="btn btn-sm btn-ghost" onclick="mapedRascunhos()"><i class="fa fa-floppy-disk"></i> Rascunhos</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedBloquearMoveis()"><i class="fa fa-couch"></i> Bloquear móveis</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedLiberarMoveis()"><i class="fa fa-person-walking"></i> Liberar móveis</button>
-    <button class="btn btn-sm btn-ghost" onclick="mapedMarcarAssentos()" title="Marca como assento toda cadeira da folha «Cadeiras» que estiver no mapa — sem isso a cadeira é só desenho e ninguém senta nela"><i class="fa fa-chair"></i> Marcar cadeiras</button>
+    <button class="btn btn-sm btn-ghost" onclick="mapedMarcarAssentos()" title="Marca como assento toda cadeira da folha «Cadeiras» que estiver no mapa — sem isso a cadeira é só desenho e ninguém senta nela. Cadeira de outra folha (Escritório, Sala de aula…) só pelo modo Sentar, arrastando por cima."><i class="fa fa-chair"></i> Marcar cadeiras</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedMarcarParedes()"><i class="fa fa-wand-magic-sparkles"></i> Marcar paredes</button>
     <button class="btn btn-sm btn-ghost" onclick="mapedLimparColisao()"><i class="fa fa-broom"></i> Limpar paredes</button>
     <span class="maped-sep"></span>
@@ -16635,6 +16635,10 @@ function mapedRefreshInfo(){
       ?(mapedDesignSel?`<br><b>Ambiente:</b> ${mapedDesignSel.label} (${mapedDesignSel.w}x${mapedDesignSel.h})`:'<br><b>Escolha um ambiente ao lado.</b>')
       :(mapedSel?`<br><b>Peça:</b> ${mapedTS.l} ${mapedSel.w}x${mapedSel.h} tiles`:''))+
     `<br><b>Peças no mapa:</b> ${mapedMapa?mapedMapa.layers.filter(l=>l.type==='objectgroup').reduce((a,l)=>a+l.objects.length,0):0}`+
+    // Sem esse número não havia como perceber que o mapa tem quinze cadeiras
+    // desenhadas e só quatro em que dá pra sentar.
+    (()=>{const n=mapedMapa?mapedContaAssentos():0;
+      return `<br><b>Assentos (dá pra sentar):</b> <b style="color:${n?'var(--green)':'var(--danger)'}">${n}</b>`;})()+
     (mapedSujo?'<br><b style="color:var(--accent)">Há alterações não publicadas.</b>':'')+
     (()=>{ try{
       const d=mapedDiagnostico();
@@ -17000,14 +17004,12 @@ function mapedCanvasDown(ev){
   // Parede é retângulo: clica num canto, arrasta até o outro, solta. Marcar
   // tile a tile uma parede de 20 tiles é trabalho demais, e marcar por TIPO de
   // tile erra quando o chão alterna dois desenhos — pinta metade do piso.
-  if(mapedModo==='sentar'){
-    const l=mapedSit();
-    // Marcado põe assento na direção escolhida; desmarcado apaga — mesma lógica
-    // do pincel de parede, pra não inventar um gesto novo.
-    l.data[ty*mapedMapa.width+tx]=document.getElementById('maped-collide').checked
-      ?parseInt(document.getElementById('maped-sitdir').value,10)||1:0;
-    mapedDraw();return;
-  }
+  // Sentar NÃO sai por aqui: cai no caminho normal lá embaixo (snapshot, aplica no
+  // tile clicado e liga o arrasto), que é o que dá desfazer e permite pintar uma
+  // fileira inteira de cadeiras num gesto só. Aqui existia uma cópia perdida do
+  // bloco de dentro do mapedAplicar, usando tx/ty que não existem neste escopo —
+  // então todo clique no modo Sentar estourava "ty is not defined" e o modo
+  // inteiro nunca funcionou.
   if(mapedModo==='parede'){mapedParedeArrasta(ev);return;}
   mapedSnapshot();
   const p=mapedCanvasTile(ev);
@@ -17140,9 +17142,13 @@ function mapedMarcarAssentos(){
     return;
   }
   mapedSujo=true;mapedDraw();
-  toast(chutados
-    ? `🪑 ${marcados} assento(s) marcado(s). Em ${chutados} eu não sei o lado da cadeira e deixei "para baixo" — corrija no modo Sentar se ficar torto.`
-    : `🪑 ${marcados} assento(s) marcado(s). Publique pra valer pra todo mundo.`,'var(--green)');
+  // O botão só enxerga a folha "Cadeiras". Cadeira de escritório, de sala de aula ou
+  // de auditório vem de outras folhas, e calar isso fazia "4 assentos marcados"
+  // parecer trabalho terminado num mapa com quinze cadeiras.
+  const alcance=' Só reconheço as cadeiras da folha «Cadeiras» — se sobrou cadeira de outra folha (Escritório, Sala de aula, Auditório…), vá no modo Sentar e arraste por cima delas.';
+  toast(`🪑 ${marcados} assento(s) marcado(s).`
+    +(chutados?` Em ${chutados} eu não sei o lado da cadeira e deixei "para baixo" — corrija no modo Sentar se ficar torto.`:'')
+    +alcance,'var(--green)');
 }
 // Quantos assentos o mapa tem, das duas fontes que o jogo le.
 function mapedContaAssentos(){
