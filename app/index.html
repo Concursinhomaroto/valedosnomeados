@@ -950,12 +950,31 @@ nav{
 .dash-fold .next-step-name{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dash-fold .next-step-sub{font-size:9.5px;margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dash-fold .next-step-item>*:last-child{white-space:nowrap;font-size:10.5px}
+/* O chip da direita ("nunca estudado", "revisao · 70d") tem white-space:nowrap, entao
+   sua largura minima e o texto inteiro; como o bloco do nome tem min-width:0, era ELE
+   que encolhia — no iPad 9 o nome do assunto ficava com 36px pra 218 que precisava,
+   virando "M..", "I...". Aqui o item quebra em duas linhas quando nao cabe: o nome
+   mantem um piso de largura e o chip desce, em vez de espremer o que importa ler. */
+.dash-fold .next-step-item{flex-wrap:wrap}
+.dash-fold .next-step-info{min-width:120px}
+.dash-fold .rev-item{flex-wrap:wrap}
+.dash-fold .rev-info{min-width:120px}
 /* as seis caixas de simulado numa fileira só */
-.dash-fold .sim-global-grid{grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:7px}
+.dash-fold .sim-global-grid{grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:7px}
 .dash-fold .stat-card{padding:9px 5px;border-radius:10px;box-shadow:none}
 .dash-fold .stat-icon{font-size:15px}
 .dash-fold .stat-val{font-size:17px}
-.dash-fold .stat-lbl{font-size:8px;line-height:1.15}
+/* "Aproveitamento" precisa de 97px e o cartao tinha 67px. Sem overflow definido o texto
+   VAZAVA pra fora e encostava no rotulo vizinho — no iPad lia-se "QUESTOESAPROVEITAMENTO",
+   uma palavra so. Cortar dentro da caixa resolvia a colisao mas partia a palavra
+   ("SIMULAD OS"), que e pior de ler. A correcao e dar largura ao cartao: com um piso de
+   88px o auto-fit passa a usar duas linhas quando nao cabem tres colunas, e cada rotulo
+   volta a caber inteiro. O overflow:hidden fica de rede de seguranca. */
+/* letter-spacing:1px sobre 14 letras custa 14px so de espacamento — e era isso que
+   deixava "Aproveitamento" 2px maior que o cartao a 1024px. Dentro da dobra, onde o
+   espaco e disputado, a folga entre letras cede primeiro. */
+.dash-fold .stat-lbl{font-size:8px;line-height:1.15;letter-spacing:.2px}
+.dash-fold .stat-card{overflow:hidden}
 .dash-fold .rank-row{padding:7px 9px;gap:9px;margin-bottom:6px}
 .dash-fold .rank-row span{font-size:15px!important}
 .dash-fold .rank-pos{font-size:11px}
@@ -966,6 +985,12 @@ nav{
 .dash-fold #week-study-chart>div>div>span:first-child{font-size:16px!important}
 .dash-fold #week-study-chart>div>div>div>div:first-child{font-size:12px!important}
 .dash-fold #week-study-chart>div>div>div>div:last-child{font-size:9.5px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Mesmo aperto da Fila de hoje: o chip de raridade e a data nao encolhem, entao quem
+   encolhia era o nome do assunto — 50px pra 209 que precisava, virando "Vacin…". Aqui
+   a linha quebra e o nome mantem um piso. */
+.dash-fold .sem-item{flex-wrap:wrap}
+/* !important porque o min-width:0 vem inline no elemento, e inline vence folha de estilo */
+.dash-fold .sem-info{min-width:120px!important}
 /* mesma régua pros dois vizinhos de linha, pra ficarem organizados juntos */
 .dash-fold #avg-time-list>div{display:flex;align-items:center;gap:9px;
   padding:7px 10px;margin-bottom:6px;border-radius:10px;background:var(--bg2);
@@ -10830,9 +10855,9 @@ function renderWeekStudyChart(){
 
   el.innerHTML=`<div style="display:flex;flex-direction:column;gap:6px">
     ${studied.map(s=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border-radius:10px;border-left:3px solid ${s.kColor}">
+      <div class="sem-item" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border-radius:10px;border-left:3px solid ${s.kColor}">
         <span style="font-size:18px;flex-shrink:0">${s.kIcon}</span>
-        <div style="flex:1;min-width:0">
+        <div class="sem-info" style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div>
           <div style="font-size:10px;color:var(--muted);font-weight:600">${s.topic} · ${s.kingdom}</div>
         </div>
