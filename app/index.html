@@ -2191,6 +2191,7 @@ nav{
       <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">
         <button class="btn btn-primary" style="width:100%" onclick="repOpenNewTema()"><i class="fa fa-plus"></i> Novo Tema</button>
         <button class="btn" style="width:100%;font-size:11px" onclick="repOpenNewEixo()"><i class="fa fa-layer-group"></i> Novo Eixo</button>
+        <button class="btn" style="width:100%;font-size:11px;background:rgba(108,71,255,0.08);color:var(--accent);border:1px solid var(--border)" onclick="redAbrirTemasAtualidade()" title="Escolha o eixo e a pesquisa diz quais temas dele estão em pauta agora"><i class="fa fa-newspaper"></i> Temas em pauta</button>
       </div>
     </div>
 
@@ -6188,6 +6189,15 @@ const TAVILY_DOMINIOS_OFICIAIS=[
   'senado.leg.br','camara.leg.br','cnj.jus.br','who.int','ms.gov.br','anvisa.gov.br',
   'scielo.br','bvsalud.org','ncbi.nlm.nih.gov','pubmed.ncbi.nlm.nih.gov',
 ];
+// Para tema de redação a fonte boa não é a mesma do resumo técnico: aqui o que
+// vale é imprensa e órgão público brasileiro, onde a pauta pública se forma.
+// Lista de primeira rodada — se voltar magra, a segunda rodada vai aberta.
+const TAVILY_DOMINIOS_ATUALIDADE=[
+  'agenciabrasil.ebc.com.br','gov.br','ibge.gov.br','ipea.gov.br','fiocruz.br',
+  'senado.leg.br','camara.leg.br','stf.jus.br','cnj.jus.br','scielo.br',
+  'g1.globo.com','folha.uol.com.br','estadao.com.br','oglobo.globo.com',
+  'nexojornal.com.br','bbc.com','cnnbrasil.com.br','valor.globo.com',
+];
 function tavilyAtivo(){ return !!(db.tavilyApiKey||'').trim(); }
 
 // Corta o texto da pagina no fim de uma frase, nao no meio de uma palavra. Um
@@ -6216,9 +6226,17 @@ async function tavilyBuscar(consulta,opts){
     include_answer:false,
     include_raw_content:true,
   };
+  // Modo notícia: o Tavily ordena e filtra por data de publicação. Para tema de
+  // redação isso é o essencial — "o que está em pauta" é uma pergunta sobre as
+  // últimas semanas, e a busca comum devolve página de 2019 com bom PageRank.
+  if(opts&&opts.noticias){
+    corpo.topic='news';
+    corpo.days=Math.max(1,Math.min(365,opts.dias||90));
+  }
   // Filtro de domínio é opcional de propósito: restringir demais pode voltar
   // vazio, e aí é melhor uma busca ampla do que nenhuma (ver tavilyPesquisar).
-  if(opts&&opts.oficial)corpo.include_domains=TAVILY_DOMINIOS_OFICIAIS;
+  if(opts&&opts.dominios&&opts.dominios.length)corpo.include_domains=opts.dominios;
+  else if(opts&&opts.oficial)corpo.include_domains=TAVILY_DOMINIOS_OFICIAIS;
   const res=await fetch('https://api.tavily.com/search',{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
@@ -6256,6 +6274,30 @@ async function tavilyPesquisar(assunto,contexto){
     }catch(e){erros.push(`"${consultas[i]}": ${e.message}`);}
   }
   const unicas=fontes.filter((f,i,a)=>a.findIndex(x=>x.url===f.url)===i).slice(0,12);
+  return{texto:partes.join('\n\n===\n\n'),fontes:unicas,consultas,erros};
+}
+
+// Busca voltada a PAUTA, não a conteúdo técnico: três ângulos do mesmo eixo —
+// o debate público, o que tramita/foi publicado, e o dado novo. Tema de redação
+// nasce do encontro dos três, e uma consulta só pega um deles.
+async function tavilyAtualidades(eixo,foco,dias){
+  const ano=new Date().getFullYear();
+  const base=(foco?`${eixo} ${foco}`:eixo).trim();
+  const consultas=[
+    `${base} Brasil debate ${ano}`,
+    `${base} Brasil nova lei OR projeto de lei OR política pública ${ano}`,
+    `${base} Brasil dados IBGE OR Ipea OR ministério relatório ${ano}`,
+  ];
+  const fontes=[],partes=[],erros=[];
+  for(let i=0;i<consultas.length;i++){
+    try{
+      const r=await tavilyBuscar(consultas[i],{
+        noticias:true, dias:dias||90, profundo:i===0, max:6,
+        dominios:i===0?TAVILY_DOMINIOS_ATUALIDADE:null});
+      if(r.fontes.length){fontes.push(...r.fontes);partes.push(r.texto);}
+    }catch(e){erros.push(`"${consultas[i]}": ${e.message}`);}
+  }
+  const unicas=fontes.filter((f,i,a)=>a.findIndex(x=>x.url===f.url)===i).slice(0,18);
   return{texto:partes.join('\n\n===\n\n'),fontes:unicas,consultas,erros};
 }
 
@@ -12269,6 +12311,226 @@ function repSaveNewTema(){
   }
 }
 
+// ============ TEMAS DE REDAÇÃO A PARTIR DA ATUALIDADE (Tavily) ==============
+// O repertório já era organizado por eixo; faltava o caminho inverso — escolher
+// o eixo e deixar a pesquisa dizer QUAIS temas dele estão em pauta agora.
+//
+// A busca vem primeiro, e não é enfeite: tema de redação não se lembra, se
+// descobre. O modelo tem data de corte, então perguntar a ele "o que está em
+// pauta" devolve a pauta do ano em que ele foi treinado — exatamente o erro que
+// custa a prova. Aqui o Tavily busca em modo notícia, com janela de dias, e o
+// modelo só organiza o que a busca trouxe.
+let redTemasGerando=false;
+
+function redTemasSalvos(){
+  const t=db.temasAtualidade;
+  return (t&&Array.isArray(t.itens)&&t.itens.length)?t:null;
+}
+
+function redPromptTemas(eixoNome,foco,qtd,jaTem){
+  const hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+  return`Você é um professor de redação para concursos públicos brasileiros, especialista em prever que temas uma banca escolhe.
+
+DATA DE HOJE: ${hoje}.
+
+TAREFA: a partir do material de imprensa e de órgãos públicos que vem abaixo, proponha ${qtd} TEMAS DE REDAÇÃO do eixo "${eixoNome}"${foco?` com foco em: ${foco}`:''}.
+
+O QUE FAZ UM TEMA SER BOM AQUI:
+- Nasce de um fato concreto e recente do material (lei publicada, dado divulgado, decisão judicial, debate público em curso) — não de uma generalidade atemporal.
+- Tem RECORTE. "Saúde pública no Brasil" não é tema; "os limites do teleatendimento na atenção primária após a regulamentação de 2025" é.
+- É discutível dos dois lados. Se só existe uma resposta decente, não rende dissertação.
+- Admite proposta de intervenção com agente, ação e meio.
+${jaTem?`\nNÃO PROPONHA nenhum destes, que o candidato já tem no repertório:\n${jaTem}\n`:''}
+REGRAS DE HONESTIDADE (a mais importante desta tarefa):
+- Todo "gancho" tem de estar NO MATERIAL, com o número da fonte. Se você não achou fato recente para sustentar um tema, proponha menos temas — nunca invente lei, número, data ou decisão.
+- Não escreva ano, cifra ou nome de norma que não esteja escrito no material.
+
+Responda SOMENTE com JSON válido, sem comentários e sem cercas de código:
+{"temas":[{
+  "tema":"o enunciado do tema, uma frase, do jeito que apareceria na prova",
+  "recorte":"em uma frase, qual é o ângulo — o que entra e o que fica de fora",
+  "gancho":"o fato recente do material que coloca isso em pauta, com data/número quando houver, citando (FONTE n)",
+  "aspectos":["3 a 4 pontos que a banca pediria para abordar"],
+  "contraponto":"o argumento do outro lado, que impede a redação de virar panfleto",
+  "fontes":[1,2]
+}]}`;
+}
+
+function redAbrirTemasAtualidade(eixoId){
+  repInit();
+  const eixos=db.repertorio.eixos||[];
+  if(!eixos.length){toast('Crie um eixo temático primeiro','var(--orange)');return;}
+  const atual=eixoId||(repSelectedTema&&repSelectedTema.eixoId)||eixos[0].id;
+  const salvos=redTemasSalvos();
+  openModal('🗞️ Temas em pauta',`
+    <p style="margin:0 0 14px;font-size:12.5px;color:var(--muted)">Você marca o eixo, a pesquisa procura o que está em debate agora e a IA transforma em tema com recorte. ${tavilyAtivo()?'':'<b style="color:var(--orange)">Sem chave do Tavily a busca não roda e a IA responde do que lembra do treino — configure em Ajustes de IA.</b>'}</p>
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:800;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Eixo temático</div>
+      <select class="inp" id="red-tema-eixo" style="width:100%">
+        ${eixos.map(e=>`<option value="${escapeHtml(e.id)}"${e.id===atual?' selected':''}>${escapeHtml(e.icon||'')} ${escapeHtml(e.nome)}</option>`).join('')}
+      </select>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:12px">
+      <div style="flex:1">
+        <div style="font-size:11px;font-weight:800;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Quantos temas</div>
+        <select class="inp" id="red-tema-qtd" style="width:100%"><option>4</option><option selected>6</option><option>8</option></select>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:11px;font-weight:800;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Notícias dos últimos</div>
+        <select class="inp" id="red-tema-dias" style="width:100%">
+          <option value="30">30 dias</option><option value="90" selected>90 dias</option>
+          <option value="180">6 meses</option><option value="365">1 ano</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:800;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Foco (opcional)</div>
+      <input class="inp" id="red-tema-foco" placeholder="Ex: enfermagem, saúde mental, Rondônia..." style="width:100%">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      ${salvos?`<button class="btn btn-ghost" onclick="redRenderTemasSugeridos()">Ver os ${salvos.itens.length} de ${fmtDateBR(salvos.em)}</button>`:''}
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="redGerarTemasAtualidade()"><i class="fa fa-magnifying-glass"></i> Buscar temas</button>
+    </div>
+  `);
+}
+
+async function redGerarTemasAtualidade(){
+  if(redTemasGerando)return;
+  repInit();
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey){toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');openAISettingsModal();return;}
+  const eixoId=document.getElementById('red-tema-eixo')?.value||'';
+  const qtd=parseInt(document.getElementById('red-tema-qtd')?.value,10)||6;
+  const dias=parseInt(document.getElementById('red-tema-dias')?.value,10)||90;
+  const foco=(document.getElementById('red-tema-foco')?.value||'').trim();
+  const eixo=(db.repertorio.eixos||[]).find(e=>e.id===eixoId);
+  if(!eixo){toast('Escolha um eixo','var(--red)');return;}
+
+  redTemasGerando=true;
+  const passo=(txt)=>{const el=document.getElementById('red-tema-status');if(el)el.textContent=txt;};
+  openModal('🗞️ Temas em pauta',`
+    <div style="text-align:center;padding:26px 10px">
+      <div style="font-size:34px;margin-bottom:12px"><i class="fa fa-spinner fa-spin" style="color:var(--accent)"></i></div>
+      <div id="red-tema-status" style="font-size:13px;color:var(--text2);font-weight:700">Procurando o que está em pauta...</div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:8px">Isso leva alguns segundos — a busca é feita agora, não é memória da IA.</div>
+    </div>`);
+
+  try{
+    let material='',fontes=[],erros=[];
+    if(tavilyAtivo()){
+      passo(`Pesquisando notícias de ${eixo.nome} (últimos ${dias} dias)...`);
+      const b=await tavilyAtualidades(eixo.nome,foco,dias);
+      material=b.texto;fontes=b.fontes;erros=b.erros;
+    }
+    // Não repetir o que ele já tem: repetir tema já preenchido é o pior gasto de
+    // pesquisa que existe aqui.
+    const jaTem=Object.values(db.repertorio.temas||{})
+      .filter(t=>t.eixoId===eixoId).map(t=>'- '+t.nome).join('\n');
+    const prompt=redPromptTemas(eixo.nome,foco,qtd,jaTem);
+
+    passo('Transformando as notícias em temas com recorte...');
+    let parsed,grounded=false;
+    if(material){
+      const r=await callGeminiJSON(apiKey,tavilyPromptComFontes(prompt,material.slice(0,40000)),false,16384);
+      parsed=r.parsed;grounded=true;
+    }else{
+      const r=await callGeminiJSON(apiKey,prompt,true,16384);
+      parsed=r.parsed;grounded=!!r.grounded;
+      if(!grounded)fontes=[];
+    }
+    const itens=(parsed&&Array.isArray(parsed.temas)?parsed.temas:[])
+      .filter(t=>t&&typeof t.tema==='string'&&t.tema.trim())
+      .map(t=>({
+        tema:String(t.tema).trim(),
+        recorte:String(t.recorte||'').trim(),
+        gancho:String(t.gancho||'').trim(),
+        contraponto:String(t.contraponto||'').trim(),
+        aspectos:(Array.isArray(t.aspectos)?t.aspectos:[]).map(a=>String(a).trim()).filter(Boolean).slice(0,5),
+        fontes:(Array.isArray(t.fontes)?t.fontes:[]).map(n=>parseInt(n,10)).filter(n=>n>0),
+      }));
+    if(!itens.length)throw new Error('A IA não devolveu nenhum tema. Tente de novo, ou amplie a janela de dias.');
+
+    db.temasAtualidade={eixoId,eixoNome:eixo.nome,foco,dias,grounded,
+      em:todayStr(),fontes:fontes.slice(0,18),erros,itens};
+    saveDB();
+    redRenderTemasSugeridos();
+  }catch(e){
+    openModal('🗞️ Temas em pauta',`
+      <p style="color:var(--red);font-weight:700;margin:0 0 10px">Não deu pra gerar os temas.</p>
+      <p style="margin:0 0 14px;font-size:12.5px;color:var(--muted)">${escapeHtml(e.message||String(e))}</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+        <button class="btn" onclick="redAbrirTemasAtualidade()">Tentar de novo</button>
+      </div>`);
+  }finally{
+    redTemasGerando=false;
+  }
+}
+
+function redRenderTemasSugeridos(){
+  const s=redTemasSalvos();
+  if(!s){toast('Nenhum tema gerado ainda','var(--muted)');return;}
+  const cards=s.itens.map((t,i)=>{
+    const links=(t.fontes||[]).map(n=>s.fontes[n-1]).filter(Boolean);
+    return`
+    <div style="border:1.5px solid var(--border2);border-radius:14px;padding:13px 14px;margin-bottom:10px;background:var(--panel2)">
+      <div style="font-size:13.5px;font-weight:800;line-height:1.35;margin-bottom:7px">${escapeHtml(t.tema)}</div>
+      ${t.recorte?`<div style="font-size:12px;color:var(--text2);margin-bottom:7px"><b>Recorte:</b> ${escapeHtml(t.recorte)}</div>`:''}
+      ${t.gancho?`<div style="font-size:12px;color:var(--text2);margin-bottom:7px"><b>Por que agora:</b> ${escapeHtml(t.gancho)}</div>`:''}
+      ${t.aspectos&&t.aspectos.length?`<div style="font-size:12px;color:var(--text2);margin-bottom:7px"><b>Aspectos:</b> ${t.aspectos.map(a=>escapeHtml(a)).join(' · ')}</div>`:''}
+      ${t.contraponto?`<div style="font-size:12px;color:var(--text2);margin-bottom:7px"><b>Contraponto:</b> ${escapeHtml(t.contraponto)}</div>`:''}
+      ${links.length?`<div style="font-size:11px;color:var(--muted);margin-bottom:9px">Fontes: ${links.map(f=>`<a href="${urlSegura(f.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml((f.titulo||f.url).slice(0,60))}</a>`).join(' · ')}</div>`:''}
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <button class="btn btn-xs btn-primary" onclick="redCriarTemaSugerido(${i},true)"><i class="fa fa-wand-magic-sparkles"></i> Criar e preencher</button>
+        <button class="btn btn-xs" onclick="redCriarTemaSugerido(${i},false)"><i class="fa fa-plus"></i> Só criar no repertório</button>
+        <button class="btn btn-xs btn-ghost" onclick="redCriarTopicoRedacao(${i})"><i class="fa fa-pen-nib"></i> Escrever sobre ele</button>
+      </div>
+    </div>`;
+  }).join('');
+  const aviso=!s.grounded
+    ?`<div style="border:1.5px solid var(--orange);background:rgba(194,65,12,.10);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--orange);font-weight:700">Estes temas saíram do conhecimento treinado da IA, não de uma busca — a pesquisa não rodou. Confira o gancho de cada um antes de estudar em cima dele.</div>`
+    :'';
+  openModal(`🗞️ ${s.itens.length} temas — ${escapeHtml(s.eixoNome||'')}`,`
+    ${aviso}
+    <p style="margin:0 0 12px;font-size:11.5px;color:var(--muted)">Gerado em ${fmtDateBR(s.em)}${s.grounded?` a partir de ${s.fontes.length} fontes dos últimos ${s.dias} dias`:''}${s.foco?` · foco: ${escapeHtml(s.foco)}`:''}</p>
+    ${cards}
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+      <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+      <button class="btn" onclick="redAbrirTemasAtualidade('${escapeHtml(s.eixoId)}')"><i class="fa fa-rotate"></i> Buscar outros</button>
+    </div>`);
+}
+
+function redCriarTemaSugerido(i,gerar){
+  const s=redTemasSalvos();if(!s||!s.itens[i])return;
+  const t=s.itens[i];
+  repInit();
+  const id='rep_'+genId();
+  const tema={id,nome:t.tema,eixoId:s.eixoId,criacao:new Date().toISOString()};
+  SECOES.forEach(sec=>tema[sec.id]='');
+  // O gancho e o recorte já são conteúdo de verdade, pesquisado: jogar fora pra
+  // deixar o campo em branco seria desperdiçar a única parte que veio com fonte.
+  const painel=[t.recorte?`RECORTE: ${t.recorte}`:'',t.gancho?`GANCHO (por que está em pauta): ${t.gancho}`:'',
+    t.contraponto?`CONTRAPONTO: ${t.contraponto}`:'',
+    (t.aspectos&&t.aspectos.length)?`ASPECTOS A ABORDAR:\n- ${t.aspectos.join('\n- ')}`:''].filter(Boolean).join('\n\n');
+  if(painel)tema.panorama=painel;
+  db.repertorio.temas[id]=tema;
+  saveDB();closeModal();repRenderSidebar();repSelectTema(id);
+  if(gerar)repGerarComIA(id);
+  else toast('✅ Tema criado no repertório.','var(--green)');
+}
+
+function redCriarTopicoRedacao(i){
+  const s=redTemasSalvos();if(!s||!s.itens[i])return;
+  rdInit();
+  const id='rdt_'+genId();
+  db.redacoes.topics[id]={id,name:s.itens[i].tema,criacao:new Date().toISOString()};
+  saveDB();closeModal();
+  showScreen('redacoes');
+  rdRenderTopics();rdSelectTopic(id);
+  toast('📝 Tópico criado em Minhas Redações.','var(--green)');
+}
+
 function repOpenNewEixo(){
   openModal('🗂️ Novo Eixo Temático',`
     <div style="margin-bottom:10px">
@@ -17749,6 +18011,11 @@ window.repDeleteTema=repDeleteTema;
 window.repOpenNewTema=repOpenNewTema;
 window.repSaveNewTema=repSaveNewTema;
 window.repOpenNewEixo=repOpenNewEixo;
+window.redAbrirTemasAtualidade=redAbrirTemasAtualidade;
+window.redGerarTemasAtualidade=redGerarTemasAtualidade;
+window.redRenderTemasSugeridos=redRenderTemasSugeridos;
+window.redCriarTemaSugerido=redCriarTemaSugerido;
+window.redCriarTopicoRedacao=redCriarTopicoRedacao;
 window.repSaveNewEixo=repSaveNewEixo;
 window.rdRenderTopics=rdRenderTopics;
 window.rdOpenNewTopic=rdOpenNewTopic;
