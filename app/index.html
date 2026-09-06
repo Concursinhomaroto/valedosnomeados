@@ -7464,11 +7464,28 @@ REGRAS:
     const cards=Array.isArray(parsed)?parsed:(parsed&&Array.isArray(parsed.cards)?parsed.cards:[]);
     if(!cards.length)throw new Error('A IA não devolveu nenhum flashcard válido.');
     if(!db.flashcards)db.flashcards={};
-    let n=0;
+    // Trava de duplicata — a mesma que o upload de PDF já usava, e que faltava
+    // aqui. Pedir no prompt "não repita estas perguntas" não é garantia: a IA
+    // reformula ("Qual o prazo para..." vira "Em quantos dias..."), então cada
+    // "Gerar mais" empilhava a mesma coisa escrita de outro jeito. Comparar a
+    // pergunta crua deixava passar; normalizeForDedup tira acento, pontuação e
+    // caixa antes de comparar.
+    // Escopo: os cards DESTE assunto, mais os do chefão que não têm assunto
+    // (vieram de PDF). Não compara com outros minibosses do mesmo chefão, pra
+    // não bloquear uma pergunta que legitimamente serve a dois assuntos.
+    const existentes=new Set(
+      Object.values(db.flashcards)
+        .filter(c=>c.subId===sub.id||(c.mbId===topic.id&&!c.subId))
+        .map(c=>normalizeForDedup(c.pergunta))
+    );
+    let n=0,repetidas=0;
     cards.forEach(c=>{
       const pergunta=String(c&&c.pergunta||'').trim();
       const resposta=String(c&&c.resposta||'').trim();
       if(!pergunta||!resposta)return;
+      const chave=normalizeForDedup(pergunta);
+      if(existentes.has(chave)){repetidas++;return;}
+      existentes.add(chave);   // pega duplicata DENTRO do próprio lote também
       const id='fc_'+genId();
       db.flashcards[id]={id,mbId:topic.id,subId:sub.id,subNome:sub.name,
         pergunta,resposta,tags:'ia-miniboss',dificuldade:2,acertos:0,erros:0,
@@ -7478,8 +7495,13 @@ REGRAS:
     db.fcCreatedTotal=(db.fcCreatedTotal||0)+n;
     saveDB();
     if(typeof updateFCBadge==='function')updateFCBadge();
-    toast(grounded?`${bF.via==='tavily'?'🔎':'🌐'} ${n} flashcard${n>1?'s':''} gerado${n>1?'s':''} com pesquisa na internet${bF.via==='tavily'?` (${bF.fontes.length} fontes)`:''}!`
-                  :`🃏 ${n} flashcard${n>1?'s':''} gerado${n>1?'s':''} (busca indisponível agora — usei o conhecimento da IA)`,'var(--green)');
+    if(!n&&repetidas){
+      toast(`ℹ️ Nenhum flashcard novo — as ${repetidas} perguntas geradas já existiam neste assunto.`,'var(--orange)');
+    }else{
+      const extra=repetidas?` (${repetidas} repetida${repetidas>1?'s':''} descartada${repetidas>1?'s':''})`:'';
+      toast((grounded?`${bF.via==='tavily'?'🔎':'🌐'} ${n} flashcard${n>1?'s':''} gerado${n>1?'s':''} com pesquisa na internet${bF.via==='tavily'?` (${bF.fontes.length} fontes)`:''}!`
+                    :`🃏 ${n} flashcard${n>1?'s':''} gerado${n>1?'s':''} (busca indisponível agora — usei o conhecimento da IA)`)+extra,'var(--green)');
+    }
   }catch(e){
     toast('❌ '+(e.message||'Erro ao gerar flashcards'),'var(--red)');
   }finally{
