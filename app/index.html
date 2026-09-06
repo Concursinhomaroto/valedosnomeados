@@ -2230,14 +2230,30 @@ nav{
     <h2><i class="fa fa-house-chimney"></i> Sala de Estudo</h2>
     <div class="sala-mapa-hint">WASD ou setas pra andar · E pra sentar/levantar · você continua na sala enquanto estuda em outras telas</div>
   </div>
+  <div class="sala-mapa-wrap">
   <div class="sala-mapa-stage">
     <div class="sala-mapa-viewport" id="sala-mapa-viewport"></div>
     <div class="sala-mapa-controls">
       <button class="sala-zoom-btn" onclick="salaMapaZoom(0.25)" title="Aumentar zoom"><i class="fa fa-plus"></i></button>
       <button class="sala-zoom-btn" onclick="salaMapaZoom(-0.25)" title="Diminuir zoom"><i class="fa fa-minus"></i></button>
       <button class="sala-zoom-btn" onclick="salaOpenNicknamePicker()" title="Trocar visual"><i class="fa fa-user"></i></button>
-      <button class="sala-zoom-btn" onclick="salaSairDaSala()" title="Sair da sala — some do mapa para os outros até você voltar aqui"><i class="fa fa-right-from-bracket"></i></button>
+      <button class="sala-zoom-btn" id="sala-btn-sair" onclick="salaSairDaSala()" title="Sair da sala — some do mapa para os outros"><i class="fa fa-right-from-bracket"></i></button>
     </div>
+  </div>
+
+  <!-- Chat da sala: uma aba "Geral" que todo mundo vê e uma aba por conversa
+       privada. O que for dito no Geral também vira balão na cabeça de quem falou,
+       no mapa — é o que faz a sala parecer um lugar e não uma lista. -->
+  <div class="sala-chat" id="sala-chat">
+    <div class="sala-chat-tabs" id="sala-chat-tabs"></div>
+    <div class="sala-chat-quem" id="sala-chat-quem"></div>
+    <div class="sala-chat-msgs" id="sala-chat-msgs"></div>
+    <div class="sala-chat-forma">
+      <input class="sala-chat-inp" id="sala-chat-inp" maxlength="300" placeholder="Escreva e aperte Enter..."
+             onkeydown="if(event.key==='Enter'){event.preventDefault();salaChatEnviar();}">
+      <button class="sala-chat-btn" onclick="salaChatEnviar()" title="Enviar"><i class="fa fa-paper-plane"></i></button>
+    </div>
+  </div>
   </div>
   <!-- Crédito exigido pela licença do Modern Interiors (LimeZu) — não remover/esconder. -->
   <div class="sala-mapa-credit">Arte: <a href="https://limezu.itch.io/" target="_blank" rel="noopener">LimeZu</a> — Modern Interiors</div>
@@ -2259,6 +2275,40 @@ nav{
 .sala-zoom-btn{width:32px;height:32px;border-radius:8px;border:1.5px solid var(--accent);background:rgba(124,58,237,0.55);color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .sala-zoom-btn:hover{background:var(--accent);}
 .sala-mapa-credit{margin-top:8px;font-size:10px;color:var(--muted);text-align:right;}
+/* Chat ao lado do mapa em tela larga, embaixo em tela estreita. Largura fixa de
+   propósito: o mapa é a peça que precisa de espaço, o chat só precisa caber. */
+.sala-mapa-wrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px;align-items:start;}
+.sala-mapa-wrap .sala-mapa-stage{min-width:0;}
+.sala-chat{display:flex;flex-direction:column;background:var(--panel);border:1.5px solid var(--border2);
+  border-radius:var(--r-lg);overflow:hidden;height:calc(100vh - 200px);max-height:640px;min-height:320px;}
+.sala-chat-tabs{display:flex;gap:4px;padding:7px 7px 0;overflow-x:auto;flex-shrink:0;border-bottom:1.5px solid var(--border2);}
+.sala-chat-tab{display:flex;align-items:center;gap:5px;padding:5px 9px;border-radius:8px 8px 0 0;border:1.5px solid transparent;
+  border-bottom:none;background:transparent;color:var(--muted);font-size:11.5px;font-weight:800;cursor:pointer;white-space:nowrap;font-family:inherit;}
+.sala-chat-tab.ativa{background:var(--panel2);border-color:var(--border2);color:var(--accent);}
+.sala-chat-tab .x{opacity:.55;font-size:10px;}
+.sala-chat-tab .x:hover{opacity:1;}
+.sala-chat-nao-lidas{background:var(--red);color:#fff;border-radius:999px;padding:0 5px;font-size:9.5px;min-width:15px;text-align:center;}
+.sala-chat-quem{padding:7px 10px;border-bottom:1.5px solid var(--border2);font-size:11px;color:var(--muted);flex-shrink:0;
+  max-height:88px;overflow-y:auto;}
+.sala-chat-quem b{color:var(--text2);}
+.sala-chat-pessoa{display:inline-flex;align-items:center;gap:4px;margin:3px 4px 0 0;padding:2px 8px;border-radius:999px;
+  border:1.5px solid var(--border2);background:var(--panel2);cursor:pointer;font-size:10.5px;font-weight:700;color:var(--text2);}
+.sala-chat-pessoa:hover{border-color:var(--accent);color:var(--accent);}
+.sala-chat-msgs{flex:1;overflow-y:auto;padding:9px 10px;display:flex;flex-direction:column;gap:7px;}
+.sala-chat-msg{font-size:12px;line-height:1.42;word-break:break-word;}
+.sala-chat-msg .quem{font-weight:800;color:var(--accent);}
+.sala-chat-msg.propria .quem{color:var(--green);}
+.sala-chat-msg .hora{font-size:9.5px;color:var(--muted);margin-left:5px;}
+.sala-chat-vazio{color:var(--muted);font-size:11.5px;text-align:center;margin:auto;padding:14px;line-height:1.5;}
+.sala-chat-forma{display:flex;gap:6px;padding:8px;border-top:1.5px solid var(--border2);flex-shrink:0;}
+.sala-chat-inp{flex:1;min-width:0;padding:8px 10px;border-radius:9px;border:1.5px solid var(--border2);
+  background:var(--panel2);color:var(--text);font-family:inherit;font-size:12px;}
+.sala-chat-btn{width:36px;border-radius:9px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;flex-shrink:0;}
+.sala-chat-aviso{padding:6px 10px;font-size:10px;color:var(--orange);border-bottom:1.5px solid var(--border2);line-height:1.4;}
+@media(max-width:1000px){
+  .sala-mapa-wrap{grid-template-columns:1fr;}
+  .sala-chat{height:340px;max-height:none;}
+}
 .sala-mapa-credit a{color:var(--muted);text-decoration:underline;}
 @media(max-width:700px){
   .sala-mapa-top h2{font-size:16px;}
@@ -16304,6 +16354,7 @@ function salaMapaPause(){
 }
 function salaMapaResume(){
   if(salaMapaGame)salaMapaGame.scene.resume('salaMapaScene');
+  if(typeof salaChatAbrirAba==='function')salaChatAbrirAba(salaChatAba);
   // NAO religa a captura global: ela e o que fazia as teclas do jogo sumirem dos
   // campos de texto do resto do site (ver disableGlobalCapture no create).
   if(salaMapaSceneRef)salaPresenceJoin(salaMapaSceneRef);
@@ -16433,6 +16484,9 @@ function salaPresenceJoin(scene){
   }
   salaPresenceParaBatimento();
   salaPresenceOuvir(scene);
+  // O chat acompanha a PRESENÇA, não a tela: quem continua na sala estudando em
+  // outra aba do app tem de receber a mensagem que alguém mandar pra ele.
+  salaChatEntrar();
   salaAtualizaIndicador();
 }
 // Sair da TELA não é sair da SALA. Quem está estudando no resto da plataforma
@@ -16468,22 +16522,277 @@ function salaPresenceLeave(){
     salaOwnPresenceKeyRef.remove().catch(()=>{});
     salaOwnPresenceKeyRef=null;
   }
+  salaChatSair();
   salaAtualizaIndicador();
 }
 function salaNaSala(){ return !!salaOwnPresenceKeyRef; }
+
+// ============================ CHAT DA SALA ==================================
+// Duas conversas no mesmo painel:
+//   Geral   -> sala_chat/{id} = {uid, nick, txt, ts}, últimas 60, todo mundo lê.
+//   Privada -> sala_dm/{meuUid}/{outroUid}/{id}, escrita nas DUAS caixas.
+// A escrita dupla existe porque o Realtime Database não sabe consultar "toda
+// conversa em que eu apareço": com a caixa por dono, cada pessoa assina um nó só
+// (o seu) e recebe todas as suas conversas — ao custo de uma escrita a mais.
+//
+// SOBRE "PRIVADA": privado aqui é o que as REGRAS do Firebase garantirem. O app
+// só mostra a você o que está na sua caixa, mas se a regra de sala_dm deixar
+// qualquer autenticado ler o nó inteiro, "privado" é só a interface. A regra que
+// fecha isso de verdade está no aviso do painel (salaChatAvisoRegras).
+const SALA_CHAT_MAX=60;          // mensagens guardadas no geral
+const SALA_DM_MAX=50;            // por conversa
+const SALA_CHAT_MAX_LEN=300;
+const SALA_CHAT_INTERVALO_MS=1200; // trava simples de repetição
+let salaChatRef=null,salaDmRef=null;
+let salaChatMsgs=[];             // [{id,uid,nick,txt,ts}]
+let salaDmConversas={};          // outroUid -> {nick, msgs:[], naoLidas:n}
+let salaChatAba='geral';         // 'geral' ou o uid do outro
+let salaChatUltimoEnvio=0;
+let salaChatVistoGeral=0;        // ts da última mensagem geral já lida
+let salaChatNaoLidasGeral=0;
+// "Já recebi o primeiro retrato do nó?" — precisa ser explícito. Deduzir isso de
+// "a lista anterior estava vazia" engolia justamente a primeira mensagem da
+// conversa, que é a que mais importa ver.
+let salaChatIniciado=false,salaDmIniciado=false;
+
+function salaChatEntrar(){
+  if(!firebaseDB||!currentUser||salaChatRef)return;
+  salaChatRef=firebaseDB.ref('sala_chat').limitToLast(SALA_CHAT_MAX);
+  salaChatRef.on('value',snap=>{
+    const v=snap.val()||{};
+    const antes=new Set(salaChatMsgs.map(m=>m.id));
+    salaChatMsgs=Object.keys(v).map(id=>Object.assign({id},v[id]))
+      .filter(m=>m&&typeof m.txt==='string')
+      .sort((a,b)=>(a.ts||0)-(b.ts||0));
+    if(salaChatIniciado){
+      // Só as que chegaram AGORA viram balão — abrir a sala não pode explodir
+      // sessenta balões de histórico de uma vez.
+      salaChatMsgs.forEach(m=>{
+        if(!antes.has(m.id)&&Date.now()-(m.ts||0)<60000)salaChatNovaMensagem(m,false);
+      });
+    }
+    salaChatIniciado=true;
+    if(salaChatAba!=='geral'||!salaChatNaTela()){
+      salaChatNaoLidasGeral=salaChatMsgs.filter(m=>(m.ts||0)>salaChatVistoGeral&&m.uid!==currentUser.uid).length;
+    }
+    salaChatRender();
+  },e=>console.warn('chat da sala indisponível:',e));
+
+  salaDmRef=firebaseDB.ref('sala_dm/'+currentUser.uid);
+  salaDmRef.on('value',snap=>{
+    const v=snap.val()||{};
+    const antes={};
+    Object.keys(salaDmConversas).forEach(u=>{antes[u]=new Set(salaDmConversas[u].msgs.map(m=>m.id));});
+    Object.keys(v).forEach(outro=>{
+      const msgs=Object.keys(v[outro]||{}).map(id=>Object.assign({id},v[outro][id]))
+        .filter(m=>m&&typeof m.txt==='string').sort((a,b)=>(a.ts||0)-(b.ts||0));
+      const c=salaDmConversas[outro]||(salaDmConversas[outro]={nick:'',msgs:[],naoLidas:0,visto:0});
+      c.nick=(msgs.length&&msgs[msgs.length-1].nick)||c.nick||'aluno';
+      c.msgs=msgs;
+      if(salaDmIniciado)msgs.forEach(m=>{
+        if(m.de===currentUser.uid)return;
+        const vistas=antes[outro];
+        if((!vistas||!vistas.has(m.id))&&Date.now()-(m.ts||0)<60000)
+          salaChatNovaMensagem(Object.assign({uid:m.de},m),true);
+      });
+      c.naoLidas=(salaChatAba===outro&&salaChatNaTela())?0
+        :msgs.filter(m=>m.de!==currentUser.uid&&(m.ts||0)>(c.visto||0)).length;
+    });
+    Object.keys(salaDmConversas).forEach(u=>{if(!v[u]&&!salaDmConversas[u].msgs.length)delete salaDmConversas[u];});
+    salaDmIniciado=true;
+    salaChatRender();
+  },e=>console.warn('mensagens privadas indisponíveis:',e));
+  salaChatRender();
+}
+function salaChatSair(){
+  if(salaChatRef){salaChatRef.off();salaChatRef=null;}
+  if(salaDmRef){salaDmRef.off();salaDmRef=null;}
+  salaChatMsgs=[];salaDmConversas={};salaChatAba='geral';
+  salaChatNaoLidasGeral=0;salaChatIniciado=false;salaDmIniciado=false;
+  salaChatRender();
+}
+function salaChatNaTela(){
+  const sc=document.querySelector('.screen.active');
+  return !!sc&&sc.id==='screen-sala';
+}
+// Uma mensagem nova: balão na cabeça de quem falou (se a cena estiver montada) e
+// aviso no menu pra quem estiver estudando em outra tela.
+function salaChatNovaMensagem(m,privada){
+  if(salaMapaSceneRef&&salaMapaSceneRef.salaMostrarBalao)salaMapaSceneRef.salaMostrarBalao(m.uid,m.txt,privada);
+  if(!salaChatNaTela()&&m.uid!==(currentUser&&currentUser.uid)){
+    toast((privada?'✉️ ':'💬 ')+(m.nick||'alguém')+': '+m.txt.slice(0,60),'var(--accent)');
+  }
+}
+function salaChatEnviar(){
+  const inp=document.getElementById('sala-chat-inp');
+  if(!inp)return;
+  const txt=inp.value.trim().slice(0,SALA_CHAT_MAX_LEN);
+  if(!txt)return;
+  if(!salaNaSala()){toast('Entre na sala primeiro pra conversar.','var(--orange)');return;}
+  const agora=Date.now();
+  if(agora-salaChatUltimoEnvio<SALA_CHAT_INTERVALO_MS){toast('Calma — uma mensagem por vez.','var(--orange)');return;}
+  salaChatUltimoEnvio=agora;
+  inp.value='';
+  const nick=db.studyNickname||'aluno';
+  if(salaChatAba==='geral'){
+    const ref=firebaseDB.ref('sala_chat').push();
+    ref.set({uid:currentUser.uid,nick,txt,ts:agora}).catch(e=>{
+      console.warn('falha ao enviar no chat geral:',e);
+      toast('Não consegui enviar — confira as regras do Firebase pra sala_chat.','var(--red)');
+    });
+    salaChatPodar();
+  }else{
+    const outro=salaChatAba;
+    const id=firebaseDB.ref('sala_dm/'+currentUser.uid+'/'+outro).push().key;
+    const msg={de:currentUser.uid,nick,txt,ts:agora};
+    const updates={};
+    updates['sala_dm/'+currentUser.uid+'/'+outro+'/'+id]=msg;
+    updates['sala_dm/'+outro+'/'+currentUser.uid+'/'+id]=msg;
+    firebaseDB.ref().update(updates).catch(e=>{
+      console.warn('falha ao enviar mensagem privada:',e);
+      toast('Não consegui enviar — confira as regras do Firebase pra sala_dm.','var(--red)');
+    });
+  }
+  salaChatRender();
+}
+// Poda o geral: sem isso o nó cresce pra sempre. Só quem escreve poda, e só de vez
+// em quando, pra não virar uma escrita a mais em cada mensagem.
+function salaChatPodar(){
+  if(Math.random()>0.15)return;
+  firebaseDB.ref('sala_chat').once('value').then(snap=>{
+    const v=snap.val()||{};
+    const ids=Object.keys(v).sort((a,b)=>(v[a].ts||0)-(v[b].ts||0));
+    const sobra=ids.length-SALA_CHAT_MAX;
+    if(sobra<=0)return;
+    const upd={};ids.slice(0,sobra).forEach(id=>{upd[id]=null;});
+    firebaseDB.ref('sala_chat').update(upd).catch(()=>{});
+  }).catch(()=>{});
+}
+function salaChatAbrirAba(aba){
+  salaChatAba=aba;
+  if(aba==='geral'){
+    salaChatNaoLidasGeral=0;
+    const ult=salaChatMsgs[salaChatMsgs.length-1];
+    salaChatVistoGeral=ult?(ult.ts||Date.now()):Date.now();
+  }else if(salaDmConversas[aba]){
+    salaDmConversas[aba].naoLidas=0;
+    const ult=salaDmConversas[aba].msgs[salaDmConversas[aba].msgs.length-1];
+    salaDmConversas[aba].visto=ult?(ult.ts||Date.now()):Date.now();
+  }
+  salaChatRender();
+  setTimeout(()=>document.getElementById('sala-chat-inp')?.focus(),50);
+}
+function salaChatFecharAba(uid,ev){
+  if(ev)ev.stopPropagation();
+  delete salaDmConversas[uid];
+  if(salaChatAba===uid)salaChatAba='geral';
+  salaChatRender();
+}
+function salaChatAbrirDM(uid,nick){
+  if(!uid||uid===(currentUser&&currentUser.uid))return;
+  if(!salaDmConversas[uid])salaDmConversas[uid]={nick:nick||'aluno',msgs:[],naoLidas:0,visto:0};
+  else if(nick)salaDmConversas[uid].nick=nick;
+  salaChatAbrirAba(uid);
+}
+function salaChatRender(){
+  const tabs=document.getElementById('sala-chat-tabs');
+  const quem=document.getElementById('sala-chat-quem');
+  const cx=document.getElementById('sala-chat-msgs');
+  if(!tabs||!cx||!quem)return;
+
+  const badge=n=>n>0?`<span class="sala-chat-nao-lidas">${n>9?'9+':n}</span>`:'';
+  tabs.innerHTML=`<button class="sala-chat-tab${salaChatAba==='geral'?' ativa':''}" onclick="salaChatAbrirAba('geral')">💬 Geral ${badge(salaChatNaoLidasGeral)}</button>`
+    +Object.keys(salaDmConversas).map(uid=>`
+      <button class="sala-chat-tab${salaChatAba===uid?' ativa':''}" onclick="salaChatAbrirAba('${escapeHtml(uid)}')">
+        ✉️ ${escapeHtml((salaDmConversas[uid].nick||'aluno').slice(0,14))} ${badge(salaDmConversas[uid].naoLidas)}
+        <span class="x" onclick="salaChatFecharAba('${escapeHtml(uid)}',event)"><i class="fa fa-xmark"></i></span>
+      </button>`).join('');
+
+  // Quem está na sala agora — clicar abre a conversa privada.
+  const outros=(salaMapaSceneRef&&salaMapaSceneRef.salaPresencaConhecida)||{};
+  const uids=Object.keys(outros).filter(u=>u!==(currentUser&&currentUser.uid));
+  quem.innerHTML=uids.length
+    ? `<b>Na sala agora:</b><br>`+uids.map(u=>
+        `<span class="sala-chat-pessoa" onclick="salaChatAbrirDM('${escapeHtml(u)}','${escapeHtml(outros[u].nickname||'aluno')}')" title="Mandar mensagem privada">✉️ ${escapeHtml((outros[u].nickname||'aluno').slice(0,18))}${outros[u].fora?' 📖':''}</span>`).join('')
+    : `<b>Na sala agora:</b> só você por enquanto.`;
+
+  const lista=salaChatAba==='geral'
+    ? salaChatMsgs.map(m=>({uid:m.uid,nick:m.nick,txt:m.txt,ts:m.ts}))
+    : ((salaDmConversas[salaChatAba]||{}).msgs||[]).slice(-SALA_DM_MAX).map(m=>({uid:m.de,nick:m.nick,txt:m.txt,ts:m.ts}));
+  if(!lista.length){
+    cx.innerHTML=`<div class="sala-chat-vazio">${salaChatAba==='geral'
+      ?'Ninguém falou ainda.<br>O que você escrever aqui aparece num balão na cabeça do seu personagem.'
+      :'Conversa privada. Só você e essa pessoa veem o que for escrito aqui.'}</div>`;
+  }else{
+    const meu=currentUser&&currentUser.uid;
+    cx.innerHTML=lista.map(m=>`
+      <div class="sala-chat-msg${m.uid===meu?' propria':''}">
+        <span class="quem">${escapeHtml((m.nick||'aluno').slice(0,20))}</span><span class="hora">${salaChatHora(m.ts)}</span><br>
+        ${escapeHtml(m.txt||'')}
+      </div>`).join('');
+    cx.scrollTop=cx.scrollHeight;
+  }
+  salaAtualizaIndicador();
+}
+function salaChatHora(ts){
+  if(!ts)return '';
+  try{return new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}catch(e){return '';}
+}
+function salaChatTotalNaoLidas(){
+  return salaChatNaoLidasGeral+Object.keys(salaDmConversas).reduce((n,u)=>n+(salaDmConversas[u].naoLidas||0),0);
+}
+
 // Ficar na sala é o padrão, mas não pode ser uma armadilha: quem quiser sumir do
 // mapa sem deslogar tem este botão.
 function salaSairDaSala(){
-  if(!salaNaSala()){toast('Você já não está na sala.','var(--muted)');return;}
-  salaPresenceLeave();
+  // Alterna. Sair e só poder voltar trocando de tela e voltando seria uma
+  // armadilha — o mesmo botão que tira põe de volta.
+  if(!salaNaSala()){
+    if(!salaMapaSceneRef){toast('Abra o mapa primeiro.','var(--muted)');return;}
+    salaPresenceJoin(salaMapaSceneRef);
+    toast('Você voltou pra sala — os outros já te veem.','var(--green)');
+  }else{
+    salaPresenceLeave();
+    toast('Você saiu da sala — ninguém mais te vê no mapa. Clique de novo pra voltar.','var(--accent)');
+  }
+  salaAtualizaBotaoSair();
   salaAtualizaIndicador();
-  toast('Você saiu da sala — ninguém mais te vê no mapa. Volte quando quiser.','var(--accent)');
+}
+function salaAtualizaBotaoSair(){
+  const b=document.getElementById('sala-btn-sair');
+  if(!b)return;
+  const dentro=salaNaSala();
+  b.innerHTML=`<i class="fa fa-${dentro?'right-from-bracket':'right-to-bracket'}"></i>`;
+  b.title=dentro?'Sair da sala — some do mapa para os outros':'Voltar pra sala — aparecer de novo no mapa';
 }
 // Fora da Sala não há como saber que você continua visível lá. O pontinho verde
 // no menu é a resposta, sem precisar abrir a tela pra conferir.
 function salaAtualizaIndicador(){
   const d=document.getElementById('nav-sala-dot');
-  if(d)d.style.display=salaNaSala()?'block':'none';
+  if(!d)return;
+  if(!salaNaSala()){
+    d.style.display='none';d.textContent='';
+    if(typeof salaAtualizaBotaoSair==='function')salaAtualizaBotaoSair();
+    return;
+  }
+  // Mensagem nova enquanto você estuda em outra tela precisa aparecer no menu —
+  // senão o chat só serve pra quem já está olhando o mapa.
+  if(typeof salaAtualizaBotaoSair==='function')salaAtualizaBotaoSair();
+  const n=(typeof salaChatTotalNaoLidas==='function')?salaChatTotalNaoLidas():0;
+  d.style.display='flex';
+  if(n>0){
+    d.textContent=n>9?'9+':String(n);
+    d.style.width='auto';d.style.minWidth='16px';d.style.height='16px';d.style.padding='0 4px';
+    d.style.borderRadius='999px';d.style.background='var(--red)';d.style.color='#fff';
+    d.style.fontSize='9.5px';d.style.fontWeight='800';d.style.alignItems='center';
+    d.style.justifyContent='center';d.style.boxShadow='none';
+    d.title=n+' mensagem(ns) não lida(s) na sala';
+  }else{
+    d.textContent='';
+    d.style.width='8px';d.style.minWidth='0';d.style.height='8px';d.style.padding='0';
+    d.style.background='var(--green)';d.style.boxShadow='0 0 0 3px rgba(21,128,61,.22)';
+    d.title='Você está visível na sala agora';
+  }
 }
 function salaPresenceMaybeSend(scene){
   if(!salaOwnPresenceKeyRef||salaPresenceWriteFailed)return;
@@ -16702,6 +17011,10 @@ function salaMapaCreateGame(){
     // move/anima quem já existe (com um tween curto até o alvo, pra não "pular" a cada
     // atualização), remove quem saiu.
     salaSyncOtherPlayers(all){
+      // O painel de chat precisa saber quem está aqui pra oferecer a conversa
+      // privada; a cena já recebe isso de graça a cada snapshot.
+      this.salaPresencaConhecida=all||{};
+      if(typeof salaChatRender==='function')salaChatRender();
       const seen=new Set();
       Object.keys(all).forEach(uid=>{
         if(!currentUser||uid===currentUser.uid)return;
@@ -16741,10 +17054,52 @@ function salaMapaCreateGame(){
         this.otherPlayers[uid].sprite.destroy();
         this.otherPlayers[uid].nameText.destroy();
         delete this.otherPlayers[uid];
+        this.salaApagaBalao(uid);
+      });
+    }
+    // ----- balões de fala -----
+    // O balão é o que faz o chat parecer conversa e não lista: você vê QUEM falou
+    // sem tirar os olhos do mapa. Fica 6 segundos e segue o boneco.
+    salaAlvoDoBalao(uid){
+      if(currentUser&&uid===currentUser.uid)return this.player;
+      const e=this.otherPlayers[uid];
+      return e?e.sprite:null;
+    }
+    salaMostrarBalao(uid,texto,privada){
+      const alvo=this.salaAlvoDoBalao(uid);
+      if(!alvo||!texto)return;
+      this.baloes=this.baloes||{};
+      this.salaApagaBalao(uid);
+      const txt=String(texto).slice(0,120);
+      const t=this.add.text(alvo.x,alvo.y-52,txt,{
+        fontSize:'10px',fontFamily:'Arial',color:privada?'#3b1d6e':'#111827',
+        backgroundColor:privada?'#d8c9ff':'#ffffff',
+        padding:{x:6,y:4},align:'center',
+        wordWrap:{width:150,useAdvancedWrap:true},
+      }).setOrigin(0.5,1).setDepth(100000);
+      this.baloes[uid]={t,ate:Date.now()+6000};
+    }
+    salaApagaBalao(uid){
+      if(!this.baloes||!this.baloes[uid])return;
+      this.baloes[uid].t.destroy();
+      delete this.baloes[uid];
+    }
+    // Chamado no começo do update: o balão acompanha o boneco mesmo enquanto o
+    // jogo está "quieto" por causa de um campo de texto em foco.
+    salaAtualizaBaloes(){
+      if(!this.baloes)return;
+      const agora=Date.now();
+      Object.keys(this.baloes).forEach(uid=>{
+        const b=this.baloes[uid];
+        if(agora>b.ate){this.salaApagaBalao(uid);return;}
+        const alvo=this.salaAlvoDoBalao(uid);
+        if(!alvo){this.salaApagaBalao(uid);return;}
+        b.t.setPosition(alvo.x,alvo.y-52);
       });
     }
     update(){
       const p=this.player,cur=this.cursors;
+      this.salaAtualizaBaloes();
       // Sem captura, a tecla chega ao campo de texto — mas tambem continua
       // chegando ao jogo, e o boneco andava enquanto voce digitava. Enquanto o
       // foco esta num campo (ou ha um modal aberto), o jogo fica quieto.
