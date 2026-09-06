@@ -48,7 +48,25 @@
   --pink:#be185d;
   --text:#2e1065;
   --text2:#5b21b6;
-  --muted:#a78bfa;
+  --muted:#6d5f9c;   /* era #a78bfa, 2,72:1 sobre branco — legenda, data e placeholder ficavam ilegíveis */
+  /* Semáforo em duas versões, porque a mesma cor tem dois papéis incompatíveis.
+     --red & cia. são PREENCHIMENTO (fundo de toast, de barra, de selo) e existem
+     pra ter texto BRANCO por cima. As -t são TEXTO sobre painel, e precisam do
+     contraste contrário. Usar a mesma variável nos dois papéis é o que fazia o
+     vermelho de "revisão atrasada" ficar em 2,67:1 no tema escuro — o aviso mais
+     urgente do app era o menos legível. Todos os valores abaixo foram medidos
+     contra --panel, --panel2 e --bg do próprio tema, mínimo 4,5:1. */
+  /* --danger era usada em 10 lugares e nunca foi definida em lugar nenhum.
+     Variável inválida é ignorada: como cor de texto o aviso herdava a cor normal,
+     e como fundo de toast ficava o fundo do toast ANTERIOR — erro do editor de
+     mapa aparecendo em roxo de sucesso. É apelido de --red (papel de preenchimento). */
+  --danger:#b91c1c;
+  --red-t:#b91c1c;      /* 5,90:1 no pior fundo claro */
+  --green-t:#15803d;    /* 4,57:1 */
+  --orange-t:#c2410c;   /* 4,72:1 */
+  --cyan-t:#0e7490;     /* 4,88:1 — o #0891b2 anterior dava 3,36:1 */
+  --pink-t:#be185d;
+  --gold-t:#b45309;     /* 4,58:1 — o #f59e0b dava 1,96:1 */
   --shadow:0 4px 24px rgba(124,58,237,0.08);
   --shadow2:0 8px 40px rgba(124,58,237,0.14);
 
@@ -90,6 +108,11 @@
   --text:#ede9fe;
   --text2:#c4b5fd;
   --muted:#8b7fb8;
+  /* O tema escuro nunca redefinia o semáforo: herdava os tons feitos pra fundo
+     branco e os punha sobre #1a1830. Medidos aqui contra painel/painel2/fundo. */
+  --danger:#b91c1c;
+  --red-t:#f87171; --green-t:#4ade80; --orange-t:#fb923c;
+    --cyan-t:#22d3ee; --pink-t:#f472b6; --gold-t:#fbbf24;
   --shadow:0 4px 24px rgba(0,0,0,0.35);
   --shadow2:0 8px 40px rgba(0,0,0,0.5);
   --map-bg:linear-gradient(160deg,#171528 0%,#1a1830 50%,#201d38 100%);
@@ -101,6 +124,8 @@
     --border:#332f54; --border2:rgba(167,139,250,0.25);
     --accent:#a78bfa; --accent2:#8b5cf6; --accent3:#c4b5fd;
     --text:#ede9fe; --text2:#c4b5fd; --muted:#8b7fb8;
+  --red-t:#f87171; --green-t:#4ade80; --orange-t:#fb923c;
+    --cyan-t:#22d3ee; --pink-t:#f472b6; --gold-t:#fbbf24;
     --shadow:0 4px 24px rgba(0,0,0,0.35); --shadow2:0 8px 40px rgba(0,0,0,0.5);
     --map-bg:linear-gradient(160deg,#171528 0%,#1a1830 50%,#201d38 100%);
     --note-bg:#3d3315;
@@ -193,7 +218,7 @@ nav{
 .pix-tier-note{background:color-mix(in srgb, var(--accent) 12%, transparent);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;color:var(--accent);margin-bottom:12px;}
 .pix-tier-benefits{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:5px;}
 .pix-tier-benefits li{font-size:11.5px;color:var(--text2);padding-left:20px;position:relative;line-height:1.4;}
-.pix-tier-benefits li::before{content:'✓';position:absolute;left:0;color:var(--green);font-weight:800;}
+.pix-tier-benefits li::before{content:'✓';position:absolute;left:0;color:var(--green-t);font-weight:800;}
 .pix-steps{margin:0 0 14px;padding-left:18px;font-size:12px;color:var(--muted);line-height:1.7;}
 .pix-steps b{color:var(--accent);}
 .pix-copia-cola{width:100%;min-height:64px;resize:vertical;padding:10px 12px;border-radius:10px;border:1.5px solid var(--border2);background:var(--panel);color:var(--text2);font-family:monospace;font-size:10.5px;word-break:break-all;margin-bottom:10px;}
@@ -257,9 +282,9 @@ nav{
   border:1.5px solid var(--border2);background:var(--panel2);color:var(--muted);
   transition:filter .15s}
 .backup-badge:hover{filter:brightness(1.08)}
-.backup-badge.bk-ok{color:var(--green);border-color:var(--green);background:rgba(21,128,61,.10)}
-.backup-badge.bk-alerta{color:var(--orange);border-color:var(--orange);background:rgba(194,65,12,.10)}
-.backup-badge.bk-erro{color:var(--red);border-color:var(--red);background:rgba(185,28,28,.10)}
+.backup-badge.bk-ok{color:var(--green-t);border-color:var(--green);background:rgba(21,128,61,.10)}
+.backup-badge.bk-alerta{color:var(--orange-t);border-color:var(--orange);background:rgba(194,65,12,.10)}
+.backup-badge.bk-erro{color:var(--red-t);border-color:var(--red);background:rgba(185,28,28,.10)}
 
 /* ===== MAP WORLD ===== */
 #world-map{
@@ -336,9 +361,9 @@ nav{
 .btn-cyan:hover{filter:brightness(1.1);transform:translateY(-1px);}
 .btn-ghost{background:var(--panel2);border:1.5px solid var(--border2);color:var(--text2);}
 .btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
-.btn-danger{background:rgba(220,38,38,0.08);border:1.5px solid rgba(220,38,38,0.25);color:var(--red);}
+.btn-danger{background:rgba(220,38,38,0.08);border:1.5px solid rgba(220,38,38,0.25);color:var(--red-t);}
 .btn-danger:hover{background:rgba(220,38,38,0.16);}
-.btn-green-s{background:rgba(22,163,74,0.1);border:1.5px solid rgba(22,163,74,0.3);color:var(--green);}
+.btn-green-s{background:rgba(22,163,74,0.1);border:1.5px solid rgba(22,163,74,0.3);color:var(--green-t);}
 .btn-green-s:hover{background:rgba(22,163,74,0.2);}
 .btn-sm{padding:6px 12px;font-size:11px;border-radius:9px;}
 .btn-xs{padding:4px 9px;font-size:10px;border-radius:7px;}
@@ -378,13 +403,13 @@ nav{
 
 /* PRIORITY */
 .pri-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:900;letter-spacing:0.5px;}
-.pri-30{background:rgba(22,163,74,0.1);color:var(--green);border:1.5px solid rgba(22,163,74,0.3);}
-.pri-70{background:rgba(234,88,12,0.1);color:var(--orange);border:1.5px solid rgba(234,88,12,0.3);}
-.pri-100{background:rgba(220,38,38,0.1);color:var(--red);border:1.5px solid rgba(220,38,38,0.3);animation:redPulse 2s infinite;}
+.pri-30{background:rgba(22,163,74,0.1);color:var(--green-t);border:1.5px solid rgba(22,163,74,0.3);}
+.pri-70{background:rgba(234,88,12,0.1);color:var(--orange-t);border:1.5px solid rgba(234,88,12,0.3);}
+.pri-100{background:rgba(220,38,38,0.1);color:var(--red-t);border:1.5px solid rgba(220,38,38,0.3);animation:redPulse 2s infinite;}
 @keyframes redPulse{0%,100%{box-shadow:none;}50%{box-shadow:0 0 10px rgba(220,38,38,0.35);}}
 
 /* STATUS */
-.studied-badge{background:rgba(22,163,74,0.1);color:var(--green);border:1.5px solid rgba(22,163,74,0.3);border-radius:8px;font-size:9px;padding:2px 7px;font-weight:800;}
+.studied-badge{background:rgba(22,163,74,0.1);color:var(--green-t);border:1.5px solid rgba(22,163,74,0.3);border-radius:8px;font-size:9px;padding:2px 7px;font-weight:800;}
 .unstudy-badge{background:var(--bg2);color:var(--muted);border:1.5px solid var(--border);border-radius:8px;font-size:9px;padding:2px 7px;font-weight:700;}
 
 /* TIMER */
@@ -422,10 +447,10 @@ nav{
 .sim-wrap{background:rgba(190,24,93,0.05);border:1.5px solid rgba(190,24,93,0.25);border-radius:14px;padding:14px;margin-top:10px;display:none;}
 .sim-wrap.sim-open{display:block;}
 .sim-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
-.sim-title{font-size:11px;font-weight:900;color:var(--pink);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;}
+.sim-title{font-size:11px;font-weight:900;color:var(--pink-t);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;}
 .sim-empty{font-size:12px;color:var(--muted);text-align:center;padding:6px 0 12px;}
 .sim-config-row{display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:10px;flex-wrap:wrap;}
-.sim-stat-badge{font-size:10.5px;font-weight:700;color:var(--pink);background:rgba(190,24,93,0.1);border:1px solid rgba(190,24,93,0.25);border-radius:8px;padding:3px 9px;display:inline-block;margin-bottom:8px;}
+.sim-stat-badge{font-size:10.5px;font-weight:700;color:var(--pink-t);background:rgba(190,24,93,0.1);border:1px solid rgba(190,24,93,0.25);border-radius:8px;padding:3px 9px;display:inline-block;margin-bottom:8px;}
 .sim-q{border-top:1px dashed var(--border);padding-top:10px;margin-top:10px;}
 .sim-q:first-of-type{border-top:none;padding-top:0;margin-top:0;}
 .sim-q-text{font-size:12.5px;font-weight:700;color:var(--text);line-height:1.5;margin-bottom:8px;}
@@ -433,15 +458,15 @@ nav{
 .sim-alt{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text2);line-height:1.5;padding:7px 10px;border-radius:10px;border:1.5px solid var(--border2);cursor:pointer;background:var(--panel2);}
 .sim-alt:hover{border-color:var(--pink);}
 .sim-alt.sim-selected{border-color:var(--accent);background:rgba(124,58,237,0.08);}
-.sim-alt.sim-correct{border-color:var(--green);background:rgba(21,128,61,0.1);color:var(--green);font-weight:700;}
-.sim-alt.sim-wrong{border-color:var(--red);background:rgba(220,38,38,0.1);color:var(--red);font-weight:700;}
+.sim-alt.sim-correct{border-color:var(--green);background:rgba(21,128,61,0.1);color:var(--green-t);font-weight:700;}
+.sim-alt.sim-wrong{border-color:var(--red);background:rgba(220,38,38,0.1);color:var(--red-t);font-weight:700;}
 .sim-explain{font-size:11.5px;color:var(--muted);margin-top:6px;padding:8px 10px;background:rgba(0,0,0,0.03);border-radius:8px;line-height:1.5;}
 .sim-score-banner{text-align:center;padding:12px;border-radius:12px;margin-bottom:12px;font-weight:900;font-size:15px;}
-.sim-score-banner.sim-good{background:rgba(21,128,61,0.1);color:var(--green);border:1.5px solid rgba(21,128,61,0.3);}
-.sim-score-banner.sim-bad{background:rgba(220,38,38,0.1);color:var(--red);border:1.5px solid rgba(220,38,38,0.3);}
+.sim-score-banner.sim-good{background:rgba(21,128,61,0.1);color:var(--green-t);border:1.5px solid rgba(21,128,61,0.3);}
+.sim-score-banner.sim-bad{background:rgba(220,38,38,0.1);color:var(--red-t);border:1.5px solid rgba(220,38,38,0.3);}
 .sim-disclaimer{font-size:9.5px;color:var(--muted);margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);display:flex;align-items:center;gap:5px;}
 .sim-q-flagged{opacity:0.65;}
-.sim-flagged-banner{font-size:11px;font-weight:800;color:var(--red);background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.25);border-radius:8px;padding:7px 10px;margin-top:8px;display:flex;align-items:center;gap:6px;}
+.sim-flagged-banner{font-size:11px;font-weight:800;color:var(--red-t);background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.25);border-radius:8px;padding:7px 10px;margin-top:8px;display:flex;align-items:center;gap:6px;}
 
 /* ===== BANCO DE ERROS ===== */
 .err-item{background:var(--panel);border:1.5px solid var(--border2);border-radius:14px;padding:14px;margin-bottom:12px;}
@@ -452,7 +477,7 @@ nav{
 .err-breadcrumb b{color:var(--text2);}
 .err-date{font-size:9.5px;color:var(--muted);font-weight:600;}
 .err-q-text{font-size:13px;font-weight:800;color:var(--text);line-height:1.5;margin-bottom:10px;}
-.err-skipped{font-size:11px;color:var(--orange);margin-top:8px;font-weight:700;}
+.err-skipped{font-size:11px;color:var(--orange-t);margin-top:8px;font-weight:700;}
 
 /* ===== SIMULADO GERAL ===== */
 /* Arvore dobravel: com 300+ assuntos, a lista aberta obrigava a rolar dezenas de
@@ -549,9 +574,9 @@ nav{
   overflow:hidden;text-overflow:ellipsis;max-width:38%;}
 .ed-vinc-badge{font-size:8.5px;font-weight:900;color:var(--accent);background:rgba(108,71,255,0.14);
   border-radius:999px;padding:2px 7px;flex-shrink:0;}
-.ed-vinc-badge-chefao{color:var(--orange);background:rgba(234,88,12,0.14);}
+.ed-vinc-badge-chefao{color:var(--orange-t);background:rgba(234,88,12,0.14);}
 .ed-vinc-chefao .ed-vinc-nome{color:var(--text);}
-.ed-prog{font-size:9.5px;font-weight:900;color:var(--orange);background:rgba(234,88,12,0.12);
+.ed-prog{font-size:9.5px;font-weight:900;color:var(--orange-t);background:rgba(234,88,12,0.12);
   border-radius:999px;padding:2px 7px;flex-shrink:0;font-variant-numeric:tabular-nums;}
 .ed-vinc-vazio{padding:14px;text-align:center;color:var(--muted);font-weight:700;}
 .ed-vinc-criar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
@@ -595,9 +620,9 @@ nav{
 .sg-hist-row:last-child{margin-bottom:0;}
 .sg-timer-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--panel);border:1.5px solid var(--border2);border-radius:14px;padding:12px 16px;box-shadow:var(--shadow2);}
 .sg-timer-display{font-size:18px;font-weight:900;color:var(--accent);font-variant-numeric:tabular-nums;}
-.sg-timer-display.sg-timer-warn{color:var(--red);animation:pulse 1s infinite;}
+.sg-timer-display.sg-timer-warn{color:var(--red-t);animation:pulse 1s infinite;}
 .sg-progress{font-size:11px;font-weight:700;color:var(--muted);}
-.sg-q-tag{font-size:9.5px;font-weight:800;color:var(--pink);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;}
+.sg-q-tag{font-size:9.5px;font-weight:800;color:var(--pink-t);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;}
 .sg-breakdown{display:flex;flex-direction:column;gap:6px;margin-bottom:4px;}
 .sg-breakdown-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);font-size:11.5px;color:var(--text2);}
 @media(max-width:600px){
@@ -616,7 +641,7 @@ nav{
 .rd-ai-list li::before{content:'';position:absolute;left:0;top:7px;width:5px;height:5px;border-radius:50%;}
 .rd-ai-erros{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px;align-items:start;}
 .rd-ai-erro{background:var(--bg2);border-radius:10px;padding:8px 10px;font-size:11.5px;}
-.rd-ai-erro-trecho{color:var(--red);font-weight:700;font-style:italic;}
+.rd-ai-erro-trecho{color:var(--red-t);font-weight:700;font-style:italic;}
 .rd-ai-erro-sugestao{color:var(--text2);margin-top:3px;}
 .rd-criterios-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-bottom:12px;}
 .rd-criterio{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;}
@@ -673,7 +698,7 @@ nav{
 .resumo-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
 .resumo-title{font-size:11px;font-weight:900;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;}
 .resumo-actions{display:flex;gap:6px;flex-wrap:wrap;}
-.resumo-body{font-size:12.5px;color:var(--text2);line-height:1.7;white-space:pre-line;max-height:340px;overflow-y:auto;padding-right:4px;}
+.resumo-body{font-size:12.5px;color:var(--text2);line-height:1.7;white-space:pre-line;max-height:340px;overflow-y:auto;padding-right:4px;max-width:68ch;}
 .resumo-disclaimer{font-size:9.5px;color:var(--muted);margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);display:flex;align-items:center;gap:5px;}
 .resumo-empty{font-size:12px;color:var(--muted);text-align:center;padding:2px 0 10px;}
 .resumo-drop{display:block;border:1.5px dashed rgba(139,92,246,0.4);border-radius:12px;padding:18px 12px;text-align:center;cursor:pointer;transition:all 0.2s;}
@@ -760,15 +785,15 @@ nav{
 .rev-name{font-size:13px;font-weight:800;color:var(--text);}
 .rev-sub{font-size:10px;color:var(--muted);margin-top:3px;}
 .rev-cd{font-size:12px;font-weight:900;min-width:70px;text-align:right;}
-.cd-over{color:var(--red);}
-.cd-today{color:var(--orange);}
-.cd-ok{color:var(--green);}
-.after-exam-tag{background:rgba(234,88,12,0.1);color:var(--orange);border:1.5px solid rgba(234,88,12,0.25);border-radius:8px;font-size:9px;padding:2px 7px;font-weight:800;}
+.cd-over{color:var(--red-t);}
+.cd-today{color:var(--orange-t);}
+.cd-ok{color:var(--green-t);}
+.after-exam-tag{background:rgba(234,88,12,0.1);color:var(--orange-t);border:1.5px solid rgba(234,88,12,0.25);border-radius:8px;font-size:9px;padding:2px 7px;font-weight:800;}
 .rev-num-badge{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex-shrink:0;}
-.rn-1{background:rgba(22,163,74,0.15);color:var(--green);border:1.5px solid rgba(22,163,74,0.35);}
-.rn-2{background:rgba(6,182,212,0.15);color:var(--cyan);border:1.5px solid rgba(6,182,212,0.35);}
-.rn-3{background:rgba(234,88,12,0.15);color:var(--orange);border:1.5px solid rgba(234,88,12,0.35);}
-.rn-4{background:rgba(220,38,38,0.15);color:var(--red);border:1.5px solid rgba(220,38,38,0.35);}
+.rn-1{background:rgba(22,163,74,0.15);color:var(--green-t);border:1.5px solid rgba(22,163,74,0.35);}
+.rn-2{background:rgba(6,182,212,0.15);color:var(--cyan-t);border:1.5px solid rgba(6,182,212,0.35);}
+.rn-3{background:rgba(234,88,12,0.15);color:var(--orange-t);border:1.5px solid rgba(234,88,12,0.35);}
+.rn-4{background:rgba(220,38,38,0.15);color:var(--red-t);border:1.5px solid rgba(220,38,38,0.35);}
 
 /* ===== FILTER CHIPS ===== */
 .filter-row{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:16px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
@@ -855,12 +880,12 @@ nav{
 /* chip do motivo na fila de hoje */
 .fila-chip{font-size:9.5px;font-weight:900;border-radius:999px;padding:3px 9px;
   border:1px solid;white-space:nowrap;flex-shrink:0}
-.fila-rev{background:rgba(220,38,38,0.1);color:var(--red);border-color:rgba(220,38,38,0.3)}
+.fila-rev{background:rgba(220,38,38,0.1);color:var(--red-t);border-color:rgba(220,38,38,0.3)}
 .fila-novo{background:rgba(108,71,255,0.1);color:var(--accent);border-color:var(--border2)}
-.fila-fraco{background:rgba(234,88,12,0.1);color:var(--orange);border-color:rgba(234,88,12,0.3)}
+.fila-fraco{background:rgba(234,88,12,0.1);color:var(--orange-t);border-color:rgba(234,88,12,0.3)}
 /* bloco de cima do cartao de divida */
 .div-topo{display:flex;align-items:center;gap:13px;margin-bottom:10px}
-.div-num{font-size:33px;font-weight:900;line-height:.9;color:var(--red)}
+.div-num{font-size:33px;font-weight:900;line-height:.9;color:var(--red-t)}
 .div-txt{font-size:10.5px;font-weight:800;color:var(--muted);line-height:1.35;padding-bottom:3px}
 .div-txt b{color:var(--text2);display:block;font-size:11.5px}
 .div-barra{display:flex;height:11px;border-radius:999px;overflow:hidden;margin-bottom:7px;background:var(--bg2)}
@@ -1101,7 +1126,7 @@ nav{
 .conq-progress-bar{height:8px;border-radius:4px;background:var(--bg2);overflow:hidden;margin-bottom:8px;}
 .conq-progress-fill{height:100%;border-radius:4px;background:var(--accent);transition:width 0.5s ease;}
 .conq-next-text{font-size:11px;color:var(--text2);font-weight:600;}
-.conq-maxed{color:var(--gold);font-weight:800;}
+.conq-maxed{color:var(--gold-t);font-weight:800;}
 .conq-card-desc{font-size:10.5px;color:var(--muted);font-weight:600;margin:2px 0 4px;line-height:1.4;}
 .conq-rarity-badge{font-size:8.5px;font-weight:900;text-transform:uppercase;letter-spacing:0.5px;color:var(--rarity-color,var(--muted));margin-top:3px;}
 .conq-diff-badge{position:absolute;top:14px;right:14px;font-size:8.5px;font-weight:900;text-transform:uppercase;letter-spacing:0.4px;opacity:0.85;}
@@ -1146,8 +1171,8 @@ nav{
 .mb-rev-dots{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;}
 .mb-dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;cursor:pointer;transition:transform 0.2s;border:2px solid transparent;}
 .mb-dot:hover{transform:scale(1.25);}
-.mbd-overdue{background:rgba(220,38,38,0.12);color:var(--red);border-color:rgba(220,38,38,0.4);animation:pulse 1.5s infinite;}
-.mbd-pending{background:rgba(234,88,12,0.1);color:var(--orange);border-color:rgba(234,88,12,0.3);}
+.mbd-overdue{background:rgba(220,38,38,0.12);color:var(--red-t);border-color:rgba(220,38,38,0.4);animation:pulse 1.5s infinite;}
+.mbd-pending{background:rgba(234,88,12,0.1);color:var(--orange-t);border-color:rgba(234,88,12,0.3);}
 .mbd-done{background:rgba(22,163,74,0.08);color:rgba(22,163,74,0.5);border-color:rgba(22,163,74,0.2);}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.5;}}
 .mb-progbar{height:4px;background:var(--bg2);border-radius:2px;overflow:hidden;margin-top:8px;}
@@ -1161,7 +1186,7 @@ nav{
 .modal-box::-webkit-scrollbar-thumb{background:var(--accent);border-radius:2px;}
 .modal-title{font-size:17px;font-weight:900;color:var(--text);display:flex;align-items:center;gap:8px;margin-bottom:20px;}
 .modal-title button{margin-left:auto;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;}
-.modal-title button:hover{color:var(--red);}
+.modal-title button:hover{color:var(--red-t);}
 
 /* ===== TOAST ===== */
 #toast{position:fixed;top:72px;right:16px;z-index:600;color:#fff;padding:12px 20px;border-radius:14px;font-size:13px;font-weight:800;display:none;box-shadow:0 8px 30px rgba(0,0,0,0.15);max-width:280px;animation:toastIn 0.3s ease;}
@@ -1176,7 +1201,7 @@ nav{
 .rank-pos{font-size:16px;font-weight:900;min-width:28px;text-align:center;}
 
 /* ===== TIME CHIP ===== */
-.time-chip{background:rgba(6,182,212,0.1);border:1.5px solid rgba(6,182,212,0.25);color:var(--cyan);border-radius:8px;padding:2px 8px;font-size:10px;font-weight:800;}
+.time-chip{background:rgba(6,182,212,0.1);border:1.5px solid rgba(6,182,212,0.25);color:var(--cyan-t);border-radius:8px;padding:2px 8px;font-size:10px;font-weight:800;}
 
 /* ===== EMPTY ===== */
 .empty{text-align:center;padding:40px 20px;color:var(--muted);}
@@ -1228,9 +1253,18 @@ nav{
 .rep-eixo-chip{font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.5px;}
 
 /* Seções do tema */
-.rep-secoes{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--border);}
-.rep-secao{padding:18px 20px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
-.rep-secao:nth-child(even){border-right:none;}
+/* Duas colunas só quando cada uma ainda cabe uma linha de leitura decente.
+   Medido: a 1280px de janela a coluna dava 39 caracteres por linha e a 1440px,
+   48 — abaixo dos 60-75 confortáveis, e quebra demais cansa tanto quanto linha
+   longa demais. Uma coluna com o limite de 68ch entrega 68 em qualquer largura.
+   Acima de 1700px cabem as duas sem apertar (a 1600 a coluna ainda dava 58). */
+.rep-secoes{display:grid;grid-template-columns:1fr;gap:0;border-top:1px solid var(--border);}
+.rep-secao{padding:18px 20px;border-bottom:1px solid var(--border);}
+@media(min-width:1700px){
+  .rep-secoes{grid-template-columns:1fr 1fr;}
+  .rep-secao{border-right:1px solid var(--border);}
+  .rep-secao:nth-child(even){border-right:none;}
+}
 .rep-secao-dominada{background:rgba(34,197,94,0.045);}
 .rep-dominado-btn{font-size:15px;cursor:pointer;opacity:.5;transition:opacity .15s;line-height:1;}
 .rep-dominado-btn:hover{opacity:.85;}
@@ -1243,7 +1277,11 @@ nav{
    tela — sem isso, um único parágrafo assim empurra a página inteira de largura no
    celular e o navegador reduz o zoom da página toda pra caber, deixando tudo minúsculo
    (o "fica ruim de ler quando amplia" relatado). */
-.rep-secao-body{font-size:13px;color:var(--text2);line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;}
+.rep-secao-body{font-size:13px;color:var(--text2);line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;
+  /* 160 caracteres por linha a 1920px (medido): o olho perde a linha ao voltar,
+     e é isso que cansa em sessão longa. 68ch põe na faixa confortável de 60-75
+     sem encolher a caixa — o texto para antes da borda, o cartão continua igual. */
+  max-width:68ch;}
 .rep-secao-edit{width:100%;min-height:100px;border:1.5px solid var(--border);border-radius:10px;padding:10px;font-size:13px;font-family:inherit;line-height:1.7;resize:vertical;outline:none;background:var(--panel2);color:var(--text);transition:border-color .2s;}
 .rep-secao-edit:focus{border-color:var(--accent);}
 
@@ -1251,9 +1289,9 @@ nav{
 .rep-secao-rep{grid-column:1/-1;border-right:none;border-bottom:none;}
 .rep-tags-flow{display:flex;flex-wrap:wrap;gap:6px;}
 .rep-tag{display:inline-block;background:rgba(108,71,255,0.08);color:var(--accent);border:1px solid rgba(108,71,255,0.2);border-radius:20px;padding:3px 9px;font-size:10.5px;font-weight:700;margin:0;cursor:default;white-space:nowrap;}
-.rep-tag.rep-tag-lei{background:rgba(22,163,74,0.08);color:var(--green);border-color:rgba(22,163,74,0.2);}
-.rep-tag.rep-tag-autor{background:rgba(234,88,12,0.08);color:var(--orange);border-color:rgba(234,88,12,0.2);}
-.rep-tag.rep-tag-dado{background:rgba(6,182,212,0.08);color:var(--cyan);border-color:rgba(6,182,212,0.2);}
+.rep-tag.rep-tag-lei{background:rgba(22,163,74,0.08);color:var(--green-t);border-color:rgba(22,163,74,0.2);}
+.rep-tag.rep-tag-autor{background:rgba(234,88,12,0.08);color:var(--orange-t);border-color:rgba(234,88,12,0.2);}
+.rep-tag.rep-tag-dado{background:rgba(6,182,212,0.08);color:var(--cyan-t);border-color:rgba(6,182,212,0.2);}
 .rep-tag.rep-tag-conceito{background:rgba(139,92,246,0.08);color:#7c3aed;border-color:rgba(139,92,246,0.2);}
 
 /* Completude */
@@ -1275,7 +1313,7 @@ nav{
 .rd-topic-item.rd-topic-empty{opacity:0.55;}
 .rd-topic-icon{font-size:15px;flex-shrink:0;}
 .rd-topic-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 7px;border-radius:8px;transition:all .15s;opacity:0.5;}
-.rd-topic-del:hover{background:rgba(220,38,38,0.1);color:var(--red);opacity:1;}
+.rd-topic-del:hover{background:rgba(220,38,38,0.1);color:var(--red-t);opacity:1;}
 .rd-topic-item:hover{background:var(--bg2);border-color:var(--border);}
 .rd-topic-item.active{background:linear-gradient(135deg,rgba(108,71,255,0.08),rgba(79,70,229,0.04));border-color:rgba(108,71,255,0.3);}
 .rd-topic-name{font-size:13px;font-weight:800;color:var(--text);flex:1;}
@@ -1297,8 +1335,8 @@ nav{
 .rd-card-title{font-size:14px;font-weight:900;color:var(--text);}
 .rd-card-date{font-size:11px;color:var(--muted);font-weight:600;}
 .rd-npd-badge{font-size:18px;font-weight:900;padding:6px 14px;border-radius:12px;text-align:center;}
-.rd-npd-badge.aprovado{background:rgba(22,163,74,0.1);color:var(--green);}
-.rd-npd-badge.reprovado{background:rgba(220,38,38,0.1);color:var(--red);}
+.rd-npd-badge.aprovado{background:rgba(22,163,74,0.1);color:var(--green-t);}
+.rd-npd-badge.reprovado{background:rgba(220,38,38,0.1);color:var(--red-t);}
 .rd-npd-badge.rascunho{background:var(--bg2);color:var(--muted);}
 
 /* Checklist competências */
@@ -1355,9 +1393,9 @@ nav{
 .fc-mb-name{font-size:12px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .fc-mb-count{font-size:10px;color:var(--muted);font-weight:600;margin-top:1px;}
 .fc-mb-badge{font-size:9px;font-weight:900;padding:2px 6px;border-radius:20px;flex-shrink:0;}
-.fc-due{background:rgba(234,88,12,0.12);color:var(--orange);}
+.fc-due{background:rgba(234,88,12,0.12);color:var(--orange-t);}
 .fc-new{background:rgba(108,71,255,0.1);color:var(--accent);}
-.fc-ok{background:rgba(22,163,74,0.1);color:var(--green);}
+.fc-ok{background:rgba(22,163,74,0.1);color:var(--green-t);}
 
 .fc-sidebar-summary{background:var(--panel);border:1.5px solid var(--border);border-radius:18px;padding:16px 18px;}
 .fc-sidebar-summary-title{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
@@ -1445,9 +1483,9 @@ nav{
 .fc-study-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:10px;}
 .fc-study-counter{font-size:12px;font-weight:800;color:var(--muted);}
 .fc-study-actions{display:flex;gap:8px;}
-.fc-btn-wrong{background:rgba(220,38,38,0.1);color:var(--red);border:1.5px solid rgba(220,38,38,0.2);border-radius:10px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;transition:all .15s;}
+.fc-btn-wrong{background:rgba(220,38,38,0.1);color:var(--red-t);border:1.5px solid rgba(220,38,38,0.2);border-radius:10px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;transition:all .15s;}
 .fc-btn-wrong:hover{background:rgba(220,38,38,0.2);}
-.fc-btn-right{background:rgba(22,163,74,0.1);color:var(--green);border:1.5px solid rgba(22,163,74,0.2);border-radius:10px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;transition:all .15s;}
+.fc-btn-right{background:rgba(22,163,74,0.1);color:var(--green-t);border:1.5px solid rgba(22,163,74,0.2);border-radius:10px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;transition:all .15s;}
 .fc-btn-right:hover{background:rgba(22,163,74,0.2);}
 .fc-btn-skip{background:var(--bg2);color:var(--muted);border:1.5px solid var(--border);border-radius:10px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer;}
 
@@ -1517,10 +1555,10 @@ nav{
 /* Confidence buttons no modo estudo */
 .fc-conf-row{display:flex;gap:6px;justify-content:center;margin-top:14px;flex-wrap:wrap;}
 .fc-conf-btn{padding:8px 14px;border-radius:10px;border:2px solid transparent;font-size:11px;font-weight:900;cursor:pointer;transition:all .15s;}
-.fc-conf-1{background:rgba(220,38,38,0.1);color:var(--red);border-color:rgba(220,38,38,0.2);}
-.fc-conf-2{background:rgba(234,88,12,0.1);color:var(--orange);border-color:rgba(234,88,12,0.2);}
+.fc-conf-1{background:rgba(220,38,38,0.1);color:var(--red-t);border-color:rgba(220,38,38,0.2);}
+.fc-conf-2{background:rgba(234,88,12,0.1);color:var(--orange-t);border-color:rgba(234,88,12,0.2);}
 .fc-conf-3{background:rgba(245,158,11,0.1);color:#d97706;border-color:rgba(245,158,11,0.2);}
-.fc-conf-4{background:rgba(22,163,74,0.1);color:var(--green);border-color:rgba(22,163,74,0.2);}
+.fc-conf-4{background:rgba(22,163,74,0.1);color:var(--green-t);border-color:rgba(22,163,74,0.2);}
 .fc-conf-btn:hover{transform:scale(1.06);}
 
 /* MODO toggle */
@@ -1567,10 +1605,10 @@ nav{
 .edital-date-chip{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:var(--text2);}
 .edital-actions{display:flex;gap:6px;}
 .ed-status-previsto{background:rgba(107,114,128,0.12);color:#374151;}
-.ed-status-inscricoes{background:rgba(234,88,12,0.12);color:var(--orange);}
-.ed-status-inscrito{background:rgba(22,163,74,0.12);color:var(--green);}
+.ed-status-inscricoes{background:rgba(234,88,12,0.12);color:var(--orange-t);}
+.ed-status-inscrito{background:rgba(22,163,74,0.12);color:var(--green-t);}
 .ed-status-aguardando{background:rgba(108,71,255,0.12);color:var(--accent);}
-.ed-status-realizado{background:rgba(6,182,212,0.12);color:var(--cyan);}
+.ed-status-realizado{background:rgba(6,182,212,0.12);color:var(--cyan-t);}
 .edital-urgente{animation:redPulse 2s infinite;}
 .ed-counter-pill{background:var(--panel);border:1.5px solid var(--border);border-radius:12px;padding:8px 14px;font-size:11px;font-weight:800;color:var(--text2);display:flex;align-items:center;gap:6px;}
 
@@ -1587,8 +1625,8 @@ nav{
 .plan-item-text{font-size:11px;font-weight:700;color:var(--text);line-height:1.4;flex:1;}
 .plan-item-sub{font-size:9px;color:var(--muted);margin-top:2px;font-weight:600;}
 .plan-tag{font-size:9px;font-weight:900;padding:1px 6px;border-radius:20px;flex-shrink:0;}
-.plan-tag-new{background:rgba(220,38,38,0.1);color:var(--red);}
-.plan-tag-pend{background:rgba(234,88,12,0.1);color:var(--orange);}
+.plan-tag-new{background:rgba(220,38,38,0.1);color:var(--red-t);}
+.plan-tag-pend{background:rgba(234,88,12,0.1);color:var(--orange-t);}
 .plan-add-btn{background:rgba(108,71,255,0.08);border:1.5px dashed rgba(108,71,255,0.3);border-radius:8px;width:26px;height:26px;cursor:pointer;font-size:16px;color:var(--accent);display:flex;align-items:center;justify-content:center;transition:all 0.15s;flex-shrink:0;}
 .plan-add-btn:hover{background:rgba(108,71,255,0.15);border-color:var(--accent);}
 
@@ -2297,14 +2335,14 @@ nav{
 .sala-chat-msgs{flex:1;overflow-y:auto;padding:9px 10px;display:flex;flex-direction:column;gap:7px;}
 .sala-chat-msg{font-size:12px;line-height:1.42;word-break:break-word;}
 .sala-chat-msg .quem{font-weight:800;color:var(--accent);}
-.sala-chat-msg.propria .quem{color:var(--green);}
+.sala-chat-msg.propria .quem{color:var(--green-t);}
 .sala-chat-msg .hora{font-size:9.5px;color:var(--muted);margin-left:5px;}
 .sala-chat-vazio{color:var(--muted);font-size:11.5px;text-align:center;margin:auto;padding:14px;line-height:1.5;}
 .sala-chat-forma{display:flex;gap:6px;padding:8px;border-top:1.5px solid var(--border2);flex-shrink:0;}
 .sala-chat-inp{flex:1;min-width:0;padding:8px 10px;border-radius:9px;border:1.5px solid var(--border2);
   background:var(--panel2);color:var(--text);font-family:inherit;font-size:12px;}
 .sala-chat-btn{width:36px;border-radius:9px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;flex-shrink:0;}
-.sala-chat-aviso{padding:6px 10px;font-size:10px;color:var(--orange);border-bottom:1.5px solid var(--border2);line-height:1.4;}
+.sala-chat-aviso{padding:6px 10px;font-size:10px;color:var(--orange-t);border-bottom:1.5px solid var(--border2);line-height:1.4;}
 @media(max-width:1000px){
   .sala-mapa-wrap{grid-template-columns:1fr;}
   .sala-chat{height:340px;max-height:none;}
@@ -2573,14 +2611,14 @@ nav{
 .loading-title{font-size:16px;font-weight:900;background:linear-gradient(135deg,var(--accent),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
 .loading-msg{font-size:12px;color:var(--muted);font-weight:600;}
 .loading-error{text-align:center;margin-top:4px;}
-.loading-error-msg{font-size:13px;color:var(--red);font-weight:700;}
+.loading-error-msg{font-size:13px;color:var(--red-t);font-weight:700;}
 .btn-retry{margin-top:12px;padding:10px 24px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-md);font-size:13px;font-weight:700;cursor:pointer;}
 
 .auth-brand{max-width:340px;width:90%;gap:14px;}
 .auth-tabs{display:flex;gap:4px;background:var(--bg2);border-radius:10px;padding:3px;width:100%;}
 .auth-tab{flex:1;background:none;border:none;color:var(--muted);font-size:12px;font-weight:800;padding:9px;border-radius:8px;cursor:pointer;transition:all .15s;letter-spacing:0.3px;}
 .auth-tab.active{background:var(--accent);color:#fff;}
-.auth-error{display:none;font-size:12px;color:var(--red);font-weight:700;text-align:center;width:100%;line-height:1.4;}
+.auth-error{display:none;font-size:12px;color:var(--red-t);font-weight:700;text-align:center;width:100%;line-height:1.4;}
 .auth-divider{width:100%;text-align:center;font-size:10px;color:var(--muted);font-weight:800;letter-spacing:0.5px;position:relative;}
 .auth-forgot{background:none;border:none;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;text-decoration:underline;padding:2px;}
 </style>
@@ -4047,7 +4085,7 @@ function abrirDetalhesBackup(){
   const st=backupEstado.estado,ultima=backupEstado.ultima;
   let corpo='';
   if(st==='erro'){
-    corpo=`<p style="color:var(--red);font-weight:700;margin:0 0 10px">O backup automático não está funcionando.</p>
+    corpo=`<p style="color:var(--red-t);font-weight:700;margin:0 0 10px">O backup automático não está funcionando.</p>
       <p style="margin:0 0 10px">Seus dados normais continuam sendo salvos — o que falhou foi a
       <b>cópia extra de segurança</b>. Quase sempre é permissão: as regras do Firebase precisam
       liberar os caminhos <code>vdn_v1_backups</code> e <code>vdn_v1_backupMeta</code> dentro de
@@ -4070,7 +4108,7 @@ function abrirDetalhesBackup(){
     const dias=daysDiff(ultima,todayStr());
     const hora=backupEstado.ts?new Date(backupEstado.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'';
     corpo=`<p style="margin:0 0 10px">Última cópia completa: <b>${fmtDateBR(ultima)}</b>${hora?` às ${hora}`:''}
-      ${dias<=0?' <span style="color:var(--green);font-weight:700">(hoje)</span>':dias>3?` <span style="color:var(--red);font-weight:700">(há ${dias} dias)</span>`:` <span style="color:var(--orange);font-weight:700">(há ${dias} dia${dias>1?'s':''})</span>`}</p>`;
+      ${dias<=0?' <span style="color:var(--green-t);font-weight:700">(hoje)</span>':dias>3?` <span style="color:var(--red-t);font-weight:700">(há ${dias} dias)</span>`:` <span style="color:var(--orange-t);font-weight:700">(há ${dias} dia${dias>1?'s':''})</span>`}</p>`;
   }
   openModal('🛡️ Cópia de segurança',`
     ${corpo}
@@ -4558,9 +4596,9 @@ function renderAdminResults(matches,totalMatches,totalPages){
       return daysDiff(todayStr(),addDays(d.lastPaymentAt,days));
     })();
     let statusHtml;
-    if(full&&!d.lastPaymentAt)statusHtml='<span style="color:var(--green)">Acesso completo permanente</span>';
-    else if(left!==null&&left>=0)statusHtml=`<span style="color:var(--green)">${(PIX_PLANS[d.planType]||PIX_PLANS.mensal).label} — ${left} dia${left===1?'':'s'} restante${left===1?'':'s'}</span>`;
-    else if(left!==null)statusHtml=`<span style="color:var(--red)">Vencido há ${Math.abs(left)} dia${Math.abs(left)===1?'':'s'}</span>`;
+    if(full&&!d.lastPaymentAt)statusHtml='<span style="color:var(--green-t)">Acesso completo permanente</span>';
+    else if(left!==null&&left>=0)statusHtml=`<span style="color:var(--green-t)">${(PIX_PLANS[d.planType]||PIX_PLANS.mensal).label} — ${left} dia${left===1?'':'s'} restante${left===1?'':'s'}</span>`;
+    else if(left!==null)statusHtml=`<span style="color:var(--red-t)">Vencido há ${Math.abs(left)} dia${Math.abs(left)===1?'':'s'}</span>`;
     else statusHtml='<span style="color:var(--muted)">Trial, sem pagamento ainda</span>';
     const email=d.accountEmail||'';
     return `<div class="admin-result-card">
@@ -4886,8 +4924,8 @@ function renderMap(){
       <div class="territory-stats">
         <div class="t-stat"><div class="tv" style="color:${k.color}">${topics.length}</div><div class="tl">⚔️ Chefões</div></div>
         <div class="t-stat"><div class="tv" style="color:var(--accent)">${subs.length}</div><div class="tl">👾 Miniboss</div></div>
-        <div class="t-stat"><div class="tv" style="color:${pending>0?'var(--red)':'var(--green)'}">${pending}</div><div class="tl">🔔 Atrasadas</div></div>
-        <div class="t-stat"><div class="tv" style="color:var(--cyan)">${fmtTime(time)}</div><div class="tl">⏱️ Estudado</div></div>
+        <div class="t-stat"><div class="tv" style="color:${pending>0?'var(--red-t)':'var(--green-t)'}">${pending}</div><div class="tl">🔔 Atrasadas</div></div>
+        <div class="t-stat"><div class="tv" style="color:var(--cyan-t)">${fmtTime(time)}</div><div class="tl">⏱️ Estudado</div></div>
       </div>
       <div class="territory-progress">
         <div class="tp-label"><span>Progresso</span><span style="color:${k.color}">${pct}%</span></div>
@@ -5811,9 +5849,9 @@ function renderTopics(){
         <div class="topic-meta">
           <span>👾 ${subs.length}</span>
           <span class="time-chip"><i class="fa fa-clock"></i> ${fmtTime(studied)}</span>
-          ${pending>0?`<span style="background:rgba(220,38,38,0.1);color:var(--red);border:1.5px solid rgba(220,38,38,0.3);border-radius:8px;padding:2px 7px;font-size:9px;font-weight:900">${pending} atrasadas!</span>`:''}
+          ${pending>0?`<span style="background:rgba(220,38,38,0.1);color:var(--red-t);border:1.5px solid rgba(220,38,38,0.3);border-radius:8px;padding:2px 7px;font-size:9px;font-weight:900">${pending} atrasadas!</span>`:''}
         </div>
-        <button class="btn btn-sm" title="Puxa para HOJE a revisão de todos os minibosses já estudados deste chefão. Quem tinha revisão marcada para a frente é antecipado; quem não tinha ganha uma. Não cria revisão para miniboss que você ainda não estudou." style="background:linear-gradient(135deg,rgba(108,71,255,0.12),rgba(79,70,229,0.12));border:1.5px solid var(--border2);color:var(--accent);font-size:10px" onclick="event.stopPropagation();intensiveTraining('${topic.id}')"><i class="fa fa-fire" style="color:var(--orange)"></i> Revisar hoje</button>
+        <button class="btn btn-sm" title="Puxa para HOJE a revisão de todos os minibosses já estudados deste chefão. Quem tinha revisão marcada para a frente é antecipado; quem não tinha ganha uma. Não cria revisão para miniboss que você ainda não estudou." style="background:linear-gradient(135deg,rgba(108,71,255,0.12),rgba(79,70,229,0.12));border:1.5px solid var(--border2);color:var(--accent);font-size:10px" onclick="event.stopPropagation();intensiveTraining('${topic.id}')"><i class="fa fa-fire" style="color:var(--orange-t)"></i> Revisar hoje</button>
         <button class="btn btn-xs" onclick="event.stopPropagation();renameTopic('${topic.id}')" title="Renomear chefão"><i class="fa fa-pen"></i></button>
         <button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteTopic('${topic.id}')"><i class="fa fa-trash"></i></button>
         <i class="fa fa-chevron-down" style="color:var(--muted);font-size:11px;transition:transform 0.2s" id="chev-${topic.id}"></i>
@@ -5878,18 +5916,18 @@ function subItemHTML(s,topicId){
   const revStatusBadge=revLocked
     ? `<span style="background:rgba(107,114,128,0.1);color:var(--muted);border:1.5px solid var(--border);border-radius:8px;padding:2px 8px;font-size:9px;font-weight:800;display:inline-flex;align-items:center;gap:4px"><i class="fa fa-lock" style="font-size:8px"></i> REVISÕES BLOQUEADAS</span>`
     : (s.revMastered
-        ? `<span style="background:rgba(21,128,61,0.1);color:var(--green);border:1.5px solid rgba(21,128,61,0.3);border-radius:8px;padding:2px 7px;font-size:9px;font-weight:900">🏆 Dominado</span>`
+        ? `<span style="background:rgba(21,128,61,0.1);color:var(--green-t);border:1.5px solid rgba(21,128,61,0.3);border-radius:8px;padding:2px 7px;font-size:9px;font-weight:900">🏆 Dominado</span>`
         : overdueCount>0
-        ? `<span style="background:rgba(220,38,38,0.1);color:var(--red);border:1.5px solid rgba(220,38,38,0.3);border-radius:8px;padding:2px 7px;font-size:9px;font-weight:900">${overdueCount} atrasada${overdueCount>1?'s':''}!</span>`
+        ? `<span style="background:rgba(220,38,38,0.1);color:var(--red-t);border:1.5px solid rgba(220,38,38,0.3);border-radius:8px;padding:2px 7px;font-size:9px;font-weight:900">${overdueCount} atrasada${overdueCount>1?'s':''}!</span>`
         : (revs.length>0
-            ? `<span style="background:rgba(22,163,74,0.08);color:var(--green);border:1.5px solid rgba(22,163,74,0.25);border-radius:8px;padding:2px 7px;font-size:9px;font-weight:800">${done}/${revs.length} revisões</span>`
+            ? `<span style="background:rgba(22,163,74,0.08);color:var(--green-t);border:1.5px solid rgba(22,163,74,0.25);border-radius:8px;padding:2px 7px;font-size:9px;font-weight:800">${done}/${revs.length} revisões</span>`
             : ''));
 
   return`<div class="sub-item${s.studied?' sub-studied':''}" id="si-${s.id}">
     <div class="sub-row">
-      <span class="sub-name" style="cursor:pointer" onclick="closeTimerPanel('${s.id}')" title="Clique pra fechar o painel de estudo desse miniboss, se estiver aberto"><i class="fa fa-user-ninja" style="color:${s.priority===100?'var(--red)':s.priority===70?'var(--orange)':'var(--green)'}"></i> ${s.name}</span>
+      <span class="sub-name" style="cursor:pointer" onclick="closeTimerPanel('${s.id}')" title="Clique pra fechar o painel de estudo desse miniboss, se estiver aberto"><i class="fa fa-user-ninja" style="color:${s.priority===100?'var(--red-t)':s.priority===70?'var(--orange-t)':'var(--green-t)'}"></i> ${s.name}</span>
       <span class="pri-badge ${pCls}" style="cursor:pointer" onclick="cyclePriority('${s.id}','${topicId}')" title="Alterar → ${nextLbl}">${pLbl} ✎</span>
-      ${(running||time>0)?`<span class="time-chip" id="tc-${s.id}" title="Tempo desta sessão (ainda não salvo)">${running?'<i class="fa fa-circle" style="color:var(--red);font-size:6px;animation:pulse 1s infinite"></i> ':'<i class="fa fa-clock"></i> '}${fmtTime(displayTime)}</span>`:''}
+      ${(running||time>0)?`<span class="time-chip" id="tc-${s.id}" title="Tempo desta sessão (ainda não salvo)">${running?'<i class="fa fa-circle" style="color:var(--red-t);font-size:6px;animation:pulse 1s infinite"></i> ':'<i class="fa fa-clock"></i> '}${fmtTime(displayTime)}</span>`:''}
       <span class="total-time-chip" title="Tempo total estudado (salvo)"><i class="fa fa-layer-group"></i> ${fmtTime(totalTime)}</span>
       ${s.studied?'<span class="studied-badge">✓ ESTUDADO</span>':'<span class="unstudy-badge">NÃO ESTUDADO</span>'}
       ${revStatusBadge}
@@ -6212,7 +6250,7 @@ function fontesHTML(fontes,consultas,diag){
   // estourada ou modelo que simplesmente decidiu não buscar.
   if(!f.length&&d.length)return`
     <details class="resumo-fontes" open>
-      <summary style="color:var(--red)"><i class="fa fa-triangle-exclamation"></i> Por que não pesquisou na internet</summary>
+      <summary style="color:var(--red-t)"><i class="fa fa-triangle-exclamation"></i> Por que não pesquisou na internet</summary>
       <ol class="resumo-fontes-lista">
         ${d.map(x=>`<li><code>${escapeHtml(x.modelo)}</code> — ${escapeHtml(x.erro)}</li>`).join('')}
       </ol>
@@ -7507,7 +7545,7 @@ function simPanelHTML(s){
       ${linhas.length>1?`<div class="sim-fmt-split">${linhas.map(f=>
         `<span><b style="color:${f.cor}">${f.corrigido}%</b> ${f.lbl} <i>(${f.acertos}/${f.questoes}${f.formato==='certoerrado'?` · bruto ${f.pct}% · saldo ${f.saldo>=0?'+':''}${f.saldo}`:''})</i></span>`).join('')}</div>`:''}`;
     })():''}
-    <div class="sim-empty">Gere questões pra treinar este assunto.${(s.note||'').trim()?' <b style="color:var(--pink)">Vai usar sua anotação como referência.</b>':' <span title="Adicione uma anotação neste miniboss pra deixar as questões mais precisas ao seu recorte de estudo">Sem anotação — a IA vai gerar com base só no nome do assunto.</span>'}${tavilyAtivo()?' <b style="color:var(--accent)">🔎 Vai pesquisar na internet antes de elaborar.</b>':''}</div>
+    <div class="sim-empty">Gere questões pra treinar este assunto.${(s.note||'').trim()?' <b style="color:var(--pink-t)">Vai usar sua anotação como referência.</b>':' <span title="Adicione uma anotação neste miniboss pra deixar as questões mais precisas ao seu recorte de estudo">Sem anotação — a IA vai gerar com base só no nome do assunto.</span>'}${tavilyAtivo()?' <b style="color:var(--accent)">🔎 Vai pesquisar na internet antes de elaborar.</b>':''}</div>
     <div class="sim-config-row">
       <label style="font-size:11px;color:var(--muted);font-weight:700">Formato:</label>
       <select id="sim-fmt-${s.id}" class="inp" style="width:auto;padding:6px 10px">
@@ -8116,7 +8154,7 @@ function simGeralConfigHTML(){
         const pct=h.quantidade?Math.round(h.acertos/h.quantidade*100):0;
         return`<div class="sg-hist-row">
           <div><b>${new Date(h.data).toLocaleDateString('pt-BR')}</b> · ${h.formato==='certoerrado'?'✔️✖️ C/E':'🔤 Múltipla'} · ${h.quantidade} questões · ${h.assuntos.length} assunto(s) · ⏱ ${fmtHMS(h.tempoGastoSec||0)}</div>
-          <div style="color:${pct>=60?'var(--green)':'var(--red)'};font-weight:800">${h.acertos}/${h.quantidade} (${pct}%)</div>
+          <div style="color:${pct>=60?'var(--green-t)':'var(--red-t)'};font-weight:800">${h.acertos}/${h.quantidade} (${pct}%)</div>
         </div>`;
       }).join('')}
     </div>`;
@@ -8554,7 +8592,7 @@ function simGeralResultsHTML(){
         const bp=b.total?Math.round(b.acertos/b.total*100):0;
         return`<div class="sg-breakdown-row">
           <span>${b.kingdomIcon} ${b.subName}</span>
-          <span style="color:${bp>=60?'var(--green)':'var(--red)'};font-weight:800">${b.acertos}/${b.total} (${bp}%)</span>
+          <span style="color:${bp>=60?'var(--green-t)':'var(--red-t)'};font-weight:800">${b.acertos}/${b.total} (${bp}%)</span>
         </div>`;
       }).join('')}
     </div>
@@ -8880,7 +8918,7 @@ function tickTimers(){
     const total=base+elapsedSec;
     const td=document.getElementById('td-'+id);if(td)td.textContent=fmtHMS(total);
     const tc=document.getElementById('tc-'+id);
-    if(tc)tc.innerHTML=`<i class="fa fa-clock" style="color:var(--orange)"></i> ${fmtTime(total)}`;
+    if(tc)tc.innerHTML=`<i class="fa fa-clock" style="color:var(--orange-t)"></i> ${fmtTime(total)}`;
   });
 }
 
@@ -9708,7 +9746,7 @@ function renderFCAccuracyTrend(){
     const mA=Math.round(ant.reduce((a,d)=>a+d.pct,0)/ant.length);
     const mR=Math.round(rec.reduce((a,d)=>a+d.pct,0)/rec.length);
     const dif=mR-mA;
-    if(dif!==0)delta=`<span style="color:${dif>0?'var(--green)':'var(--red)'}">${dif>0?'▲':'▼'} ${Math.abs(dif)} ponto${Math.abs(dif)===1?'':'s'}</span> vs. a semana anterior`;
+    if(dif!==0)delta=`<span style="color:${dif>0?'var(--green-t)':'var(--red-t)'}">${dif>0?'▲':'▼'} ${Math.abs(dif)} ponto${Math.abs(dif)===1?'':'s'}</span> vs. a semana anterior`;
   }
   const W=Math.max(160,Math.round(wrap.clientWidth)||400),H=64,padL=4,padR=4,padT=6,padB=16;
   const bw=Math.floor((W-padL-padR)/days.length);
@@ -9728,7 +9766,7 @@ function renderFCAccuracyTrend(){
   });
   wrap.innerHTML=`
   <div class="fc-topo">
-    <div class="fc-num" style="color:${faixaCor(media)}">${media}%</div>
+    <div class="fc-num" style="color:${faixaCorTexto(media)}">${media}%</div>
     <div class="fc-lbl"><b>de acerto</b>${totalReviews} revisõe${totalReviews===1?'':'s'} nos últimos 14 dias${delta?'<br>'+delta:''}</div>
   </div>
   <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;overflow:visible">
@@ -9769,9 +9807,9 @@ function renderKingdomsNeedingAttention(){
     <div>
       <span style="font-size:16px;flex-shrink:0">${r.icon}</span>
       <div style="flex:1;min-width:0;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}</div>
-      ${r.overdue>0?`<span style="background:rgba(220,38,38,0.1);color:var(--red);border-radius:999px;padding:2px 8px;font-size:9.5px;font-weight:900;flex-shrink:0">🔔 ${r.overdue} atrasada${r.overdue!==1?'s':''}</span>`:''}
+      ${r.overdue>0?`<span style="background:rgba(220,38,38,0.1);color:var(--red-t);border-radius:999px;padding:2px 8px;font-size:9.5px;font-weight:900;flex-shrink:0">🔔 ${r.overdue} atrasada${r.overdue!==1?'s':''}</span>`:''}
       ${r.pct!==null?`<div class="faixa-trilho" style="max-width:62px"><i style="width:${r.pct}%;background:${faixaCor(r.pct)}"></i></div>
-        <span style="color:${faixaCor(r.pct)};font-size:11px;font-weight:900;flex-shrink:0;width:34px;text-align:right">${r.pct}%</span>`:''}
+        <span style="color:${faixaCorTexto(r.pct)};font-size:11px;font-weight:900;flex-shrink:0;width:34px;text-align:right">${r.pct}%</span>`:''}
     </div>`).join('');
 }
 
@@ -9862,7 +9900,7 @@ function showSubRevisions(subId,topicId){
     // Filtrar apenas revisões válidas (date definida e string válida) — sem cap fixo,
     // com SM-2 a quantidade varia por assunto conforme o desempenho.
     const revsValidas=revs.filter(r=>r.date&&typeof r.date==='string'&&r.date.length===10);
-    html+=`<div style="background:rgba(22,163,74,0.04);border:1.5px solid rgba(22,163,74,0.2);border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--green);font-weight:700;display:flex;align-items:center;gap:8px">
+    html+=`<div style="background:rgba(22,163,74,0.04);border:1.5px solid rgba(22,163,74,0.2);border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--green-t);font-weight:700;display:flex;align-items:center;gap:8px">
       <i class="fa fa-calendar-check"></i> Revisões agendadas desde ${sub.studiedAt||'data do estudo'}
     </div>`;
     html+=`<div style="display:flex;flex-direction:column;gap:8px">`;
@@ -9884,7 +9922,7 @@ function showSubRevisions(subId,topicId){
         </div>
         ${after?'<span class="after-exam-tag">⚠️ Após prova</span>':''}
         ${r.completed
-          ?'<span style="color:var(--green);font-size:12px;font-weight:900">✓ CONCLUÍDA</span>'
+          ?'<span style="color:var(--green-t);font-size:12px;font-weight:900">✓ CONCLUÍDA</span>'
           :isChainLocked
             ?'<span style="color:var(--muted);font-size:10px;font-weight:700;display:flex;align-items:center;gap:4px"><i class="fa fa-lock" style="font-size:9px"></i> Bloqueada</span>'
             :`<button class="btn btn-sm btn-green-s" onclick="openRevQualityPicker('${subId}',${revs.indexOf(r)})"><i class="fa fa-check"></i> Concluir</button>`}
@@ -9892,7 +9930,7 @@ function showSubRevisions(subId,topicId){
     });
     html+=`</div>`;
     if(sub.revMastered){
-      html+=`<div style="background:rgba(21,128,61,0.08);border:1.5px solid rgba(21,128,61,0.3);border-radius:12px;padding:14px;margin-top:12px;text-align:center;font-size:12px;font-weight:800;color:var(--green)">🏆 Domínio total! Sem mais revisões agendadas por agora.</div>`;
+      html+=`<div style="background:rgba(21,128,61,0.08);border:1.5px solid rgba(21,128,61,0.3);border-radius:12px;padding:14px;margin-top:12px;text-align:center;font-size:12px;font-weight:800;color:var(--green-t)">🏆 Domínio total! Sem mais revisões agendadas por agora.</div>`;
     }
     html+=`<button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-top:14px" title="Útil se o assunto ficou atrasado com o sistema antigo de revisão, ou se você já reestudou por fora" onclick="resetarRevisoes('${subId}');showSubRevisions('${subId}','${topicId}')"><i class="fa fa-rotate"></i> Resetar revisões (recomeçar a partir de hoje)</button>`;
   }
@@ -10253,6 +10291,9 @@ function raridadeChip(prio){
 // Faixa de desempenho: abaixo de 50 e problema, 50-79 e atencao, 80+ esta bom.
 // Antes tudo acima de 60 saia verde, entao 73% e 100% tinham a mesma cara.
 function faixaCor(pct){return pct>=80?'var(--green)':pct>=50?'var(--orange)':'var(--red)';}
+// Mesma faixa, versão TEXTO: faixaCor pinta barra (com texto branco por cima) e
+// também era usada como cor de letra, onde o tom escuro sumia no tema escuro.
+function faixaCorTexto(pct){return pct>=80?'var(--green-t)':pct>=50?'var(--orange-t)':'var(--red-t)';}
 
 // Assuntos do edital em foco, por subId, com o peso que o edital dá a eles.
 // Vazio quando nao ha edital em foco — e ai a fila segue o criterio geral.
@@ -10932,7 +10973,7 @@ function renderDashboard(){
         <div style="font-size:10px;color:var(--muted);font-weight:600">${k.bosses} chefões · ${k.minis} minibosses</div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:14px;font-weight:900;color:var(--cyan)">${fmtTime(k.time)}</div>
+        <div style="font-size:14px;font-weight:900;color:var(--cyan-t)">${fmtTime(k.time)}</div>
         <div style="font-size:10px;color:var(--muted)">estudados</div>
       </div>
     </div>`).join('');
@@ -11674,7 +11715,7 @@ function renderEditais(){
     if(passou){
       diasHtml=`<div class="edital-countdown"><div class="edital-dias-num" style="color:var(--muted)">—</div><div class="edital-dias-lbl" style="color:var(--muted)">REALIZADO</div></div>`;
     } else {
-      const diasColor=dias<=7?'var(--red)':dias<=30?'var(--orange)':'var(--accent)';
+      const diasColor=dias<=7?'var(--red-t)':dias<=30?'var(--orange-t)':'var(--accent)';
       diasHtml=`<div class="edital-countdown ${urgente?'edital-urgente':''}">
         <div class="edital-dias-num" style="color:${diasColor}">${dias}</div>
         <div class="edital-dias-lbl" style="color:${diasColor}">DIAS</div>
@@ -11690,7 +11731,7 @@ function renderEditais(){
           <div class="edital-meta">
             <span class="edital-status ${st.cls}">${st.label}</span>
             ${e.banca?`<span class="edital-banca-chip"><i class="fa fa-building"></i> ${e.banca}</span>`:''}
-            ${urgente?'<span style="background:rgba(220,38,38,0.1);color:var(--red);border-radius:20px;padding:2px 8px;font-size:9px;font-weight:900;animation:redPulse 2s infinite">🔥 URGENTE</span>':''}
+            ${urgente?'<span style="background:rgba(220,38,38,0.1);color:var(--red-t);border-radius:20px;padding:2px 8px;font-size:9px;font-weight:900;animation:redPulse 2s infinite">🔥 URGENTE</span>':''}
           </div>
         </div>
         ${diasHtml}
@@ -11730,8 +11771,8 @@ function edConteudoHTML(e){
     <div class="ed-cob-head" onclick="edToggleConteudo('${e.id}')">
       <i class="fa fa-chevron-right ed-chev${aberto?' aberto':''}"></i>
       <span class="ed-cob-titulo">📚 Conteúdo & cobertura</span>
-      ${c.total?`<span class="ed-cob-pct" style="color:${c.pct>=70?'var(--green)':c.pct>=35?'var(--orange)':'var(--red)'}">${c.pct}%</span>
-        <span class="ed-cob-det">${c.estudados}/${c.total} estudados${c.faltam?` · <b style="color:var(--red)">${c.faltam} sem cadastro</b>`:''}</span>`
+      ${c.total?`<span class="ed-cob-pct" style="color:${c.pct>=70?'var(--green-t)':c.pct>=35?'var(--orange-t)':'var(--red-t)'}">${c.pct}%</span>
+        <span class="ed-cob-det">${c.estudados}/${c.total} estudados${c.faltam?` · <b style="color:var(--red-t)">${c.faltam} sem cadastro</b>`:''}</span>`
         :`<span class="ed-cob-det">nenhum conteúdo cadastrado ainda</span>`}
     </div>
     ${barra}
@@ -11766,7 +11807,7 @@ function edConteudoCorpo(e){
             <input type="number" min="0" max="200" class="inp" value="${d.questoes||''}" placeholder="—"
                    onchange="edSetQuestoes('${e.id}','${d.id}',this.value)"> questões
           </label>
-          <span class="ed-disc-cob" style="color:${cd.pct>=70?'var(--green)':cd.pct>=35?'var(--orange)':'var(--red)'}">${cd.estudados}/${cd.total}</span>
+          <span class="ed-disc-cob" style="color:${cd.pct>=70?'var(--green-t)':cd.pct>=35?'var(--orange-t)':'var(--red-t)'}">${cd.estudados}/${cd.total}</span>
           <button class="btn btn-xs btn-ghost" onclick="edAddAssunto('${e.id}','${d.id}')" title="Adicionar assunto"><i class="fa fa-plus"></i></button>
           <button class="btn btn-xs btn-danger" onclick="edDelDisciplina('${e.id}','${d.id}')" title="Remover disciplina"><i class="fa fa-trash"></i></button>
         </div>
@@ -11929,6 +11970,7 @@ function repRenderMain(){
   const e=(db.repertorio.eixos||[]).find(x=>x.id===t.eixoId)||{nome:'Sem eixo',color:'var(--accent)',icon:'📌'};
   const pct=repCompletude(t);
   const pctColor=pct===100?'var(--green)':pct>=60?'var(--orange)':'var(--red)';
+  const pctTxt=pct===100?'var(--green-t)':pct>=60?'var(--orange-t)':'var(--red-t)';
   const diasDesdeGeracao=t.geradoEm?Math.floor((Date.now()-new Date(t.geradoEm).getTime())/86400000):null;
   const desatualizado=diasDesdeGeracao!==null&&diasDesdeGeracao>90;
   const algumExpandido=SECOES.some(s=>!repCollapsedIds.has(s.id));
@@ -11949,10 +11991,10 @@ function repRenderMain(){
             ${t.contextoAtualidade.contraponto?`<div><b>Contraponto:</b> ${escapeHtml(t.contextoAtualidade.contraponto)}</div>`:''}
             ${(t.contextoAtualidade.fontes||[]).length?`<div style="margin-top:3px;color:var(--muted)">Fontes: ${t.contextoAtualidade.fontes.map(f=>`<a href="${urlSegura(f.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml((f.titulo||f.url).slice(0,44))}</a>`).join(' · ')}</div>`:''}
           </div>`:''}
-          ${t.geradoEm?`<div style="font-size:10.5px;color:${desatualizado?'var(--orange)':'var(--muted)'};margin-top:4px;font-weight:${desatualizado?'800':'400'}">
+          ${t.geradoEm?`<div style="font-size:10.5px;color:${desatualizado?'var(--orange-t)':'var(--muted)'};margin-top:4px;font-weight:${desatualizado?'800':'400'}">
             ${desatualizado?'⏰':'🕐'} Gerado por IA em ${repFormatDataCurta(t.geradoEm)}${desatualizado?` (${diasDesdeGeracao} dias atrás) — leis e dados podem ter mudado, considere gerar de novo`:''}
           </div>`:''}
-          ${t.erroGeracao?`<div style="margin-top:7px;padding:8px 11px;border:1.5px solid var(--red);background:rgba(185,28,28,.10);border-radius:10px;font-size:11.5px;color:var(--red);line-height:1.5">
+          ${t.erroGeracao?`<div style="margin-top:7px;padding:8px 11px;border:1.5px solid var(--red);background:rgba(185,28,28,.10);border-radius:10px;font-size:11.5px;color:var(--red-t);line-height:1.5">
             <b>A geração não completou.</b> ${t.erroGeracao.campos.length?`Ficaram sem conteúdo: ${t.erroGeracao.campos.map(c=>escapeHtml((SECOES.find(x=>x.id===c)||{}).title||c)).join(', ')}.`:'Nenhuma seção foi preenchida.'}
             <div style="color:var(--muted);margin-top:3px">Motivo: <code>${escapeHtml(t.erroGeracao.msg||'—')}</code></div>
             <div style="color:var(--muted)">Clique em <b>Gerar com IA</b> pra tentar de novo — o que já veio não se perde.</div>
@@ -11961,7 +12003,7 @@ function repRenderMain(){
             <div style="flex:1;max-width:200px">
               <div class="rep-prog-bar"><div class="rep-prog-fill" style="width:${pct}%;background:${pctColor}"></div></div>
             </div>
-            <span style="font-size:11px;font-weight:800;color:${pctColor}">${pct}% completo</span>
+            <span style="font-size:11px;font-weight:800;color:${pctTxt}">${pct}% completo</span>
           </div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -12327,12 +12369,12 @@ function repRenderOverview(){
     <!-- Pills de status -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px">
       <div style="background:rgba(22,163,74,0.06);border:1.5px solid rgba(22,163,74,0.2);border-radius:14px;padding:14px;text-align:center">
-        <div style="font-size:26px;font-weight:900;color:var(--green)">${completos}</div>
-        <div style="font-size:10px;font-weight:800;color:var(--green);text-transform:uppercase;margin-top:4px">✅ Completos</div>
+        <div style="font-size:26px;font-weight:900;color:var(--green-t)">${completos}</div>
+        <div style="font-size:10px;font-weight:800;color:var(--green-t);text-transform:uppercase;margin-top:4px">✅ Completos</div>
       </div>
       <div style="background:rgba(245,158,11,0.06);border:1.5px solid rgba(245,158,11,0.2);border-radius:14px;padding:14px;text-align:center">
-        <div style="font-size:26px;font-weight:900;color:var(--orange)">${emProgresso}</div>
-        <div style="font-size:10px;font-weight:800;color:var(--orange);text-transform:uppercase;margin-top:4px">🔄 Em progresso</div>
+        <div style="font-size:26px;font-weight:900;color:var(--orange-t)">${emProgresso}</div>
+        <div style="font-size:10px;font-weight:800;color:var(--orange-t);text-transform:uppercase;margin-top:4px">🔄 Em progresso</div>
       </div>
       <div style="background:rgba(108,71,255,0.06);border:1.5px solid rgba(108,71,255,0.2);border-radius:14px;padding:14px;text-align:center">
         <div style="font-size:26px;font-weight:900;color:var(--accent)">${total}</div>
@@ -12358,13 +12400,14 @@ function repRenderOverview(){
             ${temaEixo.map(t=>{
               const pct=repCompletude(t);
               const pctColor=pct===100?'var(--green)':pct>=60?'var(--orange)':'var(--red)';
+  const pctTxt=pct===100?'var(--green-t)':pct>=60?'var(--orange-t)':'var(--red-t)';
               return`<div class="rep-overview-card" onclick="repSelectTema('${t.id}')" style="border-color:${e.color}25">
                 <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${e.color};border-radius:16px 16px 0 0"></div>
                 <div class="rep-overview-card-nome">${t.nome}</div>
                 <div class="rep-overview-card-eixo">${e.icon} ${e.nome}</div>
                 <div style="display:flex;align-items:center;gap:8px">
                   <div class="rep-prog-bar" style="flex:1"><div class="rep-prog-fill" style="width:${pct}%;background:${pctColor}"></div></div>
-                  <span style="font-size:10px;font-weight:800;color:${pctColor}">${pct}%</span>
+                  <span style="font-size:10px;font-weight:800;color:${pctTxt}">${pct}%</span>
                 </div>
               </div>`;
             }).join('')}
@@ -12475,7 +12518,7 @@ function redAbrirTemasAtualidade(eixoId){
   const atual=eixoId||(repSelectedTema&&repSelectedTema.eixoId)||eixos[0].id;
   const salvos=redTemasSalvos();
   openModal('🗞️ Temas em pauta',`
-    <p style="margin:0 0 14px;font-size:12.5px;color:var(--muted)">Você marca o eixo, a pesquisa procura o que está em debate agora e a IA transforma em tema com recorte. ${tavilyAtivo()?'':'<b style="color:var(--orange)">Sem chave do Tavily a busca não roda e a IA responde do que lembra do treino — configure em Ajustes de IA.</b>'}</p>
+    <p style="margin:0 0 14px;font-size:12.5px;color:var(--muted)">Você marca o eixo, a pesquisa procura o que está em debate agora e a IA transforma em tema com recorte. ${tavilyAtivo()?'':'<b style="color:var(--orange-t)">Sem chave do Tavily a busca não roda e a IA responde do que lembra do treino — configure em Ajustes de IA.</b>'}</p>
     <div style="margin-bottom:12px">
       <div style="font-size:11px;font-weight:800;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Eixo temático</div>
       <select class="inp" id="red-tema-eixo" style="width:100%">
@@ -12569,7 +12612,7 @@ async function redGerarTemasAtualidade(){
     redRenderTemasSugeridos();
   }catch(e){
     openModal('🗞️ Temas em pauta',`
-      <p style="color:var(--red);font-weight:700;margin:0 0 10px">Não deu pra gerar os temas.</p>
+      <p style="color:var(--red-t);font-weight:700;margin:0 0 10px">Não deu pra gerar os temas.</p>
       <p style="margin:0 0 14px;font-size:12.5px;color:var(--muted)">${escapeHtml(e.message||String(e))}</p>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
@@ -12601,7 +12644,7 @@ function redRenderTemasSugeridos(){
     </div>`;
   }).join('');
   const aviso=!s.grounded
-    ?`<div style="border:1.5px solid var(--orange);background:rgba(194,65,12,.10);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--orange);font-weight:700">Estes temas saíram do conhecimento treinado da IA, não de uma busca — a pesquisa não rodou. Confira o gancho de cada um antes de estudar em cima dele.</div>`
+    ?`<div style="border:1.5px solid var(--orange);background:rgba(194,65,12,.10);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--orange-t);font-weight:700">Estes temas saíram do conhecimento treinado da IA, não de uma busca — a pesquisa não rodou. Confira o gancho de cada um antes de estudar em cima dele.</div>`
     :'';
   openModal(`🗞️ ${s.itens.length} temas — ${escapeHtml(s.eixoNome||'')}`,`
     ${aviso}
@@ -13099,7 +13142,7 @@ function rdRenderEstrutura(el){
       ${Object.keys(RD_ESTRUTURA_GENEROS).map(k=>`<button class="${rdEstruturaGenero===k?'active':''}" data-genero="${k}" onclick="rdSetEstruturaGenero('${k}')">${RD_ESTRUTURA_GENEROS[k].label}</button>`).join('')}
     </div>
     <div class="legis-disclaimer" style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px"><i class="fa fa-circle-info"></i> <b>Quando usar:</b> ${g.quando}</div>
-    ${g.exemploTema?`<div style="font-size:11px;color:var(--text2);background:var(--bg2);border-left:3px solid var(--gold);border-radius:6px;padding:8px 12px;margin-bottom:12px;line-height:1.5"><i class="fa fa-lightbulb" style="color:var(--gold)"></i> ${g.exemploTema}</div>`:''}
+    ${g.exemploTema?`<div style="font-size:11px;color:var(--text2);background:var(--bg2);border-left:3px solid var(--gold);border-radius:6px;padding:8px 12px;margin-bottom:12px;line-height:1.5"><i class="fa fa-lightbulb" style="color:var(--gold-t)"></i> ${g.exemploTema}</div>`:''}
     <div class="rd-conectivo-card" style="margin-bottom:16px">
       <div style="font-size:12px;font-weight:900;color:var(--text);margin-bottom:8px">📌 Regras dessa estrutura</div>
       <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
@@ -13141,7 +13184,7 @@ function rdConectivoCardHTML(cat){
     </div>
     ${cat.exemplo?`<div style="font-size:11px;color:var(--text2);background:var(--bg2);border-left:3px solid var(--accent);border-radius:6px;padding:7px 10px;margin-bottom:10px;line-height:1.5"><b style="color:var(--accent);font-weight:800">Exemplo de uso:</b> ${cat.exemplo}</div>`:''}
     <div class="rep-tags-flow">${chips}</div>
-    ${cat.nota?`<div style="font-size:10.5px;color:var(--orange);margin-top:9px;line-height:1.5"><i class="fa fa-circle-info"></i> ${cat.nota}</div>`:''}
+    ${cat.nota?`<div style="font-size:10.5px;color:var(--orange-t);margin-top:9px;line-height:1.5"><i class="fa fa-circle-info"></i> ${cat.nota}</div>`:''}
   </div>`;
 }
 function rdRenderConectivosLista(){
@@ -13193,11 +13236,11 @@ function rdRenderMain(){
     <!-- Stats rápidas -->
     ${redacoes.length>0?`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">
       <div style="background:var(--panel);border:1.5px solid var(--border);border-radius:14px;padding:14px;text-align:center">
-        <div style="font-size:22px;font-weight:900;color:var(--green)">${aprovadas}</div>
+        <div style="font-size:22px;font-weight:900;color:var(--green-t)">${aprovadas}</div>
         <div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase">✅ Aprovadas</div>
       </div>
       <div style="background:var(--panel);border:1.5px solid var(--border);border-radius:14px;padding:14px;text-align:center">
-        <div style="font-size:22px;font-weight:900;color:var(--red)">${reprovadas}</div>
+        <div style="font-size:22px;font-weight:900;color:var(--red-t)">${reprovadas}</div>
         <div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase">❌ Reprovadas</div>
       </div>
       <div style="background:var(--panel);border:1.5px solid var(--border);border-radius:14px;padding:14px;text-align:center">
@@ -13245,7 +13288,7 @@ function rdCardHTML(r){
           <div class="rd-npd-badge ${st}">
             ${npd!==null?`NPD: ${npd}`:' Rascunho'}
           </div>
-          <div style="font-size:10px;font-weight:800;margin-top:4px;color:${st==='aprovado'?'var(--green)':st==='reprovado'?'var(--red)':'var(--muted)'}">
+          <div style="font-size:10px;font-weight:800;margin-top:4px;color:${st==='aprovado'?'var(--green-t)':st==='reprovado'?'var(--red-t)':'var(--muted)'}">
             ${st==='aprovado'?'✅ APROVADO':st==='reprovado'?'❌ REPROVADO':'📝 RASCUNHO'}
           </div>
         </div>
@@ -13263,17 +13306,17 @@ function rdCardHTML(r){
       </div>
       <div class="rd-comp-item">
         <div class="rd-comp-label">NE — Nº de Erros Gramaticais</div>
-        <div class="rd-comp-val" style="color:var(--red)">${r.ne??'—'}</div>
+        <div class="rd-comp-val" style="color:var(--red-t)">${r.ne??'—'}</div>
         <div class="rd-comp-sub">Grafia, morfossintaxe, vocabulário</div>
       </div>
       <div class="rd-comp-item">
         <div class="rd-comp-label">TL — Total de Linhas</div>
-        <div class="rd-comp-val" style="color:var(--cyan)">${r.tl??'—'}</div>
+        <div class="rd-comp-val" style="color:var(--cyan-t)">${r.tl??'—'}</div>
         <div class="rd-comp-sub">Linhas efetivamente escritas</div>
       </div>
       <div class="rd-comp-item">
         <div class="rd-comp-label">NPD — Nota Final</div>
-        <div class="rd-comp-val" style="color:${st==='aprovado'?'var(--green)':st==='reprovado'?'var(--red)':'var(--muted)'}">${npd??'—'}</div>
+        <div class="rd-comp-val" style="color:${st==='aprovado'?'var(--green-t)':st==='reprovado'?'var(--red-t)':'var(--muted)'}">${npd??'—'}</div>
         <div class="rd-comp-sub">NPD = NC – 6 × NE ÷ TL</div>
       </div>
     </div>
@@ -13379,7 +13422,7 @@ function rdFolhaRenderGutter(linhasUsadas){
   let html='';
   for(let i=1;i<=total;i++){
     const excedeu=i>RD_FOLHA_MAX_LINHAS;
-    html+=`<div style="height:${RD_FOLHA_LINE_HEIGHT}px;${excedeu?'color:var(--red);font-weight:800':(i<=linhasUsadas?'color:var(--accent);font-weight:800':'')}">${i}</div>`;
+    html+=`<div style="height:${RD_FOLHA_LINE_HEIGHT}px;${excedeu?'color:var(--red-t);font-weight:800':(i<=linhasUsadas?'color:var(--accent);font-weight:800':'')}">${i}</div>`;
   }
   gutter.innerHTML=html;
 }
@@ -13582,8 +13625,8 @@ function rdDedupErros(erros){
 }
 function rdAiFeedbackHTML(fb){
   if(!fb)return'';
-  const fortes=(fb.pontosFortes||[]).map(p=>`<li style="color:var(--green)">${escapeHtml(p)}</li>`).join('');
-  const faltantes=(fb.pontosFaltantes||[]).map(p=>`<li style="color:var(--orange)">${escapeHtml(p)}</li>`).join('');
+  const fortes=(fb.pontosFortes||[]).map(p=>`<li style="color:var(--green-t)">${escapeHtml(p)}</li>`).join('');
+  const faltantes=(fb.pontosFaltantes||[]).map(p=>`<li style="color:var(--orange-t)">${escapeHtml(p)}</li>`).join('');
   const erros=rdDedupErros(fb.erros).map(e=>`<div class="rd-ai-erro"><span class="rd-ai-erro-trecho">"${escapeHtml(e.trecho||'')}"</span>${e.tipo?` <span style="color:var(--muted)">(${rdCriterioLabel(e.tipo)})</span>`:''}${e.sugestao?`<div class="rd-ai-erro-sugestao">→ ${escapeHtml(e.sugestao)}</div>`:''}</div>`).join('');
   const criterios=fb.criterios?RD_CRITERIOS.map(c=>rdCriterioBarHTML(c,fb.criterios[c.id])).join(''):'';
   return`<div class="rd-ai-panel">
@@ -13592,10 +13635,10 @@ function rdAiFeedbackHTML(fb){
     ${rdQuesitosHTML(fb)}
     ${criterios?`<div class="rd-criterios-grid">${criterios}</div>`:''}
     ${(fortes||faltantes)?`<div class="rd-ai-cols">
-      <div><div class="rd-ai-col-title" style="color:var(--green)">✅ Pontos fortes</div><ul class="rd-ai-list">${fortes||'<li style="color:var(--muted)">—</li>'}</ul></div>
-      <div><div class="rd-ai-col-title" style="color:var(--orange)">⚠️ Faltou / insuficiente</div><ul class="rd-ai-list">${faltantes||'<li style="color:var(--muted)">—</li>'}</ul></div>
+      <div><div class="rd-ai-col-title" style="color:var(--green-t)">✅ Pontos fortes</div><ul class="rd-ai-list">${fortes||'<li style="color:var(--muted)">—</li>'}</ul></div>
+      <div><div class="rd-ai-col-title" style="color:var(--orange-t)">⚠️ Faltou / insuficiente</div><ul class="rd-ai-list">${faltantes||'<li style="color:var(--muted)">—</li>'}</ul></div>
     </div>`:''}
-    ${erros?`<div class="rd-ai-col-title" style="color:var(--red);margin-bottom:6px">✗ Erros encontrados</div><div class="rd-ai-erros">${erros}</div>`:''}
+    ${erros?`<div class="rd-ai-col-title" style="color:var(--red-t);margin-bottom:6px">✗ Erros encontrados</div><div class="rd-ai-erros">${erros}</div>`:''}
     <div class="legis-disclaimer" style="border-top:1px dashed var(--border);margin-top:10px;padding-top:8px"><i class="fa fa-triangle-exclamation"></i> Sugestão gerada por IA — use como orientação, não como nota oficial.</div>
   </div>`;
 }
@@ -14114,9 +14157,9 @@ function renderFCSidebarSummary(){
   const emDia=all.length-due-novo;
   el.innerHTML=`
     <div class="fc-sidebar-summary-title">📊 Resumo Geral</div>
-    <div class="fc-sidebar-stat-row"><span class="fc-sidebar-stat-dot" style="background:var(--red)"></span>Revisar agora<b style="color:var(--red)">${due}</b></div>
+    <div class="fc-sidebar-stat-row"><span class="fc-sidebar-stat-dot" style="background:var(--red)"></span>Revisar agora<b style="color:var(--red-t)">${due}</b></div>
     <div class="fc-sidebar-stat-row"><span class="fc-sidebar-stat-dot" style="background:var(--accent)"></span>Novos<b style="color:var(--accent)">${novo}</b></div>
-    <div class="fc-sidebar-stat-row"><span class="fc-sidebar-stat-dot" style="background:var(--green)"></span>Em dia<b style="color:var(--green)">${emDia}</b></div>
+    <div class="fc-sidebar-stat-row"><span class="fc-sidebar-stat-dot" style="background:var(--green)"></span>Em dia<b style="color:var(--green-t)">${emDia}</b></div>
     <button class="btn btn-primary btn-sm" style="width:100%;margin-top:10px" onclick="fcStudyAllKingdoms()"><i class="fa fa-globe"></i> Estudar tudo</button>
   `;
 }
@@ -14206,8 +14249,8 @@ function renderFCMain(){
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
           <div class="stat-card" style="cursor:pointer;background:rgba(220,38,38,0.04);border-color:rgba(220,38,38,0.15)" onclick="fcOverviewClick('due')">
             <span class="stat-icon">🔥</span>
-            <div class="stat-val" style="color:var(--red)">${vencidos.length}</div>
-            <div class="stat-lbl" style="color:var(--red)">Revisar agora</div>
+            <div class="stat-val" style="color:var(--red-t)">${vencidos.length}</div>
+            <div class="stat-lbl" style="color:var(--red-t)">Revisar agora</div>
           </div>
           <div class="stat-card" style="cursor:pointer;background:rgba(108,71,255,0.04);border-color:rgba(108,71,255,0.15)" onclick="fcOverviewClick('new')">
             <span class="stat-icon">✨</span>
@@ -14216,8 +14259,8 @@ function renderFCMain(){
           </div>
           <div class="stat-card" style="cursor:pointer;background:rgba(22,163,74,0.04);border-color:rgba(22,163,74,0.15)" onclick="fcOverviewClick('ok')">
             <span class="stat-icon">✅</span>
-            <div class="stat-val" style="color:var(--green)">${emDia.length}</div>
-            <div class="stat-lbl" style="color:var(--green)">Em dia</div>
+            <div class="stat-val" style="color:var(--green-t)">${emDia.length}</div>
+            <div class="stat-lbl" style="color:var(--green-t)">Em dia</div>
           </div>
         </div>
 
@@ -14241,7 +14284,7 @@ function renderFCMain(){
         <!-- Urgentes para revisar -->
         ${urgentes.length?`
         <div style="margin-bottom:20px">
-          <div style="font-size:12px;font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">🔥 Chefões com revisões vencidas</div>
+          <div style="font-size:12px;font-weight:900;color:var(--red-t);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">🔥 Chefões com revisões vencidas</div>
           <div style="display:flex;flex-direction:column;gap:6px">
             ${urgentes.map(b=>`
               <div onclick="selectFCBoss('${b.topicId}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--panel);border:1.5px solid rgba(220,38,38,0.2);border-left:4px solid var(--red);border-radius:12px;cursor:pointer;transition:all .15s" onmouseover="this.style.transform='translateX(4px)'" onmouseout="this.style.transform='translateX(0)'">
@@ -14250,7 +14293,7 @@ function renderFCMain(){
                   <div style="font-size:13px;font-weight:800;color:${b.kColor}">${b.name}</div>
                   <div style="font-size:10px;color:var(--muted)">${b.kingdom} · ${b.total} cards</div>
                 </div>
-                <span style="background:rgba(220,38,38,0.1);color:var(--red);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:900">${b.due} vencido${b.due!==1?'s':''}</span>
+                <span style="background:rgba(220,38,38,0.1);color:var(--red-t);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:900">${b.due} vencido${b.due!==1?'s':''}</span>
               </div>`).join('')}
           </div>
         </div>`:''}
@@ -14266,9 +14309,9 @@ function renderFCMain(){
                 <div class="rep-overview-card-nome">${b.kIcon} ${b.name}</div>
                 <div class="rep-overview-card-eixo">${b.kingdom} · ${b.total} card${b.total!==1?'s':''}</div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap">
-                  ${b.due>0?`<span style="background:rgba(220,38,38,0.1);color:var(--red);border-radius:20px;padding:2px 8px;font-size:9px;font-weight:900">🔥 ${b.due}</span>`:''}
+                  ${b.due>0?`<span style="background:rgba(220,38,38,0.1);color:var(--red-t);border-radius:20px;padding:2px 8px;font-size:9px;font-weight:900">🔥 ${b.due}</span>`:''}
                   ${b.novo>0?`<span style="background:rgba(108,71,255,0.1);color:var(--accent);border-radius:20px;padding:2px 8px;font-size:9px;font-weight:900">✨ ${b.novo}</span>`:''}
-                  ${b.due===0&&b.novo===0?`<span style="background:rgba(22,163,74,0.1);color:var(--green);border-radius:20px;padding:2px 8px;font-size:9px;font-weight:900">✅ Em dia</span>`:''}
+                  ${b.due===0&&b.novo===0?`<span style="background:rgba(22,163,74,0.1);color:var(--green-t);border-radius:20px;padding:2px 8px;font-size:9px;font-weight:900">✅ Em dia</span>`:''}
                 </div>
               </div>`).join('')}
           </div>
@@ -14326,16 +14369,16 @@ function renderFCMain(){
     <!-- Painel de controle do chefão -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
       <div style="background:${due>0?'rgba(220,38,38,0.06)':'var(--bg2)'};border:1.5px solid ${due>0?'rgba(220,38,38,0.25)':'var(--border)'};border-radius:12px;padding:10px 14px;text-align:center;cursor:pointer" onclick="fcBossStudy('due')">
-        <div style="font-size:22px;font-weight:900;color:${due>0?'var(--red)':'var(--muted)'}">${due}</div>
-        <div style="font-size:9px;font-weight:800;color:${due>0?'var(--red)':'var(--muted)'};text-transform:uppercase">🔥 Vencidos</div>
+        <div style="font-size:22px;font-weight:900;color:${due>0?'var(--red-t)':'var(--muted)'}">${due}</div>
+        <div style="font-size:9px;font-weight:800;color:${due>0?'var(--red-t)':'var(--muted)'};text-transform:uppercase">🔥 Vencidos</div>
       </div>
       <div style="background:${novo>0?'rgba(108,71,255,0.06)':'var(--bg2)'};border:1.5px solid ${novo>0?'rgba(108,71,255,0.2)':'var(--border)'};border-radius:12px;padding:10px 14px;text-align:center;cursor:pointer" onclick="fcBossStudy('new')">
         <div style="font-size:22px;font-weight:900;color:${novo>0?'var(--accent)':'var(--muted)'}">${novo}</div>
         <div style="font-size:9px;font-weight:800;color:${novo>0?'var(--accent)':'var(--muted)'};text-transform:uppercase">✨ Novos</div>
       </div>
       <div style="background:rgba(22,163,74,0.04);border:1.5px solid rgba(22,163,74,0.15);border-radius:12px;padding:10px 14px;text-align:center;cursor:pointer" onclick="fcBossStudy('ok')">
-        <div style="font-size:22px;font-weight:900;color:var(--green)">${all.filter(c=>!['due','new'].includes(fcStatus(c))).length}</div>
-        <div style="font-size:9px;font-weight:800;color:var(--green);text-transform:uppercase">✅ Em dia</div>
+        <div style="font-size:22px;font-weight:900;color:var(--green-t)">${all.filter(c=>!['due','new'].includes(fcStatus(c))).length}</div>
+        <div style="font-size:9px;font-weight:800;color:var(--green-t);text-transform:uppercase">✅ Em dia</div>
       </div>
       <div style="background:var(--bg2);border:1.5px solid var(--border);border-radius:12px;padding:10px 14px;text-align:center;cursor:pointer" onclick="fcBossStudy('all')">
         <div style="font-size:22px;font-weight:900;color:var(--text)">${all.length}</div>
@@ -14348,7 +14391,7 @@ function renderFCMain(){
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:20px">🔥</span>
         <div>
-          <div style="font-size:13px;font-weight:900;color:var(--red)">${due} card${due!==1?'s':''} vencido${due!==1?'s':''} esperando revisão</div>
+          <div style="font-size:13px;font-weight:900;color:var(--red-t)">${due} card${due!==1?'s':''} vencido${due!==1?'s':''} esperando revisão</div>
           <div style="font-size:10px;color:var(--muted)">Clique para revisar agora</div>
         </div>
       </div>
@@ -14431,16 +14474,16 @@ function fcGridHTML(cards){
       <div id="fcbtn-${c.id}" style="display:none;gap:6px;margin:8px 0" onclick="event.stopPropagation()">
         <div style="font-size:10px;font-weight:800;color:var(--muted);text-align:center;margin-bottom:6px">Como foi?</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <button onclick="fcGridMark('${c.id}',false)" style="padding:8px;border-radius:10px;border:2px solid rgba(185,28,28,0.2);background:rgba(185,28,28,0.06);color:var(--red);font-size:12px;font-weight:900;cursor:pointer;transition:all .15s" onmouseover="this.style.background='rgba(185,28,28,0.15)'" onmouseout="this.style.background='rgba(185,28,28,0.06)'">✗ Errei</button>
-          <button onclick="fcGridMark('${c.id}',true)" style="padding:8px;border-radius:10px;border:2px solid rgba(21,128,61,0.2);background:rgba(21,128,61,0.06);color:var(--green);font-size:12px;font-weight:900;cursor:pointer;transition:all .15s" onmouseover="this.style.background='rgba(21,128,61,0.15)'" onmouseout="this.style.background='rgba(21,128,61,0.06)'">✓ Acertei</button>
+          <button onclick="fcGridMark('${c.id}',false)" style="padding:8px;border-radius:10px;border:2px solid rgba(185,28,28,0.2);background:rgba(185,28,28,0.06);color:var(--red-t);font-size:12px;font-weight:900;cursor:pointer;transition:all .15s" onmouseover="this.style.background='rgba(185,28,28,0.15)'" onmouseout="this.style.background='rgba(185,28,28,0.06)'">✗ Errei</button>
+          <button onclick="fcGridMark('${c.id}',true)" style="padding:8px;border-radius:10px;border:2px solid rgba(21,128,61,0.2);background:rgba(21,128,61,0.06);color:var(--green-t);font-size:12px;font-weight:900;cursor:pointer;transition:all .15s" onmouseover="this.style.background='rgba(21,128,61,0.15)'" onmouseout="this.style.background='rgba(21,128,61,0.06)'">✓ Acertei</button>
         </div>
       </div>
       ${c.tags?`<div class="fc-card-tags">${c.tags.split(',').filter(t=>t.trim()).map(t=>`<span class="fc-card-tag">#${t.trim()}</span>`).join('')}</div>`:''}
       <div class="fc-card-meta" onclick="event.stopPropagation()">
         <div class="fc-card-stats">
-          <span style="color:var(--green)">✓${c.acertos||0}</span>
-          <span style="color:var(--red)">✗${c.erros||0}</span>
-          ${pct!==null?`<span style="color:${pct>=70?'var(--green)':pct>=40?'var(--orange)':'var(--red)'};font-weight:900">${pct}%</span>`:''}
+          <span style="color:var(--green-t)">✓${c.acertos||0}</span>
+          <span style="color:var(--red-t)">✗${c.erros||0}</span>
+          ${pct!==null?`<span style="color:${pct>=70?'var(--green-t)':pct>=40?'var(--orange-t)':'var(--red-t)'};font-weight:900">${pct}%</span>`:''}
           ${fcNextReview(c)?`<span style="color:var(--muted)">📅${fcNextReview(c)?.slice(5)}</span>`:''}
         </div>
         <div class="fc-card-actions">
@@ -14482,15 +14525,15 @@ function fcDesempenhoHTML(cards){
   return`
     <div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap">
       <div style="flex:1;background:rgba(21,128,61,0.06);border:1.5px solid rgba(21,128,61,0.2);border-radius:12px;padding:12px;text-align:center">
-        <div style="font-size:26px;font-weight:900;color:var(--green)">${acertos}</div>
+        <div style="font-size:26px;font-weight:900;color:var(--green-t)">${acertos}</div>
         <div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase">✓ Acertos</div>
       </div>
       <div style="flex:1;background:rgba(185,28,28,0.06);border:1.5px solid rgba(185,28,28,0.2);border-radius:12px;padding:12px;text-align:center">
-        <div style="font-size:26px;font-weight:900;color:var(--red)">${erros}</div>
+        <div style="font-size:26px;font-weight:900;color:var(--red-t)">${erros}</div>
         <div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase">✗ Erros</div>
       </div>
       <div style="flex:1;background:${pctGeral>=70?'rgba(21,128,61,0.06)':pctGeral>=40?'rgba(194,65,12,0.06)':'rgba(185,28,28,0.06)'};border:1.5px solid ${pctGeral>=70?'rgba(21,128,61,0.2)':pctGeral>=40?'rgba(194,65,12,0.2)':'rgba(185,28,28,0.2)'};border-radius:12px;padding:12px;text-align:center">
-        <div style="font-size:26px;font-weight:900;color:${pctGeral>=70?'var(--green)':pctGeral>=40?'var(--orange)':'var(--red)'}">${pctGeral}%</div>
+        <div style="font-size:26px;font-weight:900;color:${pctGeral>=70?'var(--green-t)':pctGeral>=40?'var(--orange-t)':'var(--red-t)'}">${pctGeral}%</div>
         <div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase">🎯 Aproveitamento</div>
       </div>
     </div>
@@ -14680,7 +14723,7 @@ function fcStudyHTML(cards){
   return`
     <div class="fc-progress-bar"><div class="fc-progress-fill" style="width:${pct}%"></div></div>
     <div class="fc-study-nav">
-      <span class="fc-study-counter">Card ${fcStudyIdx+1}/${sorted.length} · <span style="color:var(--green)">✓${fcScoreRight}</span> <span style="color:var(--red)">✗${fcScoreWrong}</span></span>
+      <span class="fc-study-counter">Card ${fcStudyIdx+1}/${sorted.length} · <span style="color:var(--green-t)">✓${fcScoreRight}</span> <span style="color:var(--red-t)">✗${fcScoreWrong}</span></span>
       <div class="fc-study-actions">
         <button class="fc-btn-skip" onclick="fcStudyBack()" title="Voltar para o card anterior" ${sorted.length<2?'disabled':''}>⟵ Voltar</button>
         <button class="fc-btn-skip" onclick="fcEditCard('${c.id}')" title="Ajustar pergunta, resposta ou dificuldade deste card"><i class="fa fa-pen"></i> Editar</button>
@@ -15171,8 +15214,8 @@ function openAISettingsModal(){
         ${outrasVoices.length?`<optgroup label="${ptVoices.length?'Outros idiomas (não recomendado)':'Nenhuma voz em português encontrada — outras vozes do aparelho'}">${outrasVoices.map(v=>`<option value="${v.voiceURI}" ${db.preferredVoiceURI===v.voiceURI?'selected':''}>${v.name} (${v.lang||'idioma desconhecido'})</option>`).join('')}</optgroup>`:''}
       </select>
       <div style="font-size:9.5px;color:var(--muted);margin-bottom:6px">${allVoices.length} voz(es) encontrada(s) no total no seu aparelho — ${ptVoices.length} em português.</div>
-      ${!allVoices.length?`<div style="font-size:10.5px;color:var(--orange);background:rgba(234,88,12,0.08);border:1.5px solid rgba(234,88,12,0.25);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.5">⏳ Nenhuma voz carregada ainda — em alguns navegadores isso demora um instante. Clique em "Atualizar lista" abaixo.</div>`:''}
-      ${allVoices.length&&!ptVoices.length?`<div style="font-size:10.5px;color:var(--orange);background:rgba(234,88,12,0.08);border:1.5px solid rgba(234,88,12,0.25);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.5">⚠️ Seu aparelho não tem nenhuma voz em português instalada — por isso ela lê com sotaque/pronúncia errada. Isso é uma configuração do sistema, não do site: no <b>Android</b>, vá em Configurações → Sistema → Idiomas → Conversão de texto em voz (Text-to-Speech) e baixe uma voz em Português (Brasil). No <b>iPhone</b>, vá em Ajustes → Acessibilidade → Conteúdo Falado → Vozes e baixe uma voz em Português. Depois, feche e abra o app de novo.</div>`:''}
+      ${!allVoices.length?`<div style="font-size:10.5px;color:var(--orange-t);background:rgba(234,88,12,0.08);border:1.5px solid rgba(234,88,12,0.25);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.5">⏳ Nenhuma voz carregada ainda — em alguns navegadores isso demora um instante. Clique em "Atualizar lista" abaixo.</div>`:''}
+      ${allVoices.length&&!ptVoices.length?`<div style="font-size:10.5px;color:var(--orange-t);background:rgba(234,88,12,0.08);border:1.5px solid rgba(234,88,12,0.25);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.5">⚠️ Seu aparelho não tem nenhuma voz em português instalada — por isso ela lê com sotaque/pronúncia errada. Isso é uma configuração do sistema, não do site: no <b>Android</b>, vá em Configurações → Sistema → Idiomas → Conversão de texto em voz (Text-to-Speech) e baixe uma voz em Português (Brasil). No <b>iPhone</b>, vá em Ajustes → Acessibilidade → Conteúdo Falado → Vozes e baixe uma voz em Português. Depois, feche e abra o app de novo.</div>`:''}
       <div style="display:flex;gap:8px;margin-bottom:20px">
         <button class="btn btn-sm btn-ghost" style="flex:1;justify-content:center" onclick="reloadVoiceOptions()"><i class="fa fa-rotate"></i> Atualizar lista</button>
         <button class="btn btn-sm btn-ghost" style="flex:1;justify-content:center" onclick="testVoicePreview()"><i class="fa fa-volume-high"></i> Testar voz</button>
@@ -17386,13 +17429,13 @@ function mapedRefreshInfo(){
     // Sem esse número não havia como perceber que o mapa tem quinze cadeiras
     // desenhadas e só quatro em que dá pra sentar.
     (()=>{const n=mapedMapa?mapedContaAssentos():0;
-      return `<br><b>Assentos (dá pra sentar):</b> <b style="color:${n?'var(--green)':'var(--danger)'}">${n}</b>`;})()+
+      return `<br><b>Assentos (dá pra sentar):</b> <b style="color:${n?'var(--green-t)':'var(--danger)'}">${n}</b>`;})()+
     (mapedSujo?'<br><b style="color:var(--accent)">Há alterações não publicadas.</b>':'')+
     (()=>{ try{
       const d=mapedDiagnostico();
-      if(d.preso)return `<br><b style="color:var(--danger)">A entrada está bloqueada — ninguém vai conseguir andar.</b>`;
+      if(d.preso)return `<br><b style="color:var(--red-t)">A entrada está bloqueada — ninguém vai conseguir andar.</b>`;
       return `<br><b>Andável a partir da entrada:</b> ${d.alcance} de ${d.livre} tiles livres`
-        +(d.alcance<d.livre*0.35?' <b style="color:var(--danger)">(o resto está fechado)</b>':'');
+        +(d.alcance<d.livre*0.35?' <b style="color:var(--red-t)">(o resto está fechado)</b>':'');
     }catch(e){return '';} })();
 }
 
