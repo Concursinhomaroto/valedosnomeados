@@ -15908,7 +15908,12 @@ async function tryGeminiModel(apiKey,model,prompt,opts){
       const err=await response.text();
       let detail=err.slice(0,150);
       try{detail=(JSON.parse(err)?.error?.message||detail).slice(0,150);}catch(e2){}
-      return{ok:false,reason:`${response.status} ${detail}`,http:response.status};
+      // 429/500/502/503/504 nao sao problema da chave nem do modelo: e a Google
+      // sobrecarregada ou limitando no momento. Quem chama trata esperando e tentando
+      // de novo, em vez de queimar a lista inteira de modelos (que estao sobrecarregados
+      // junto) e terminar acusando a chave do usuario, que esta boa.
+      const temporario=[429,500,502,503,504].includes(response.status);
+      return{ok:false,reason:`${response.status} ${detail}`,http:response.status,temporario};
     }
     const data=await response.json();
     // Concatena TODAS as partes de texto, não só parts[0] — com tools ativos (ex: busca)
@@ -15938,8 +15943,25 @@ async function tryGeminiModel(apiKey,model,prompt,opts){
     return{ok:true,raw,grounded,fontes,consultas,
            motivo:grounded?null:'o modelo respondeu, mas não usou a busca (nenhuma fonte veio na resposta)'};
   }catch(e){
-    return{ok:false,reason:e.message};
+    // fetch que nem chegou a responder (rede caiu, DNS, timeout) tambem e temporario
+    return{ok:false,reason:e.message,temporario:true};
   }
+}
+// Tenta o MESMO modelo de novo quando o erro e temporario, esperando 1s e depois 3s.
+const GEMINI_ESPERAS_MS=[1000,3000];
+async function tryGeminiModelComRetry(apiKey,model,prompt,opts){
+  let r=await tryGeminiModel(apiKey,model,prompt,opts);
+  for(let i=0;!r.ok&&r.temporario&&i<GEMINI_ESPERAS_MS.length;i++){
+    await new Promise(res=>setTimeout(res,GEMINI_ESPERAS_MS[i]));
+    r=await tryGeminiModel(apiKey,model,prompt,opts);
+  }
+  return r;
+}
+// Mensagem com a causa CERTA. Um 503 e a Google sobrecarregada — mandar o usuario
+// "conferir se a chave esta valida" fazia ele trocar uma chave que nao tinha problema.
+function geminiMensagemErro(attempts,tudoTemporario){
+  if(tudoTemporario)return 'A IA do Google está sobrecarregada agora (erro 503/429). Não é problema da sua chave nem da sua conta — espere um ou dois minutos e tente de novo.';
+  return `Nenhum modelo do Gemini respondeu. Tentativas: ${attempts.join(' · ')||'nenhuma'}. Verifique se sua chave em aistudio.google.com/apikey está válida.`;
 }
 // Consulta quais modelos a própria chave tem acesso (ListModels) — usado só como
 // último recurso, quando nenhum nome fixo em GEMINI_MODEL_CANDIDATES funciona. Isso
@@ -15963,18 +15985,25 @@ async function listGeminiModels(apiKey){
 // virar 33 flashcards: o JSON estourou o teto e voltou pela metade.
 async function callGeminiGenerate(apiKey,prompt,opts){
   const attempts=[];
+  let soTemporario=true;   // vira false no primeiro erro de verdade (chave, modelo, cota)
   for(const model of GEMINI_MODEL_CANDIDATES){
-    const r=await tryGeminiModel(apiKey,model,prompt,opts);
+    const r=await tryGeminiModelComRetry(apiKey,model,prompt,opts);
     if(r.ok)return r.raw;
+    if(!r.temporario)soTemporario=false;
     attempts.push(`${model} (${r.reason})`);
   }
-  const discovered=(await listGeminiModels(apiKey)).filter(m=>!GEMINI_MODEL_CANDIDATES.includes(m));
-  for(const model of discovered){
-    const r=await tryGeminiModel(apiKey,model,prompt,opts);
-    if(r.ok)return r.raw;
-    attempts.push(`${model} (${r.reason})`);
+  // Sobrecarga atinge todos os modelos ao mesmo tempo: sair perguntando a API quais
+  // outros modelos existem so empilha requisicao em cima de um servico que ja esta
+  // recusando, e faz o usuario esperar mais por um erro que ja e conhecido.
+  if(!soTemporario){
+    const discovered=(await listGeminiModels(apiKey)).filter(m=>!GEMINI_MODEL_CANDIDATES.includes(m));
+    for(const model of discovered){
+      const r=await tryGeminiModelComRetry(apiKey,model,prompt,opts);
+      if(r.ok)return r.raw;
+      attempts.push(`${model} (${r.reason})`);
+    }
   }
-  throw new Error(`Nenhum modelo do Gemini respondeu. Tentativas: ${attempts.join(' · ')||'nenhuma'}. Verifique se sua chave em aistudio.google.com/apikey está válida.`);
+  throw new Error(geminiMensagemErro(attempts,soTemporario));
 }
 // Igual ao callGeminiGenerate, mas pedindo pra IA pesquisar na internet antes de responder
 // (grounding). A ferramenta de busca é OPCIONAL do ponto de vista do modelo — ele decide
@@ -15989,10 +16018,10 @@ async function callGeminiGenerateSearch(apiKey,prompt){
   const diag=[];      // por que a busca não pegou, modelo a modelo
   let fallback=null;  // primeira resposta que funcionou mas sem confirmar busca real
   for(const model of GEMINI_MODEL_CANDIDATES){
-    let r=await tryGeminiModel(apiKey,model,prompt,{useSearch:true});
+    let r=await tryGeminiModelComRetry(apiKey,model,prompt,{useSearch:true});
     // 400 costuma ser nome de ferramenta que aquele modelo não conhece — tenta o outro
     if(!r.ok&&r.http===400){
-      const alt=await tryGeminiModel(apiKey,model,prompt,{useSearch:true,searchTool:'retrieval'});
+      const alt=await tryGeminiModelComRetry(apiKey,model,prompt,{useSearch:true,searchTool:'retrieval'});
       if(alt.ok)r=alt; else diag.push({modelo:model,erro:r.reason});
     }
     // 429 é quota da CHAVE, não do modelo: insistir nos outros três só queima
@@ -17688,6 +17717,15 @@ function salaMapaCreateGame(){
       // descreve algo" virava "nyrcrvlgo". A captura so serviria pra impedir a
       // pagina de rolar com as setas, e a Sala nao rola: fica desligada.
       this.input.keyboard.disableGlobalCapture();
+      // Clicar no mapa tem de devolver o teclado ao boneco. O Phaser chama
+      // preventDefault no clique do canvas, e preventDefault impede a troca de foco
+      // que o navegador faria sozinho — entao o cursor continuava preso no campo do
+      // chat, salaTecladoOcupado() seguia verdadeiro e o boneco ficava travado pra
+      // sempre depois da primeira mensagem. Tirar o foco na mao resolve.
+      this.input.on('pointerdown',()=>{
+        const a=document.activeElement;
+        if(a&&a!==document.body&&typeof a.blur==='function')a.blur();
+      });
 
       salaPresenceJoin(this);
     }
