@@ -365,6 +365,8 @@ nav{
 .btn-danger:hover{background:rgba(220,38,38,0.16);}
 .btn-green-s{background:rgba(22,163,74,0.1);border:1.5px solid rgba(22,163,74,0.3);color:var(--green-t);}
 .btn-green-s:hover{background:rgba(22,163,74,0.2);}
+.btn-orange-s{background:rgba(234,88,12,0.1);border:1.5px solid rgba(234,88,12,0.3);color:var(--orange-t);}
+.btn-orange-s:hover{background:rgba(234,88,12,0.2);}
 .btn-sm{padding:6px 12px;font-size:11px;border-radius:9px;}
 .btn-xs{padding:4px 9px;font-size:10px;border-radius:7px;}
 
@@ -444,6 +446,26 @@ nav{
 .flash-del:hover{color:var(--red-t);background:rgba(239,68,68,.12);}
 .flash-card-dup{border-color:var(--orange);}
 .flash-dup-aviso{font-size:10.5px;color:var(--orange-t);font-weight:600;margin-top:4px;line-height:1.45;}
+.flash-dup-btn{background:none;border:0;padding:0;cursor:pointer;font:inherit;text-decoration:underline;text-underline-offset:2px;}
+.dup-aviso{font-size:11.5px;color:var(--text2);line-height:1.55;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:14px;}
+.dup-par{border:1.5px solid var(--border);border-radius:14px;padding:11px;margin-bottom:12px;}
+.dup-cab{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px;}
+.dup-op{display:flex;align-items:flex-start;gap:9px;padding:9px 10px;border:1.5px solid var(--border);border-radius:11px;margin-bottom:7px;cursor:pointer;background:var(--card2,rgba(255,255,255,0.03));}
+.dup-op:last-child{margin-bottom:0;}
+.dup-op input{margin-top:3px;flex:0 0 auto;accent-color:var(--red);}
+.dup-op.sel{border-color:var(--red);background:rgba(239,68,68,.07);}
+.dup-op-keep input{accent-color:var(--green);}
+.dup-op-keep.sel{border-color:var(--green);background:rgba(22,163,74,.07);}
+.dup-op-txt{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 auto;}
+.dup-q{font-size:12.5px;font-weight:700;color:var(--text);line-height:1.45;}
+.dup-r{font-size:11.5px;color:var(--text2);line-height:1.5;}
+.dup-meta{font-size:10px;color:var(--muted);font-weight:600;}
+.dup-tag{flex:0 0 auto;font-size:9px;font-weight:800;text-transform:uppercase;color:var(--red-t);align-self:center;}
+.dup-op:not(.sel) .dup-tag{color:var(--muted);}
+.dup-rodape{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;position:sticky;bottom:-26px;background:var(--panel);padding:12px 0 2px;margin-top:4px;}
+/* No celular o rótulo "apagar esta" espremia a pergunta em 3 linhas. O radio
+   marcado e o realce vermelho já dizem a mesma coisa, então o rótulo sai. */
+@media(max-width:520px){.dup-tag{display:none;}.dup-op{padding:9px 8px;}}
 
 /* ===== SIMULADO RÁPIDO (IA) ===== */
 .btn-purple-s{background:rgba(124,58,237,0.12);border:1.5px solid rgba(124,58,237,0.35);color:var(--accent);}
@@ -7466,7 +7488,7 @@ function flashPanelHTML(s){
       </div>`).join('');
     return`
       <div class="flash-header">
-        <div class="flash-title"><i class="fa fa-layer-group"></i> Flashcards <span class="flash-count">${cards.length} card${cards.length>1?'s':''}</span>${dups.size?` <span class="flash-count flash-count-dup" title="Marcados abaixo — confira e apague o que for repetido">${dups.size} possível repetida${dups.size>1?'s':''}</span>`:''}</div>
+        <div class="flash-title"><i class="fa fa-layer-group"></i> Flashcards <span class="flash-count">${cards.length} card${cards.length>1?'s':''}</span>${dups.size?` <button class="flash-count flash-count-dup flash-dup-btn" onclick="flashRevisarDupSub('${s.id}')" title="Ver os pares lado a lado e apagar de uma vez">${dups.size} possível repetida${dups.size>1?'s':''} — revisar</button>`:''}</div>
         <button class="btn btn-xs btn-ghost" onclick="generateFlashcardsSub('${s.id}',true)" title="Gerar mais com a IA"><i class="fa fa-wand-magic-sparkles"></i> Gerar mais</button>
       </div>
       ${lista}
@@ -7909,10 +7931,155 @@ function flashSuspeitasDup(cards){
   for(let i=0;i<cards.length;i++){
     for(let j=i+1;j<cards.length;j++){
       if(marc.has(cards[j].id))continue;
+      if(fcJaLiberado(cards[i],cards[j]))continue;
       if(fcQuaseIgual(cards[i].pergunta,cards[j].pergunta))marc.set(cards[j].id,cards[i].pergunta);
     }
   }
   return marc;
+}
+
+// ===== Revisão de repetidas (o mutirão) =====
+// Nada é apagado sem você ver o par lado a lado: a marcação por semelhança erra
+// pra mais de vez em quando (medindo um corpus real, ela junta "dengue grupo A"
+// com "dengue grupo B"), então um botão que apagasse tudo de uma vez sem revisão
+// ia comer card bom. Cada par vem com uma sugestão pronta — some a que tem menos
+// histórico de estudo — e dá pra inverter ou dizer que são perguntas diferentes.
+// "São diferentes" fica gravado no card (naoRepete), senão o mesmo falso positivo
+// voltaria marcado de laranja pra sempre, toda vez que você abrisse a tela.
+function fcJaLiberado(a,b){
+  return (Array.isArray(a.naoRepete)&&a.naoRepete.indexOf(b.id)>=0)
+       ||(Array.isArray(b.naoRepete)&&b.naoRepete.indexOf(a.id)>=0);
+}
+function fcHistorico(c){return (c.acertos||0)+(c.erros||0);}
+// Só compara card com card do MESMO assunto (ou do mesmo chefão, quando vieram de
+// PDF e não têm assunto). Uma pergunta pode legitimamente servir a dois minibosses,
+// e cruzar tudo com tudo transformaria a revisão em ruído.
+function fcAcharPares(cards){
+  const grupos=new Map();
+  cards.forEach(c=>{
+    if(!c||!c.pergunta)return;
+    const k=c.subId||('mb:'+c.mbId);
+    if(!grupos.has(k))grupos.set(k,[]);
+    grupos.get(k).push(c);
+  });
+  const pares=[];
+  grupos.forEach(grupo=>{
+    // ordem por criação: o "a" do par é sempre o mais antigo, que é o que tende
+    // a carregar o histórico de acertos/erros que você não quer perder.
+    const ord=grupo.slice().sort((x,y)=>String(x.criacao||'').localeCompare(String(y.criacao||'')));
+    const pareado=new Set();
+    for(let i=0;i<ord.length;i++){
+      if(pareado.has(ord[i].id))continue;
+      for(let j=i+1;j<ord.length;j++){
+        if(pareado.has(ord[j].id))continue;
+        if(fcJaLiberado(ord[i],ord[j]))continue;
+        const exato=normalizeForDedup(ord[i].pergunta)===normalizeForDedup(ord[j].pergunta);
+        if(!exato&&!fcQuaseIgual(ord[i].pergunta,ord[j].pergunta))continue;
+        pareado.add(ord[j].id);
+        pares.push({a:ord[i],b:ord[j],exato,acao:fcHistorico(ord[j])>fcHistorico(ord[i])?'a':'b'});
+      }
+    }
+  });
+  return pares;
+}
+// renderFCMain roda a cada tecla digitada na busca; varrer pares é O(n²) por
+// assunto, então o resultado fica em cache até a lista de cards mudar.
+let fcDupCache={chave:'',pares:[]};
+function fcParesCache(cards){
+  const chave=cards.map(c=>c.id+':'+(c.pergunta||'').length+':'+((c.naoRepete||[]).length)).join(',');
+  if(fcDupCache.chave!==chave)fcDupCache={chave,pares:fcAcharPares(cards)};
+  return fcDupCache.pares;
+}
+let fcDupPares=[],fcDupVoltar=null;
+function fcAbrirRevisao(cards,titulo,aoFechar){
+  fcDupPares=fcAcharPares(cards);
+  fcDupVoltar=aoFechar||null;
+  if(!fcDupPares.length){toast('✅ Nenhuma repetida suspeita por aqui.','var(--green)');return;}
+  openModal('<i class="fa fa-clone"></i> '+titulo,fcRevisaoHTML());
+}
+function fcDupResumo(c){
+  const h=fcHistorico(c);
+  const d=c.criacao?new Date(c.criacao):null;
+  const quando=(d&&!isNaN(d))?d.toLocaleDateString('pt-BR'):'sem data';
+  return `criado em ${quando} · ${h?`${c.acertos||0} acerto${(c.acertos||0)!==1?'s':''} / ${c.erros||0} erro${(c.erros||0)!==1?'s':''}`:'nunca estudado'}`;
+}
+function fcDupCartaoHTML(i,lado,c){
+  const sel=fcDupPares[i].acao===lado;
+  const r=String(c.resposta||'');
+  return `<label class="dup-op${sel?' sel':''}">
+    <input type="radio" name="dup${i}" value="${lado}"${sel?' checked':''} onchange="fcDupEscolha(${i},'${lado}')">
+    <span class="dup-op-txt">
+      <span class="dup-q">${escapeHtml(c.pergunta)}</span>
+      <span class="dup-r">${escapeHtml(r.length>110?r.slice(0,110)+'…':r)}</span>
+      <span class="dup-meta">${fcDupResumo(c)}</span>
+    </span>
+    <span class="dup-tag">${sel?'apagar':'apagar esta'}</span>
+  </label>`;
+}
+function fcRevisaoHTML(){
+  const apagar=fcDupPares.filter(p=>p.acao!=='nenhum').length;
+  const manter=fcDupPares.length-apagar;
+  const corpo=fcDupPares.map((p,i)=>`
+    <div class="dup-par">
+      <div class="dup-cab">Par ${i+1} de ${fcDupPares.length} · ${p.exato?'<b>texto idêntico</b>':'<b>parecidas</b> — confira, pode ser que sejam diferentes'}</div>
+      ${fcDupCartaoHTML(i,'a',p.a)}
+      ${fcDupCartaoHTML(i,'b',p.b)}
+      <label class="dup-op dup-op-keep${p.acao==='nenhum'?' sel':''}">
+        <input type="radio" name="dup${i}" value="nenhum"${p.acao==='nenhum'?' checked':''} onchange="fcDupEscolha(${i},'nenhum')">
+        <span class="dup-op-txt"><span class="dup-q">São perguntas diferentes — manter as duas</span>
+        <span class="dup-meta">Não volto a marcar este par.</span></span>
+      </label>
+    </div>`).join('');
+  return `<div class="dup-aviso"><i class="fa fa-circle-info"></i> A sugestão já vem marcada: apagar a que tem menos histórico de estudo. Confira antes de aplicar — quem só parece repetida às vezes é pergunta diferente de verdade.</div>
+    ${corpo}
+    <div class="dup-rodape">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-danger btn-sm" onclick="fcDupAplicar()">
+        ${apagar?`Apagar ${apagar} card${apagar>1?'s':''}`:'Aplicar'}${manter?` e liberar ${manter} par${manter>1?'es':''}`:''}
+      </button>
+    </div>`;
+}
+function fcDupEscolha(i,v){
+  if(!fcDupPares[i])return;
+  fcDupPares[i].acao=v;
+  document.getElementById('modal-body').innerHTML=fcRevisaoHTML();
+}
+function fcDupAplicar(){
+  let apagados=0,liberados=0;
+  fcDupPares.forEach(p=>{
+    if(p.acao==='nenhum'){
+      // grava dos DOIS lados: se um dia o outro card for apagado, a marca some junto
+      const A=db.flashcards[p.a.id],B=db.flashcards[p.b.id];
+      if(A&&B){
+        A.naoRepete=(A.naoRepete||[]).concat([B.id]);
+        B.naoRepete=(B.naoRepete||[]).concat([A.id]);
+        liberados++;
+      }
+      return;
+    }
+    const alvo=p.acao==='a'?p.a:p.b;
+    if(db.flashcards[alvo.id]){delete db.flashcards[alvo.id];apagados++;}
+  });
+  fcDupCache={chave:'',pares:[]};
+  saveDB();
+  if(typeof updateFCBadge==='function')updateFCBadge();
+  closeModal();
+  if(typeof fcDupVoltar==='function')fcDupVoltar();
+  const partes=[];
+  if(apagados)partes.push(`${apagados} repetida${apagados>1?'s':''} apagada${apagados>1?'s':''}`);
+  if(liberados)partes.push(`${liberados} par${liberados>1?'es':''} liberado${liberados>1?'s':''}`);
+  toast('🧹 '+(partes.join(' e ')||'Nada a fazer')+'.',apagados?'var(--green)':'var(--orange)');
+}
+function fcRevisarDupChefao(){
+  const validTopicIds=new Set();
+  db.kingdoms.forEach(k=>{(db.topics[k.id]||[]).forEach(t=>validTopicIds.add(t.id));});
+  const all=fcSelectedMb?getAllFCForTopic(fcSelectedMb.id)
+                        :Object.values(db.flashcards||{}).filter(c=>validTopicIds.has(c.mbId));
+  fcAbrirRevisao(all,`Repetidas em ${fcSelectedMb?fcSelectedMb.name:'todos os chefões'}`,()=>{renderFCMain();renderFCMbList();});
+}
+function flashRevisarDupSub(subId){
+  const sub=simFindSub(subId);
+  fcAbrirRevisao(flashCardsDoSub(subId),`Repetidas em ${sub?sub.name:'este assunto'}`,()=>flashRefreshPanel(subId));
 }
 function flashApagarCard(id,subId){
   const c=db.flashcards&&db.flashcards[id];
@@ -14578,6 +14745,7 @@ function renderFCMain(){
         </div>
         <button class="btn btn-sm${fcVoiceMode?' btn-primary':' btn-ghost'}" onclick="fcToggleVoiceMode()" title="Lê a pergunta em voz alta, espera 6s e vira o card sozinho lendo a resposta — pra estudar sem precisar olhar pra tela">${fcVoiceMode?'🔊':'🔇'} Voz</button>
         <button class="btn btn-sm${fcAutoMode?' btn-primary':' btn-ghost'}" onclick="fcToggleAutoMode()" title="Além de ler pergunta e resposta, pergunta 'Como foi?' e OUVE sua resposta falada (fácil/difícil/não lembrei) pra passar pro próximo card sozinho — 100% sem tocar na tela">${fcAutoMode?'🤖':'⚙️'} Automático</button>
+        ${(()=>{const nd=fcParesCache(all).length;return nd?`<button class="btn btn-sm btn-orange-s" onclick="fcRevisarDupChefao()" title="Perguntas que parecem repetidas — ver os pares lado a lado antes de apagar"><i class="fa fa-clone"></i> ${nd} repetida${nd>1?'s':''}</button>`:'';})()}
         <button class="btn btn-ghost btn-sm" onclick="fcExportDeck()" title="Baixar todos os cards ${isAllKingdoms?'de todos os reinos':isGroupMode?'deste reino':'deste chefão'} em JSON"><i class="fa fa-download"></i> Exportar</button>
         ${isGroupMode?'':`
         <button class="btn btn-ghost btn-sm" onclick="fcImportDeckPrompt()" title="Importar cards de um arquivo JSON"><i class="fa fa-upload"></i> Importar</button>
