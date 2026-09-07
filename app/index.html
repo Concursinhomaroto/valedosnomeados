@@ -4773,6 +4773,18 @@ function adminGoToPage(delta){
 function escapeHtml(s){
   return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+// Texto que vira literal de string JS DENTRO de um atributo HTML — onclick="f('AQUI')".
+// escapeHtml sozinho NAO serve nesse lugar: ele troca ' por &#39;, e o navegador
+// decodifica a entidade ANTES de o JavaScript ler o atributo. A aspa volta, fecha a
+// string e o resto vira codigo. Foi assim que um apelido da Sala executava JS no
+// navegador de quem clicasse no nome da pessoa. Duas camadas, nesta ordem: escapa
+// pro JS primeiro, depois pro HTML.
+function escapeAttrJs(s){
+  return escapeHtml(String(s==null?'':s)
+    .replace(/\\/g,'\\\\')
+    .replace(/'/g,"\\'")
+    .replace(/[\r\n\u2028\u2029]/g,' '));
+}
 function renderAdminResults(matches,totalMatches,totalPages){
   const resultsEl=document.getElementById('admin-results');
   const pagEl=document.getElementById('admin-pagination');
@@ -4797,7 +4809,7 @@ function renderAdminResults(matches,totalMatches,totalPages){
     const email=d.accountEmail||'';
     return `<div class="admin-result-card">
       <div style="display:flex;align-items:flex-start;gap:8px">
-        <input type="checkbox" class="admin-select-checkbox" data-email="${escapeHtml(email)}" ${email&&adminSelectedEmails.has(email)?'checked':''} ${email?'':'disabled'} onchange="adminToggleOne('${escapeHtml(email)}',this.checked)" style="margin-top:3px">
+        <input type="checkbox" class="admin-select-checkbox" data-email="${escapeHtml(email)}" ${email&&adminSelectedEmails.has(email)?'checked':''} ${email?'':'disabled'} onchange="adminToggleOne('${escapeAttrJs(email)}',this.checked)" style="margin-top:3px">
         <div style="flex:1">
           <div class="admin-result-email">${escapeHtml(email)||'(sem e-mail salvo)'}</div>
           <div class="admin-result-status">${statusHtml}</div>
@@ -4807,7 +4819,7 @@ function renderAdminResults(matches,totalMatches,totalPages){
         <button class="btn btn-xs btn-primary" onclick="adminConfirmPayment('${uid}','mensal')">Confirmar Mensal</button>
         <button class="btn btn-xs btn-primary" onclick="adminConfirmPayment('${uid}','anual')">Confirmar Anual</button>
         <button class="btn btn-xs btn-primary" onclick="adminConfirmPayment('${uid}','vitalicio')" ${isLifetimeAvailable()?'':'disabled title="Promoção vitalícia indisponível (vagas ou prazo esgotados)"'}>Confirmar Vitalício</button>
-        <button class="btn btn-xs btn-danger" onclick="adminDeleteUser('${uid}','${escapeHtml(email)}')">Excluir conta</button>
+        <button class="btn btn-xs btn-danger" onclick="adminDeleteUser('${uid}','${escapeAttrJs(email)}')">Excluir conta</button>
       </div>
     </div>`;
   }).join('');
@@ -7763,7 +7775,7 @@ function simPanelHTML(s){
         <div class="sim-q">
           <div class="sim-q-text">${i+1}. ${escapeHtml(q.questao)}</div>
           <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
-            ${(q.alternativas||[]).map(alt=>`<div class="sim-alt${q.userAnswer===alt.letra?' sim-selected':''}" onclick="simSelectAnswer('${s.id}',${i},'${alt.letra}')"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`).join('')}
+            ${(q.alternativas||[]).map(alt=>`<div class="sim-alt${q.userAnswer===alt.letra?' sim-selected':''}" onclick="simSelectAnswer('${s.id}',${i},'${escapeAttrJs(alt.letra)}')"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`).join('')}
           </div>
         </div>
       `).join('')}
@@ -8894,7 +8906,7 @@ function simGeralExamHTML(){
           <div class="sg-q-tag">${q.kingdomIcon} ${q.kingdomName} · ${q.topicName} · ${q.subName}</div>
           <div class="sim-q-text">${i+1}. ${escapeHtml(q.questao)}</div>
           <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
-            ${(q.alternativas||[]).map(alt=>`<div class="sim-alt${q.userAnswer===alt.letra?' sim-selected':''}" onclick="sgSelectAnswer(${i},'${alt.letra}')"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`).join('')}
+            ${(q.alternativas||[]).map(alt=>`<div class="sim-alt${q.userAnswer===alt.letra?' sim-selected':''}" onclick="sgSelectAnswer(${i},'${escapeAttrJs(alt.letra)}')"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`).join('')}
           </div>
         </div>
       `).join('')}
@@ -17371,6 +17383,10 @@ function salaChatEnviar(){
 }
 // Poda o geral: sem isso o nó cresce pra sempre. Só quem escreve poda, e só de vez
 // em quando, pra não virar uma escrita a mais em cada mensagem.
+// Janela em que uma mensagem ainda "pertence" a quem escreveu. Depois disso qualquer
+// cliente pode apagá-la — é o que mantém o teto de 60 sem precisar de servidor. A regra
+// do Firebase usa exatamente o mesmo prazo; se este número mudar, o de lá muda junto.
+const SALA_CHAT_PODA_MS=600000; // 10 min
 function salaChatPodar(){
   if(Math.random()>0.15)return;
   firebaseDB.ref('sala_chat').once('value').then(snap=>{
@@ -17378,9 +17394,23 @@ function salaChatPodar(){
     const ids=Object.keys(v).sort((a,b)=>(v[a].ts||0)-(v[b].ts||0));
     const sobra=ids.length-SALA_CHAT_MAX;
     if(sobra<=0)return;
-    const upd={};ids.slice(0,sobra).forEach(id=>{upd[id]=null;});
-    firebaseDB.ref('sala_chat').update(upd).catch(()=>{});
-  }).catch(()=>{});
+    // Só poda o que a regra deixa apagar: mensagem sua, ou antiga o bastante. Antes
+    // isso tentava apagar qualquer mensagem — o que, com a regra nova, seria recusado
+    // em silêncio e o teto pararia de valer sem ninguém perceber.
+    const limite=Date.now()-SALA_CHAT_PODA_MS;
+    const upd={};
+    let n=0;
+    ids.slice(0,sobra).forEach(id=>{
+      const m=v[id]||{};
+      const minha=currentUser&&m.uid===currentUser.uid;
+      if(minha||((m.ts||0)<limite)){upd[id]=null;n++;}
+    });
+    if(!n)return;   // as mais antigas ainda são recentes: espera envelhecer
+    // A lista que aparece na tela é cortada por limitToLast, então falhar aqui não
+    // quebra o chat — mas some com o motivo, e essa foi a lição do backup.
+    firebaseDB.ref('sala_chat').update(upd)
+      .catch(e=>console.warn('Não consegui podar o chat da sala:',e&&e.message||e));
+  }).catch(e=>console.warn('Não consegui ler o chat da sala pra podar:',e&&e.message||e));
 }
 function salaChatAbrirAba(aba){
   salaChatAba=aba;
@@ -17417,9 +17447,9 @@ function salaChatRender(){
   const badge=n=>n>0?`<span class="sala-chat-nao-lidas">${n>9?'9+':n}</span>`:'';
   tabs.innerHTML=`<button class="sala-chat-tab${salaChatAba==='geral'?' ativa':''}" onclick="salaChatAbrirAba('geral')">💬 Geral ${badge(salaChatNaoLidasGeral)}</button>`
     +Object.keys(salaDmConversas).map(uid=>`
-      <button class="sala-chat-tab${salaChatAba===uid?' ativa':''}" onclick="salaChatAbrirAba('${escapeHtml(uid)}')">
+      <button class="sala-chat-tab${salaChatAba===uid?' ativa':''}" onclick="salaChatAbrirAba('${escapeAttrJs(uid)}')">
         ✉️ ${escapeHtml((salaDmConversas[uid].nick||'aluno').slice(0,14))} ${badge(salaDmConversas[uid].naoLidas)}
-        <span class="x" onclick="salaChatFecharAba('${escapeHtml(uid)}',event)"><i class="fa fa-xmark"></i></span>
+        <span class="x" onclick="salaChatFecharAba('${escapeAttrJs(uid)}',event)"><i class="fa fa-xmark"></i></span>
       </button>`).join('');
 
   // Quem está na sala agora — clicar abre a conversa privada.
@@ -17427,7 +17457,7 @@ function salaChatRender(){
   const uids=Object.keys(outros).filter(u=>u!==(currentUser&&currentUser.uid));
   quem.innerHTML=uids.length
     ? `<b>Na sala agora:</b><br>`+uids.map(u=>
-        `<span class="sala-chat-pessoa" onclick="salaChatAbrirDM('${escapeHtml(u)}','${escapeHtml(outros[u].nickname||'aluno')}')" title="Mandar mensagem privada">✉️ ${escapeHtml((outros[u].nickname||'aluno').slice(0,18))}${outros[u].fora?' 📖':''}</span>`).join('')
+        `<span class="sala-chat-pessoa" onclick="salaChatAbrirDM('${escapeAttrJs(u)}','${escapeAttrJs(outros[u].nickname||'aluno')}')" title="Mandar mensagem privada">✉️ ${escapeHtml((outros[u].nickname||'aluno').slice(0,18))}${outros[u].fora?' 📖':''}</span>`).join('')
     : `<b>Na sala agora:</b> só você por enquanto.`;
 
   const lista=salaChatAba==='geral'

@@ -21,13 +21,40 @@
     "sala_presence": {
       ".read": "auth != null",
       "$uid": {
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && auth.uid === $uid",
+        "nickname": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 40)"
+        },
+        "character": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 40)"
+        },
+        "x": {
+          ".validate": "!newData.exists() || (newData.isNumber())"
+        },
+        "y": {
+          ".validate": "!newData.exists() || (newData.isNumber())"
+        },
+        "state": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 20)"
+        },
+        "dir": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 10)"
+        },
+        "fora": {
+          ".validate": "!newData.exists() || (newData.isBoolean())"
+        },
+        "ts": {
+          ".validate": "!newData.exists() || (newData.isNumber())"
+        },
+        "$outro": {
+          ".validate": "false"
+        }
       }
     },
     "sala_chat": {
       ".read": "auth != null",
       "$msg": {
-        ".write": "auth != null",
+        ".write": "auth != null && ((!data.exists() && newData.exists()) || data.child('uid').val() === auth.uid || (!newData.exists() && data.child('ts').val() < now - 600000))",
         ".validate": "!newData.exists() || (newData.hasChildren(['uid','nick','txt','ts']) && newData.child('uid').val() === auth.uid && newData.child('txt').isString() && newData.child('txt').val().length <= 300 && newData.child('nick').isString() && newData.child('nick').val().length <= 40)"
       }
     },
@@ -35,9 +62,10 @@
       "$dono": {
         ".read": "auth != null && auth.uid === $dono",
         "$outro": {
-          ".write": "auth != null && (auth.uid === $dono || auth.uid === $outro)",
+          ".write": "auth != null && auth.uid === $dono",
           "$msg": {
-            ".validate": "!newData.exists() || (newData.hasChildren(['de','nick','txt','ts']) && newData.child('de').val() === auth.uid && newData.child('txt').isString() && newData.child('txt').val().length <= 300 && newData.child('nick').isString() && newData.child('nick').val().length <= 40)"
+            ".validate": "!newData.exists() || (newData.hasChildren(['de','nick','txt','ts']) && newData.child('de').val() === auth.uid && newData.child('txt').isString() && newData.child('txt').val().length <= 300 && newData.child('nick').isString() && newData.child('nick').val().length <= 40)",
+            ".write": "auth != null && (auth.uid === $dono || (auth.uid === $outro && !data.exists() && newData.exists()))"
           }
         }
       }
