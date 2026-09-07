@@ -11378,6 +11378,15 @@ let edExtraindo=new Set();
 // devolve blog de cursinho, e um numero desses ao lado dos dados reais mentiria
 // com cara de verdade.
 function edMigrar(e){
+  // Edital criado antes destes campos existirem vinha sem icone e sem cor, e o
+  // cartao renderizava a string "undefined" em 36px no lugar do icone, com a
+  // borda transparente. Preencher aqui e mais seguro que espalhar fallback por
+  // cada ponto de renderizacao.
+  if(!e.icon)e.icon='📋';
+  if(!e.color)e.color='#6c47ff';
+  if(typeof e.banca!=='string')e.banca='';
+  if(typeof e.cargo!=='string')e.cargo='';
+  if(typeof e.orgao!=='string')e.orgao='';
   if(!Array.isArray(e.disciplinas))e.disciplinas=[];
   e.disciplinas.forEach(d=>{
     if(!Array.isArray(d.assuntos))d.assuntos=[];
