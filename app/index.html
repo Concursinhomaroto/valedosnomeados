@@ -580,6 +580,31 @@ nav{
 .ed-prev-vazia{letter-spacing:0;color:var(--muted);font-weight:700;font-size:9px;
   border:1px dashed var(--border2);border-radius:6px;padding:1px 5px;}
 .ed-discs-rodape{display:flex;gap:8px;flex-wrap:wrap;}
+.ed-disc-peso{font-size:9.5px;font-weight:800;color:var(--muted);background:var(--bg2);
+  border:1px solid var(--border);border-radius:999px;padding:1px 7px;white-space:nowrap;}
+.ed-top{border:1.5px solid rgba(108,71,255,0.28);background:rgba(108,71,255,0.05);
+  border-radius:12px;padding:9px 11px;margin-top:10px;}
+.ed-top-tit{font-size:11px;font-weight:900;color:var(--accent);letter-spacing:.3px;margin-bottom:7px;}
+.ed-top-sub{display:block;font-size:9.5px;font-weight:700;color:var(--muted);letter-spacing:0;margin-top:2px;line-height:1.4;}
+.ed-top-linha{display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:11.5px;flex-wrap:wrap;}
+.ed-top-n{flex:0 0 auto;width:17px;height:17px;border-radius:50%;background:var(--accent);color:#fff;
+  font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center;}
+.ed-top-nome{flex:1 1 140px;min-width:0;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ed-top-disc{flex:0 1 auto;font-size:9.5px;font-weight:700;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;}
+.ed-top-q{flex:0 0 auto;font-size:9.5px;font-weight:900;color:var(--accent);background:rgba(108,71,255,0.12);
+  border-radius:999px;padding:1px 7px;white-space:nowrap;}
+.ed-top-st{flex:0 0 auto;font-size:9px;font-weight:800;text-transform:uppercase;white-space:nowrap;}
+/* Celular: o detalhe da cobertura ("14 de 42 questões da prova") é o número que
+   importa e estava sendo cortado por reticências — deixa quebrar. E o nome da
+   disciplina no top-5 custava uma linha inteira por item; ele já aparece na lista
+   logo abaixo, então sai. */
+@media(max-width:520px){
+  .ed-cob-head{flex-wrap:wrap;}
+  .ed-cob-det{flex:1 1 100%;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.45;}
+  .ed-top-disc{display:none;}
+  .ed-top-nome{flex:1 1 70%;white-space:normal;}
+  .ed-top-linha{gap:6px;}
+}
 .ed-vinc{flex-shrink:0;opacity:.45;}
 .ed-assunto:hover .ed-vinc{opacity:1;}
 .ed-manual{color:var(--accent);font-weight:900;margin-left:5px;}
@@ -11796,29 +11821,74 @@ function edProgresso(a){
   const subs=alvo.topic.subtopics||[];
   return{feitos:subs.filter(x=>x.studied).length,total:subs.length};
 }
+// Quantas questoes da prova UM assunto responde sozinho: a fatia de questoes da
+// disciplina dele. E esse o peso honesto — usar o total da disciplina fazia uma
+// disciplina de 30 questoes diluida em 40 assuntos ganhar de uma de 10 questoes em
+// 5 assuntos, quando cada assunto da segunda vale o dobro do tempo. Zero quando o
+// edital nao declara o numero de questoes (nao da pra inventar peso).
+function edQuestoesPorAssunto(d){
+  const n=(d.assuntos||[]).length;
+  if(!n||!(d.questoes>0))return 0;
+  return d.questoes/n;
+}
+// Cobertura em DUAS medidas. Contar assunto trata todos por igual, e isso mente
+// sobre a prova: fechar 3 assuntos de uma disciplina de 5 questoes contava tanto
+// quanto fechar 3 de uma de 30. A medida que decide o que estudar e por QUESTAO.
+// So existe quando o edital declara os numeros; sem isso a tela volta pra contagem
+// de assuntos e diz qual das duas esta mostrando, em vez de fingir precisao.
 function edCobertura(e){
   let total=0,estudados=0,cadastrados=0,faltam=0;
-  e.disciplinas.forEach(d=>d.assuntos.forEach(a=>{
-    total++;
-    const st=edEstado(a);
-    if(st==='estudado')estudados++;else if(st==='cadastrado')cadastrados++;else faltam++;
-  }));
-  return{total,estudados,cadastrados,faltam,pct:total?Math.round(estudados/total*100):0};
+  let qTotal=0,qEstudadas=0,qCadastradas=0,qFaltam=0,discSemQ=0;
+  e.disciplinas.forEach(d=>{
+    const fatia=edQuestoesPorAssunto(d);
+    if(d.questoes>0)qTotal+=d.questoes;else discSemQ++;
+    d.assuntos.forEach(a=>{
+      total++;
+      const st=edEstado(a);
+      if(st==='estudado'){estudados++;qEstudadas+=fatia;}
+      else if(st==='cadastrado'){cadastrados++;qCadastradas+=fatia;}
+      else{faltam++;qFaltam+=fatia;}
+    });
+  });
+  return{total,estudados,cadastrados,faltam,
+    pct:total?Math.round(estudados/total*100):0,
+    qTotal:Math.round(qTotal),qEstudadas:Math.round(qEstudadas),
+    qCadastradas:Math.round(qCadastradas),qFaltam:Math.round(qFaltam),
+    qCru:{tot:qTotal,ok:qEstudadas,meio:qCadastradas,falta:qFaltam},
+    qPct:qTotal?Math.round(qEstudadas/qTotal*100):null,discSemQ};
 }
 function edCoberturaDisc(d){
   const total=d.assuntos.length;
   const estudados=d.assuntos.filter(a=>edEstado(a)==='estudado').length;
-  return{total,estudados,pct:total?Math.round(estudados/total*100):0};
+  return{total,estudados,pct:total?Math.round(estudados/total*100):0,
+    questoes:d.questoes||0,porAssunto:edQuestoesPorAssunto(d)};
 }
-// Ordem do que estudar: peso da disciplina (numero de questoes que o proprio
-// edital declara — fato, nao palpite) x prevalencia marcada por voce x ainda nao
-// estudado. Assunto ja estudado sai da conta.
+// Ordem do que estudar: quantas questoes o assunto responde x prevalencia que voce
+// marcou. Assunto ja estudado sai da conta.
+// Saiu daqui o fator 1.15 que dava peso extra pro assunto "nem cadastrado": os dois
+// estados sao igualmente nao-estudados, e o que decide o que estudar e a prova, nao
+// o quanto o seu cadastro esta em dia. Ele so embaralhava a ordem.
 function edPrioridade(a,d){
   if(edEstado(a)==='estudado')return 0;
-  const peso=d.questoes>0?d.questoes:5;
-  const prev=a.prev||1;
-  const lacuna=edEstado(a)==='falta'?1.15:1;   // nem cadastrado pesa um pouco mais
-  return Math.round(peso*prev*lacuna*10);
+  const peso=edQuestoesPorAssunto(d)||1;   // sem numero declarado, peso neutro
+  return Math.round(peso*(a.prev||1)*100);
+}
+// Os N assuntos que mais rendem questao no edital inteiro. Antes a tela so ordenava
+// DENTRO de cada disciplina, entao pra saber por onde comecar era preciso comparar
+// cinco listas na mao.
+function edTop(e,n){
+  const itens=[];
+  (e.disciplinas||[]).forEach(d=>(d.assuntos||[]).forEach(a=>{
+    const p=edPrioridade(a,d);
+    if(p>0)itens.push({a,d,p,q:edQuestoesPorAssunto(d)});
+  }));
+  itens.sort((x,y)=>y.p-x.p);
+  return itens.slice(0,n||5);
+}
+// "2,5 q" — uma casa decimal so quando muda alguma coisa.
+function edFmtQ(q){
+  if(!q)return '';
+  return (q>=10?Math.round(q):Math.round(q*10)/10).toString().replace('.',',')+' q';
 }
 
 function edToggleConteudo(id){
@@ -12156,23 +12226,58 @@ function renderEditais(){
 function edConteudoHTML(e){
   const c=edCobertura(e);
   const aberto=edAbertos.has(e.id);
-  const barra=c.total?`
-    <div class="ed-cob-barra" title="${c.estudados} estudados · ${c.cadastrados} cadastrados sem estudar · ${c.faltam} sem cadastro">
-      <i style="width:${c.total?c.estudados/c.total*100:0}%;background:var(--green)"></i>
-      <i style="width:${c.total?c.cadastrados/c.total*100:0}%;background:var(--orange)"></i>
-      <i style="width:${c.total?c.faltam/c.total*100:0}%;background:var(--red)"></i>
+  // Quando o edital declara quantas questoes cada disciplina cobra, a barra e o
+  // percentual passam a falar em QUESTAO DE PROVA, que e a unidade que decide onde
+  // investir. Sem os numeros declarados, volta a contar assunto e diz isso na cara.
+  const porQ=c.qTotal>0;
+  const pct=porQ?c.qPct:c.pct;
+  const seg=porQ?c.qCru:{ok:c.estudados,meio:c.cadastrados,falta:c.faltam,tot:c.total};
+  const un=porQ?'questões':'assuntos';
+  const barra=seg.tot?`
+    <div class="ed-cob-barra" title="${porQ?c.qEstudadas:c.estudados} ${un} estudados · ${porQ?c.qCadastradas:c.cadastrados} cadastrados sem estudar · ${porQ?c.qFaltam:c.faltam} sem cadastro">
+      <i style="width:${seg.ok/seg.tot*100}%;background:var(--green)"></i>
+      <i style="width:${seg.meio/seg.tot*100}%;background:var(--orange)"></i>
+      <i style="width:${seg.falta/seg.tot*100}%;background:var(--red)"></i>
     </div>`:'';
+  const det=porQ
+    ?`<b>${c.qEstudadas} de ${c.qTotal} questões</b> da prova${c.discSemQ?` · <span style="color:var(--orange-t)">${c.discSemQ} disciplina${c.discSemQ>1?'s':''} sem nº de questões</span>`:''}`
+    :`${c.estudados}/${c.total} assuntos${c.faltam?` · <b style="color:var(--red-t)">${c.faltam} sem cadastro</b>`:''}`;
   return`
   <div class="ed-conteudo">
-    <div class="ed-cob-head" onclick="edToggleConteudo('${e.id}')">
+    <div class="ed-cob-head" onclick="edToggleConteudo('${e.id}')"
+         title="${porQ?'Cada assunto vale a fatia de questões da disciplina dele — é o percentual da prova que você já domina.':'Preencha o nº de questões de cada disciplina pra ver a cobertura por questão de prova, em vez de por assunto.'}">
       <i class="fa fa-chevron-right ed-chev${aberto?' aberto':''}"></i>
       <span class="ed-cob-titulo">📚 Conteúdo & cobertura</span>
-      ${c.total?`<span class="ed-cob-pct" style="color:${c.pct>=70?'var(--green-t)':c.pct>=35?'var(--orange-t)':'var(--red-t)'}">${c.pct}%</span>
-        <span class="ed-cob-det">${c.estudados}/${c.total} estudados${c.faltam?` · <b style="color:var(--red-t)">${c.faltam} sem cadastro</b>`:''}</span>`
+      ${c.total?`<span class="ed-cob-pct" style="color:${pct>=70?'var(--green-t)':pct>=35?'var(--orange-t)':'var(--red-t)'}">${pct}%</span>
+        <span class="ed-cob-det">${det}</span>`
         :`<span class="ed-cob-det">nenhum conteúdo cadastrado ainda</span>`}
     </div>
     ${barra}
     ${aberto?edConteudoCorpo(e):''}
+  </div>`;
+}
+// Bloco de abertura da dobra: os 5 assuntos que mais rendem questao agora, do
+// edital inteiro. E a resposta pra "por onde eu comeco?", que a tela nao dava.
+function edTopHTML(e){
+  const top=edTop(e,5);
+  if(!top.length)return'';
+  const semPeso=top.every(t=>!t.q);
+  return`<div class="ed-top">
+    <div class="ed-top-tit">🎯 Onde investir agora
+      <span class="ed-top-sub">${semPeso?'preencha o nº de questões das disciplinas pra ordenar por peso de prova'
+        :'mais questões de prova por assunto, contando a prevalência que você marcou'}</span></div>
+    ${top.map((t,i)=>{
+      const st=edEstado(t.a);
+      const cor=st==='falta'?'var(--red-t)':'var(--orange-t)';
+      const alvo=edAlvoDe(t.a);
+      const abre=alvo&&alvo.tipo==='sub'?`onclick="goToSubtopic('${t.a.subId}')" style="cursor:pointer" title="Abrir o miniboss"`:'';
+      return`<div class="ed-top-linha">
+        <span class="ed-top-n">${i+1}</span>
+        <span class="ed-top-nome" ${abre}>${escapeHtml(t.a.nome)}</span>
+        <span class="ed-top-disc">${escapeHtml(t.d.nome)}</span>
+        ${t.q?`<span class="ed-top-q" title="Questões da prova que este assunto responde sozinho">${edFmtQ(t.q)}</span>`:''}
+        <span class="ed-top-st" style="color:${cor}">${st==='falta'?'sem cadastro':'não estudado'}</span>
+      </div>`;}).join('')}
   </div>`;
 }
 
@@ -12191,7 +12296,7 @@ function edConteudoCorpo(e){
     </div>`;
   }
   const reinos=db.kingdoms.map(k=>`<option value="${k.id}">${escapeHtml(k.icon||'🏰')} ${escapeHtml(k.name)}</option>`).join('');
-  return`<div class="ed-discs">
+  return`${edTopHTML(e)}<div class="ed-discs">
     ${e.disciplinas.map(d=>{
       const cd=edCoberturaDisc(d);
       const faltam=d.assuntos.filter(a=>edEstado(a)==='falta').length;
@@ -12204,13 +12309,14 @@ function edConteudoCorpo(e){
                    onchange="edSetQuestoes('${e.id}','${d.id}',this.value)"> questões
           </label>
           <span class="ed-disc-cob" style="color:${cd.pct>=70?'var(--green-t)':cd.pct>=35?'var(--orange-t)':'var(--red-t)'}">${cd.estudados}/${cd.total}</span>
+          ${cd.porAssunto?`<span class="ed-disc-peso" title="Cada assunto desta disciplina responde, em média, ${edFmtQ(cd.porAssunto)} da prova">${edFmtQ(cd.porAssunto)}/assunto</span>`:''}
           <button class="btn btn-xs btn-ghost" onclick="edAddAssunto('${e.id}','${d.id}')" title="Adicionar assunto"><i class="fa fa-plus"></i></button>
           <button class="btn btn-xs btn-danger" onclick="edDelDisciplina('${e.id}','${d.id}')" title="Remover disciplina"><i class="fa fa-trash"></i></button>
         </div>
         ${faltam?`<div class="ed-disc-falta">
-          <span><b>${faltam}</b> assunto${faltam>1?'s':''} que cai${faltam>1?'em':''} na prova e ainda não existe${faltam>1?'m':''} no Vale.</span>
+          <span><b>${faltam}</b> sem cadastro →</span>
           <select class="inp" id="ed-reino-${d.id}" style="font-size:10px;padding:3px 7px;width:auto">${reinos}</select>
-          <button class="btn btn-xs btn-primary" onclick="edCriarFaltantes('${e.id}','${d.id}')"><i class="fa fa-wand-sparkles"></i> Criar ${faltam}</button>
+          <button class="btn btn-xs btn-primary" onclick="edCriarFaltantes('${e.id}','${d.id}')" title="Cria no Vale os ${faltam} assunto${faltam>1?'s':''} desta disciplina que ainda não existem"><i class="fa fa-wand-sparkles"></i> Criar</button>
         </div>`:''}
         <div class="ed-assuntos">
           ${ordenados.map(a=>{
