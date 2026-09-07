@@ -448,6 +448,8 @@ nav{
 .flash-dup-aviso{font-size:10.5px;color:var(--orange-t);font-weight:600;margin-top:4px;line-height:1.45;}
 .flash-dup-btn{background:none;border:0;padding:0;cursor:pointer;font:inherit;text-decoration:underline;text-underline-offset:2px;}
 .dup-aviso{font-size:11.5px;color:var(--text2);line-height:1.55;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:14px;}
+.dup-massa{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px;}
+.dup-pulados{flex:1 1 100%;text-align:right;font-size:10px;color:var(--muted);font-weight:700;}
 .dup-par{border:1.5px solid var(--border);border-radius:14px;padding:11px;margin-bottom:12px;}
 .dup-cab{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px;}
 .dup-op{display:flex;align-items:flex-start;gap:9px;padding:9px 10px;border:1.5px solid var(--border);border-radius:11px;margin-bottom:7px;cursor:pointer;background:var(--card2,rgba(255,255,255,0.03));}
@@ -8129,10 +8131,20 @@ function fcAcharPares(cards){
         const exato=normalizeForDedup(ord[i].pergunta)===normalizeForDedup(ord[j].pergunta);
         if(!exato&&!fcQuaseIgual(ord[i].pergunta,ord[j].pergunta))continue;
         pareado.add(ord[j].id);
-        pares.push({a:ord[i],b:ord[j],exato,acao:fcHistorico(ord[j])>fcHistorico(ord[i])?'a':'b'});
+        // Sugestao pronta SO pra texto identico. "Parecida" entra desmarcada de
+        // proposito: a deteccao por semelhanca erra pra mais, e com uma pilha grande
+        // de pares ninguem confere um a um — vir tudo pre-marcado pra apagar seria
+        // um convite a perder card bom num clique.
+        const sugerido=fcHistorico(ord[j])>fcHistorico(ord[i])?'a':'b';
+        // 'pular' nao faz nada: nem apaga, nem grava "sao diferentes". E o padrao de
+        // par que voce ainda nao olhou — declarar por voce que um par e legitimo
+        // silenciaria o aviso pra sempre sem ninguem ter conferido.
+        pares.push({a:ord[i],b:ord[j],exato,sugerido,acao:exato?sugerido:'pular'});
       }
     }
   });
+  // Identicas primeiro: sao as decididas, e e o bloco que da pra resolver em bloco.
+  pares.sort((x,y)=>(y.exato?1:0)-(x.exato?1:0));
   return pares;
 }
 // renderFCMain roda a cada tecla digitada na busca; varrer pares é O(n²) por
@@ -8169,12 +8181,23 @@ function fcDupCartaoHTML(i,lado,c){
     <span class="dup-tag">${sel?'apagar':'apagar esta'}</span>
   </label>`;
 }
+function fcDupMarcarIdenticas(){
+  fcDupPares.forEach(p=>{if(p.exato)p.acao=p.sugerido;});
+  document.getElementById('modal-body').innerHTML=fcRevisaoHTML();
+}
+function fcDupDesmarcarTodas(){
+  fcDupPares.forEach(p=>{p.acao='pular';});
+  document.getElementById('modal-body').innerHTML=fcRevisaoHTML();
+}
 function fcRevisaoHTML(){
-  const apagar=fcDupPares.filter(p=>p.acao!=='nenhum').length;
-  const manter=fcDupPares.length-apagar;
+  const apagar=fcDupPares.filter(p=>p.acao==='a'||p.acao==='b').length;
+  const manter=fcDupPares.filter(p=>p.acao==='nenhum').length;
+  const pulados=fcDupPares.filter(p=>p.acao==='pular').length;
+  const iguais=fcDupPares.filter(p=>p.exato).length;
+  const parecidas=fcDupPares.length-iguais;
   const corpo=fcDupPares.map((p,i)=>`
     <div class="dup-par">
-      <div class="dup-cab">Par ${i+1} de ${fcDupPares.length} · ${p.exato?'<b>texto idêntico</b>':'<b>parecidas</b> — confira, pode ser que sejam diferentes'}</div>
+      <div class="dup-cab">Par ${i+1} de ${fcDupPares.length} · ${p.exato?'<b style="color:var(--red-t)">texto idêntico</b>':'<b style="color:var(--orange-t)">só parecidas</b> — confira, pode ser pergunta diferente'}</div>
       ${fcDupCartaoHTML(i,'a',p.a)}
       ${fcDupCartaoHTML(i,'b',p.b)}
       <label class="dup-op dup-op-keep${p.acao==='nenhum'?' sel':''}">
@@ -8183,13 +8206,24 @@ function fcRevisaoHTML(){
         <span class="dup-meta">Não volto a marcar este par.</span></span>
       </label>
     </div>`).join('');
-  return `<div class="dup-aviso"><i class="fa fa-circle-info"></i> A sugestão já vem marcada: apagar a que tem menos histórico de estudo. Confira antes de aplicar — quem só parece repetida às vezes é pergunta diferente de verdade.</div>
+  return `<div class="dup-aviso">
+      <b>${fcDupPares.length} par${fcDupPares.length>1?'es':''} encontrado${fcDupPares.length>1?'s':''}:</b>
+      <b style="color:var(--red-t)">${iguais}</b> com <b>texto idêntico</b> (essas são repetição mesmo — já vêm marcadas)
+      e <b style="color:var(--orange-t)">${parecidas}</b> apenas <b>parecidas</b>, que entram <b>desmarcadas</b>:
+      a comparação por semelhança erra pra mais, então essas ficam por sua conta.
+      Nada é apagado sem você aplicar.
+      ${fcDupPares.length>8?`<div class="dup-massa">
+        <button class="btn btn-xs btn-ghost" onclick="fcDupMarcarIdenticas()">Marcar as ${iguais} idênticas</button>
+        <button class="btn btn-xs btn-ghost" onclick="fcDupDesmarcarTodas()" title="Tira a marca de exclusão de todos os pares. Não declara nada: eles voltam a aparecer numa próxima revisão.">Não apagar nenhuma</button>
+      </div>`:''}
+    </div>
     ${corpo}
     <div class="dup-rodape">
       <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancelar</button>
-      <button class="btn btn-danger btn-sm" onclick="fcDupAplicar()">
-        ${apagar?`Apagar ${apagar} card${apagar>1?'s':''}`:'Aplicar'}${manter?` e liberar ${manter} par${manter>1?'es':''}`:''}
+      <button class="btn btn-danger btn-sm"${(!apagar&&!manter)?' disabled title="Nada selecionado — escolha o que apagar ou marque algum par como diferente"':''} onclick="fcDupAplicar()">
+        ${(!apagar&&!manter)?'Nada selecionado':`${apagar?`Apagar ${apagar} card${apagar>1?'s':''}`:'Aplicar'}${manter?`${apagar?' e':''} liberar ${manter} par${manter>1?'es':''}`:''}`}
       </button>
+      ${pulados?`<span class="dup-pulados">${pulados} par${pulados>1?'es':''} sem decisão — continuam marcados pra depois</span>`:''}
     </div>`;
 }
 function fcDupEscolha(i,v){
@@ -8200,6 +8234,7 @@ function fcDupEscolha(i,v){
 function fcDupAplicar(){
   let apagados=0,liberados=0;
   fcDupPares.forEach(p=>{
+    if(p.acao==='pular')return;    // nao faz nada, volta a aparecer na proxima revisao
     if(p.acao==='nenhum'){
       // grava dos DOIS lados: se um dia o outro card for apagado, a marca some junto
       const A=db.flashcards[p.a.id],B=db.flashcards[p.b.id];
