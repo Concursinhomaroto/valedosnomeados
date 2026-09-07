@@ -3162,7 +3162,63 @@ const firebaseConfig = {
 
 let firebaseDB=null, DB_REF=null, connectedRef=null, promoRef=null;
 let useLocalFallback=false;
-const LS_KEY='vdn_local_v1';
+// Cache local do banco. A chave carrega o uid de propósito: enquanto foi uma só pra
+// todas as contas do mesmo navegador, o loadDB() tratava esse cache como fonte
+// confiável pra QUALQUER uid logado — quem entrasse depois de outra pessoa via os
+// dados dela, e o app AINDA regravava esses dados no Firebase da conta nova
+// (conta existente perdia o histórico próprio; conta nova nascia com o plano pago
+// da anterior, sem passar pelo trial).
+const LS_KEY_LEGACY='vdn_local_v1';   // chave única antiga, ainda no aparelho de quem já usou
+function lsKey(){
+  return (currentUser&&currentUser.uid)?`${LS_KEY_LEGACY}_${currentUser.uid}`:LS_KEY_LEGACY;
+}
+// Só devolve o cache se der pra PROVAR que ele é desta conta. Toda gravação nova
+// carimba _uid; pra cópia antiga (sem carimbo) o dono é conferido pelo accountEmail,
+// que o app já gravava. Sem prova, o cache é ignorado — começar do servidor é sempre
+// melhor que herdar dado de outra pessoa.
+function lerCacheLocal(){
+  const tenta=(chave)=>{
+    let raw=null;
+    try{raw=localStorage.getItem(chave);}catch(e){return null;}
+    if(!raw)return null;
+    try{return JSON.parse(raw);}catch(e){return null;}
+  };
+  const meu=tenta(lsKey());
+  if(meu){
+    // Carimbo de outro dono na própria chave não deveria acontecer, mas se acontecer
+    // (uid reaproveitado, chave editada à mão) o cache é descartado do mesmo jeito.
+    if(currentUser&&meu._uid&&meu._uid!==currentUser.uid)return null;
+    return meu;
+  }
+  if(!currentUser)return null;
+  const antigo=tenta(LS_KEY_LEGACY);
+  if(!antigo)return null;
+  const ehMeu=antigo._uid?antigo._uid===currentUser.uid
+                         :(!!antigo.accountEmail&&antigo.accountEmail===currentUser.email);
+  if(!ehMeu)return null;   // é de outra conta deste aparelho: não usa, e não apaga (pode ser
+                           // a única cópia de quem estudou offline por lá)
+  return antigo;
+}
+function gravarCacheLocal(){
+  const copia=sanitizeForFirebase(db);   // já é uma cópia profunda; não mexe no db
+  if(currentUser&&currentUser.uid)copia._uid=currentUser.uid;
+  localStorage.setItem(lsKey(),JSON.stringify(copia));
+  // Migrou pra chave com uid: a cópia antiga desta mesma conta não serve mais pra nada
+  // e só atrapalharia a checagem de dono depois.
+  try{
+    const antigo=localStorage.getItem(LS_KEY_LEGACY);
+    if(antigo&&currentUser){
+      const d=JSON.parse(antigo);
+      const ehMeu=d._uid?d._uid===currentUser.uid:(!!d.accountEmail&&d.accountEmail===currentUser.email);
+      if(ehMeu)localStorage.removeItem(LS_KEY_LEGACY);
+    }
+  }catch(e){}
+}
+// O carimbo é só do cache local — nunca pode vazar pro db nem pro Firebase.
+function semCarimbo(d){
+  if(d&&typeof d==='object'&&'_uid' in d){const c={...d};delete c._uid;return c;}
+  return d;
+}
 // Estado da promoção de vagas vitalícias — lido de um caminho PÚBLICO (promo/lifetime),
 // fora de users/{uid}, então não depende de login pra aparecer no seletor de plano.
 // Você controla isso manualmente no Firebase Console (não tem escrita pelo app):
@@ -3592,8 +3648,8 @@ function loadDB(callback){
   // FALLBACK: se Firebase falhou no init, usar localStorage
   if(useLocalFallback||!DB_REF){
     try{
-      const saved=localStorage.getItem(LS_KEY);
-      if(saved)Object.assign(db,JSON.parse(saved));
+      const saved=lerCacheLocal();
+      if(saved)Object.assign(db,semCarimbo(saved));
     }catch(e){}
     applyDefaults();
     firebaseReady=true;
@@ -3615,7 +3671,7 @@ function loadDB(callback){
   // Timeout de segurança: 12s — tenta localStorage como fallback
   const safetyTimer=setTimeout(()=>{
     if(firebaseReady)return;
-    try{const s=localStorage.getItem(LS_KEY);if(s)Object.assign(db,JSON.parse(s));}catch(e){}
+    try{const s=lerCacheLocal();if(s)Object.assign(db,semCarimbo(s));}catch(e){}
     applyDefaults();firebaseReady=true;
     overlay.style.display='none';
     if(msg)msg.style.display='none';
@@ -3643,10 +3699,9 @@ function loadDB(callback){
     if(data){
       if(!firebaseReady){
         try{
-          const localRaw=localStorage.getItem(LS_KEY);
-          const local=localRaw?JSON.parse(localRaw):null;
+          const local=lerCacheLocal();
           if(local&&(local.lastModified||0)>(data.lastModified||0)){
-            Object.assign(db,local);
+            Object.assign(db,semCarimbo(local));
             usedLocalOverride=true;
           }
         }catch(e){}
@@ -3661,11 +3716,10 @@ function loadDB(callback){
       // veio vazia). Só conta como "achado" se tiver algo relevante de verdade.
       let localTemDadoDeVerdade=false;
       try{
-        const localRaw=localStorage.getItem(LS_KEY);
-        const local=localRaw?JSON.parse(localRaw):null;
+        const local=lerCacheLocal();
         const c=local?countDataSummary(local):null;
         if(c&&(c.reinos+c.flashcards+c.redacoes+c.temas)>0){
-          Object.assign(db,local);
+          Object.assign(db,semCarimbo(local));
           usedLocalOverride=true;
           localTemDadoDeVerdade=true;
         }
@@ -3713,7 +3767,7 @@ function loadDB(callback){
       saveDB();
     }
     applyPlanGating();
-    try{localStorage.setItem(LS_KEY,JSON.stringify(db));}catch(e){}
+    try{gravarCacheLocal();}catch(e){}
     if(!firebaseReady){
       firebaseReady=true;
       overlay.style.display='none';
@@ -3740,7 +3794,7 @@ function loadDB(callback){
   },(error)=>{
     clearTimeout(safetyTimer);
     console.error('Firebase error:',error);
-    try{const s=localStorage.getItem(LS_KEY);if(s)Object.assign(db,JSON.parse(s));}catch(e){}
+    try{const s=lerCacheLocal();if(s)Object.assign(db,semCarimbo(s));}catch(e){}
     applyDefaults();
     if(!firebaseReady){
       firebaseReady=true;
@@ -4052,7 +4106,7 @@ function checkOverdueNotifications(force){
 function saveDB(){
   db.lastModified=Date.now();
   try{
-    localStorage.setItem(LS_KEY,JSON.stringify(sanitizeForFirebase(db)));
+    gravarCacheLocal();
   }catch(e){
     // Não deixa esse erro sumir silenciosamente — se o dado não é serializável (ex: uma
     // referência circular que entrou em algum campo), nem o backup local funciona, e o
@@ -4238,14 +4292,21 @@ function abrirDetalhesBackup(){
   }
   openModal('🛡️ Cópia de segurança',`
     ${corpo}
-    <p style="margin:0 0 14px;font-size:12.5px;color:var(--muted)">Uma vez por dia o app grava uma
+    <p style="margin:0 0 12px;font-size:12.5px;color:var(--muted)">Uma vez por dia o app grava uma
     cópia inteira do seu banco num caminho separado, que o uso normal nunca toca. Ficam guardados
-    os últimos ${BACKUP_RETENTION_DAYS} dias, e dá pra voltar pra qualquer um deles em
-    <b>Admin → Backups</b>.</p>
+    os últimos ${BACKUP_RETENTION_DAYS} dias, e dá pra voltar pra qualquer um deles aqui embaixo.</p>
+    <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">♻️ Voltar pra um dia anterior</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Restaurar substitui
+    <b>tudo</b> que está na conta agora pelo estado daquele dia. Ele mostra o que tem em cada um antes
+    de você confirmar.</div>
+    <div id="backup-lista-usuario" style="display:flex;flex-direction:column;gap:8px;max-height:230px;overflow-y:auto;margin-bottom:14px">
+      <div class="empty" style="padding:12px"><i class="fa fa-spinner fa-spin"></i><p>Carregando backups...</p></div>
+    </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn" onclick="forcarBackupAgora()"><i class="fa fa-shield-halved"></i> Fazer backup agora</button>
       <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
     </div>`);
+  renderBackupList('backup-lista-usuario');
 }
 // Botão de verificação: derruba os dois curto-circuitos (o do localStorage e o do
 // "já falhou nesta sessão") e força uma gravação de verdade, pra que "o backup está
@@ -4268,9 +4329,16 @@ function forcarBackupAgora(){
   },2500);
 }
 function adminLoadBackups(){
-  const list=document.getElementById('admin-backups-list');
   const retSpan=document.getElementById('admin-backups-retention');
   if(retSpan)retSpan.textContent=BACKUP_RETENTION_DAYS;
+  renderBackupList('admin-backups-list');
+}
+// A lista de backups vivia só na tela de Admin, então quem não é admin não tinha
+// como voltar pra um dia anterior — justamente quem mais precisa quando a conta
+// aparece com dado errado. Os backups sempre foram por usuário (userRef), então é
+// só questão de ter onde clicar: agora também sai no modal do selo de backup.
+function renderBackupList(elId){
+  const list=document.getElementById(elId);
   if(!list)return;
   const metaRef=userRef('vdn_v1_backupMeta');
   if(!metaRef){list.innerHTML='<div class="empty" style="padding:16px"><p>Firebase indisponível agora.</p></div>';return;}
