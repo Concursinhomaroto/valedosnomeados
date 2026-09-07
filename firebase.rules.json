@@ -47,7 +47,7 @@
           ".validate": "!newData.exists() || (newData.isNumber())"
         },
         "$outro": {
-          ".validate": "false"
+          ".validate": "!newData.exists()"
         }
       }
     },
