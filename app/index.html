@@ -15929,7 +15929,7 @@ function openAISettingsModal(){
         <input type="checkbox" id="tavily-oficial-input" ${db.tavilySoOficial!==false?'checked':''}>
         Priorizar fonte oficial (lei, diretriz, órgão de governo) em vez de blog e apostila
       </label>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:18px">${(db.tavilyApiKey||'').trim()?'✅ Busca pelo Tavily ativa':'Sem chave: o app tenta a busca do Gemini e avisa se ela não estiver liberada'}</div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:18px">${(db.tavilyApiKey||'').trim()?'✅ Busca pelo Tavily ativa — o Gemini só redige, gastando uma chamada por geração':'⚠️ Sem chave: quem pesquisa é o próprio Gemini, o que consome bem mais da cota dele (é a causa mais comum de erro 429)'}</div>
 
       <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">🔊 Voz da leitura (flashcards e resumos)</div>
       <p style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
@@ -16128,7 +16128,12 @@ async function tryGeminiModelComRetry(apiKey,model,prompt,opts){
 function geminiMensagemErro(attempts,tudoTemporario,limite){
   if(limite){
     const q=limite.esperar?` O Google pediu pra esperar ${limite.esperar}.`:'';
-    return `Você atingiu o limite de uso da sua chave do Gemini (erro 429).${q} Isso não é chave inválida: é cota — a gratuita tem teto por minuto e por dia. Espere e tente de novo, ou veja seu consumo em aistudio.google.com/apikey.`;
+    // Sem chave do Tavily, quem pesquisa na internet é o próprio Gemini — e a chamada
+    // COM busca é a que mais consome cota. A hora de dizer isso é agora, quando a
+    // pessoa acabou de bater no limite, e não escondido numa tela de configuração.
+    const semTavily=(typeof tavilyAtivo==='function')&&!tavilyAtivo();
+    const dica=semTavily?' Você está sem chave do Tavily: assim quem pesquisa na internet é o próprio Gemini, que é a chamada mais cara. Configure em ⚙️ IA e voz (1.000 buscas grátis por mês) pra gastar bem menos.':'';
+    return `Você atingiu o limite de uso da sua chave do Gemini (erro 429).${q} Isso não é chave inválida: é cota — a gratuita tem teto por minuto e por dia.${dica}`;
   }
   if(tudoTemporario)return 'A IA do Google está sobrecarregada agora (erro 503). Não é problema da sua chave nem da sua conta — espere um ou dois minutos e tente de novo.';
   return `Nenhum modelo do Gemini respondeu. Tentativas: ${attempts.join(' · ')||'nenhuma'}. Verifique se sua chave em aistudio.google.com/apikey está válida.`;
@@ -16192,7 +16197,10 @@ async function callGeminiGenerateSearch(apiKey,prompt){
   const attempts=[];
   const diag=[];      // por que a busca não pegou, modelo a modelo
   let fallback=null;  // primeira resposta que funcionou mas sem confirmar busca real
-  for(const model of geminiOrdemModelos()){
+  // Mesma economia do callGeminiJSON: quando o modelo responde mas sem ter pesquisado,
+  // vale uma segunda chance, nao mais tres. Cada tentativa e uma requisicao, e o resumo
+  // sem Tavily e justamente o caminho que mais consumia cota do Gemini.
+  for(const model of geminiOrdemModelos().slice(0,2)){
     let r=await tryGeminiModelComRetry(apiKey,model,prompt,{useSearch:true});
     // 400 costuma ser nome de ferramenta que aquele modelo não conhece — tenta o outro
     if(!r.ok&&r.http===400){
