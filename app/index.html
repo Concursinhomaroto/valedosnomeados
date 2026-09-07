@@ -1584,6 +1584,9 @@ nav{
 
 /* GRID DE CARDS */
 .fc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:20px;}
+.fc-grid-mais{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  background:var(--bg2);border:1.5px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:20px;
+  font-size:11.5px;color:var(--muted);font-weight:700;}
 .fc-grid-card{background:var(--panel);border:1.5px solid var(--border);border-radius:16px;padding:18px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;}
 .fc-grid-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:16px 16px 0 0;}
 .fc-grid-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(108,71,255,0.1);border-color:var(--border2);}
@@ -8073,21 +8076,34 @@ function fcRadical(w){
 function fcTermos(s){
   return new Set(normalizeForDedup(s).split(' ').filter(t=>t&&!FC_MOLDURA.has(t)).map(fcRadical));
 }
-function fcQuaseIgual(a,b){
-  const x=fcTermos(a),y=fcTermos(b);
+const FC_LIMIAR_PARECIDA=0.72;
+// Compara dois conjuntos JA prontos. A versao que recebia texto tokenizava os dois
+// lados a cada comparacao — e a varredura e O(n²), entao a mesma pergunta era
+// tokenizada milhares de vezes. Com 2400 cards isso custava 1 segundo de tela
+// travada toda vez que a lista mudava.
+function fcTermosParecidos(x,y){
   if(x.size<3||y.size<3)return false;
-  let i=0;x.forEach(t=>{if(y.has(t))i++;});
-  return i/(x.size+y.size-i)>=0.72;
+  // Corte barato antes da conta: se um conjunto e muito menor que o outro, nem no
+  // melhor caso (todos os termos do menor dentro do maior) o indice alcanca o limiar.
+  const menor=Math.min(x.size,y.size),maior=Math.max(x.size,y.size);
+  if(menor/maior<FC_LIMIAR_PARECIDA)return false;
+  const[a,b]=x.size<=y.size?[x,y]:[y,x];
+  let i=0;a.forEach(t=>{if(b.has(t))i++;});
+  return i/(x.size+y.size-i)>=FC_LIMIAR_PARECIDA;
+}
+function fcQuaseIgual(a,b){
+  return fcTermosParecidos(fcTermos(a),fcTermos(b));
 }
 // Marca o card MAIS NOVO de cada par parecido (o primeiro da lista fica em paz),
 // apontando qual pergunta ele parece repetir.
 function flashSuspeitasDup(cards){
   const marc=new Map();
+  const T=cards.map(c=>fcTermos(c.pergunta));   // uma vez por card, nao por comparacao
   for(let i=0;i<cards.length;i++){
     for(let j=i+1;j<cards.length;j++){
       if(marc.has(cards[j].id))continue;
       if(fcJaLiberado(cards[i],cards[j]))continue;
-      if(fcQuaseIgual(cards[i].pergunta,cards[j].pergunta))marc.set(cards[j].id,cards[i].pergunta);
+      if(fcTermosParecidos(T[i],T[j]))marc.set(cards[j].id,cards[i].pergunta);
     }
   }
   return marc;
@@ -8122,14 +8138,19 @@ function fcAcharPares(cards){
     // ordem por criação: o "a" do par é sempre o mais antigo, que é o que tende
     // a carregar o histórico de acertos/erros que você não quer perder.
     const ord=grupo.slice().sort((x,y)=>String(x.criacao||'').localeCompare(String(y.criacao||'')));
+    // Tokeniza e normaliza uma vez por card. Dentro do laco O(n²) isso era refeito a
+    // cada par: com 200 cards num assunto sao 19.900 comparacoes, ou seja ~40.000
+    // tokenizacoes da mesma coisa.
+    const T=ord.map(c=>fcTermos(c.pergunta));
+    const N=ord.map(c=>normalizeForDedup(c.pergunta));
     const pareado=new Set();
     for(let i=0;i<ord.length;i++){
       if(pareado.has(ord[i].id))continue;
       for(let j=i+1;j<ord.length;j++){
         if(pareado.has(ord[j].id))continue;
         if(fcJaLiberado(ord[i],ord[j]))continue;
-        const exato=normalizeForDedup(ord[i].pergunta)===normalizeForDedup(ord[j].pergunta);
-        if(!exato&&!fcQuaseIgual(ord[i].pergunta,ord[j].pergunta))continue;
+        const exato=N[i]===N[j];
+        if(!exato&&!fcTermosParecidos(T[i],T[j]))continue;
         pareado.add(ord[j].id);
         // Sugestao pronta SO pra texto identico. "Parecida" entra desmarcada de
         // proposito: a deteccao por semelhanca erra pra mais, e com uma pilha grande
@@ -14837,6 +14858,7 @@ function renderFCSidebarSummary(){
 }
 
 function selectFCBoss(topicId){
+  fcGridResetLimite();   // chefao novo comeca do primeiro lote
   let found=null;
   db.kingdoms.forEach(k=>{
     const t=(db.topics[k.id]||[]).find(t=>t.id===topicId);
@@ -14851,6 +14873,14 @@ function selectFCBoss(topicId){
 }
 
 // ---- MAIN CONTENT ----
+// Redesenhar a tela inteira a cada tecla custava ~350ms com alguns milhares de
+// cards — digitar tres letras travava a interface por um segundo. Espera a pessoa
+// parar de digitar. renderFCMain ja preserva o foco e a posicao do cursor.
+let fcBuscaTimer=null;
+function fcBuscaDigitou(){
+  clearTimeout(fcBuscaTimer);
+  fcBuscaTimer=setTimeout(()=>{fcGridResetLimite();renderFCMain();},250);
+}
 function renderFCMain(){
   const el=document.getElementById('fc-main-content');if(!el)return;
   // Preserva foco + posição do cursor de quem estava digitando (ex: campo de busca) —
@@ -15022,7 +15052,7 @@ function renderFCMain(){
         </div>
       </div>
       <div class="fc-toolbar">
-        <input class="fc-search" id="fc-filter-q" placeholder="🔍 Pergunta ou tag..." oninput="renderFCMain()" value="${q}">
+        <input class="fc-search" id="fc-filter-q" placeholder="🔍 Pergunta ou tag..." oninput="fcBuscaDigitou()" value="${q}">
         <div class="fc-mode-toggle">
           <button class="fc-mode-btn${fcMode==='grid'?' active':''}" onclick="fcSetMode('grid')">☰ Lista</button>
           <button class="fc-mode-btn${fcMode==='study'?' active':''}" onclick="fcSetMode('study')"${!cards.length?' disabled':''}>▶ Estudar</button>
@@ -15135,9 +15165,25 @@ function renderFCMain(){
 }
 
 // ---- GRID ----
+// Um chefao grande desenhava TODOS os cards de uma vez: com 2400 deram 7,3 MB de HTML
+// e 69 mil nos no DOM, ~350ms por render e a rolagem pesada dali em diante. Ninguem le
+// 2400 cards de cima a baixo — pra achar um card existe a busca. Desenha um lote e
+// oferece mais.
+const FC_GRID_LOTE=60;
+let fcGridLimite=FC_GRID_LOTE;
+function fcGridResetLimite(){fcGridLimite=FC_GRID_LOTE;}
+function fcGridMostrarMais(){
+  fcGridLimite+=FC_GRID_LOTE;
+  renderFCMain();
+}
 function fcGridHTML(cards){
   if(!cards.length)return`<div class="empty"><i class="fa fa-ghost"></i><p>Nenhum flashcard aqui.<br>Crie o primeiro com o botão <b>+ Novo card</b>!</p></div>`;
-  return`<div class="fc-grid">${cards.map(c=>{
+  const ocultos=Math.max(0,cards.length-fcGridLimite);
+  const rodape=ocultos?`<div class="fc-grid-mais">
+      <span>Mostrando ${Math.min(fcGridLimite,cards.length)} de ${cards.length} cards — use a busca acima pra achar um específico.</span>
+      <button class="btn btn-sm btn-ghost" onclick="fcGridMostrarMais()">Mostrar mais ${Math.min(FC_GRID_LOTE,ocultos)}</button>
+    </div>`:'';
+  return`<div class="fc-grid">${cards.slice(0,fcGridLimite).map(c=>{
     const st=fcStatus(c);const color=fcStatusColor(st);
     const total=(c.acertos||0)+(c.erros||0);
     const pct=total?Math.round((c.acertos||0)/total*100):null;
@@ -15171,6 +15217,7 @@ function fcGridHTML(cards){
         </div>
       </div>
     </div>`;}).join('')}</div>
+  ${rodape}
   <!-- Gráfico de desempenho -->
   <div style="background:var(--panel);border:1.5px solid var(--border);border-radius:16px;padding:18px;margin-top:16px">
     <div style="font-size:11px;font-weight:900;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">📊 Desempenho dos Flashcards</div>
@@ -15704,6 +15751,7 @@ function fcVoltar(){
 }
 
 function fcSetMode(m){
+  fcGridResetLimite();
   if(m!=='study')fcVoiceStop();
   else fcShuffleSession(); // nova sessão de estudo começando: embaralha de novo os cards
   fcMode=m;fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;
