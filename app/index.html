@@ -438,6 +438,12 @@ nav{
 .flash-q{font-size:12.5px;font-weight:700;color:var(--text);line-height:1.5;}
 .flash-a{font-size:12px;color:var(--text2);line-height:1.6;margin-top:5px;padding-top:5px;border-top:1px dashed var(--border);}
 .flash-count{font-size:10px;color:var(--muted);font-weight:700;}
+.flash-count-dup{color:var(--orange-t);}
+.flash-q{display:flex;align-items:flex-start;gap:8px;}
+.flash-del{flex:0 0 auto;margin-left:auto;background:none;border:0;color:var(--muted);cursor:pointer;font-size:12px;border-radius:6px;line-height:1;display:flex;align-items:center;justify-content:center;min-width:28px;min-height:28px;margin-top:-4px;margin-right:-4px;}
+.flash-del:hover{color:var(--red-t);background:rgba(239,68,68,.12);}
+.flash-card-dup{border-color:var(--orange);}
+.flash-dup-aviso{font-size:10.5px;color:var(--orange-t);font-weight:600;margin-top:4px;line-height:1.45;}
 
 /* ===== SIMULADO RÁPIDO (IA) ===== */
 .btn-purple-s{background:rgba(124,58,237,0.12);border:1.5px solid rgba(124,58,237,0.35);color:var(--accent);}
@@ -7434,6 +7440,14 @@ async function generateFluxograma(subId){
 function flashCardsDoSub(subId){
   return Object.values(db.flashcards||{}).filter(c=>c.subId===subId);
 }
+// Escopo de duplicata de UM assunto: os cards do próprio assunto MAIS os cards do
+// chefão que não têm assunto (vieram de PDF). Existe como função porque a lista
+// mandada pra IA ("não repita estas") e a trava que roda depois PRECISAM usar o
+// mesmo conjunto — enquanto divergiram, os cards de PDF não iam no prompt e a IA
+// os recriava sem saber que já existiam.
+function flashCardsDoEscopo(subId,topicId){
+  return Object.values(db.flashcards||{}).filter(c=>c.subId===subId||(c.mbId===topicId&&!c.subId));
+}
 function flashCountSub(subId){
   return flashCardsDoSub(subId).length;
 }
@@ -7443,14 +7457,16 @@ function flashPanelHTML(s){
   }
   const cards=flashCardsDoSub(s.id);
   if(cards.length){
+    const dups=flashSuspeitasDup(cards);
     const lista=cards.map(c=>`
-      <div class="flash-card">
-        <div class="flash-q">${escapeHtml(c.pergunta)}</div>
+      <div class="flash-card${dups.has(c.id)?' flash-card-dup':''}">
+        <div class="flash-q">${escapeHtml(c.pergunta)}<button class="flash-del" title="Apagar este flashcard" onclick="flashApagarCard('${c.id}','${s.id}')"><i class="fa fa-trash"></i></button></div>
+        ${dups.has(c.id)?`<div class="flash-dup-aviso"><i class="fa fa-clone"></i> Parece repetir: “${escapeHtml(dups.get(c.id).length>80?dups.get(c.id).slice(0,80)+'…':dups.get(c.id))}”</div>`:''}
         <div class="flash-a">${escapeHtml(c.resposta)}</div>
       </div>`).join('');
     return`
       <div class="flash-header">
-        <div class="flash-title"><i class="fa fa-layer-group"></i> Flashcards <span class="flash-count">${cards.length} card${cards.length>1?'s':''}</span></div>
+        <div class="flash-title"><i class="fa fa-layer-group"></i> Flashcards <span class="flash-count">${cards.length} card${cards.length>1?'s':''}</span>${dups.size?` <span class="flash-count flash-count-dup" title="Marcados abaixo — confira e apague o que for repetido">${dups.size} possível repetida${dups.size>1?'s':''}</span>`:''}</div>
         <button class="btn btn-xs btn-ghost" onclick="generateFlashcardsSub('${s.id}',true)" title="Gerar mais com a IA"><i class="fa fa-wand-magic-sparkles"></i> Gerar mais</button>
       </div>
       ${lista}
@@ -7515,7 +7531,7 @@ async function generateFlashcardsSub(subId,mais){
     // entra como material a ser CONFRONTADO com o que a IA encontrar — o que
     // estiver mais atual prevalece (mudança de lei, súmula, novo entendimento).
     const base=(sub.resumo&&sub.resumo.texto)?sub.resumo.texto.slice(0,20000):'';
-    const jaTem=flashCardsDoSub(subId).map(c=>c.pergunta);
+    const jaTem=flashCardsDoEscopo(subId,topic.id).map(c=>c.pergunta).filter(Boolean);
     const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
     const prompt=`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil, especialista em criar flashcards de memorização.
 
@@ -7533,15 +7549,33 @@ REGRAS:
 - A resposta deve ser objetiva, de 1 a 3 linhas, com o dado exato (prazo, número, classificação, definição).
 - Priorize o que mais cai em prova: terminologias, prazos, números, exceções e classificações.
 - Não repita a mesma informação em cards diferentes.
-- Prefira SEMPRE a informação mais atual que encontrar na pesquisa. Se o que você achou pesquisando divergir do material do aluno (lei alterada, súmula nova, entendimento mudado), use a versão atual e sinalize na resposta do card, começando com \"ATUALIZADO:\" e dizendo em uma frase o que mudou.${jaTem.length?`\n- NÃO repita nenhuma destas perguntas que já existem:\n${jaTem.slice(0,60).map(q=>'  - '+q).join('\n')}`:''}${base?`\n\nMATERIAL DO ALUNO (resumo já estudado — confronte com o que você pesquisar):\n${base}`:''}`;
+- Prefira SEMPRE a informação mais atual que encontrar na pesquisa. Se o que você achou pesquisando divergir do material do aluno (lei alterada, súmula nova, entendimento mudado), use a versão atual e sinalize na resposta do card, começando com \"ATUALIZADO:\" e dizendo em uma frase o que mudou.${base?`\n\nMATERIAL DO ALUNO (resumo já estudado — confronte com o que você pesquisar):\n${base}`:''}`;
+
+    // A lista de perguntas que já existem vai por ÚLTIMO, depois do resumo do aluno
+    // e depois do material da web. Antes ela ficava no meio das REGRAS, ou seja,
+    // dezenas de milhares de caracteres antes do fim do prompt — o modelo lia e
+    // esquecia. E era só um bullet passivo: agora diz explicitamente que
+    // reformular também conta como repetir, que é exatamente o que ele fazia.
+    const travaRepeticao=jaTem.length?`
+
+=====================================================================
+PERGUNTAS QUE JÁ EXISTEM NESTE ASSUNTO — NÃO CRIE NENHUMA EQUIVALENTE
+=====================================================================
+${jaTem.slice(0,120).map((q,i)=>`${i+1}. ${q}`).join('\n')}
+=====================================================================
+Reformular NÃO resolve: "Qual o prazo para X?" e "Em quantos dias X?" são a MESMA
+pergunta, e as duas estão proibidas. Antes de escrever cada card, verifique se o
+ponto que ele cobra já está coberto por algum item da lista acima; se estiver,
+descarte esse card e cubra outro ponto do assunto. É melhor devolver MENOS de
+${FLASH_QTD} cards do que devolver repetição.`:'';
 
     // useSearch sempre true: mesmo com resumo, a IA precisa conferir na web
     // Tavily quando houver chave: pesquisa e o Gemini monta os cards a partir do
     // que voltou, numa chamada sem grounding. É a mesma ordem do resumo.
     const bF=await buscarMaterial(sub.name,`${kingdom.name} — ${topic.name}`,25000);
     const{parsed,grounded}=bF.material
-      ?{...(await callGeminiJSON(apiKey,tavilyPromptComFontes(prompt,bF.material),false,8192)),grounded:true}
-      :await callGeminiJSON(apiKey,prompt,true,8192);
+      ?{...(await callGeminiJSON(apiKey,tavilyPromptComFontes(prompt,bF.material)+travaRepeticao,false,8192)),grounded:true}
+      :await callGeminiJSON(apiKey,prompt+travaRepeticao,true,8192);
     const cards=Array.isArray(parsed)?parsed:(parsed&&Array.isArray(parsed.cards)?parsed.cards:[]);
     if(!cards.length)throw new Error('A IA não devolveu nenhum flashcard válido.');
     if(!db.flashcards)db.flashcards={};
@@ -7555,9 +7589,7 @@ REGRAS:
     // (vieram de PDF). Não compara com outros minibosses do mesmo chefão, pra
     // não bloquear uma pergunta que legitimamente serve a dois assuntos.
     const existentes=new Set(
-      Object.values(db.flashcards)
-        .filter(c=>c.subId===sub.id||(c.mbId===topic.id&&!c.subId))
-        .map(c=>normalizeForDedup(c.pergunta))
+      flashCardsDoEscopo(sub.id,topic.id).map(c=>normalizeForDedup(c.pergunta))
     );
     let n=0,repetidas=0;
     cards.forEach(c=>{
@@ -7836,6 +7868,61 @@ function simNovoSimulado(subId){
 // mesma pergunta entre uma chamada e outra — comparar string crua deixa passar duplicata.
 function normalizeForDedup(s){
   return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim();
+}
+
+// ===== Suspeita de repetição (só MARCA, nunca apaga) =====
+// Duas perguntas podem cobrar a mesma coisa escritas de formas diferentes, e o
+// descarte automático por texto não dá conta disso: medi um corpus de pares reais
+// e, em QUALQUER limiar que pegasse uma fração útil das reformulações, o mesmo
+// limiar também juntava perguntas irmãs legítimas — "dose de adrenalina na PCR" x
+// "dose de amiodarona na PCR", "dengue grupo A" x "dengue grupo B". Apagar sozinho
+// por semelhança perderia card bom, que é pior que ver card repetido. Então o
+// descarte automático continua sendo só o texto EXATO (normalizado), e o que é
+// só parecido aparece marcado no painel pra você decidir com um clique.
+// Palavras que só dão forma à pergunta: trocá-las não muda o que está sendo cobrado.
+const FC_MOLDURA=new Set(('a o as os um uma uns umas ao aos de do da dos das em no na nos nas por pelo pela para com sem sob sobre e ou que se '+
+  'qual quais quanto quanta quantos quantas como quando onde quem defina cite explique indique informe mencione descreva aponte diga liste '+
+  'conceitue caracterize apresente enumere sao ser sendo esta estao deve devem pode podem existe existem tem seu sua seus suas este esse essa isso').split(' '));
+// Radical pobre de propósito: só plural e advérbio em -mente, que é onde a IA mais
+// varia ("cristaloide"/"cristaloides", "inicial"/"inicialmente"). Cortar mais que
+// isso começa a colidir palavra diferente ("hipertensão"/"hipertermia").
+function fcRadical(w){
+  if(w.length>5&&/oes$/.test(w))w=w.slice(0,-3)+'ao';
+  else if(w.length>5&&/es$/.test(w)&&!/[aeiou]es$/.test(w))w=w.slice(0,-2);
+  else if(w.length>3&&/s$/.test(w))w=w.slice(0,-1);
+  if(w.length>6&&/mente$/.test(w))w=w.slice(0,-5);
+  return w;
+}
+function fcTermos(s){
+  return new Set(normalizeForDedup(s).split(' ').filter(t=>t&&!FC_MOLDURA.has(t)).map(fcRadical));
+}
+function fcQuaseIgual(a,b){
+  const x=fcTermos(a),y=fcTermos(b);
+  if(x.size<3||y.size<3)return false;
+  let i=0;x.forEach(t=>{if(y.has(t))i++;});
+  return i/(x.size+y.size-i)>=0.72;
+}
+// Marca o card MAIS NOVO de cada par parecido (o primeiro da lista fica em paz),
+// apontando qual pergunta ele parece repetir.
+function flashSuspeitasDup(cards){
+  const marc=new Map();
+  for(let i=0;i<cards.length;i++){
+    for(let j=i+1;j<cards.length;j++){
+      if(marc.has(cards[j].id))continue;
+      if(fcQuaseIgual(cards[i].pergunta,cards[j].pergunta))marc.set(cards[j].id,cards[i].pergunta);
+    }
+  }
+  return marc;
+}
+function flashApagarCard(id,subId){
+  const c=db.flashcards&&db.flashcards[id];
+  if(!c)return;
+  if(!confirm('Apagar este flashcard?\n\n'+c.pergunta))return;
+  delete db.flashcards[id];
+  saveDB();
+  flashRefreshPanel(subId);
+  if(typeof updateFCBadge==='function')updateFCBadge();
+  toast('🗑️ Flashcard apagado.','var(--orange)');
 }
 
 // ===== Formato e nivel do simulado =====
@@ -14191,9 +14278,19 @@ function fcImportDeckFile(input){
       const cards=Array.isArray(data)?data:data.cards;
       if(!Array.isArray(cards))throw new Error('formato inválido');
       fcInit();
-      let count=0;
+      // Importar o mesmo arquivo duas vezes duplicava o baralho inteiro: era o
+      // único caminho de criação sem trava nenhuma. Mesma trava dos outros:
+      // compara a pergunta normalizada contra o que o chefão já tem, e também
+      // dentro do próprio arquivo.
+      const existentes=new Set(
+        Object.values(db.flashcards).filter(c=>c.mbId===fcSelectedMb.id).map(c=>normalizeForDedup(c.pergunta))
+      );
+      let count=0,repetidas=0;
       cards.forEach(c=>{
         if(!c||!c.pergunta||!c.resposta)return;
+        const chave=normalizeForDedup(c.pergunta);
+        if(existentes.has(chave)){repetidas++;return;}
+        existentes.add(chave);
         const id='fc_'+genId();
         db.flashcards[id]={id,mbId:fcSelectedMb.id,pergunta:c.pergunta,resposta:c.resposta,tags:c.tags||'',dificuldade:c.dificuldade||2,acertos:0,erros:0,lastConf:0,criacao:new Date().toISOString(),ultimaRevisao:null};
         count++;
@@ -14201,7 +14298,8 @@ function fcImportDeckFile(input){
       db.fcCreatedTotal=(db.fcCreatedTotal||0)+count;
       db.fcDeckIOCount=(db.fcDeckIOCount||0)+1;
       saveDB();renderFCMbList();renderFCMain();updateFCBadge();
-      toast(`📥 ${count} flashcards importados!`,'var(--green)');
+      const extra=repetidas?` (${repetidas} já existia${repetidas>1?'m':''} e ${repetidas>1?'foram ignoradas':'foi ignorada'})`:'';
+      toast(`📥 ${count} flashcards importados!`+extra,'var(--green)');
     }catch(err){
       toast('⚠️ Arquivo inválido. Use um JSON exportado daqui.','var(--red)');
     }
