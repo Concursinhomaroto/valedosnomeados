@@ -4,7 +4,21 @@
       ".read": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'",
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'leonardobrunotlc@gmail.com')"
+        ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'leonardobrunotlc@gmail.com')",
+        "vdn_v1": {
+          "plan": {
+            ".validate": "auth.token.email === 'leonardobrunotlc@gmail.com' || newData.val() === data.val() || (!data.exists() && newData.val() === 'trial')"
+          },
+          "planType": {
+            ".validate": "auth.token.email === 'leonardobrunotlc@gmail.com' || newData.val() === data.val()"
+          },
+          "lastPaymentAt": {
+            ".validate": "auth.token.email === 'leonardobrunotlc@gmail.com' || newData.val() === data.val()"
+          },
+          "trialStartedAt": {
+            ".validate": "auth.token.email === 'leonardobrunotlc@gmail.com' || newData.val() === data.val() || !data.exists()"
+          }
+        }
       }
     },
     "promo": {

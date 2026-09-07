@@ -3689,6 +3689,7 @@ function loadDB(callback){
     const prevLastPayment=db.lastPaymentAt;
     const prevAccountEmail=db.accountEmail;
     const data=snapshot.val();
+    guardarPlanoDoServidor(data);   // fonte da verdade do plano, antes de db ser tocado
     // Se o celular ficou estudando OFFLINE numa sessão anterior (sem internet
     // nenhuma — não só uma queda passageira), a escrita pro Firebase nunca chegou a
     // sair daqui: ela só existe no localStorage deste aparelho. Ao reabrir o app já
@@ -4119,7 +4120,7 @@ function saveDB(){
   clearTimeout(saveTimeout);
   saveTimeout=setTimeout(()=>{
     try{
-      DB_REF.set(sanitizeForFirebase(db)).catch(e=>{
+      DB_REF.set(payloadParaFirebase()).catch(e=>{
         console.warn('Firebase save error:',e);
         isSaving=false;
         warnSyncIssue('⚠️ Não foi possível salvar na nuvem agora. Seus dados estão seguros neste dispositivo.');
@@ -4622,11 +4623,52 @@ const PIX_PLANS={
 };
 const PIX_ACCESS_DAYS=30; // fallback pra lastPaymentAt sem planType (contas de antes dessa mudança)
 const TRIAL_DAYS=3; // dias corridos de teste grátis com a plataforma inteira liberada
+
+// ===== O plano não é decidido pelo que está na memória =====
+// Estes quatro campos moram dentro de users/{uid}/vdn_v1, que o dono escreve — então
+// `db.plan='full'; saveDB()` no console do navegador liberava a plataforma inteira, de
+// graça e pra sempre. Duas travas, uma de cada lado:
+//   1) AQUI: quem decide o acesso é o último valor que veio DO SERVIDOR (planoDoServidor),
+//      não o que está em db. Editar db na memória não abre mais nada.
+//   2) saveDB(): o cliente nunca mais envia esses campos com valor próprio — ele reescreve
+//      no payload exatamente o que o servidor já tinha. Sem isso, a regra rejeitaria o
+//      save inteiro quando a memória divergisse (e o aluno perderia o que estudou).
+//   3) Nas regras do Firebase: .validate que só deixa esses campos mudarem se quem escreve
+//      for o admin. O Worker do Pix escreve com credencial de servidor, que passa por fora
+//      das regras — por isso a confirmação automática continua funcionando sem alteração.
+const CAMPOS_PLANO=['plan','planType','lastPaymentAt','trialStartedAt'];
+let planoDoServidor={};
+let planoLidoDoServidor=false;
+function guardarPlanoDoServidor(data){
+  if(!data)return;
+  planoLidoDoServidor=true;
+  CAMPOS_PLANO.forEach(k=>{planoDoServidor[k]=data[k];});
+}
+// O que vai pro Firebase. Os campos de plano saem do que o SERVIDOR já tinha, nunca do
+// que está em memória — assim a regra nunca vê o cliente tentando mudar o plano, e um
+// save legítimo não é recusado por causa de divergência. Enquanto o servidor não tem
+// nada (conta recém-criada), mantém o que o app montou: o trial.
+function payloadParaFirebase(){
+  const copia=sanitizeForFirebase(db);
+  CAMPOS_PLANO.forEach(k=>{
+    if(planoDoServidor[k]!==undefined)copia[k]=planoDoServidor[k];
+    else if(planoLidoDoServidor)delete copia[k];
+  });
+  return copia;
+}
+// Antes da primeira leitura (conta recém-criada, ainda sem nada no servidor) cai no db,
+// que nesse instante é o padrão que o próprio app acabou de montar.
+function planoAtual(){
+  const v=k=>(planoLidoDoServidor?planoDoServidor[k]:db[k]);
+  return{plan:v('plan'),planType:v('planType'),
+         lastPaymentAt:v('lastPaymentAt'),trialStartedAt:v('trialStartedAt')};
+}
 // true enquanto a conta ainda estiver dentro dos TRIAL_DAYS dias corridos a partir do
-// cadastro (db.trialStartedAt) — nesse período, tudo fica liberado, pago ou não.
+// cadastro — nesse período, tudo fica liberado, pago ou não.
 function isInTrialWindow(){
-  if(!db.trialStartedAt)return false;
-  return daysDiff(todayStr(),addDays(db.trialStartedAt,TRIAL_DAYS))>=0;
+  const t=planoAtual().trialStartedAt;
+  if(!t)return false;
+  return daysDiff(todayStr(),addDays(t,TRIAL_DAYS))>=0;
 }
 // Plano que a pessoa clicou na landing (?plano=anual, por ex.) — capturado uma vez em
 // applyDefaults() pra db.intendedPlan (ver mais abaixo) e usado como padrão na tela de
@@ -4638,13 +4680,14 @@ const URL_PLANO_INTENT=(()=>{
 // Quantos dias de acesso restam a partir do último pagamento confirmado (negativo = já
 // venceu). null quando a conta nunca pagou (plano trial sem nenhum lastPaymentAt ainda).
 function daysOfAccessLeft(){
-  if(!db.lastPaymentAt)return null;
-  const plan=PIX_PLANS[db.planType];
+  const p=planoAtual();
+  if(!p.lastPaymentAt)return null;
+  const plan=PIX_PLANS[p.planType];
   const days=(plan&&plan.accessDays)||PIX_ACCESS_DAYS;
-  return daysDiff(todayStr(),addDays(db.lastPaymentAt,days));
+  return daysDiff(todayStr(),addDays(p.lastPaymentAt,days));
 }
 function hasFullAccess(){
-  if(db.plan!=='trial')return true; // conta antiga/legada OU vitalícia, sem trava — acesso permanente.
+  if(planoAtual().plan!=='trial')return true; // conta antiga/legada OU vitalícia, sem trava — acesso permanente.
   if(isInTrialWindow())return true; // dentro dos TRIAL_DAYS dias grátis, tudo liberado.
   const left=daysOfAccessLeft();
   return left!==null&&left>=0;
@@ -11276,9 +11319,10 @@ function renderRenewalBanner(){
   const icon=document.getElementById('renewal-banner-icon');
   const btn=document.getElementById('renewal-banner-btn');
   if(!banner||!text)return;
-  if(db.plan!=='trial'){banner.style.display='none';return;}
+  const plano=planoAtual();
+  if(plano.plan!=='trial'){banner.style.display='none';return;}
 
-  if(db.lastPaymentAt){
+  if(plano.lastPaymentAt){
     const left=daysOfAccessLeft();
     if(left!==null&&left<0){
       renewalBannerReason='renewal';
@@ -11299,7 +11343,7 @@ function renderRenewalBanner(){
   }
 
   if(isInTrialWindow()){
-    const diasRestantes=daysDiff(todayStr(),addDays(db.trialStartedAt,TRIAL_DAYS));
+    const diasRestantes=daysDiff(todayStr(),addDays(plano.trialStartedAt,TRIAL_DAYS));
     renewalBannerReason='trialActive';
     icon.textContent='🎁';
     text.innerHTML=`<b>Você está no período de teste grátis${diasRestantes<=0?' — hoje é o último dia!':` — restam ${diasRestantes} dia${diasRestantes===1?'':'s'}`}.</b><br>Depois disso, assine pra continuar com a plataforma inteira liberada.`;
