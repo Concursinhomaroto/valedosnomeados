@@ -16042,46 +16042,7 @@ function geminiOrdemModelos(lista){
   if(!geminiModeloOk||base.indexOf(geminiModeloOk)<0)return base;
   return [geminiModeloOk,...base.filter(m=>m!==geminiModeloOk)];
 }
-// ===== Fila unica de chamadas ao Gemini =====
-// As travas de geracao sao POR ASSUNTO (flashGenerating/resumoGenerating/fluxoGenerating
-// guardam subId), entao da pra disparar resumo de um assunto, fluxograma de outro e
-// flashcards de um terceiro ao mesmo tempo — cada um com 2 a 3 requisicoes. Sao ~9
-// chamadas no mesmo segundo contra uma cota que e por MINUTO. Era dai que vinha o 429.
-// Aqui tudo passa por uma fila so: uma de cada vez, com teto por minuto. Quando ha
-// folga a fila nao atrasa nada; ela so segura na rajada.
-let GEMINI_RPM=10;
-let geminiFila=Promise.resolve();
-let geminiCarimbos=[];
-let geminiUltimoAviso=0;
-function geminiEsperaNecessaria(){
-  const agora=Date.now();
-  geminiCarimbos=geminiCarimbos.filter(t=>agora-t<60000);
-  if(geminiCarimbos.length<GEMINI_RPM)return 0;
-  return Math.max(0,60000-(agora-geminiCarimbos[0]))+50;
-}
-function geminiAvisarEspera(seg){
-  // Sem isso a tela fica parada sem explicacao — parece travamento, que e exatamente
-  // a queixa que ja tivemos.
-  const agora=Date.now();
-  if(agora-geminiUltimoAviso<15000)return;
-  geminiUltimoAviso=agora;
-  if(typeof toast==='function')toast(`⏳ Segurando ${seg}s pra não estourar o limite por minuto do Gemini...`,'var(--orange)');
-}
-function geminiNaFila(fn){
-  const proxima=geminiFila.then(async()=>{
-    const espera=geminiEsperaNecessaria();
-    if(espera>1500)geminiAvisarEspera(Math.ceil(espera/1000));
-    if(espera>0)await new Promise(r=>setTimeout(r,espera));
-    geminiCarimbos.push(Date.now());
-    return fn();
-  });
-  geminiFila=proxima.then(()=>{},()=>{});   // uma falha nao pode travar a fila
-  return proxima;
-}
 async function tryGeminiModel(apiKey,model,prompt,opts){
-  return geminiNaFila(()=>tryGeminiModelAgora(apiKey,model,prompt,opts));
-}
-async function tryGeminiModelAgora(apiKey,model,prompt,opts){
   try{
     const body={contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:(opts&&opts.maxOutputTokens)||8192}};
     // Grounding com Google Search: a IA pesquisa na internet antes de responder, em vez
@@ -16159,17 +16120,6 @@ async function tryGeminiModelComRetry(apiKey,model,prompt,opts){
   for(let i=0;!r.ok&&r.temporario&&i<GEMINI_ESPERAS_MS.length;i++){
     await new Promise(res=>setTimeout(res,GEMINI_ESPERAS_MS[i]));
     r=await tryGeminiModel(apiKey,model,prompt,opts);
-  }
-  // 429 com retryDelay e diferente de 429 seco: o Google esta dizendo QUANDO voltar.
-  // Esperar o que ele pediu e tentar UMA vez e o que a propria documentacao manda —
-  // nada a ver com o retry cego de 1s e 3s que eu tinha posto antes.
-  if(!r.ok&&r.limite&&r.esperar){
-    const seg=parseFloat(String(r.esperar).replace(/[^0-9.]/g,''));
-    if(seg>0&&seg<=30){
-      geminiAvisarEspera(Math.ceil(seg));
-      await new Promise(res=>setTimeout(res,seg*1000+300));
-      r=await tryGeminiModel(apiKey,model,prompt,opts);
-    }
   }
   return r;
 }
@@ -16303,7 +16253,7 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
   async function tentarLista(models,comBusca){
     const lista=comBusca?models.slice(0,GEMINI_MAX_CACA_BUSCA):models;
     for(const model of lista){
-      const r=await tryGeminiModelComRetry(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens});
+      const r=await tryGeminiModel(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens});
       if(!r.ok){
         attempts.push(`${model} (${r.reason})`);
         // Cota estourada e da CHAVE: seguir pros outros modelos so gasta o que ja
