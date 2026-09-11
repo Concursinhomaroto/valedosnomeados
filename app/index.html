@@ -7606,11 +7606,17 @@ async function generateFluxograma(subId){
 
   try{
     let parsed,grounded=null,fontesFluxo=[],viaFluxo=null;
-    // Sem limite fixo de nós no fluxograma, a resposta em JSON pode ficar bem maior que o
-    // teto padrão de 8192 tokens (suficiente pra a maioria das chamadas da IA no app, mas
-    // curto pra cobrir um assunto inteiro com todos os pontos-chave) — sem isso, um
-    // fluxograma grande vinha cortado no meio e falhava o parse.
-    const FLUXO_MAX_OUTPUT_TOKENS=32768;
+    // O fluxograma não tem limite fixo de nós (ver FLUXO_JSON_REGRAS), então a resposta
+    // pode passar do teto padrão de 8192 tokens — por isso aqui é maior.
+    // Mas era 32768, e ISSO era o problema: o Gemini RESERVA o maxOutputTokens inteiro no
+    // orçamento por minuto da chave, mesmo quando a resposta usa uma fração dele. Com
+    // 32768 o fluxograma era o único recurso do app pedindo 4x mais que o resumo (8192) —
+    // e era o único que levava 429, na mesma chave e no mesmo minuto em que o resumo
+    // passava. Fluxogramas reais medidos ficam entre 6 mil e 15 mil tokens, então 16384
+    // cobre praticamente todos; o raro que não couber é detectado por finishReason
+    // MAX_TOKENS e repetido automaticamente com o dobro (ver callGeminiJSON), em vez de
+    // reservar o máximo em toda geração por causa da exceção.
+    const FLUXO_MAX_OUTPUT_TOKENS=16384;
     if(usarWeb){
       const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
       // Sem resumo pra usar de base: pesquisa. Tavily primeiro, grounding do
@@ -9517,7 +9523,7 @@ async function autoGerarFluxogramaWebEResumo(subId,resumoTexto){
   fluxoRefreshPanel(subId);
   try{
     const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
-    const FLUXO_MAX_OUTPUT_TOKENS=32768;
+    const FLUXO_MAX_OUTPUT_TOKENS=16384;
     // Este era o ÚNICO caminho de fluxograma que ignorava o Tavily e mandava o Gemini
     // pesquisar sozinho. Com a busca do Gemini ligada, callGeminiJSON percorre todos os
     // modelos atrás de uma resposta que tenha pesquisado de verdade — até 5 chamadas,
@@ -16166,6 +16172,10 @@ async function tryGeminiModel(apiKey,model,prompt,opts){
       //   repetir — é o oposto do que ajuda.
       const temporario=[500,502,503,504].includes(response.status);
       const limite=response.status===429;
+      // O corpo do 429 diz exatamente QUAL limite foi atingido (metrica, valor, modelo).
+      // A mensagem que vai pra tela e curta de proposito, mas jogar o corpo inteiro no
+      // console custa nada e e a unica forma de diagnosticar isso sem adivinhar.
+      if(limite)console.error('Gemini 429 — corpo completo da resposta:',model,err);
       // O 429 do Gemini traz quanto esperar; quando vem, é melhor do que qualquer
       // palpite nosso.
       let esperar=null,cota=null;
@@ -16199,7 +16209,7 @@ async function tryGeminiModel(apiKey,model,prompt,opts){
     if(!raw)return{ok:false,reason:'sem texto na resposta'};
     // MAX_TOKENS = resposta cortada no meio (JSON incompleto) — melhor já avisar
     // aqui do que deixar o parse falhar silenciosamente mais na frente.
-    if(finishReason==='MAX_TOKENS')return{ok:false,reason:'resposta cortada por exceder o limite de tokens'};
+    if(finishReason==='MAX_TOKENS')return{ok:false,reason:'resposta cortada por exceder o limite de tokens',cortado:true};
     // grounded só é true se o modelo REALMENTE usou a busca (groundingMetadata com
     // consultas/trechos) — antes, qualquer resposta com useSearch=true virava "grounded"
     // mesmo quando o modelo só respondia do conhecimento treinado, sem pesquisar de fato.
@@ -16383,7 +16393,15 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
   let limiteInfo=null,houve404JSON=false;
   async function tentarLista(models,comBusca){
     for(const model of models){
-      const r=await tryGeminiModel(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens});
+      let r=await tryGeminiModel(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens});
+      // Resposta CORTADA nao e falha do modelo: e teto de saida curto pra ESTE assunto.
+      // Ir pro proximo modelo com o mesmo teto so corta de novo — eram quatro chamadas
+      // desperdicadas terminando em erro. O certo e repetir o MESMO modelo com o dobro.
+      // E isso que permite pedir um teto normal na primeira tentativa em vez de reservar
+      // o maximo sempre: o pedido grande passa a ser a excecao, nao a regra.
+      if(!r.ok&&r.cortado&&maxOutputTokens&&maxOutputTokens<65536){
+        r=await tryGeminiModel(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens:maxOutputTokens*2});
+      }
       if(!r.ok){
         attempts.push(`${model} (${r.reason})`);
         // Por modelo, nao por chave: segue tentando os outros.
