@@ -3204,10 +3204,51 @@ function lerCacheLocal(){
                            // a única cópia de quem estudou offline por lá)
   return antigo;
 }
+// O banco de uma conta com bastante material passa de 1 MB serializado, e o navegador
+// dá cerca de 5 MB por site. Como a chave passou a levar o uid, duas contas no mesmo
+// navegador (ou a chave antiga sobrando ao lado da nova) já encostam no teto — e aí
+// TODO saveDB gastava ~70 ms montando a cópia pra falhar no fim, travando a tela.
+let cacheLocalDesligado=false;
+// Chaves de cache que NÃO são desta conta. Só são apagadas quando falta espaço de
+// verdade: antes, a ideia de preservá-las era proteger quem estudou offline em outra
+// conta neste aparelho — mas isso não pode custar o salvamento de quem está usando
+// agora. O Firebase continua sendo a fonte de cada conta.
+function cacheLocalOutrasChaves(){
+  const minha=lsKey(),fora=[];
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(k&&k.indexOf(LS_KEY_LEGACY)===0&&k!==minha)fora.push(k);
+    }
+  }catch(e){}
+  return fora;
+}
 function gravarCacheLocal(){
+  if(cacheLocalDesligado)return;
   const copia=sanitizeForFirebase(db);   // já é uma cópia profunda; não mexe no db
   if(currentUser&&currentUser.uid)copia._uid=currentUser.uid;
-  localStorage.setItem(lsKey(),JSON.stringify(copia));
+  const txt=JSON.stringify(copia);
+  const chave=lsKey();
+  try{
+    localStorage.setItem(chave,txt);
+  }catch(e){
+    if(!(e&&(e.name==='QuotaExceededError'||e.name==='NS_ERROR_DOM_QUOTA_REACHED')))throw e;
+    // Faltou espaço: joga fora o cache das outras contas e tenta de novo.
+    const outras=cacheLocalOutrasChaves();
+    outras.forEach(k=>{try{localStorage.removeItem(k);}catch(e2){}});
+    try{
+      localStorage.setItem(chave,txt);
+      if(outras.length)console.warn('Cache local: liberei',outras.length,'cópia(s) de outra(s) conta(s) pra caber.');
+    }catch(e2){
+      // Ainda não cabe. Desliga o cache local pelo resto da sessão: insistir a cada
+      // saveDB é o que deixava o app lento. Seus dados continuam indo pro Firebase —
+      // o que se perde é só a cópia offline deste aparelho.
+      cacheLocalDesligado=true;
+      try{localStorage.removeItem(chave);}catch(e3){}
+      console.warn('Cache local desligado nesta sessão: não cabe no armazenamento do navegador.');
+      if(typeof warnSyncIssue==='function')warnSyncIssue('⚠️ Seu banco ficou grande demais pra cópia offline deste navegador. Os dados continuam salvos na nuvem normalmente — só o modo offline fica indisponível nesta sessão.');
+    }
+  }
   // Migrou pra chave com uid: a cópia antiga desta mesma conta não serve mais pra nada
   // e só atrapalharia a checagem de dono depois.
   try{
@@ -4117,8 +4158,8 @@ function saveDB(){
     // Não deixa esse erro sumir silenciosamente — se o dado não é serializável (ex: uma
     // referência circular que entrou em algum campo), nem o backup local funciona, e o
     // usuário precisa ao menos ver um aviso em vez de achar que salvou.
-    console.warn('Falha ao salvar localmente (localStorage):',e);
-    warnSyncIssue('⚠️ Não foi possível salvar. Tente novamente — se persistir, recarregue a página.');
+    console.warn('Falha ao salvar a cópia local (localStorage):',e);
+    warnSyncIssue('⚠️ Não consegui gravar a cópia offline deste aparelho. Seus dados continuam sendo salvos na nuvem.');
   }
   if(useLocalFallback||!DB_REF)return;
   isSaving=true;
