@@ -9513,7 +9513,22 @@ async function autoGerarFluxogramaWebEResumo(subId,resumoTexto){
   try{
     const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
     const FLUXO_MAX_OUTPUT_TOKENS=32768;
-    const{parsed,grounded,fontes}=await callGeminiJSON(apiKey,fluxoPromptWebComResumo(contexto,resumoTexto.slice(0,40000)),true,FLUXO_MAX_OUTPUT_TOKENS);
+    // Este era o ÚNICO caminho de fluxograma que ignorava o Tavily e mandava o Gemini
+    // pesquisar sozinho. Com a busca do Gemini ligada, callGeminiJSON percorre todos os
+    // modelos atrás de uma resposta que tenha pesquisado de verdade — até 5 chamadas,
+    // cada uma com teto de 32k tokens de saída. Era por isso que, logo depois de um
+    // resumo que sai rápido, o fluxograma demorava: o resumo já usava o Tavily e este
+    // não. Passa a seguir o mesmo combinado do resto do app.
+    const prompt=fluxoPromptWebComResumo(contexto,resumoTexto.slice(0,40000));
+    const b=await buscarMaterial(sub.name,`${kingdom.name} — ${topic.name}`,30000);
+    let parsed,grounded,fontes;
+    if(b.material){
+      const r=await callGeminiJSON(apiKey,tavilyPromptComFontes(prompt,b.material),false,FLUXO_MAX_OUTPUT_TOKENS);
+      parsed=r.parsed;grounded=true;fontes=b.fontes;
+    }else{
+      const r=await callGeminiJSON(apiKey,prompt,true,FLUXO_MAX_OUTPUT_TOKENS);
+      parsed=r.parsed;grounded=r.grounded;fontes=r.fontes;
+    }
     const{raizId,nos}=fluxoFlattenArvore(parsed);
     sub.fluxograma={raizId,nos,origem:'web',grounded,fontes:fontes||[],geradoEm:new Date().toISOString()};
     saveDB();
