@@ -3181,8 +3181,69 @@ function lsKey(){
 // carimba _uid; pra cópia antiga (sem carimbo) o dono é conferido pelo accountEmail,
 // que o app já gravava. Sem prova, o cache é ignorado — começar do servidor é sempre
 // melhor que herdar dado de outra pessoa.
+// ---- Onde a cópia offline mora: IndexedDB, com o localStorage só como reserva ----
+// O localStorage dá cerca de 5 MB por site e conta 2 BYTES POR CARACTERE: um banco de
+// 1,2 milhão de caracteres já ocupa ~2,4 MB. Junte o rascunho do editor de mapa e a
+// cópia de outra conta no mesmo navegador e o teto estoura — era exatamente o aviso
+// "Cache local desligado nesta sessão", que deixava o usuário sem modo offline.
+// O IndexedDB não tem esse teto apertado (centenas de MB), guarda o objeto sem precisar
+// de JSON.stringify, e grava sem bloquear a tela — então também tira do saveDB os
+// milissegundos que ele gastava serializando a cada gravação.
+const IDB_NOME='vdn_cache_v1',IDB_STORE='banco';
+let idbConn=null;
+function idbAbrir(){
+  if(idbConn)return idbConn;
+  idbConn=new Promise(resolve=>{
+    let req;
+    try{req=indexedDB.open(IDB_NOME,1);}catch(e){return resolve(null);}
+    req.onupgradeneeded=()=>{try{req.result.createObjectStore(IDB_STORE);}catch(e){}};
+    req.onsuccess=()=>resolve(req.result);
+    // Navegador em aba anônima, armazenamento bloqueado ou versão presa em outra aba:
+    // devolve null e o código cai pro localStorage, como antes.
+    req.onerror=()=>resolve(null);
+    req.onblocked=()=>resolve(null);
+  });
+  return idbConn;
+}
+function idbLer(chave){
+  return idbAbrir().then(conn=>new Promise(resolve=>{
+    if(!conn)return resolve(null);
+    try{
+      const r=conn.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).get(chave);
+      r.onsuccess=()=>resolve(r.result||null);
+      r.onerror=()=>resolve(null);
+    }catch(e){resolve(null);}
+  }));
+}
+function idbGravar(chave,valor){
+  return idbAbrir().then(conn=>new Promise(resolve=>{
+    if(!conn)return resolve(false);
+    try{
+      const t=conn.transaction(IDB_STORE,'readwrite');
+      t.objectStore(IDB_STORE).put(valor,chave);
+      t.oncomplete=()=>resolve(true);
+      t.onerror=()=>resolve(false);
+      t.onabort=()=>resolve(false);
+    }catch(e){resolve(false);}
+  }));
+}
+// lerCacheLocal() é chamada em pontos síncronos do boot (fallback do Firebase, timeout
+// de 12s), e IndexedDB é assíncrono. Por isso a cópia é trazida UMA vez, antes de tudo,
+// e fica aqui na memória — quem lê continua lendo sem esperar.
+let cacheIdbMem=null,cacheIdbLegadoMem=null,cacheIdbOk=false;
+async function prepararCacheLocal(){
+  try{
+    cacheIdbMem=await idbLer(lsKey());
+    cacheIdbLegadoMem=await idbLer(LS_KEY_LEGACY);
+    cacheIdbOk=!!(await idbAbrir());
+  }catch(e){cacheIdbOk=false;}
+}
 function lerCacheLocal(){
   const tenta=(chave)=>{
+    // IndexedDB primeiro (já pré-carregado em prepararCacheLocal); localStorage depois,
+    // que é onde ainda está a cópia de quem usou o app antes desta versão.
+    if(chave===lsKey()&&cacheIdbMem)return cacheIdbMem;
+    if(chave===LS_KEY_LEGACY&&cacheIdbLegadoMem)return cacheIdbLegadoMem;
     let raw=null;
     try{raw=localStorage.getItem(chave);}catch(e){return null;}
     if(!raw)return null;
@@ -3224,11 +3285,27 @@ function cacheLocalOutrasChaves(){
   return fora;
 }
 function gravarCacheLocal(){
-  if(cacheLocalDesligado)return;
   const copia=sanitizeForFirebase(db);   // já é uma cópia profunda; não mexe no db
   if(currentUser&&currentUser.uid)copia._uid=currentUser.uid;
-  const txt=JSON.stringify(copia);
   const chave=lsKey();
+  // Caminho normal: IndexedDB. Guarda o objeto direto (sem serializar), não trava a
+  // tela e tem espaço de sobra. A cópia na memória é atualizada na hora pra que um
+  // lerCacheLocal() logo em seguida já enxergue o valor novo.
+  if(cacheIdbOk){
+    cacheIdbMem=copia;
+    idbGravar(chave,copia).then(ok=>{
+      if(!ok)return;
+      // Deu certo no IndexedDB: as cópias no localStorage não servem mais pra nada e
+      // estão ocupando o espaço apertado que causou o problema. Vão embora.
+      try{localStorage.removeItem(chave);}catch(e){}
+      cacheLocalOutrasChaves().forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
+      try{localStorage.removeItem(LS_KEY_LEGACY);}catch(e){}
+    });
+    return;
+  }
+  // Reserva: navegador sem IndexedDB (aba anônima, armazenamento bloqueado).
+  if(cacheLocalDesligado)return;
+  const txt=JSON.stringify(copia);
   try{
     localStorage.setItem(chave,txt);
   }catch(e){
@@ -3682,7 +3759,13 @@ function applyDefaults(){
   });
 }
 
-function loadDB(callback){
+async function loadDB(callback){
+  // Traz a cópia offline do IndexedDB pra memória ANTES de qualquer lerCacheLocal().
+  // Esses pontos de leitura (fallback do Firebase, timeout de 12s) são síncronos, e
+  // IndexedDB é assíncrono — sem esta espera, eles leriam null e o modo offline não
+  // teria dado nenhum pra mostrar. bootApp() só chama loadDB depois da autenticação,
+  // então currentUser já existe e lsKey() aponta pra conta certa.
+  try{await prepararCacheLocal();}catch(e){}
   const overlay=document.getElementById('loading-overlay');
   const msg=document.getElementById('loading-msg');
   const errBox=document.getElementById('loading-error');
