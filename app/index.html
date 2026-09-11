@@ -16166,15 +16166,16 @@ async function callGeminiGenerate(apiKey,prompt,opts){
     const r=await tryGeminiModelComRetry(apiKey,model,prompt,opts);
     if(r.ok){geminiAnotarModeloOk(model);return r.raw;}
     attempts.push(`${model} (${r.reason})`);
-    // Cota estourada é da CHAVE, não do modelo: continuar a lista só gasta o que
-    // já está no vermelho. Para na primeira.
-    if(r.limite){limite=r;break;}
+    // Limite e sobrecarga sao POR MODELO no Gemini, nao por chave: o painel da conta
+    // mostra 3.8 e 3.7 recusando enquanto a 3.6 responde normalmente. Parar na primeira
+    // recusa era justamente o que impedia de chegar no modelo que estava de pe.
+    if(r.limite)limite=r;
     if(!r.temporario)soTemporario=false;
   }
   // Sobrecarga atinge todos os modelos ao mesmo tempo: sair perguntando a API quais
   // outros modelos existem so empilha requisicao em cima de um servico que ja esta
   // recusando, e faz o usuario esperar mais por um erro que ja e conhecido.
-  if(!soTemporario&&!limite){
+  if(!soTemporario){
     const discovered=(await listGeminiModels(apiKey)).filter(m=>!GEMINI_MODEL_CANDIDATES.includes(m));
     for(const model of discovered){
       const r=await tryGeminiModelComRetry(apiKey,model,prompt,opts);
@@ -16197,10 +16198,7 @@ async function callGeminiGenerateSearch(apiKey,prompt){
   const attempts=[];
   const diag=[];      // por que a busca não pegou, modelo a modelo
   let fallback=null;  // primeira resposta que funcionou mas sem confirmar busca real
-  // Mesma economia do callGeminiJSON: quando o modelo responde mas sem ter pesquisado,
-  // vale uma segunda chance, nao mais tres. Cada tentativa e uma requisicao, e o resumo
-  // sem Tavily e justamente o caminho que mais consumia cota do Gemini.
-  for(const model of geminiOrdemModelos().slice(0,2)){
+  for(const model of geminiOrdemModelos()){
     let r=await tryGeminiModelComRetry(apiKey,model,prompt,{useSearch:true});
     // 400 costuma ser nome de ferramenta que aquele modelo não conhece — tenta o outro
     if(!r.ok&&r.http===400){
@@ -16245,20 +16243,13 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
   let best=null; // primeiro JSON válido encontrado, mas sem confirmar busca real
   let sawRateLimit=false;
   let limiteInfo=null;
-  // Com busca ativa, o modelo decide sozinho se pesquisa. Quando ele responde SEM ter
-  // pesquisado, vale tentar outro — mas nao os quatro: cada tentativa e uma requisicao,
-  // e na cota gratuita do Gemini o orcamento e de poucas por minuto. Duas e o suficiente
-  // pra dar uma segunda chance sem transformar uma acao em cinco chamadas.
-  const GEMINI_MAX_CACA_BUSCA=2;
   async function tentarLista(models,comBusca){
-    const lista=comBusca?models.slice(0,GEMINI_MAX_CACA_BUSCA):models;
-    for(const model of lista){
+    for(const model of models){
       const r=await tryGeminiModel(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens});
       if(!r.ok){
         attempts.push(`${model} (${r.reason})`);
-        // Cota estourada e da CHAVE: seguir pros outros modelos so gasta o que ja
-        // esta no vermelho e afunda mais o limite por minuto. Para a lista aqui.
-        if(r.limite){sawRateLimit=true;limiteInfo=r;break;}
+        // Por modelo, nao por chave: segue tentando os outros.
+        if(r.limite){sawRateLimit=true;limiteInfo=r;}
         continue;
       }
       geminiAnotarModeloOk(model);
@@ -16287,20 +16278,16 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
     if(hit)return hit;
     // Busca não trouxe nada aproveitável — tenta de novo sem a ferramenta de busca, que
     // costuma obedecer melhor à instrução de responder só com JSON.
-    if(!sawRateLimit){
-      const hit2=await tentarLista(ordem,false);
-      if(hit2)return hit2;
-    }
+    const hit2=await tentarLista(ordem,false);
+    if(hit2)return hit2;
   }else{
     const hit=await tentarLista(ordem,false);
     if(hit)return hit;
   }
   if(best)return best;
-  if(!sawRateLimit){
-    const discovered=(await listGeminiModels(apiKey)).filter(m=>!GEMINI_MODEL_CANDIDATES.includes(m));
-    const hit3=await tentarLista(discovered,false);
-    if(hit3)return hit3;
-  }
+  const discovered=(await listGeminiModels(apiKey)).filter(m=>!GEMINI_MODEL_CANDIDATES.includes(m));
+  const hit3=await tentarLista(discovered,false);
+  if(hit3)return hit3;
   if(best)return best;
   if(sawRateLimit)throw new Error(geminiMensagemErro(attempts,false,limiteInfo||{}));
   throw new Error(`Nenhum modelo respondeu com um JSON válido. Tentativas: ${attempts.join(' · ')||'nenhuma'}.`);
