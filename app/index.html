@@ -7566,6 +7566,22 @@ ${FLUXO_JSON_REGRAS}
 // do chefão e os fluxogramas dos irmãos saem repetindo uns aos outros — que é a queixa.
 // Mesma mecânica já validada na geração de flashcards (travaRepeticao): a lista vai no
 // FIM do prompt, depois do material, e diz explicitamente o que não fazer.
+// Vai por ULTIMO no prompt, depois de todo o material. O formato pedido ficava no topo,
+// antes do resumo (ate 40 mil caracteres) e antes dos flashcards — ou seja, o modelo lia
+// "responda so com JSON" e terminava lendo dezenas de pares "P:/R:". Ele entao respondia
+// no formato do fim, nao no do comeco, e o parse falhava nos tres modelos com "resposta
+// nao veio em JSON valido". E a mesma licao que travaRepeticao ja tinha aprendido, ao
+// contrario: o que precisa ser obedecido fica no FIM, perto da resposta.
+const FLUXO_FECHAMENTO=`
+
+=====================================================================
+LEMBRETE FINAL DE FORMATO — vale acima de qualquer coisa dita antes
+=====================================================================
+Responda APENAS com o JSON da árvore: comece com { e termine com }. Nada de
+markdown, nada de bloco de código, nenhuma palavra antes ou depois.
+O material acima (resumo e flashcards) é FONTE, não é modelo de resposta: não
+responda em formato pergunta/resposta e não devolva texto corrido.
+Estrutura: {"texto":"...","tipo":"inicio","ramos":[{"rotulo":null,"no":{...}}]}`;
 function fluxoContextoDoAluno(sub,topic){
   let txt='';
   const cards=Object.values(db.flashcards||{}).filter(c=>c.mbId===topic.id);
@@ -7635,17 +7651,17 @@ async function generateFluxograma(subId){
       // Gemini como alternativa — a mesma ordem do resumo.
       const b=await buscarMaterial(sub.name,`${kingdom.name} — ${topic.name}`,30000);
       if(b.material){
-        const r=await callGeminiJSON(apiKey,tavilyPromptComFontes(fluxoPromptWeb(contexto),b.material),false,FLUXO_MAX_OUTPUT_TOKENS);
+        const r=await callGeminiJSON(apiKey,tavilyPromptComFontes(fluxoPromptWeb(contexto),b.material)+FLUXO_FECHAMENTO,false,FLUXO_MAX_OUTPUT_TOKENS);
         parsed=r.parsed;grounded=true;fontesFluxo=b.fontes;viaFluxo='tavily';
       }else{
-        const r=await callGeminiJSON(apiKey,fluxoPromptWeb(contexto),true,FLUXO_MAX_OUTPUT_TOKENS);
+        const r=await callGeminiJSON(apiKey,fluxoPromptWeb(contexto)+FLUXO_FECHAMENTO,true,FLUXO_MAX_OUTPUT_TOKENS);
         parsed=r.parsed;grounded=r.grounded;fontesFluxo=r.fontes||[];
       }
     }else{
       // Sem chunking de propósito: a fonte aqui é o Resumo (já condensado) ou um trecho
       // colado à mão, não o material bruto inteiro — um corte de segurança em 40k
       // caracteres é mais que suficiente e evita estourar o teto de uma chamada só.
-      const r=await callGeminiJSON(apiKey,fluxoPrompt(texto.slice(0,40000))+fluxoContextoDoAluno(sub,topic),false,FLUXO_MAX_OUTPUT_TOKENS);
+      const r=await callGeminiJSON(apiKey,fluxoPrompt(texto.slice(0,40000))+fluxoContextoDoAluno(sub,topic)+FLUXO_FECHAMENTO,false,FLUXO_MAX_OUTPUT_TOKENS);
       parsed=r.parsed;
       // Veio do Resumo? Então herda de onde o Resumo veio. Sem isso, um
       // fluxograma feito em cima de resumo pesquisado no Tavily aparecia como
@@ -16341,7 +16357,12 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
   let limiteInfo=null,houve404JSON=false;
   async function tentarLista(models,comBusca){
     for(const model of models){
-      let r=await tryGeminiModel(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens});
+      // tryGeminiModelComRetry, nao tryGeminiModel: o 503 ("this model is currently
+      // experiencing high demand") e passageiro e some repetindo em 1s/3s — e o resumo
+      // sempre repetiu, porque callGeminiGenerate usa a versao com retry. O fluxograma
+      // era o unico que desistia do modelo no primeiro 503, o que o deixava bem mais
+      // fragil que o resumo exatamente nos momentos de sobrecarga da Google.
+      let r=await tryGeminiModelComRetry(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens});
       // Resposta CORTADA nao e falha do modelo: e teto de saida curto pra ESTE assunto.
       // Ir pro proximo modelo com o mesmo teto so corta de novo — eram quatro chamadas
       // desperdicadas terminando em erro. O certo e repetir o MESMO modelo com o dobro.
@@ -16362,7 +16383,12 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
       // sem o try/catch aqui, uma resposta ruim de UM modelo derrubava a tentativa
       // inteira em vez de simplesmente seguir pro próximo candidato da lista.
       let parsed=null;
-      try{parsed=extractAIJson(r.raw);}catch(e){}
+      try{parsed=extractAIJson(r.raw);}catch(e){
+        // Sem isto, "resposta nao veio em JSON valido" nao diz NADA sobre o que a IA
+        // respondeu de fato — e sem saber o que veio nao da pra consertar o prompt.
+        console.error('Gemini respondeu, mas fora do formato JSON pedido:',model,
+                      '\n--- inicio da resposta ---\n'+String(r.raw||'').slice(0,1200));
+      }
       if(parsed&&typeof parsed==='object'){
         if(r.grounded)return{parsed,grounded:true,fontes:r.fontes,consultas:r.consultas};
         if(!best)best={parsed,grounded:false,fontes:[],consultas:[]};
