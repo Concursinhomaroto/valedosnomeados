@@ -759,7 +759,21 @@ nav{
    NÃO limitar nem centralizar a largura aqui: o resumo é lido em largura cheia,
    do jeito que sempre foi. O limite de 68ch e a centralização foram iniciativa
    minha, não foram pedidos, e estão revertidos. */
-.resumo-body{font-size:12.5px;color:var(--text2);line-height:1.7;white-space:pre-line;}
+.resumo-body{font-size:12.5px;color:var(--text2);line-height:1.7;}
+/* Era white-space:pre-line, e aí CADA linha em branco do texto virava um vão de ~21px
+   (line-height 1.7). Como a IA separa tópicos com linha em branco — às vezes duas — o
+   resumo saía esparramado: o conteúdo bom, a organização não. Agora os blocos viram
+   parágrafos de verdade e o espaçamento é do CSS, não do texto. */
+.resumo-body .resumo-p{margin:0 0 9px;}
+.resumo-body .resumo-p:last-child{margin-bottom:0;}
+.resumo-body .resumo-h{font-size:10.5px;font-weight:900;letter-spacing:.05em;color:#8b5cf6;
+  margin:17px 0 7px;padding-bottom:4px;border-bottom:1px solid var(--border);}
+.resumo-body .resumo-h:first-child{margin-top:0;}
+/* "Na prática:" é a ponte entre teoria e plantão — merece ser achável batendo o olho,
+   em vez de ficar igual ao resto do parágrafo. */
+.resumo-body .resumo-pratica{margin:0 0 9px;padding:7px 10px;
+  border-left:3px solid rgba(139,92,246,0.45);background:rgba(139,92,246,0.06);
+  border-radius:0 8px 8px 0;}
 .resumo-disclaimer{font-size:9.5px;color:var(--muted);margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);display:flex;align-items:center;gap:5px;}
 .resumo-empty{font-size:12px;color:var(--muted);text-align:center;padding:2px 0 10px;}
 .resumo-drop{display:block;border:1.5px dashed rgba(139,92,246,0.4);border-radius:12px;padding:18px 12px;text-align:center;cursor:pointer;transition:all 0.2s;}
@@ -6399,7 +6413,7 @@ function resumoPanelHTML(s){
         </div>
       </div>
       ${isSpeaking?`<div style="font-size:9.5px;color:var(--muted);margin:-4px 0 8px;display:flex;align-items:center;gap:5px">${resumoSpeakMode==='audio'?'<i class=\"fa fa-lock-open\"></i> Áudio da IA — continua tocando com a tela travada.':'<i class=\"fa fa-triangle-exclamation\"></i> Voz do navegador — para se a tela travar (configure sua chave de IA pra ouvir com a tela travada).'}</div>`:''}
-      <div class="resumo-body">${escapeHtml(s.resumo.texto)}</div>
+      <div class="resumo-body">${resumoFormatar(s.resumo.texto)}</div>
       ${fontesHTML(s.resumo.fontes,s.resumo.consultas,s.resumo.diag)}
       <div class="resumo-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm}${fonteTxt} — confira sempre a fonte oficial antes de usar na prova.</div>
     `;
@@ -7616,7 +7630,13 @@ REGRAS:
 - Nos nós que nomeiam um tipo, uma classificação ou um critério, ancore o conceito num exemplo concreto entre parênteses, curtíssimo (até 6 palavras), no formato "(ex.: ...)". Ex: "Choque hipovolêmico (ex.: hemorragia por trauma)". Use só onde o exemplo ajuda a fixar — se todos os nós tiverem exemplo, o fluxograma vira texto corrido e perde a função.
 - O exemplo entre parênteses não pode introduzir número, prazo, dose ou nome de norma que você não confirmou.
 - O fluxo não precisa ser sequência de procedimento — pode ser a estrutura lógica do assunto (definição → classificações → características de cada uma → exceções → prazos), o que fizer mais sentido pro conteúdo.
-- Não existe limite fixo de nós: cubra o assunto de forma completa, usando quantos passos/ramos forem necessários pra não deixar de fora nenhum ponto que costuma cair em prova. Prefira um fluxograma mais completo a um resumido demais — só evite repetir a mesma informação em nós diferentes.`;
+
+TAMANHO — ISTO É UM ESQUELETO, NÃO UM RESUMO:
+- No MÁXIMO 25 nós no fluxograma inteiro, e o JSON completo em até 3.000 caracteres.
+- Quem guarda o conteúdo desenvolvido é o Resumo, que o aluno já tem. Aqui é só o DIRECIONAMENTO: a espinha do assunto, pra bater o olho e lembrar do resto.
+- Portanto, escolha. Se o assunto tem mais pontos do que cabe, fique com os que organizam o raciocínio (a divisão principal, os critérios que separam um caso do outro, o que muda a conduta) e descarte o detalhe que o Resumo já explica.
+- Não repita a mesma informação em nós diferentes.
+- Um fluxograma de 20 nós que se lê num olhar vale mais do que um de 80 que ninguém consegue ler. Preferir o mais completo aqui é errar o objetivo.`;
 
 function fluxoPrompt(texto){
   return`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil, especialista em transformar conteúdo de estudo em fluxogramas/mapas visuais de memorização.
@@ -7688,6 +7708,25 @@ passagem, pra dar liga, tudo bem; desenvolver o assunto do vizinho, não.`;
   }
   return txt;
 }
+// Só a APRESENTAÇÃO do resumo. s.resumo.texto continua exatamente como a IA escreveu,
+// porque é ele que é lido em voz alta (resumoToggleSpeak) e que alimenta o fluxograma —
+// mexer no texto guardado mudaria as duas coisas de tabela.
+// Três formas: título de seção (linha curta, toda em maiúsculas, terminando em ":"),
+// o "Na prática:" e o parágrafo comum.
+function resumoFormatar(txt){
+  const blocos=String(txt||'').split(/\n\s*\n/).map(b=>b.trim()).filter(Boolean);
+  if(!blocos.length)return '';
+  return blocos.map(b=>{
+    const linha=b.replace(/\s+/g,' ');
+    const ehTitulo=linha.length<=90&&/:$/.test(linha)&&linha===linha.toUpperCase()
+                   &&/[A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ]/.test(linha);
+    if(ehTitulo)return `<h4 class="resumo-h">${escapeHtml(linha.replace(/:\s*$/,''))}</h4>`;
+    if(/^na pr[áa]tica\s*:/i.test(linha))return `<p class="resumo-pratica">${escapeHtml(linha)}</p>`;
+    // Quebras soltas DENTRO de um bloco viram espaço: o navegador junta a frase de novo,
+    // que é o comportamento de parágrafo — antes cada uma abria linha nova.
+    return `<p class="resumo-p">${escapeHtml(linha)}</p>`;
+  }).join('');
+}
 async function generateFluxograma(subId){
   const sub=simFindSub(subId);
   let topic=null,kingdom=null;
@@ -7717,17 +7756,13 @@ async function generateFluxograma(subId){
 
   try{
     let parsed,grounded=null,fontesFluxo=[],viaFluxo=null;
-    // O fluxograma não tem limite fixo de nós (ver FLUXO_JSON_REGRAS), então a resposta
-    // pode passar do teto padrão de 8192 tokens — por isso aqui é maior.
-    // Mas era 32768, e ISSO era o problema: o Gemini RESERVA o maxOutputTokens inteiro no
-    // orçamento por minuto da chave, mesmo quando a resposta usa uma fração dele. Com
-    // 32768 o fluxograma era o único recurso do app pedindo 4x mais que o resumo (8192) —
-    // e era o único que levava 429, na mesma chave e no mesmo minuto em que o resumo
-    // passava. Fluxogramas reais medidos ficam entre 6 mil e 15 mil tokens, então 16384
-    // cobre praticamente todos; o raro que não couber é detectado por finishReason
-    // MAX_TOKENS e repetido automaticamente com o dobro (ver callGeminiJSON), em vez de
-    // reservar o máximo em toda geração por causa da exceção.
-    const FLUXO_MAX_OUTPUT_TOKENS=16384;
+    // O teto acompanha o limite de tamanho do prompt (25 nós / 3.000 caracteres):
+    // 3.000 caracteres de JSON em português são cerca de 900 tokens, então 2048 deixa
+    // mais de duas vezes de folga. Se ainda assim vier cortado, callGeminiJSON repete o
+    // MESMO modelo com o dobro — não é preciso reservar o máximo em toda geração por
+    // causa da exceção. Era 32768: o fluxograma pedia 4x mais que o resumo, sendo o
+    // recurso que deveria produzir MENOS texto dos dois.
+    const FLUXO_MAX_OUTPUT_TOKENS=2048;
     if(usarWeb){
       const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
       // Sem resumo pra usar de base: pesquisa. Tavily primeiro, grounding do
@@ -16438,6 +16473,10 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
   let best=null; // primeiro JSON válido encontrado, mas sem confirmar busca real
   let sawRateLimit=false;
   let limiteInfo=null,houve404JSON=false;
+  // O teto aprendido vale pra TODOS os modelos seguintes desta chamada. Sem isso, o
+  // modelo 1 descobria que 2048 era curto, subia pra 4096 — e o modelo 2 recomeçava do
+  // 2048, cortava de novo e subia de novo: seis chamadas repetindo uma conta já feita.
+  let teto=maxOutputTokens;
   async function tentarLista(models,comBusca){
     for(const model of models){
       // tryGeminiModelComRetry, nao tryGeminiModel: o 503 ("this model is currently
@@ -16445,14 +16484,15 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
       // sempre repetiu, porque callGeminiGenerate usa a versao com retry. O fluxograma
       // era o unico que desistia do modelo no primeiro 503, o que o deixava bem mais
       // fragil que o resumo exatamente nos momentos de sobrecarga da Google.
-      let r=await tryGeminiModelComRetry(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens});
+      let r=await tryGeminiModelComRetry(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens:teto});
       // Resposta CORTADA nao e falha do modelo: e teto de saida curto pra ESTE assunto.
       // Ir pro proximo modelo com o mesmo teto so corta de novo — eram quatro chamadas
       // desperdicadas terminando em erro. O certo e repetir o MESMO modelo com o dobro.
       // E isso que permite pedir um teto normal na primeira tentativa em vez de reservar
       // o maximo sempre: o pedido grande passa a ser a excecao, nao a regra.
-      if(!r.ok&&r.cortado&&maxOutputTokens&&maxOutputTokens<65536){
-        r=await tryGeminiModel(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens:maxOutputTokens*2});
+      if(!r.ok&&r.cortado&&teto&&teto<65536){
+        teto=teto*2;
+        r=await tryGeminiModel(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens:teto});
       }
       if(!r.ok){
         attempts.push(`${model} (${r.reason})`);
