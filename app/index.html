@@ -16206,9 +16206,14 @@ async function listGeminiModels(apiKey){
     const models=(data.models||[])
       .filter(m=>Array.isArray(m.supportedGenerationMethods)&&m.supportedGenerationMethods.includes('generateContent'))
       .map(m=>(m.name||'').replace(/^models\//,''))
-      .filter(Boolean);
+      .filter(Boolean)
+      // A API lista como "generateContent" modelos que nao servem pra isto: voz (tts),
+      // imagem/visao, embedding, live. Mandar o prompt de um resumo pra um modelo de TTS
+      // so gera 400/404 e queima cota — e era exatamente o que aparecia no painel do
+      // usuario (gemini-2.5-flash-tts, gemini-pro-vision).
+      .filter(n=>!/(^|-)(tts|embedding|embed|vision|image|imagen|audio|live|aqa)(-|$)/i.test(n));
     models.sort((a,b)=>(a.includes('flash')?0:1)-(b.includes('flash')?0:1));
-    return models;
+    return models.slice(0,2);   // sondagem, nao varredura
   }catch(e){return[];}
 }
 // opts repassa maxOutputTokens. Sem isso vale o padrao de 8192, que corta a
@@ -16217,7 +16222,7 @@ async function listGeminiModels(apiKey){
 async function callGeminiGenerate(apiKey,prompt,opts){
   const attempts=[];
   let soTemporario=true;   // vira false no primeiro erro de verdade (chave, modelo)
-  let limite=null;
+  let limite=null,houve404=false;
   for(const model of geminiOrdemModelos()){
     const r=await tryGeminiModelComRetry(apiKey,model,prompt,opts);
     if(r.ok){geminiAnotarModeloOk(model);return r.raw;}
@@ -16226,12 +16231,18 @@ async function callGeminiGenerate(apiKey,prompt,opts){
     // mostra 3.8 e 3.7 recusando enquanto a 3.6 responde normalmente. Parar na primeira
     // recusa era justamente o que impedia de chegar no modelo que estava de pe.
     if(r.limite)limite=r;
+    if(r.http===404)houve404=true;
     if(!r.temporario)soTemporario=false;
   }
   // Sobrecarga atinge todos os modelos ao mesmo tempo: sair perguntando a API quais
   // outros modelos existem so empilha requisicao em cima de um servico que ja esta
   // recusando, e faz o usuario esperar mais por um erro que ja e conhecido.
-  if(!soTemporario){
+  // Perguntar a API quais outros modelos existem so faz sentido quando o nome que
+  // usamos nao existe mais (404). Em 503 ou 429 os nomes estao certos — o servico e que
+  // esta ocupado ou limitado — e sair tentando mais modelos multiplica o gasto: medido,
+  // um fluxograma virava 10 chamadas e 43 mil tokens de entrada, o que sozinho estoura
+  // o teto de tokens por minuto do nivel gratuito e provoca o proximo 429.
+  if(!soTemporario&&houve404){
     const discovered=(await listGeminiModels(apiKey)).filter(m=>!GEMINI_MODEL_CANDIDATES.includes(m));
     for(const model of discovered){
       const r=await tryGeminiModelComRetry(apiKey,model,prompt,opts);
@@ -16298,7 +16309,7 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
   const attempts=[];
   let best=null; // primeiro JSON válido encontrado, mas sem confirmar busca real
   let sawRateLimit=false;
-  let limiteInfo=null;
+  let limiteInfo=null,houve404JSON=false;
   async function tentarLista(models,comBusca){
     for(const model of models){
       const r=await tryGeminiModel(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens});
@@ -16306,6 +16317,7 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
         attempts.push(`${model} (${r.reason})`);
         // Por modelo, nao por chave: segue tentando os outros.
         if(r.limite){sawRateLimit=true;limiteInfo=r;}
+        if(r.http===404)houve404JSON=true;
         continue;
       }
       geminiAnotarModeloOk(model);
@@ -16341,9 +16353,11 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
     if(hit)return hit;
   }
   if(best)return best;
-  const discovered=(await listGeminiModels(apiKey)).filter(m=>!GEMINI_MODEL_CANDIDATES.includes(m));
-  const hit3=await tentarLista(discovered,false);
-  if(hit3)return hit3;
+  if(houve404JSON){
+    const discovered=(await listGeminiModels(apiKey)).filter(m=>!GEMINI_MODEL_CANDIDATES.includes(m));
+    const hit3=await tentarLista(discovered,false);
+    if(hit3)return hit3;
+  }
   if(best)return best;
   if(sawRateLimit)throw new Error(geminiMensagemErro(attempts,false,limiteInfo||{}));
   throw new Error(`Nenhum modelo respondeu com um JSON válido. Tentativas: ${attempts.join(' · ')||'nenhuma'}.`);
