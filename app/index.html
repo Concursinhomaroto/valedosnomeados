@@ -7558,24 +7558,36 @@ ${contexto}
 ${FLUXO_JSON_REGRAS}
 - Se não tiver certeza sobre uma informação específica (data exata, número de lei, prazo), prefira omitir a deixar algo errado no fluxograma.`;
 }
-// Igual a fluxoPromptWeb, mas usada quando já existe um resumo recém-gerado (fluxo
-// automático da 1ª sessão de estudo): pesquisa na internet E usa o resumo como base,
-// combinando as duas fontes — diferente do botão manual de Fluxograma, que só pesquisa
-// na internet quando NÃO há nenhum texto/resumo disponível.
-function fluxoPromptWebComResumo(contexto,resumoTexto){
-  return`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil, especialista em transformar conteúdo de estudo em fluxogramas/mapas visuais de memorização.
-
-${promptRegrasAtualidadeCurta()}
-
-TAREFA: Pesquise na internet, em fontes confiáveis (legislação oficial, diretriz oficial, doutrina consolidada), as informações mais ATUAIS sobre o assunto abaixo, e COMBINE com o resumo já preparado a seguir — use o resumo como base e complemente/CORRIJA com o que encontrar pesquisando (mudanças recentes de lei, súmulas, jurisprudência, revisão de diretriz). Se a pesquisa contradisser o resumo, vale a pesquisa, cobrindo os pontos-chave que mais caem em prova — terminologias, classificações, prazos, números e conceitos essenciais —, no formato JSON abaixo. Responda APENAS com o JSON, sem texto antes ou depois, sem markdown, sem bloco de código.
-
-${contexto}
-
-RESUMO JÁ PREPARADO (use como base):
-${resumoTexto}
-
-${FLUXO_JSON_REGRAS}
-- Se não tiver certeza sobre uma informação específica (data exata, número de lei, prazo), prefira omitir a deixar algo errado no fluxograma.`;
+// Contexto do ALUNO pro fluxograma: os flashcards já cadastrados (mesmo recorte que o
+// resumo usa) e a lista dos minibosses IRMÃOS deste chefão.
+// Os irmãos estão aqui por um motivo concreto: flashcard é ligado ao CHEFÃO, não ao
+// miniboss (c.mbId===topic.id), então todos os irmãos recebem exatamente o mesmo lote de
+// cards como contexto. Sem dizer de quem é cada assunto, o modelo puxa pro conteúdo geral
+// do chefão e os fluxogramas dos irmãos saem repetindo uns aos outros — que é a queixa.
+// Mesma mecânica já validada na geração de flashcards (travaRepeticao): a lista vai no
+// FIM do prompt, depois do material, e diz explicitamente o que não fazer.
+function fluxoContextoDoAluno(sub,topic){
+  let txt='';
+  const cards=Object.values(db.flashcards||{}).filter(c=>c.mbId===topic.id);
+  if(cards.length){
+    const MAX_CARDS=120;
+    txt+=`\n\nFLASHCARDS QUE O ALUNO JÁ TEM CADASTRADOS NESTE CHEFÃO (contexto do que ele estuda — incorpore o que for do assunto específico, no formato de nó do fluxograma, nunca como pergunta/resposta):\n`
+       +cards.slice(0,MAX_CARDS).map(c=>`P: ${c.pergunta}\nR: ${c.resposta}`).join('\n\n');
+    if(cards.length>MAX_CARDS)txt+=`\n\n(+ ${cards.length-MAX_CARDS} outros flashcards cadastrados, não incluídos aqui por espaço)`;
+  }
+  const irmaos=(topic.subtopics||[]).filter(x=>x&&x.id!==sub.id&&x.name).map(x=>x.name);
+  if(irmaos.length){
+    txt+=`\n\n=====================================================================
+OUTROS ASSUNTOS DESTE MESMO CHEFÃO — CADA UM TEM O FLUXOGRAMA DELE
+=====================================================================
+${irmaos.slice(0,40).map((n,i)=>`${i+1}. ${n}`).join('\n')}
+=====================================================================
+Este fluxograma é SÓ sobre "${sub.name}". Se um ponto pertence a um dos assuntos
+listados acima, deixe de fora — ele já está (ou vai estar) no fluxograma daquele
+assunto, e repetir aqui faz o aluno estudar a mesma coisa duas vezes. Citar de
+passagem, pra dar liga, tudo bem; desenvolver o assunto do vizinho, não.`;
+  }
+  return txt;
 }
 async function generateFluxograma(subId){
   const sub=simFindSub(subId);
@@ -7633,7 +7645,7 @@ async function generateFluxograma(subId){
       // Sem chunking de propósito: a fonte aqui é o Resumo (já condensado) ou um trecho
       // colado à mão, não o material bruto inteiro — um corte de segurança em 40k
       // caracteres é mais que suficiente e evita estourar o teto de uma chamada só.
-      const r=await callGeminiJSON(apiKey,fluxoPrompt(texto.slice(0,40000)),false,FLUXO_MAX_OUTPUT_TOKENS);
+      const r=await callGeminiJSON(apiKey,fluxoPrompt(texto.slice(0,40000))+fluxoContextoDoAluno(sub,topic),false,FLUXO_MAX_OUTPUT_TOKENS);
       parsed=r.parsed;
       // Veio do Resumo? Então herda de onde o Resumo veio. Sem isso, um
       // fluxograma feito em cima de resumo pesquisado no Tavily aparecia como
@@ -9481,9 +9493,9 @@ function toggleTimer(subId,topicId){
 // Dispara automaticamente, sem exigir clique, na primeira vez que o usuário
 // clica em "Estudar" de um miniboss: gera o Resumo (com pesquisa na internet +
 // flashcards já cadastrados do chefão, via generateResumoWeb) e, assim que ele
-// terminar, gera o Fluxograma combinando pesquisa na internet COM o resumo
-// recém-criado (autoGerarFluxogramaWebEResumo abaixo) — diferente do botão manual
-// de Fluxograma, que só pesquisa na internet quando NÃO há resumo/texto disponível.
+// terminar, gera o Fluxograma a partir desse resumo recém-criado + os flashcards do
+// aluno (autoGerarFluxogramaDoResumo abaixo), sem pesquisar de novo — a pesquisa do
+// resumo, feita segundos antes, já trouxe o material.
 // Roda em segundo plano (fire-and-forget) pra não travar o início do cronômetro;
 // se não houver chave de API configurada, desiste em silêncio — um fluxo 100%
 // automático não deve interromper o usuário abrindo modal de configuração.
@@ -9500,16 +9512,24 @@ async function autoGerarResumoEFluxograma(subId){
   const sub=simFindSub(subId);
   if(!sub||!sub.resumo||!sub.resumo.texto)return;
   try{
-    await autoGerarFluxogramaWebEResumo(subId,sub.resumo.texto);
+    await autoGerarFluxogramaDoResumo(subId,sub.resumo.texto);
   }catch(e){
     console.error('Auto-fluxograma (primeiro estudo) falhou:',e);
   }
 }
-// Fluxograma do fluxo automático da 1ª sessão: pesquisa na internet E usa o resumo
-// recém-gerado como base (fluxoPromptWebComResumo), sempre com useSearch=true —
-// não reaproveita generateFluxograma porque essa função pula a pesquisa quando já
-// existe um texto/resumo (usarWeb=!texto), e aqui o pedido é combinar as duas fontes.
-async function autoGerarFluxogramaWebEResumo(subId,resumoTexto){
+// Fluxograma do fluxo automático da 1ª sessão: monta a partir do RESUMO que acabou de
+// ser gerado + os flashcards do aluno. NÃO pesquisa.
+// Antes ele pesquisava de novo, e isso era errado por dois motivos:
+// 1) DESPERDÍCIO — o resumo tinha acabado de ser escrito a partir de uma busca do
+//    Tavily, segundos antes. A segunda busca refazia o mesmo trabalho: mais 2 buscas no
+//    Tavily e mais tempo de espera, pra chegar no mesmo conteúdo que já estava na mão.
+// 2) REPETIÇÃO — a busca era feita com os termos do CHEFÃO ("Saúde Mental — X"), iguais
+//    pra todos os minibosses irmãos. Resultado: material parecido entrando em todos, e
+//    fluxogramas de assuntos diferentes saindo parecidos uns com os outros. O resumo, ao
+//    contrário, é específico deste miniboss — é a fonte certa.
+// A pesquisa continua existindo onde ela é a única opção: no botão manual, quando não há
+// resumo nem texto colado (generateFluxograma com usarWeb=true).
+async function autoGerarFluxogramaDoResumo(subId,resumoTexto){
   const sub=simFindSub(subId);
   let topic=null,kingdom=null;
   for(const k of db.kingdoms){ (db.topics[k.id]||[]).forEach(t=>{if(t.subtopics?.some(x=>x.id===subId)){topic=t;kingdom=k;}}); if(topic)break; }
@@ -9518,32 +9538,25 @@ async function autoGerarFluxogramaWebEResumo(subId,resumoTexto){
   if(!apiKey)return;
   if(fluxoGenerating.has(subId)){toast('Geração em andamento...','var(--orange)');return;}
 
-  fluxoGenerating.set(subId,'web');
+  fluxoGenerating.set(subId,'texto');
   openFluxo.add(subId);
   fluxoRefreshPanel(subId);
   try{
-    const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
     const FLUXO_MAX_OUTPUT_TOKENS=16384;
-    // Este era o ÚNICO caminho de fluxograma que ignorava o Tavily e mandava o Gemini
-    // pesquisar sozinho. Com a busca do Gemini ligada, callGeminiJSON percorre todos os
-    // modelos atrás de uma resposta que tenha pesquisado de verdade — até 5 chamadas,
-    // cada uma com teto de 32k tokens de saída. Era por isso que, logo depois de um
-    // resumo que sai rápido, o fluxograma demorava: o resumo já usava o Tavily e este
-    // não. Passa a seguir o mesmo combinado do resto do app.
-    const prompt=fluxoPromptWebComResumo(contexto,resumoTexto.slice(0,40000));
-    const b=await buscarMaterial(sub.name,`${kingdom.name} — ${topic.name}`,30000);
-    let parsed,grounded,fontes;
-    if(b.material){
-      const r=await callGeminiJSON(apiKey,tavilyPromptComFontes(prompt,b.material),false,FLUXO_MAX_OUTPUT_TOKENS);
-      parsed=r.parsed;grounded=true;fontes=b.fontes;
-    }else{
-      const r=await callGeminiJSON(apiKey,prompt,true,FLUXO_MAX_OUTPUT_TOKENS);
-      parsed=r.parsed;grounded=r.grounded;fontes=r.fontes;
-    }
-    const{raizId,nos}=fluxoFlattenArvore(parsed);
-    sub.fluxograma={raizId,nos,origem:'web',grounded,fontes:fontes||[],geradoEm:new Date().toISOString()};
+    const prompt=fluxoPrompt(resumoTexto.slice(0,40000))+fluxoContextoDoAluno(sub,topic);
+    const r=await callGeminiJSON(apiKey,prompt,false,FLUXO_MAX_OUTPUT_TOKENS);
+    const{raizId,nos}=fluxoFlattenArvore(r.parsed);
+    // As fontes vêm do resumo: foi a pesquisa dele que produziu este conteúdo, então o
+    // crédito é dela. Sem isso, um fluxograma feito em cima de resumo pesquisado no
+    // Tavily apareceria sem fonte nenhuma à vista — mesma herança que o botão manual
+    // já faz quando gera a partir do resumo.
+    const resumo=sub.resumo||{};
+    sub.fluxograma={raizId,nos,origem:'ia',grounded:!!resumo.grounded,via:resumo.via||null,
+                    doResumo:true,fontes:resumo.fontes||[],geradoEm:new Date().toISOString()};
     saveDB();
-    toast(grounded?'🌐 Fluxograma gerado com pesquisa na internet + resumo!':'🔀 Fluxograma gerado com base no resumo (busca na internet indisponível agora)','var(--green)');
+    toast(resumo.grounded
+      ?`🔀 Fluxograma gerado a partir do Resumo (${(resumo.fontes||[]).length} fontes herdadas)`
+      :'🔀 Fluxograma gerado a partir do Resumo!','var(--green)');
   }catch(e){
     console.error('Fluxograma error:',e);
     toast('⚠️ '+e.message,'var(--red)');
