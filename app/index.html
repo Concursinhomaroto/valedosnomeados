@@ -16085,7 +16085,23 @@ function saveGeminiApiKey(){
 // 'gemini-3.5-flash-lite' saiu porque não existe — era um 404 gasto em toda
 // geração antes de cair no candidato seguinte. Da mais nova pra mais antiga,
 // porque a busca com grounding tem quota gratuita bem maior na geração 3.x.
+// O ultimo da fila e uma RESERVA, nao uma escolha: no nivel gratuito o teto de
+// requisicoes por DIA e por modelo, e nos Flash ele e baixo (20). Quem gera resumo,
+// flashcard e fluxograma o dia inteiro esgota os quatro e fica sem nada — foi
+// exatamente o 429 que aparecia sempre no fluxograma, que costuma ser a ultima acao
+// depois do resumo. O Flash Lite tem teto diario muito maior (500) e so e alcancado
+// depois que os quatro acima recusaram, entao enquanto houver cota boa nada muda:
+// a qualidade do resumo continua vindo dos modelos de cima.
 const GEMINI_MODEL_CANDIDATES=['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-flash-latest'];
+// RESERVA DE COTA — fora da fila normal de propósito.
+// No nível gratuito o teto de requisições por DIA é por modelo, e nos Flash ele é baixo
+// (20). Quem gera resumo, flashcard e fluxograma o dia inteiro esgota os quatro acima e
+// fica sem nada — era o 429 que aparecia sempre no fluxograma, que costuma ser a última
+// ação depois do resumo. O Flash Lite tem teto diário muito maior (500).
+// Só é acionada quando alguém recusou por COTA (429). Numa queda da Google (503) ela
+// fica fora: é a mesma infraestrutura, estaria caída também, e tentar só somaria
+// mais três requisições e mais espera a um erro que já é conhecido.
+const GEMINI_MODELO_RESERVA='gemini-flash-lite-latest';
 // Toda chamada recomecava a lista no primeiro modelo. Se a chave da pessoa nao tem
 // acesso aos dois primeiros, cada acao no app queimava duas requisicoes so pra
 // descobrir de novo o que ja sabia — e na cota gratuita do Gemini (poucas por minuto)
@@ -16108,6 +16124,10 @@ let geminiModeloOk=null,geminiModeloOkEm=0;
 })();
 function geminiAnotarModeloOk(model){
   if(!model)return;
+  // A reserva nunca vira preferida. Sem isso, bastava um dia de cota estourada pra que
+  // o app passasse a COMECAR pelo modelo mais fraco nos 30 minutos seguintes — e o
+  // resumo piorava sem motivo no dia seguinte, com cota boa sobrando.
+  if(model===GEMINI_MODELO_RESERVA)return;
   geminiModeloOk=model;geminiModeloOkEm=Date.now();
   try{localStorage.setItem(GEMINI_MODELO_OK_KEY,JSON.stringify({m:model,t:geminiModeloOkEm}));}catch(e){}
 }
@@ -16148,12 +16168,26 @@ async function tryGeminiModel(apiKey,model,prompt,opts){
       const limite=response.status===429;
       // O 429 do Gemini traz quanto esperar; quando vem, é melhor do que qualquer
       // palpite nosso.
-      let esperar=null;
+      let esperar=null,cota=null;
       try{
-        const d=(JSON.parse(err)?.error?.details||[]).find(x=>x&&x.retryDelay);
+        const det=(JSON.parse(err)?.error?.details||[]);
+        const d=det.find(x=>x&&x.retryDelay);
         if(d)esperar=String(d.retryDelay);
+        // O 429 tambem diz QUAL cota estourou (QuotaFailure.violations[].quotaId), e
+        // isso muda completamente o que a pessoa deve fazer: "por minuto" passa em um
+        // minuto, "por dia" so passa amanha. Sem ler isso, a mensagem era a mesma nos
+        // dois casos e a pessoa ficava clicando de novo achando que ia liberar.
+        const v=det.map(x=>x&&x.violations).filter(Boolean).reduce((a,b)=>a.concat(b),[]);
+        const q=v.find(x=>x&&x.quotaId)||null;
+        if(q){
+          const id=String(q.quotaId||'');
+          cota={id,
+                periodo:/PerDay/i.test(id)?'dia':(/PerMinute/i.test(id)?'minuto':null),
+                limite:q.quotaValue?String(q.quotaValue):null,
+                modelo:(q.quotaDimensions&&q.quotaDimensions.model)||model};
+        }
       }catch(e2){}
-      return{ok:false,reason:`${response.status} ${detail}`,http:response.status,temporario,limite,esperar};
+      return{ok:false,reason:`${response.status} ${detail}`,http:response.status,temporario,limite,esperar,cota};
     }
     const data=await response.json();
     // Concatena TODAS as partes de texto, não só parts[0] — com tools ativos (ex: busca)
@@ -16203,6 +16237,18 @@ async function tryGeminiModelComRetry(apiKey,model,prompt,opts){
 function geminiMensagemErro(attempts,tudoTemporario,limite){
   if(limite){
     const q=limite.esperar?` O Google pediu pra esperar ${limite.esperar}.`:'';
+    // Quando o proprio Google diz que a cota estourada e a DIARIA, esperar nao resolve
+    // — e a mensagem generica ("tem teto por minuto e por dia") fazia a pessoa tentar
+    // de novo varias vezes a toa, queimando o resto da cota dos outros modelos.
+    const c=limite.cota;
+    if(c&&c.periodo==='dia'){
+      const lim=c.limite?` (${c.limite} por dia)`:'';
+      return `Acabou a cota DIÁRIA da sua chave do Gemini${lim} no modelo ${c.modelo||'usado'} — e nos outros que o app tenta antes dele. Não adianta esperar alguns minutos: esse contador só zera à meia-noite no horário do Pacífico (4h/5h da manhã aqui). Pra destravar hoje: use uma chave de outro projeto do Google, ou ative o faturamento em aistudio.google.com, que sobe esse teto.`;
+    }
+    if(c&&c.periodo==='minuto'){
+      const lim=c.limite?` (${c.limite} por minuto)`:'';
+      return `Você estourou o limite POR MINUTO da sua chave do Gemini${lim}.${q} Isso passa sozinho: espere um pouco e tente de novo — sua cota do dia continua de pé.`;
+    }
     // Sem chave do Tavily, quem pesquisa na internet é o próprio Gemini — e a chamada
     // COM busca é a que mais consome cota. A hora de dizer isso é agora, quando a
     // pessoa acabou de bater no limite, e não escondido numa tela de configuração.
@@ -16269,6 +16315,12 @@ async function callGeminiGenerate(apiKey,prompt,opts){
       attempts.push(`${model} (${r.reason})`);
       if(r.limite){limite=r;break;}
     }
+  }
+  if(limite){
+    const rr=await tryGeminiModel(apiKey,GEMINI_MODELO_RESERVA,prompt,opts);
+    if(rr.ok)return rr.raw;
+    attempts.push(`${GEMINI_MODELO_RESERVA} (${rr.reason})`);
+    if(rr.limite)limite=rr;
   }
   throw new Error(geminiMensagemErro(attempts,soTemporario,limite));
 }
@@ -16383,7 +16435,11 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
     if(hit3)return hit3;
   }
   if(best)return best;
-  if(sawRateLimit)throw new Error(geminiMensagemErro(attempts,false,limiteInfo||{}));
+  if(sawRateLimit){
+    const hitR=await tentarLista([GEMINI_MODELO_RESERVA],false);
+    if(hitR)return hitR;
+    throw new Error(geminiMensagemErro(attempts,false,limiteInfo||{}));
+  }
   throw new Error(`Nenhum modelo respondeu com um JSON válido. Tentativas: ${attempts.join(' · ')||'nenhuma'}.`);
 }
 
