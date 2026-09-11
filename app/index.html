@@ -9472,7 +9472,12 @@ function toggleTimer(subId,topicId){
         gainXP(xpGain);
         saveDB();
         toast(`🎯 Primeiro estudo! Primeira revisão agendada em 7 dias — as próximas se ajustam à sua dificuldade. +${xpGain} XP!`,'var(--green)');
-        autoGerarResumoEFluxograma(sub.id);
+        // Resumo e Fluxograma NAO sao mais gerados sozinhos aqui.
+        // Cada "Estudar" num miniboss novo disparava duas chamadas ao Gemini (uma do
+        // resumo, uma do fluxograma) sem ninguem ter pedido — e no nivel gratuito o teto
+        // e de 20 requisicoes por dia POR MODELO, entao dez minibosses abertos zeravam a
+        // cota do dia antes de qualquer geracao pedida de proposito. Agora os dois saem
+        // so pelo botao, quando o usuario quiser.
       }
       refreshSubs(topic,topicId);
     }
@@ -9487,82 +9492,6 @@ function toggleTimer(subId,topicId){
     const topic=(db.topics[currentKingdom?.id||'']||[]).find(tp=>tp.subtopics?.some(s=>s.id===subId));
     if(topic)refreshSubs(topic,topicId);
     renderMap();
-  }
-}
-
-// Dispara automaticamente, sem exigir clique, na primeira vez que o usuário
-// clica em "Estudar" de um miniboss: gera o Resumo (com pesquisa na internet +
-// flashcards já cadastrados do chefão, via generateResumoWeb) e, assim que ele
-// terminar, gera o Fluxograma a partir desse resumo recém-criado + os flashcards do
-// aluno (autoGerarFluxogramaDoResumo abaixo), sem pesquisar de novo — a pesquisa do
-// resumo, feita segundos antes, já trouxe o material.
-// Roda em segundo plano (fire-and-forget) pra não travar o início do cronômetro;
-// se não houver chave de API configurada, desiste em silêncio — um fluxo 100%
-// automático não deve interromper o usuário abrindo modal de configuração.
-async function autoGerarResumoEFluxograma(subId){
-  const apiKey=(db.geminiApiKey||'').trim();
-  if(!apiKey)return;
-  if(resumoGenerating.has(subId)||fluxoGenerating.has(subId))return;
-  try{
-    await generateResumoWeb(subId);
-  }catch(e){
-    console.error('Auto-resumo (primeiro estudo) falhou:',e);
-    return;
-  }
-  const sub=simFindSub(subId);
-  if(!sub||!sub.resumo||!sub.resumo.texto)return;
-  try{
-    await autoGerarFluxogramaDoResumo(subId,sub.resumo.texto);
-  }catch(e){
-    console.error('Auto-fluxograma (primeiro estudo) falhou:',e);
-  }
-}
-// Fluxograma do fluxo automático da 1ª sessão: monta a partir do RESUMO que acabou de
-// ser gerado + os flashcards do aluno. NÃO pesquisa.
-// Antes ele pesquisava de novo, e isso era errado por dois motivos:
-// 1) DESPERDÍCIO — o resumo tinha acabado de ser escrito a partir de uma busca do
-//    Tavily, segundos antes. A segunda busca refazia o mesmo trabalho: mais 2 buscas no
-//    Tavily e mais tempo de espera, pra chegar no mesmo conteúdo que já estava na mão.
-// 2) REPETIÇÃO — a busca era feita com os termos do CHEFÃO ("Saúde Mental — X"), iguais
-//    pra todos os minibosses irmãos. Resultado: material parecido entrando em todos, e
-//    fluxogramas de assuntos diferentes saindo parecidos uns com os outros. O resumo, ao
-//    contrário, é específico deste miniboss — é a fonte certa.
-// A pesquisa continua existindo onde ela é a única opção: no botão manual, quando não há
-// resumo nem texto colado (generateFluxograma com usarWeb=true).
-async function autoGerarFluxogramaDoResumo(subId,resumoTexto){
-  const sub=simFindSub(subId);
-  let topic=null,kingdom=null;
-  for(const k of db.kingdoms){ (db.topics[k.id]||[]).forEach(t=>{if(t.subtopics?.some(x=>x.id===subId)){topic=t;kingdom=k;}}); if(topic)break; }
-  if(!sub||!topic||!kingdom)return;
-  const apiKey=(db.geminiApiKey||'').trim();
-  if(!apiKey)return;
-  if(fluxoGenerating.has(subId)){toast('Geração em andamento...','var(--orange)');return;}
-
-  fluxoGenerating.set(subId,'texto');
-  openFluxo.add(subId);
-  fluxoRefreshPanel(subId);
-  try{
-    const FLUXO_MAX_OUTPUT_TOKENS=16384;
-    const prompt=fluxoPrompt(resumoTexto.slice(0,40000))+fluxoContextoDoAluno(sub,topic);
-    const r=await callGeminiJSON(apiKey,prompt,false,FLUXO_MAX_OUTPUT_TOKENS);
-    const{raizId,nos}=fluxoFlattenArvore(r.parsed);
-    // As fontes vêm do resumo: foi a pesquisa dele que produziu este conteúdo, então o
-    // crédito é dela. Sem isso, um fluxograma feito em cima de resumo pesquisado no
-    // Tavily apareceria sem fonte nenhuma à vista — mesma herança que o botão manual
-    // já faz quando gera a partir do resumo.
-    const resumo=sub.resumo||{};
-    sub.fluxograma={raizId,nos,origem:'ia',grounded:!!resumo.grounded,via:resumo.via||null,
-                    doResumo:true,fontes:resumo.fontes||[],geradoEm:new Date().toISOString()};
-    saveDB();
-    toast(resumo.grounded
-      ?`🔀 Fluxograma gerado a partir do Resumo (${(resumo.fontes||[]).length} fontes herdadas)`
-      :'🔀 Fluxograma gerado a partir do Resumo!','var(--green)');
-  }catch(e){
-    console.error('Fluxograma error:',e);
-    toast('⚠️ '+e.message,'var(--red)');
-  }finally{
-    fluxoGenerating.delete(subId);
-    fluxoRefreshPanel(subId);
   }
 }
 
