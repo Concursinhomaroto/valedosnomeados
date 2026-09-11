@@ -6662,12 +6662,17 @@ async function tavilyPesquisar(assunto,contexto){
   ];
   const fontes=[]; const partes=[]; const erros=[];
   const oficialPrimeiro=db.tavilySoOficial!==false;
-  for(let i=0;i<consultas.length;i++){
-    try{
-      const r=await tavilyBuscar(consultas[i],{oficial:oficialPrimeiro&&i===0,profundo:i===0,max:6});
-      if(r.fontes.length){fontes.push(...r.fontes);partes.push(r.texto);}
-    }catch(e){erros.push(`"${consultas[i]}": ${e.message}`);}
-  }
+  // As duas consultas são independentes — uma não usa o resultado da outra. Em série,
+  // as duas esperas somavam, e a primeira usa busca "avançada", que é a mais lenta do
+  // Tavily. Em paralelo, o tempo passa a ser o da mais demorada, não o das duas.
+  // O resultado é montado na ordem original, então nada muda no material entregue.
+  const resultados=await Promise.all(consultas.map((q,i)=>
+    tavilyBuscar(q,{oficial:oficialPrimeiro&&i===0,profundo:i===0,max:6})
+      .then(r=>({r}),e=>({e}))));
+  resultados.forEach(({r,e},i)=>{
+    if(e){erros.push(`"${consultas[i]}": ${e.message}`);return;}
+    if(r&&r.fontes.length){fontes.push(...r.fontes);partes.push(r.texto);}
+  });
   const unicas=fontes.filter((f,i,a)=>a.findIndex(x=>x.url===f.url)===i).slice(0,12);
   return{texto:partes.join('\n\n===\n\n'),fontes:unicas,consultas,erros};
 }
@@ -16086,15 +16091,29 @@ const GEMINI_MODEL_CANDIDATES=['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6
 // descobrir de novo o que ja sabia — e na cota gratuita do Gemini (poucas por minuto)
 // isso e a diferenca entre funcionar e levar 429. Guarda quem respondeu e tenta ele
 // primeiro. E so uma dica: se falhar, a lista inteira continua sendo tentada.
+// A dica TEM PRAZO. Sem prazo ela vira armadilha: basta o modelo preferido estar
+// ocupado uma vez pra que o app passe a usar um modelo mais fraco PARA SEMPRE, e o
+// resumo piora sem explicação. Depois da validade, volta a começar pelo primeiro da
+// lista, que é o melhor; se ele estiver ocupado de novo, a dica se renova sozinha.
 const GEMINI_MODELO_OK_KEY='vdn_gemini_modelo_ok';
-let geminiModeloOk=(()=>{try{return localStorage.getItem(GEMINI_MODELO_OK_KEY)||null;}catch(e){return null;}})();
+const GEMINI_MODELO_OK_VALIDADE_MS=30*60*1000;   // 30 min
+let geminiModeloOk=null,geminiModeloOkEm=0;
+(()=>{
+  try{
+    const bruto=localStorage.getItem(GEMINI_MODELO_OK_KEY);
+    if(!bruto)return;
+    const d=JSON.parse(bruto);
+    if(d&&d.m&&d.t&&(Date.now()-d.t)<GEMINI_MODELO_OK_VALIDADE_MS){geminiModeloOk=d.m;geminiModeloOkEm=d.t;}
+  }catch(e){}   // formato antigo (só o nome, sem data) é descartado de propósito
+})();
 function geminiAnotarModeloOk(model){
-  if(!model||model===geminiModeloOk)return;
-  geminiModeloOk=model;
-  try{localStorage.setItem(GEMINI_MODELO_OK_KEY,model);}catch(e){}
+  if(!model)return;
+  geminiModeloOk=model;geminiModeloOkEm=Date.now();
+  try{localStorage.setItem(GEMINI_MODELO_OK_KEY,JSON.stringify({m:model,t:geminiModeloOkEm}));}catch(e){}
 }
 function geminiOrdemModelos(lista){
   const base=lista||GEMINI_MODEL_CANDIDATES;
+  if(geminiModeloOk&&(Date.now()-geminiModeloOkEm)>=GEMINI_MODELO_OK_VALIDADE_MS)geminiModeloOk=null;
   if(!geminiModeloOk||base.indexOf(geminiModeloOk)<0)return base;
   return [geminiModeloOk,...base.filter(m=>m!==geminiModeloOk)];
 }
@@ -16329,6 +16348,11 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
       if(parsed&&typeof parsed==='object'){
         if(r.grounded)return{parsed,grounded:true,fontes:r.fontes,consultas:r.consultas};
         if(!best)best={parsed,grounded:false,fontes:[],consultas:[]};
+        // JSON válido em mãos. Continuar procurando um modelo que tenha pesquisado de
+        // verdade custa MAIS TRÊS chamadas — e o limite por minuto da conta gratuita é
+        // de 5. Quatro chamadas num segundo estouram sozinhas e a geração morre com
+        // 429, tendo uma resposta boa na mão. Fica com a que funcionou.
+        return best;
         // Sem busca ativa não existe "grounded" pra perseguir — o primeiro JSON válido já
         // resolve, então para por aqui em vez de gastar chamada de API à toa nos outros
         // candidatos (só na busca vale a pena continuar tentando achar um resultado
