@@ -16098,7 +16098,13 @@ function saveGeminiApiKey(){
 // depois do resumo. O Flash Lite tem teto diario muito maior (500) e so e alcancado
 // depois que os quatro acima recusaram, entao enquanto houver cota boa nada muda:
 // a qualidade do resumo continua vindo dos modelos de cima.
-const GEMINI_MODEL_CANDIDATES=['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-flash-latest'];
+// 'gemini-flash-latest' saiu: e APELIDO do 'gemini-3.8-flash', o primeiro da lista.
+// Provado pelo proprio erro da API — a requisicao vai pra models/gemini-flash-latest e o
+// 429 volta dizendo "model": "gemini-3.8-flash". Mesmo modelo, MESMO balde de cota: se o
+// primeiro ja recusou por cota diaria, esse recusa junto, sempre. Era uma requisicao
+// garantidamente perdida em toda geracao que falhava — e, no teto de 20 por dia, uma
+// requisicao perdida importa.
+const GEMINI_MODEL_CANDIDATES=['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash'];
 // RESERVA DE COTA — fora da fila normal de propósito.
 // No nível gratuito o teto de requisições por DIA é por modelo, e nos Flash ele é baixo
 // (20). Quem gera resumo, flashcard e fluxograma o dia inteiro esgota os quatro acima e
