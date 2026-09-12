@@ -2598,6 +2598,7 @@ nav{
       </label>
       <span id="admin-selected-count" style="color:var(--muted)">0 selecionados</span>
       <button class="btn btn-xs" style="margin-left:auto" onclick="adminCopySelectedEmails()"><i class="fa fa-copy"></i> Copiar e-mails selecionados</button>
+      <button class="btn btn-xs btn-ghost" onclick="adminReconstruirIndice()" title="Lê todas as contas por inteiro uma vez e regrava a lista a partir do que está gravado nelas"><i class="fa fa-rotate"></i> Reconstruir índice</button>
     </div>
     <div id="admin-results" style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
       <div class="empty" style="padding:16px"><i class="fa fa-spinner fa-spin"></i><p>Carregando...</p></div>
@@ -4361,6 +4362,49 @@ function saveDB(){
     }
   },800);
   maybeBackupDB();
+  adminIndexAtualizar();
+}
+
+// ===== ÍNDICE DO PAINEL ADMIN =====
+// O Painel Admin lia ref('users') inteiro — todas as contas com flashcards, resumos,
+// redações e as duas cópias de backup — pra mostrar quatro campos por linha: e-mail,
+// plano, tipo de plano e data do último pagamento. Isso dá ~180 bytes úteis por conta
+// contra ~3,7 MB baixados: vinte mil vezes mais do que precisa. Não era só custo de
+// banda; snap.val() monta tudo isso como objeto JavaScript na memória do navegador, e
+// por volta de 100 contas a aba simplesmente morre.
+//
+// Este nó é a vitrine: só os quatro campos, escritos pela própria pessoa junto do save
+// normal. NÃO é fonte de verdade de nada — quem decide acesso continua sendo
+// users/{uid}/vdn_v1/plan, que as regras já protegem, e adminConfirmPayment escreve lá
+// direto. Como qualquer um pode editar o próprio registro pelo console (o mesmo já vale
+// pro accountEmail que o painel exibe hoje), alguém poderia se pintar de pago NA LISTA
+// sem ganhar acesso nenhum; pra desconfiar disso existe o "Reconstruir índice", que lê
+// as contas de verdade e sobrescreve a vitrine com o que está gravado.
+const ADMIN_INDEX='admin_index';
+let adminIndexUltimo=''; // evita reescrever a mesma coisa a cada save
+function adminIndexAtualizar(){
+  if(useLocalFallback||!firebaseDB||!currentUser)return;
+  const entrada={
+    email:db.accountEmail||currentUser.email||'',
+    plan:db.plan||'trial',
+    planType:db.planType||'',
+    lastPaymentAt:db.lastPaymentAt||'',
+  };
+  const chave=[entrada.email,entrada.plan,entrada.planType,entrada.lastPaymentAt].join('|');
+  if(chave===adminIndexUltimo)return;
+  adminIndexUltimo=chave;
+  firebaseDB.ref(ADMIN_INDEX+'/'+currentUser.uid).set(entrada).catch(e=>{
+    adminIndexUltimo=''; // deixa tentar de novo no próximo save
+    console.warn('Falha ao atualizar o índice do painel admin:',e);
+  });
+}
+// Aceita as duas formas: a entrada enxuta do índice e o registro completo
+// (users/{uid}) que o "Reconstruir índice" lê. Assim o painel renderiza igual nos dois.
+function adminConta(u){
+  if(!u)return{};
+  const d=u.vdn_v1||u;
+  return {accountEmail:d.accountEmail||d.email||'',plan:d.plan,
+          planType:d.planType,lastPaymentAt:d.lastPaymentAt};
 }
 
 // ===== BACKUP DIÁRIO AUTOMÁTICO =====
@@ -5288,7 +5332,7 @@ function adminRenderStats(all){
   const counts={total:0,trial:0,mensal:0,anual:0,vitalicio:0,vencido:0};
   Object.values(all||{}).forEach(u=>{
     counts.total++;
-    counts[adminStatusBucket((u&&u.vdn_v1)||{})]++;
+    counts[adminStatusBucket(adminConta(u))]++;
   });
   statsEl.innerHTML=`
     <div class="admin-stat"><b>${counts.total}</b><span>Total de contas</span></div>
@@ -5314,7 +5358,7 @@ function adminRefresh(){
   const resultsEl=document.getElementById('admin-results');
   if(!resultsEl)return;
   resultsEl.innerHTML='<div class="empty" style="padding:16px"><i class="fa fa-spinner fa-spin"></i><p>Carregando...</p></div>';
-  firebaseDB.ref('users').once('value').then(snap=>{
+  firebaseDB.ref(ADMIN_INDEX).once('value').then(snap=>{
     adminUsersCache=snap.val()||{};
     adminRenderStats(adminUsersCache);
     adminRenderPage();
@@ -5322,12 +5366,40 @@ function adminRefresh(){
     resultsEl.innerHTML=`<div class="empty" style="padding:16px"><p>Erro ao buscar: ${e.message}</p></div>`;
   });
 }
+// Leitura cara, de propósito e sob clique: lê as contas de verdade e regrava a vitrine
+// inteira com o que está gravado nelas. Serve pra três coisas — trazer pro índice as
+// contas que existiam antes dele, reconciliar um pagamento que o Worker do Pix confirmou
+// direto no Firebase sem a pessoa ter reaberto o app, e conferir se alguém mexeu no
+// próprio registro. Não roda sozinho em lugar nenhum.
+async function adminReconstruirIndice(){
+  const resultsEl=document.getElementById('admin-results');
+  if(!confirm('Reconstruir o índice? Isso lê TODAS as contas por inteiro uma vez — é a leitura pesada que o painel deixou de fazer a cada abertura. Use quando desconfiar que a lista está desatualizada.'))return;
+  if(resultsEl)resultsEl.innerHTML='<div class="empty" style="padding:16px"><i class="fa fa-spinner fa-spin"></i><p>Lendo todas as contas...</p></div>';
+  try{
+    const snap=await firebaseDB.ref('users').once('value');
+    const todas=snap.val()||{};
+    const uids=Object.keys(todas);
+    if(!uids.length){toast('Nenhuma conta encontrada.','var(--orange)');adminRefresh();return;}
+    const indice={};
+    uids.forEach(uid=>{
+      const d=(todas[uid]&&todas[uid].vdn_v1)||{};
+      indice[uid]={email:d.accountEmail||'',plan:d.plan||'trial',
+                   planType:d.planType||'',lastPaymentAt:d.lastPaymentAt||''};
+    });
+    // set, e não update: conta excluída fora do app some da vitrine junto.
+    await firebaseDB.ref(ADMIN_INDEX).set(indice);
+    toast(`✅ Índice reconstruído com ${uids.length} conta${uids.length===1?'':'s'}.`,'var(--green)');
+  }catch(e){
+    toast('⚠️ Erro ao reconstruir: '+e.message,'var(--red)');
+  }
+  adminRefresh();
+}
 // Lista completa (ordenada por e-mail), filtrada pela busca quando tiver 2+ letras —
 // com a busca vazia dá pra rolar por todas as contas, página por página.
 function adminFilteredList(){
   const q=(document.getElementById('admin-search-input')?.value||'').trim().toLowerCase();
   const all=Object.entries(adminUsersCache||{})
-    .map(([uid,u])=>({uid,d:(u&&u.vdn_v1)||{}}))
+    .map(([uid,u])=>({uid,d:adminConta(u)}))
     .sort((a,b)=>(a.d.accountEmail||'').localeCompare(b.d.accountEmail||''));
   if(q.length<2)return all;
   return all.filter(({d})=>(d.accountEmail||'').toLowerCase().includes(q));
@@ -5367,7 +5439,10 @@ function renderAdminResults(matches,totalMatches,totalPages){
   const resultsEl=document.getElementById('admin-results');
   const pagEl=document.getElementById('admin-pagination');
   if(!matches.length){
-    resultsEl.innerHTML='<div class="empty" style="padding:16px"><p>Nenhuma conta encontrada.</p></div>';
+    const semIndice=!adminUsersCache||!Object.keys(adminUsersCache).length;
+    resultsEl.innerHTML=semIndice
+      ?'<div class="empty" style="padding:16px"><p>A lista está vazia. Se já existem contas cadastradas, elas entram aqui sozinhas assim que cada pessoa abrir o app — ou clique em <b>Reconstruir índice</b> pra trazer todas agora.</p></div>'
+      :'<div class="empty" style="padding:16px"><p>Nenhuma conta encontrada.</p></div>';
     if(pagEl)pagEl.innerHTML='';
     return;
   }
@@ -5417,10 +5492,13 @@ function renderAdminResults(matches,totalMatches,totalPages){
 function adminConfirmPayment(uid,planType){
   const label=(PIX_PLANS[planType]||PIX_PLANS.mensal).label;
   if(!confirm(`Confirmar plano ${label} pra essa conta?`))return;
-  const accountEmail=adminUsersCache&&adminUsersCache[uid]&&adminUsersCache[uid].vdn_v1&&adminUsersCache[uid].vdn_v1.accountEmail;
+  const accountEmail=adminConta(adminUsersCache&&adminUsersCache[uid]).accountEmail;
   const ref=firebaseDB.ref('users/'+uid+'/vdn_v1');
   if(planType==='vitalicio'){
     ref.update({plan:'full'}).then(()=>{
+      // O índice é só vitrine, mas quem acabou de confirmar precisa ver o resultado na
+      // lista sem depender de a pessoa reabrir o app.
+      firebaseDB.ref(ADMIN_INDEX+'/'+uid).update({plan:'full'}).catch(()=>{});
       const slotsRef=firebaseDB.ref('promo/lifetime/slotsLeft');
       slotsRef.transaction(cur=>Math.max(0,(cur||0)-1));
       toast('✅ Vitalício confirmado','var(--green)');
@@ -5429,6 +5507,7 @@ function adminConfirmPayment(uid,planType){
     }).catch(e=>toast('⚠️ Erro: '+e.message,'var(--red)'));
   }else{
     ref.update({lastPaymentAt:todayStr(),planType}).then(()=>{
+      firebaseDB.ref(ADMIN_INDEX+'/'+uid).update({lastPaymentAt:todayStr(),planType}).catch(()=>{});
       toast('✅ '+label+' confirmado','var(--green)');
       sendPlanConfirmedEmail(accountEmail,label);
       adminRefresh();
@@ -5450,6 +5529,8 @@ async function adminDeleteUser(uid,email){
     });
     const data=await res.json();
     if(!res.ok||!data.ok)throw new Error(data.error||'Falha ao excluir');
+    // O Worker apaga users/{uid}; a linha da vitrine é daqui.
+    await firebaseDB.ref(ADMIN_INDEX+'/'+uid).remove().catch(()=>{});
     toast('✅ Conta excluída','var(--green)');
     adminRefresh();
   }catch(e){
