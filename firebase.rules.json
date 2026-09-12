@@ -21,7 +21,6 @@
         }
       }
     },
-    "_comentario_admin_index": "Vitrine do Painel Admin: quatro campos por conta (email, plan, planType, lastPaymentAt) pra ele nao precisar mais baixar users/ inteiro. NAO e fonte de verdade de acesso — quem decide isso continua sendo users/$uid/vdn_v1/plan, protegido acima. Cada pessoa so escreve a propria linha, e os limites de tamanho existem pra ninguem enfiar dado grande num no que o admin baixa inteiro.",
     "admin_index": {
       ".read": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'",
       "$uid": {
