@@ -2619,11 +2619,12 @@ nav{
   <div class="section-card" style="max-width:720px">
     <div class="sec-title" style="font-size:15px">🗄️ Backups automáticos (sua conta)</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
-      Uma cópia completa dos seus dados é gravada automaticamente uma vez por dia, num
-      lugar separado do banco principal — nunca é sobrescrita pelo uso normal do app.
-      Guarda os últimos <span id="admin-backups-retention">30</span> dias. Restaurar
-      substitui TUDO que está na sua conta agora pelo estado daquele dia — não afeta o
-      caminho antigo (vdn_v1) nem nenhuma outra conta.
+      Uma cópia dos seus dados é mantida automaticamente num lugar separado do banco
+      principal — nunca é sobrescrita pelo uso normal do app. É <b>uma cópia só</b>,
+      atualizada uma vez por dia: o app compara com o que já está gravado e sobe apenas
+      o que mudou desde o último backup. Restaurar substitui TUDO que está na sua conta
+      agora pelo estado dessa cópia — não afeta o caminho antigo (vdn_v1) nem nenhuma
+      outra conta.
     </div>
     <div id="admin-backups-list" style="display:flex;flex-direction:column;gap:8px">
       <div class="empty" style="padding:16px"><i class="fa fa-spinner fa-spin"></i><p>Carregando backups...</p></div>
@@ -4364,15 +4365,89 @@ function saveDB(){
 }
 
 // ===== BACKUP DIÁRIO AUTOMÁTICO =====
-// Rede de segurança independente do resto do app: uma vez por dia, grava uma cópia
-// completa e íntegra do banco num caminho separado (users/{uid}/vdn_v1_backups/{data}),
-// que o fluxo normal de leitura/escrita nunca toca. Existe pra que "não ter pra onde
+// Rede de segurança independente do resto do app: mantém uma cópia completa e íntegra do
+// banco num caminho separado (users/{uid}/vdn_v1_backupAtual), que o fluxo normal de
+// leitura/escrita nunca toca. Existe pra que "não ter pra onde
 // recuperar" nunca mais seja possível de novo, não importa que bug apareça no futuro no
 // caminho normal — mesmo o bug que já corrigimos (ver commit da leitura vazia) teria sido
 // só um contratempo de um dia, em vez de uma perda definitiva, se isso já existisse antes.
-const BACKUP_RETENTION_DAYS=30;
+// Antes eram 30 cópias completas do banco, uma por dia — 30x o tamanho dos dados, por
+// usuário, pra guardar 30 vezes quase a mesma coisa. Agora é UMA cópia só, num caminho
+// fixo (vdn_v1_backupAtual), atualizada no lugar: a cada dia o app compara o que tem
+// hoje com a assinatura do que já está gravado lá e sobe só os pedaços que mudaram —
+// os flashcards que você revisou, e não a coleção inteira de novo.
+const BACKUP_CAMINHO='vdn_v1_backupAtual';
 let backupCheckInFlight=false;
 let backupFailedThisSession=false; // evita bombardear o Firebase de novo a cada save se já falhou uma vez nesta sessão (ex: regra de permissão faltando) — tenta de novo na próxima sessão/dia
+
+// JSON com as chaves em ordem alfabética: o mesmo conteúdo tem que gerar sempre a mesma
+// string, senão a comparação acusaria mudança onde não houve (o Firebase devolve objeto
+// sem ordem garantida).
+function backupStable(v){
+  if(v===null||typeof v!=='object')return JSON.stringify(v===undefined?null:v);
+  if(Array.isArray(v))return '['+v.map(backupStable).join(',')+']';
+  return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+backupStable(v[k])).join(',')+'}';
+}
+// djb2 + tamanho. O tamanho junto é o que torna colisão improvável o suficiente: dois
+// conteúdos diferentes teriam que bater no hash E ter exatamente o mesmo comprimento.
+function backupHash(v){
+  const s=backupStable(v);
+  let h=5381;
+  for(let i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;
+  return h.toString(36)+'-'+s.length.toString(36);
+}
+// Monta só o delta. Dois níveis: cada chave de topo do banco e, quando ela é um mapa
+// (flashcards, revisions, times...), cada item dentro dela. Array é tratado inteiro,
+// porque índice de array muda de lugar quando alguém apaga um item do meio e um diff
+// por índice gravaria lixo. A assinatura é atualizada no mesmo ritmo — só os pedaços
+// que mudaram —, senão reenviar a lista inteira de hashes todo dia custaria mais do que
+// o próprio delta. Sem assinatura anterior (primeira vez, ou assinatura perdida), tudo
+// conta como mudado e sobe a cópia completa, que é o comportamento seguro.
+const BACKUP_SIG='vdn_v1_backupSig';
+function backupMontarDelta(dados,sigAntiga){
+  const updates={};
+  let mudou=0;
+  Object.keys(dados).forEach(k=>{
+    const v=dados[k];
+    if(v&&typeof v==='object'&&!Array.isArray(v)){
+      const antigos=(sigAntiga&&sigAntiga[k]&&typeof sigAntiga[k]==='object')?sigAntiga[k]:null;
+      const vistos={};
+      Object.keys(v).forEach(c=>{
+        vistos[c]=1;
+        const h=backupHash(v[c]);
+        if(!antigos||antigos[c]!==h){
+          updates[BACKUP_CAMINHO+'/'+k+'/'+c]=v[c];
+          updates[BACKUP_SIG+'/'+k+'/'+c]=h;
+          mudou++;
+        }
+      });
+      // item que existia no backup e não existe mais no banco sai da cópia também,
+      // senão "restaurar" traria de volta o que foi apagado de propósito.
+      if(antigos)Object.keys(antigos).forEach(c=>{
+        if(!vistos[c]){
+          updates[BACKUP_CAMINHO+'/'+k+'/'+c]=null;
+          updates[BACKUP_SIG+'/'+k+'/'+c]=null;
+          mudou++;
+        }
+      });
+    }else{
+      const h=backupHash(v);
+      if(!sigAntiga||sigAntiga[k]!==h){
+        updates[BACKUP_CAMINHO+'/'+k]=v;
+        updates[BACKUP_SIG+'/'+k]=h;
+        mudou++;
+      }
+    }
+  });
+  if(sigAntiga)Object.keys(sigAntiga).forEach(k=>{
+    if(!(k in dados)){
+      updates[BACKUP_CAMINHO+'/'+k]=null;
+      updates[BACKUP_SIG+'/'+k]=null;
+      mudou++;
+    }
+  });
+  return {updates,mudou};
+}
 function maybeBackupDB(){
   if(!firebaseReady||useLocalFallback||!DB_REF||!currentUser)return;
   if(backupCheckInFlight||backupFailedThisSession)return;
@@ -4385,9 +4460,10 @@ function maybeBackupDB(){
   }catch(e){}
   backupCheckInFlight=true;
   const metaRef=userRef('vdn_v1_backupMeta');
-  if(!metaRef){backupCheckInFlight=false;return;}
-  metaRef.once('value').then(snap=>{
-    const meta=snap.val()||{};
+  const sigRef=userRef(BACKUP_SIG);
+  if(!metaRef||!sigRef){backupCheckInFlight=false;return;}
+  Promise.all([metaRef.once('value'),sigRef.once('value')]).then(([snapMeta,snapSig])=>{
+    const meta=snapMeta.val()||{};
     if(meta[today]){
       // Outro dispositivo/aba desta mesma conta já gravou o backup de hoje — só evita
       // ficar checando de novo a cada save nesta sessão.
@@ -4396,16 +4472,14 @@ function maybeBackupDB(){
       backupCheckInFlight=false;
       return;
     }
-    const dates=Object.keys(meta).sort();
-    const keepFrom=Math.max(0,dates.length-(BACKUP_RETENTION_DAYS-1));
-    const toDelete=dates.slice(0,keepFrom);
-    const updates={};
-    updates['vdn_v1_backups/'+today]=sanitizeForFirebase(db);
+    const dados=sanitizeForFirebase(db);
+    const {updates}=backupMontarDelta(dados,snapSig.val());
     updates['vdn_v1_backupMeta/'+today]=Date.now();
-    toDelete.forEach(d=>{
-      updates['vdn_v1_backups/'+d]=null;
-      updates['vdn_v1_backupMeta/'+d]=null;
-    });
+    // Só existe um backup: qualquer data antiga na meta é resto do modelo de 30 dias.
+    Object.keys(meta).forEach(d=>{if(d!==today)updates['vdn_v1_backupMeta/'+d]=null;});
+    // E o caminho antigo inteiro (as até 30 cópias completas) sai junto, liberando o
+    // espaço que era o motivo da mudança. Roda uma vez; depois não existe mais nada lá.
+    updates['vdn_v1_backups']=null;
     userRef('').update(updates).then(()=>{
       try{localStorage.setItem('vdn_backup_last_date',today);}catch(e){}
       setBackupEstado('ok',today,Date.now());
@@ -4418,7 +4492,7 @@ function maybeBackupDB(){
       backupFailedThisSession=true;
       backupCheckInFlight=false;
       setBackupEstado('erro',null,0,(e&&e.message)||String(e));
-      warnSyncIssue('⚠️ O backup automático diário falhou (provavelmente falta liberar o caminho vdn_v1_backups nas regras do Firebase). Seus dados normais continuam salvos — só a cópia extra de segurança que não foi.');
+      warnSyncIssue('⚠️ O backup automático diário falhou (provavelmente falta liberar os caminhos vdn_v1_backupAtual e vdn_v1_backupSig nas regras do Firebase). Seus dados normais continuam salvos — só a cópia extra de segurança que não foi.');
     });
   }).catch(e=>{
     console.error('Falha ao checar backups existentes (provável falta de permissão nas regras do Firebase):',e);
@@ -4680,7 +4754,7 @@ function abrirDetalhesBackup(){
     corpo=`<p style="color:var(--red-t);font-weight:700;margin:0 0 10px">O backup automático não está funcionando.</p>
       <p style="margin:0 0 10px">Seus dados normais continuam sendo salvos — o que falhou foi a
       <b>cópia extra de segurança</b>. Quase sempre é permissão: as regras do Firebase precisam
-      liberar os caminhos <code>vdn_v1_backups</code> e <code>vdn_v1_backupMeta</code> dentro de
+      liberar os caminhos <code>vdn_v1_backupAtual</code>, <code>vdn_v1_backupSig</code> e <code>vdn_v1_backupMeta</code> dentro de
       <code>users/{uid}</code>.</p>
       ${backupEstado.erro?`<p style="margin:0 0 10px;font-size:12px;color:var(--muted)">Erro relatado: <code>${escapeHtml(backupEstado.erro)}</code></p>`:''}
       <details style="margin:0 0 12px"><summary style="cursor:pointer;font-size:12.5px;font-weight:700">Como liberar (regra do Firebase)</summary>
@@ -4704,13 +4778,13 @@ function abrirDetalhesBackup(){
   }
   openModal('🛡️ Cópia de segurança',`
     ${corpo}
-    <p style="margin:0 0 12px;font-size:12.5px;color:var(--muted)">Uma vez por dia o app grava uma
-    cópia inteira do seu banco num caminho separado, que o uso normal nunca toca. Ficam guardados
-    os últimos ${BACKUP_RETENTION_DAYS} dias, e dá pra voltar pra qualquer um deles aqui embaixo.</p>
-    <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">♻️ Voltar pra um dia anterior</div>
+    <p style="margin:0 0 12px;font-size:12.5px;color:var(--muted)">O app mantém <b>uma</b> cópia do seu
+    banco num caminho separado, que o uso normal nunca toca. Uma vez por dia ela é atualizada no lugar:
+    só o que mudou desde ontem é enviado, em vez de uma cópia nova inteira.</p>
+    <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">♻️ Voltar pra essa cópia</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Restaurar substitui
-    <b>tudo</b> que está na conta agora pelo estado daquele dia. Ele mostra o que tem em cada um antes
-    de você confirmar.</div>
+    <b>tudo</b> que está na conta agora pelo estado da cópia. Ele mostra o que tem nela antes de você
+    confirmar.</div>
     <div id="backup-lista-usuario" style="display:flex;flex-direction:column;gap:8px;max-height:230px;overflow-y:auto;margin-bottom:14px">
       <div class="empty" style="padding:12px"><i class="fa fa-spinner fa-spin"></i><p>Carregando backups...</p></div>
     </div>
@@ -4743,8 +4817,6 @@ function forcarBackupAgora(){
   },2500);
 }
 function adminLoadBackups(){
-  const retSpan=document.getElementById('admin-backups-retention');
-  if(retSpan)retSpan.textContent=BACKUP_RETENTION_DAYS;
   renderBackupList('admin-backups-list');
 }
 // A lista de backups vivia só na tela de Admin, então quem não é admin não tinha
@@ -4760,12 +4832,12 @@ function renderBackupList(elId){
     const meta=snap.val()||{};
     const dates=Object.keys(meta).sort().reverse();
     if(!dates.length){
-      list.innerHTML='<div class="empty" style="padding:16px"><p>Ainda não existe nenhum backup — o primeiro é gravado automaticamente na próxima vez que algo for salvo hoje.</p></div>';
+      list.innerHTML='<div class="empty" style="padding:16px"><p>Ainda não existe cópia de segurança — a primeira é gravada automaticamente na próxima vez que algo for salvo hoje.</p></div>';
       return;
     }
     list.innerHTML=dates.map(d=>`
       <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--panel2);border:1.5px solid var(--border2);border-radius:10px;font-size:13px">
-        <span style="flex:1"><b>${fmtDateBR(d)}</b> <span style="color:var(--muted);font-size:11px">gravado às ${new Date(meta[d]).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span></span>
+        <span style="flex:1"><b>${fmtDateBR(d)}</b> <span style="color:var(--muted);font-size:11px">atualizado às ${new Date(meta[d]).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span></span>
         <button class="btn btn-xs" onclick="confirmRestoreFromBackup('${d}')"><i class="fa fa-clock-rotate-left"></i> Restaurar</button>
       </div>
     `).join('');
@@ -4775,7 +4847,7 @@ function renderBackupList(elId){
   });
 }
 function confirmRestoreFromBackup(date){
-  userRef('vdn_v1_backups/'+date).once('value').then(snap=>{
+  userRef(BACKUP_CAMINHO).once('value').then(snap=>{
     const backup=snap.val();
     if(!backup){toast('Esse backup não existe mais.','var(--red)');adminLoadBackups();return;}
     const c=countDataSummary(backup);
@@ -4801,7 +4873,7 @@ function confirmRestoreFromBackup(date){
   }).catch(e=>{console.warn('Falha ao carregar backup pra confirmação:',e);toast('Falha ao carregar esse backup.','var(--red)');});
 }
 function restoreFromBackup(date){
-  userRef('vdn_v1_backups/'+date).once('value').then(snap=>{
+  userRef(BACKUP_CAMINHO).once('value').then(snap=>{
     const backup=snap.val();
     if(!backup){toast('Esse backup não existe mais.','var(--red)');closeModal();return;}
     // Object.assign não remove campos que o backup não tem mas o db atual tem (ex: algo
