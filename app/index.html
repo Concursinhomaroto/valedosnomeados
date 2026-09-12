@@ -6830,6 +6830,33 @@ function resumoFileSelected(subId,inputEl){
   if(f)generateResumo(subId,f);
 }
 
+// Vai por ULTIMO, depois do material. Os quatro caminhos de resumo terminam com o texto
+// bruto (MATERIAL:, as anotacoes por parte, ou o bloco do Tavily), entao as regras de
+// formato ficavam enterradas dezenas de milhares de caracteres antes do fim — e o modelo
+// respondia ao que estava mais fresco. E o mesmo erro que fez o fluxograma ignorar o
+// formato pedido; aqui ele fazia uns resumos sairem sem titulo em maiusculas e sem
+// "Na pratica:", e outros sairem certinhos, sem padrao aparente.
+const RESUMO_FECHAMENTO=`
+
+=====================================================================
+LEMBRETE FINAL DE FORMATO — vale acima de qualquer coisa dita antes
+=====================================================================
+1) Cada seção começa com um TÍTULO CURTO EM MAIÚSCULAS terminado em dois pontos,
+   sozinho na linha, e o texto da seção vem na linha seguinte.
+2) Depois de apresentar um conceito, critério, classificação, prazo ou número,
+   escreva uma linha começando exatamente por "Na prática:" com uma situação curta
+   mostrando aquilo acontecendo. Se o ponto for autoexplicativo, pule — mas a maior
+   parte das seções deve ter a sua.
+3) Separe cada bloco com UMA linha em branco. Sem markdown: nada de #, de ** ou de
+   bullets com símbolos.
+
+Exemplo do formato esperado:
+
+CLASSIFICAÇÃO DOS CHOQUES:
+O choque é classificado em quatro tipos conforme o mecanismo... (texto da seção)
+
+Na prática: Paciente vítima de trauma com hemorragia externa volumosa evolui com
+taquicardia e hipotensão — quadro de choque hipovolêmico.`;
 function resumoPromptUnico(contexto,texto){
   return`Você é um professor especialista em preparar candidatos para concursos públicos de alto nível no Brasil.
 
@@ -6948,7 +6975,7 @@ async function generateResumo(subId,file){
     if(chunks.length===1){
       const statusEl=document.querySelector(`#resumo-${subId} .resumo-status-txt`);
       if(statusEl)statusEl.textContent=`IA gerando o resumo (${texto.length} caracteres lidos)...`;
-      resumoFinal=(await callGeminiGenerate(apiKey,resumoPromptUnico(contexto,chunks[0]))).trim();
+      resumoFinal=(await callGeminiGenerate(apiKey,resumoPromptUnico(contexto,chunks[0])+RESUMO_FECHAMENTO)).trim();
     }else{
       const parciais=[];
       for(let idx=0;idx<chunks.length;idx++){
@@ -6959,7 +6986,7 @@ async function generateResumo(subId,file){
       }
       const statusEl=document.querySelector(`#resumo-${subId} .resumo-status-txt`);
       if(statusEl)statusEl.textContent='IA consolidando o resumo final...';
-      resumoFinal=(await callGeminiGenerate(apiKey,resumoPromptConsolida(contexto,parciais))).trim();
+      resumoFinal=(await callGeminiGenerate(apiKey,resumoPromptConsolida(contexto,parciais)+RESUMO_FECHAMENTO)).trim();
     }
 
     sub.resumo={texto:resumoFinal,geradoEm:new Date().toISOString(),fileName:file.name,origem:'arquivo'};
@@ -7289,20 +7316,20 @@ async function generateResumoWeb(subId){
       const busca=await tavilyPesquisar(sub.name,`${kingdom.name} — ${topic.name}`);
       if(busca.texto){
         if(statusEl)statusEl.textContent='Escrevendo o resumo a partir do que foi encontrado...';
-        raw=await callGeminiGenerate(apiKey,tavilyPromptComFontes(resumoPromptWeb(contexto,flashcardsTxt),busca.texto));
+        raw=await callGeminiGenerate(apiKey,tavilyPromptComFontes(resumoPromptWeb(contexto,flashcardsTxt),busca.texto)+RESUMO_FECHAMENTO);
         grounded=true;fontes=busca.fontes;consultas=busca.consultas;via='tavily';
         diag=busca.erros.map(e=>({modelo:'tavily',erro:e}));
       }else{
         // Tavily configurado mas sem resultado: não some com o erro, e ainda
         // tenta o grounding do Gemini antes de desistir da busca.
-        const r=await callGeminiGenerateSearch(apiKey,resumoPromptWeb(contexto,flashcardsTxt));
+        const r=await callGeminiGenerateSearch(apiKey,resumoPromptWeb(contexto,flashcardsTxt)+RESUMO_FECHAMENTO);
         ({raw,grounded,fontes,consultas,diag}=r);
         diag=[...busca.erros.map(e=>({modelo:'tavily',erro:e})),
               ...(busca.erros.length?[]:[{modelo:'tavily',erro:'a busca não retornou nenhuma página'}]),
               ...(diag||[])];
       }
     }else{
-      ({raw,grounded,fontes,consultas,diag}=await callGeminiGenerateSearch(apiKey,resumoPromptWeb(contexto,flashcardsTxt)));
+      ({raw,grounded,fontes,consultas,diag}=await callGeminiGenerateSearch(apiKey,resumoPromptWeb(contexto,flashcardsTxt)+RESUMO_FECHAMENTO));
     }
 
     sub.resumo={texto:raw.trim(),geradoEm:new Date().toISOString(),origem:'web',grounded,via,
@@ -8078,6 +8105,15 @@ function resumoFormatar(txt){
     const ehTitulo=linha.length<=90&&/:$/.test(linha)&&linha===linha.toUpperCase()
                    &&/[A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ]/.test(linha);
     if(ehTitulo)return `<h4 class="resumo-h">${escapeHtml(linha.replace(/:\s*$/,''))}</h4>`;
+    // Título COLADO no texto ("CLASSIFICAÇÃO DOS CHOQUES: O choque é..."), que é como a IA
+    // costuma escrever mesmo pedindo linha separada. Sem isto o título ficava do mesmo
+    // tamanho e cor do corpo, perdido no meio do parágrafo. Corta no primeiro dois-pontos
+    // e só aceita se o que veio antes for curto, maiúsculo e não for "Na prática".
+    const m=linha.match(/^([^:]{4,80}):\s+(\S[\s\S]*)$/);
+    if(m&&m[1]===m[1].toUpperCase()&&/[A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ]/.test(m[1])){
+      return `<h4 class="resumo-h">${escapeHtml(m[1].trim())}</h4>`
+            +`<p class="resumo-p">${escapeHtml(m[2])}</p>`;
+    }
     if(/^na pr[áa]tica\s*:/i.test(linha))return `<p class="resumo-pratica">${escapeHtml(linha)}</p>`;
     // Quebras soltas DENTRO de um bloco viram espaço: o navegador junta a frase de novo,
     // que é o comportamento de parágrafo — antes cada uma abria linha nova.
