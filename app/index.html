@@ -191,6 +191,31 @@ nav{
 }
 .nav-btn:hover{color:#fff;background:rgba(255,255,255,0.15);transform:translateX(3px);}
 .nav-btn.active{color:#fff;background:rgba(255,255,255,0.22);border-left-color:#fed7aa;text-shadow:0 1px 6px rgba(0,0,0,0.2);}
+/* ===== BUSCA DE CHEFÃO / MINIBOSS NO REINO ===== */
+.busca-wrap{position:relative;display:flex;align-items:center;margin-bottom:14px;}
+.busca-ico{position:absolute;left:14px;color:var(--muted);font-size:12px;pointer-events:none;}
+.busca-inp{
+  width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:12px;
+  padding:11px 14px 11px 36px;font-size:13px;color:var(--text);font-family:inherit;
+  transition:border-color 0.2s,box-shadow 0.2s;
+}
+.busca-inp::placeholder{color:var(--muted);}
+.busca-inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--border2);}
+/* O "x" nativo do type=search some em alguns navegadores e aparece feio em outros;
+   o botão abaixo é o único limpar, e é sempre o mesmo em todo lugar. */
+.busca-inp::-webkit-search-cancel-button{display:none;}
+.busca-limpa{
+  position:absolute;right:8px;background:none;border:none;color:var(--muted);
+  cursor:pointer;font-size:13px;padding:6px 8px;border-radius:8px;line-height:1;
+}
+.busca-limpa:hover{color:var(--text);background:var(--border2);}
+.busca-cont{
+  position:absolute;right:38px;font-size:10px;font-weight:900;color:var(--accent);
+  background:var(--border2);border-radius:20px;padding:3px 9px;pointer-events:none;
+}
+.busca-cont[data-vazio="1"]{color:var(--red-t);background:rgba(220,38,38,0.1);}
+/* Marca o trecho que casou, pra o olho achar na hora em nome comprido. */
+.busca-hit{background:rgba(250,204,21,0.28);border-radius:3px;padding:0 2px;font-weight:900;}
 .nav-badge{background:linear-gradient(135deg,#fb923c,#f97316);color:#fff;border-radius:10px;padding:2px 8px;font-size:9px;font-weight:900;margin-left:auto;box-shadow:0 2px 6px rgba(249,115,22,0.4);flex-shrink:0;}
 .nav-icon{font-size:17px;flex-shrink:0;}
 /* Sem isso, um rótulo comprido (ex: "BANCO DE ERROS") não encolhia e empurrava o
@@ -561,6 +586,9 @@ nav{
 .ed-vazio{padding:10px 2px;font-size:11.5px;color:var(--muted);font-weight:600;line-height:1.5;}
 .ed-textarea{width:100%;min-height:110px;margin:8px 0;font-size:11.5px;line-height:1.5;resize:vertical;}
 .ed-vazio-acoes{display:flex;gap:8px;flex-wrap:wrap;}
+.ed-pdf-status{font-size:11.5px;color:var(--accent);margin:10px 0 0;display:flex;
+  align-items:center;gap:7px;line-height:1.5;}
+.ed-pdf-status[data-erro="1"]{color:var(--red-t);}
 .ed-discs{margin-top:10px;display:flex;flex-direction:column;gap:12px;}
 .ed-disc{border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--panel2);}
 .ed-disc-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px;}
@@ -2048,6 +2076,15 @@ nav{
       <button class="fire-btn" id="fprio-3" onclick="setTopicPrio(3)" title="🔥🔥🔥 Alta prioridade">🔥🔥🔥</button>
     </div>
     <button class="btn btn-primary" onclick="addTopic()"><i class="fa fa-plus"></i> Criar Chefão</button>
+  </div>
+
+  <div class="busca-wrap">
+    <i class="fa fa-magnifying-glass busca-ico"></i>
+    <input class="busca-inp" id="busca-miniboss" type="search" autocomplete="off"
+           placeholder="Procurar chefão ou miniboss neste reino..."
+           oninput="filtrarReino(this.value)">
+    <button class="busca-limpa" id="busca-limpa" hidden onclick="limparBuscaReino()" title="Limpar busca" aria-label="Limpar busca"><i class="fa fa-xmark"></i></button>
+    <span class="busca-cont" id="busca-cont" hidden></span>
   </div>
 
   <div id="topics-list" class="topic-list"></div>
@@ -6221,11 +6258,68 @@ function topicsPorPrioridade(kingdomId){
   return [...(db.topics[kingdomId]||[])].sort((a,b)=>(b.priority||1)-(a.priority||1));
 }
 
+// ===== BUSCA DE CHEFÃO / MINIBOSS =====
+// Procura nos DOIS níveis. Achar um miniboss sem lembrar de qual chefão ele é era o
+// caso que doía: com o edital inteiro cadastrado, o nome está lá mas escondido dentro
+// de um chefão fechado. Quando o nome casa num miniboss, o chefão dele abre sozinho.
+let buscaReinoTermo='';
+// Sem acento e sem caixa dos dois lados: "esquizofrenia" tem que achar "Esquizofrenia",
+// e "cardio" tem que achar "Cardiologia" — ninguém digita acento numa caixa de busca.
+function buscaNormaliza(t){
+  return String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+}
+// Destaca o trecho que casou. Escapa ANTES de inserir a marcação, senão um nome com
+// "<" ou "&" (ou digitado de má-fé) entraria como HTML — mesmo cuidado do resto do app.
+function buscaMarca(texto,termo){
+  const t=String(texto||'');
+  if(!termo)return escapeHtml(t);
+  const pos=buscaNormaliza(t).indexOf(termo);
+  if(pos<0)return escapeHtml(t);
+  return escapeHtml(t.slice(0,pos))
+    +'<span class="busca-hit">'+escapeHtml(t.slice(pos,pos+termo.length))+'</span>'
+    +escapeHtml(t.slice(pos+termo.length));
+}
+function filtrarReino(valor){
+  buscaReinoTermo=buscaNormaliza(valor);
+  const limpa=document.getElementById('busca-limpa');
+  if(limpa)limpa.hidden=!valor;
+  renderTopics();
+  const cont=document.getElementById('busca-cont');
+  if(!cont)return;
+  if(!buscaReinoTermo){cont.hidden=true;cont.textContent='';cont.removeAttribute('data-vazio');return;}
+  let chefoes=0,minis=0;
+  (db.topics[currentKingdom.id]||[]).forEach(t=>{
+    const casaChefao=buscaNormaliza(t.name).indexOf(buscaReinoTermo)>=0;
+    const casaMinis=(t.subtopics||[]).filter(x=>buscaNormaliza(x.name).indexOf(buscaReinoTermo)>=0).length;
+    if(casaChefao||casaMinis)chefoes++;
+    minis+=casaMinis;
+  });
+  cont.hidden=false;
+  if(!chefoes){cont.textContent='nada encontrado';cont.setAttribute('data-vazio','1');return;}
+  cont.removeAttribute('data-vazio');
+  cont.textContent=minis?`${minis} miniboss${minis>1?'es':''}`:`${chefoes} chefão${chefoes>1?'es':''}`;
+}
+function limparBuscaReino(){
+  const inp=document.getElementById('busca-miniboss');
+  if(inp)inp.value='';
+  filtrarReino('');
+  if(inp)inp.focus();
+}
 function renderTopics(){
   const list=document.getElementById('topics-list');
-  const topics=topicsPorPrioridade(currentKingdom.id);
+  let topics=topicsPorPrioridade(currentKingdom.id);
+  const vazioOriginal=!topics.length;
+  // Com busca ativa, o chefão fica na lista se o nome DELE casa ou se algum miniboss
+  // dele casa — é o que faz o miniboss ser encontrável sem saber onde ele mora.
+  if(buscaReinoTermo){
+    topics=topics.filter(t=>buscaNormaliza(t.name).indexOf(buscaReinoTermo)>=0
+      ||(t.subtopics||[]).some(x=>buscaNormaliza(x.name).indexOf(buscaReinoTermo)>=0));
+  }
   if(!topics.length){
-    list.innerHTML=`<div class="empty"><i class="fa fa-dragon"></i><p>Nenhum chefão neste reino.<br>Invoque o primeiro acima!</p></div>`;return;
+    list.innerHTML=vazioOriginal
+      ?`<div class="empty"><i class="fa fa-dragon"></i><p>Nenhum chefão neste reino.<br>Invoque o primeiro acima!</p></div>`
+      :`<div class="empty"><i class="fa fa-magnifying-glass"></i><p>Nada com esse nome neste reino.<br><span style="font-size:11px;color:var(--muted)">A busca procura chefão e miniboss.</span></p></div>`;
+    return;
   }
   list.innerHTML='';
   topics.forEach(topic=>{
@@ -6233,12 +6327,16 @@ function renderTopics(){
     const subs=[...(topic.subtopics||[])].sort((a,b)=>b.priority-a.priority);
     const pending=subs.reduce((n,s)=>n+countOverdue(s,todayStr()),0);
     const studied=subs.reduce((n,s)=>n+(db.times[s.id]||0),0);
+    // Abre sozinho quando a busca casou num miniboss DESTE chefão — senão o resultado
+    // ficaria escondido atrás de mais um clique, que é o problema que a busca resolve.
+    const abreNaBusca=!!buscaReinoTermo&&(topic.subtopics||[])
+      .some(x=>buscaNormaliza(x.name).indexOf(buscaReinoTermo)>=0);
     const el=document.createElement('div');
     el.className='topic-card';el.id='tc-'+topic.id;
     el.innerHTML=`
       <div class="topic-head" onclick="toggleTopic('${topic.id}')">
         <span class="topic-icon-el">${topic.icon}</span>
-        <span class="topic-name-el">${topic.name}</span>
+        <span class="topic-name-el">${buscaMarca(topic.name,buscaReinoTermo)}</span>
         <span style="font-size:13px;letter-spacing:-2px" title="Prioridade">${'🔥'.repeat(topic.priority||1)}</span>
         <div class="topic-meta">
           <span>👾 ${subs.length}</span>
@@ -6248,9 +6346,9 @@ function renderTopics(){
         <button class="btn btn-sm" title="Puxa para HOJE a revisão de todos os minibosses já estudados deste chefão. Quem tinha revisão marcada para a frente é antecipado; quem não tinha ganha uma. Não cria revisão para miniboss que você ainda não estudou." style="background:linear-gradient(135deg,rgba(108,71,255,0.12),rgba(79,70,229,0.12));border:1.5px solid var(--border2);color:var(--accent);font-size:10px" onclick="event.stopPropagation();intensiveTraining('${topic.id}')"><i class="fa fa-fire" style="color:var(--orange-t)"></i> Revisar hoje</button>
         <button class="btn btn-xs" onclick="event.stopPropagation();renameTopic('${topic.id}')" title="Renomear chefão"><i class="fa fa-pen"></i></button>
         <button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteTopic('${topic.id}')"><i class="fa fa-trash"></i></button>
-        <i class="fa fa-chevron-down" style="color:var(--muted);font-size:11px;transition:transform 0.2s" id="chev-${topic.id}"></i>
+        <i class="fa fa-chevron-down" style="color:var(--muted);font-size:11px;transition:transform 0.2s;transform:${abreNaBusca?'rotate(180deg)':'rotate(0deg)'}" id="chev-${topic.id}"></i>
       </div>
-      <div class="topic-body" id="tb-${topic.id}" style="display:none">
+      <div class="topic-body" id="tb-${topic.id}" style="display:${abreNaBusca?'block':'none'}">
         <div class="add-form" style="margin-bottom:14px">
           <span style="font-size:16px">👾</span>
           <input class="inp" id="sn-${topic.id}" placeholder="Nome do miniboss (subtópico)">
@@ -6277,8 +6375,14 @@ function toggleTopic(id){
 
 // ===== SUBTOPICS =====
 function renderSubsHTML(topic){
-  const subs=[...(topic.subtopics||[])].sort((a,b)=>b.priority-a.priority);
-  if(!subs.length)return`<div class="empty" style="padding:18px"><i class="fa fa-ghost"></i><p>Nenhum miniboss. Invoque o primeiro!</p></div>`;
+  let subs=[...(topic.subtopics||[])].sort((a,b)=>b.priority-a.priority);
+  const tinha=subs.length;
+  // Se a busca casou só no NOME DO CHEFÃO, mostra os minibosses todos: a pessoa
+  // procurou o chefão, quer ver o que tem dentro. Se casou em miniboss, filtra.
+  if(buscaReinoTermo&&subs.some(x=>buscaNormaliza(x.name).indexOf(buscaReinoTermo)>=0)){
+    subs=subs.filter(x=>buscaNormaliza(x.name).indexOf(buscaReinoTermo)>=0);
+  }
+  if(!subs.length)return`<div class="empty" style="padding:18px"><i class="fa fa-ghost"></i><p>${tinha?'Nenhum miniboss com esse nome aqui.':'Nenhum miniboss. Invoque o primeiro!'}</p></div>`;
   return subs.map(s=>subItemHTML(s,topic.id)).join('');
 }
 
@@ -6319,7 +6423,7 @@ function subItemHTML(s,topicId){
 
   return`<div class="sub-item${s.studied?' sub-studied':''}" id="si-${s.id}">
     <div class="sub-row">
-      <span class="sub-name" style="cursor:pointer" onclick="closeTimerPanel('${s.id}')" title="Clique pra fechar o painel de estudo desse miniboss, se estiver aberto"><i class="fa fa-user-ninja" style="color:${s.priority===100?'var(--red-t)':s.priority===70?'var(--orange-t)':'var(--green-t)'}"></i> ${s.name}</span>
+      <span class="sub-name" style="cursor:pointer" onclick="closeTimerPanel('${s.id}')" title="Clique pra fechar o painel de estudo desse miniboss, se estiver aberto"><i class="fa fa-user-ninja" style="color:${s.priority===100?'var(--red-t)':s.priority===70?'var(--orange-t)':'var(--green-t)'}"></i> ${buscaMarca(s.name,buscaReinoTermo)}</span>
       <span class="pri-badge ${pCls}" style="cursor:pointer" onclick="cyclePriority('${s.id}','${topicId}')" title="Alterar → ${nextLbl}">${pLbl} ✎</span>
       ${(running||time>0)?`<span class="time-chip" id="tc-${s.id}" title="Tempo desta sessão (ainda não salvo)">${running?'<i class="fa fa-circle" style="color:var(--red-t);font-size:6px;animation:pulse 1s infinite"></i> ':'<i class="fa fa-clock"></i> '}${fmtTime(displayTime)}</span>`:''}
       <span class="total-time-chip" title="Tempo total estudado (salvo)"><i class="fa fa-layer-group"></i> ${fmtTime(totalTime)}</span>
@@ -12413,6 +12517,89 @@ function edCriarUm(){
 
 // Extrai o conteúdo programático colado. Sem Tavily de propósito: o texto ja veio
 // do usuario, pesquisar aqui so gastaria credito pra reencontrar o que ele colou.
+// Edital em PDF: extrai o texto no próprio navegador (PDF.js, com OCR de reserva pra
+// edital escaneado) e joga na mesma caixa em que a pessoa colaria à mão. Depois segue
+// exatamente o mesmo caminho do texto colado — edExtrairIA — em vez de um fluxo
+// paralelo que precisaria ser mantido duas vezes.
+// O conteúdo programático costuma estar no fim de um edital de 40+ páginas, então o
+// texto inteiro é grande demais pra mandar pro Gemini: edRecortarConteudo acha o
+// trecho que interessa antes de gastar token com o resto.
+async function edLerPDF(id,input){
+  const arq=input&&input.files&&input.files[0];
+  if(!arq)return;
+  input.value='';   // deixa reenviar o mesmo arquivo depois de um erro
+  const st=document.getElementById('ed-pdf-st-'+id);
+  const diz=(txt,erro)=>{
+    if(!st)return;
+    st.hidden=false;
+    if(erro)st.setAttribute('data-erro','1'); else st.removeAttribute('data-erro');
+    st.innerHTML=(erro?'<i class="fa fa-triangle-exclamation"></i> ':'<i class="fa fa-spinner fa-spin"></i> ')+escapeHtml(txt);
+  };
+  if(arq.type&&arq.type.indexOf('pdf')<0){diz('Isso não parece um PDF. Envie o arquivo do edital.',true);return;}
+  try{
+    diz('Abrindo o PDF...');
+    const texto=await extractPDFText(arq,(pag,total)=>diz(`Lendo página ${pag} de ${total}...`));
+    if(!texto||texto.replace(/---\s*P[áa]gina\s*\d+\s*---/gi,'').trim().length<200){
+      diz('Não consegui ler texto desse PDF. Se ele for escaneado, tente um com texto selecionável, ou cole o conteúdo programático na caixa acima.',true);
+      return;
+    }
+    const recorte=edRecortarConteudo(texto);
+    const campo=document.getElementById('ed-txt-'+id);
+    if(campo)campo.value=recorte.texto;
+    if(st){
+      st.hidden=false;st.removeAttribute('data-erro');
+      st.innerHTML='<i class="fa fa-circle-check" style="color:var(--green-t)"></i> '
+        +escapeHtml(recorte.achou
+          ? `Conteúdo programático localizado (${(recorte.texto.length/1000).toFixed(1)} mil caracteres). Extraindo as disciplinas...`
+          : `PDF lido (${(recorte.texto.length/1000).toFixed(1)} mil caracteres). Não achei um cabeçalho de "conteúdo programático", então mandei o trecho mais provável — confira o resultado.`);
+    }
+    await edExtrairIA(id);
+  }catch(err){
+    console.error('Edital PDF:',err);
+    diz('Não consegui ler o PDF: '+(err&&err.message?err.message:'erro desconhecido'),true);
+  }
+}
+// Um edital tem dezenas de páginas de regras, cronograma e anexos antes do que importa.
+// Mandar tudo pro Gemini é caro (e o teto por minuto é apertado na chave gratuita), e
+// ainda piora o resultado: a IA se perde entre "DOS REQUISITOS" e o conteúdo de fato.
+// Aqui o texto é cortado no cabeçalho do conteúdo programático e vai até onde ele acaba.
+const ED_MAX_CHARS=45000;
+function edRecortarConteudo(textoBruto){
+  const texto=String(textoBruto||'').replace(/---\s*P[áa]gina\s*\d+\s*---/gi,'\n');
+  const norm=texto.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  // EM ORDEM DE CONFIANÇA, não de posição. "Conteúdo programático" é o cabeçalho do
+  // bloco inteiro; "conhecimentos específicos" é uma SEÇÃO dentro dele, e aparece
+  // depois. Escolher pela posição mais avançada fazia o recorte começar no meio e
+  // jogar fora Língua Portuguesa e todo o bloco de conhecimentos básicos.
+  const inicios=[/conteudos?\s+program[aá]ticos?/,/objetos?\s+de\s+avaliacao/,
+                 /dos\s+conhecimentos\s+exigidos/,/programa\s+das\s+provas/,
+                 /conhecimentos\s+basicos/,/conhecimentos\s+especificos/];
+  let ini=-1;
+  for(const re of inicios){
+    const m=norm.match(re);
+    if(!m)continue;
+    // Dentro do padrão escolhido, o ÚLTIMO casamento: o primeiro costuma ser a menção
+    // no sumário ou numa cláusula ("o conteúdo programático consta do Anexo II"), e o
+    // bloco de verdade vem depois.
+    ini=norm.lastIndexOf(m[0]);
+    break;
+  }
+  const achou=ini>=0;
+  let corte=achou?texto.slice(ini):texto;
+  // Fim: o que costuma vir DEPOIS do conteúdo e não interessa.
+  const fimNorm=corte.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const fins=[/\bdas?\s+disposic(o|ao)es\s+finais/,/\bdo\s+cronograma\b/,/\bmodelo\s+de\s+(requerimento|declaracao)/];
+  for(const re of fins){
+    const m=fimNorm.match(re);
+    // A guarda só existe pra não cortar num "disposições finais" que apareça logo na
+    // primeira linha do recorte. Era 1500 e rejeitava o corte legítimo quando o
+    // conteúdo programático é curto — o edital inteiro vinha junto.
+    if(m&&m.index>300)corte=corte.slice(0,m.index);
+  }
+  corte=corte.replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+  if(corte.length>ED_MAX_CHARS)corte=corte.slice(0,ED_MAX_CHARS);
+  return{texto:corte,achou};
+}
 async function edExtrairIA(id){
   const e=edFind(id);if(!e)return;
   const texto=(document.getElementById('ed-txt-'+id)?.value||'').trim();
@@ -12614,8 +12801,11 @@ function edConteudoCorpo(e){
       <textarea class="inp ed-textarea" id="ed-txt-${e.id}" placeholder="CONHECIMENTOS ESPECÍFICOS: 1. Sistematização da Assistência de Enfermagem. 2. Vacinação: calendário e rede de frio. 3. Urgência e emergência..."></textarea>
       <div class="ed-vazio-acoes">
         <button class="btn btn-sm btn-primary" onclick="edExtrairIA('${e.id}')"><i class="fa fa-wand-magic-sparkles"></i> Extrair com IA</button>
+        <label class="btn btn-sm btn-cyan" style="cursor:pointer" for="ed-pdf-${e.id}"><i class="fa fa-file-pdf"></i> Enviar o PDF do edital</label>
+        <input type="file" id="ed-pdf-${e.id}" accept="application/pdf,.pdf" hidden onchange="edLerPDF('${e.id}',this)">
         <button class="btn btn-sm btn-ghost" onclick="edAddDisciplina('${e.id}')"><i class="fa fa-plus"></i> Adicionar à mão</button>
       </div>
+      <p class="ed-pdf-status" id="ed-pdf-st-${e.id}" hidden></p>
     </div>`;
   }
   const reinos=db.kingdoms.map(k=>`<option value="${k.id}">${escapeHtml(k.icon||'🏰')} ${escapeHtml(k.name)}</option>`).join('');
