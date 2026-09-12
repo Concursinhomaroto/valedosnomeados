@@ -1557,6 +1557,11 @@ nav{
 .fc-sidebar-stat-row{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:var(--text2);padding:5px 0;}
 .fc-sidebar-stat-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
 .fc-sidebar-stat-row b{margin-left:auto;font-size:13px;font-weight:900;color:var(--text);}
+/* As linhas viraram atalho pra fila de estudo daquela categoria — sem isso o número
+   ficava lá sem nada pra fazer com ele. */
+.fc-stat-click{cursor:pointer;border-radius:8px;margin:0 -6px;padding-left:6px;padding-right:6px;
+  transition:background .15s;}
+.fc-stat-click:hover{background:var(--border2);}
 
 .fc-main{min-height:200px;}
 .fc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
@@ -15433,12 +15438,16 @@ function renderFCSidebarSummary(){
   if(!all.length){el.innerHTML='';return;}
   const due=all.filter(c=>fcStatus(c)==='due').length;
   const novo=all.filter(c=>fcStatus(c)==='new').length;
-  const emDia=all.length-due-novo;
+  // Dominado sai da conta de "Em dia": era all.length-due-novo, e os dominados caíam
+  // aqui dentro, inflando um número que deveria ser só o que está em revisão em dia.
+  const dominado=all.filter(c=>fcStatus(c)==='dominado').length;
+  const emDia=all.length-due-novo-dominado;
   el.innerHTML=`
     <div class="fc-sidebar-summary-title">📊 Resumo Geral</div>
-    <div class="fc-sidebar-stat-row"><span class="fc-sidebar-stat-dot" style="background:var(--red)"></span>Revisar agora<b style="color:var(--red-t)">${due}</b></div>
-    <div class="fc-sidebar-stat-row"><span class="fc-sidebar-stat-dot" style="background:var(--accent)"></span>Novos<b style="color:var(--accent)">${novo}</b></div>
-    <div class="fc-sidebar-stat-row"><span class="fc-sidebar-stat-dot" style="background:var(--green)"></span>Em dia<b style="color:var(--green-t)">${emDia}</b></div>
+    <div class="fc-sidebar-stat-row fc-stat-click" onclick="fcOverviewClick('due')" title="Estudar os vencidos de todos os reinos"><span class="fc-sidebar-stat-dot" style="background:var(--red)"></span>Revisar agora<b style="color:var(--red-t)">${due}</b></div>
+    <div class="fc-sidebar-stat-row fc-stat-click" onclick="fcOverviewClick('new')" title="Estudar os novos de todos os reinos, embaralhados"><span class="fc-sidebar-stat-dot" style="background:var(--accent)"></span>Novos<b style="color:var(--accent)">${novo}</b></div>
+    <div class="fc-sidebar-stat-row fc-stat-click" onclick="fcOverviewClick('ok')" title="Rever os que estão em dia"><span class="fc-sidebar-stat-dot" style="background:var(--green)"></span>Em dia<b style="color:var(--green-t)">${emDia}</b></div>
+    <div class="fc-sidebar-stat-row fc-stat-click" onclick="fcEstudarDominados()" title="Cards que você tirou de circulação — não entram nas revisões"><span class="fc-sidebar-stat-dot" style="background:#b45309"></span>Dominados<b style="color:#b45309">${dominado}</b></div>
     <button class="btn btn-primary btn-sm" style="width:100%;margin-top:10px" onclick="fcStudyAllKingdoms()"><i class="fa fa-globe"></i> Estudar tudo</button>
   `;
 }
