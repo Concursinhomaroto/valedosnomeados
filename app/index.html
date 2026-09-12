@@ -15210,7 +15210,85 @@ function fcInit(){if(!db.flashcards)db.flashcards={};}
 // Próxima revisão via SM-2 de verdade (mesmo algoritmo/mesma sm2Next() usado nas revisões de
 // assunto): o intervalo cresce a cada acerto seguido, multiplicado pelo fator de facilidade
 // daquele card específico, em vez de sempre reiniciar do mesmo bucket fixo 7/14/21/41.
+// ===== FSRS — agendamento dos FLASHCARDS =====
+// Substitui o SM-2 SÓ nos flashcards. As revisões de miniboss (sm2Next, completeRev)
+// continuam intactas: são outro fluxo, com outra UI, e misturar as duas coisas numa
+// mudança só seria pedir pra quebrar as duas.
+//
+// O modelo guarda dois números por card, em vez do fator de facilidade:
+//   S (estabilidade) = dias até a chance de lembrar cair pra 90%
+//   D (dificuldade)  = 1 a 10, o quanto ESTE card resiste a grudar
+// e a próxima data é quando a curva R(t,S) chega na retenção desejada.
+//
+// w[3] = 5 (e não 15,69 do padrão): decisão do usuário. "Fácil" num card que nunca foi
+// respondido é o palpite menos confiável de todos — avalia reconhecimento, não memória.
+// Custo medido: +1 revisão desse card no primeiro ano. Retenção no dia da revisão é a
+// mesma (90%) nos dois casos.
+const FSRS_W=[0.40255,1.18385,3.173,5.0,7.1949,0.5345,1.4604,0.0046,1.54575,0.1192,
+              1.01925,1.9395,0.11,0.29605,2.2698,0.2315,2.9898,0.51655,0.6621];
+const FSRS_DECAY=-0.5, FSRS_FACTOR=Math.pow(0.9,1/FSRS_DECAY)-1;   // 19/81
+const FSRS_RETENCAO=0.9;
+const FSRS_S_MAX=36500;   // teto de 100 anos, como no Anki
+function fsrsR(t,S){ return Math.pow(1+FSRS_FACTOR*t/Math.max(0.01,S),FSRS_DECAY); }
+function fsrsIntervalo(S){
+  const d=(S/FSRS_FACTOR)*(Math.pow(FSRS_RETENCAO,1/FSRS_DECAY)-1);
+  return Math.max(1,Math.round(Math.min(d,FSRS_S_MAX)));
+}
+function fsrsD0(g){ return Math.min(10,Math.max(1,FSRS_W[4]-Math.exp(FSRS_W[5]*(g-1))+1)); }
+function fsrsProxD(D,g){
+  const d=D-FSRS_W[6]*(g-3);
+  // Reversão à média: sem isto D deriva sem âncora e o card nunca volta pro meio.
+  return Math.min(10,Math.max(1,FSRS_W[7]*fsrsD0(4)+(1-FSRS_W[7])*d));
+}
+function fsrsProxS(D,S,R,g){
+  if(g===1){  // esqueceu: derruba, mas NÃO zera — o S antigo continua na conta
+    return Math.min(S,FSRS_W[11]*Math.pow(D,-FSRS_W[12])
+      *(Math.pow(S+1,FSRS_W[13])-1)*Math.exp(FSRS_W[14]*(1-R)));
+  }
+  const b=g===2?FSRS_W[15]:(g===4?FSRS_W[16]:1);
+  return Math.min(FSRS_S_MAX,S*(Math.exp(FSRS_W[8])*(11-D)*Math.pow(S,-FSRS_W[9])
+    *(Math.exp(FSRS_W[10]*(1-R))-1)*b+1));
+}
+// Estado do card. Migra na primeira vez que o card é tocado, a partir do que já existe:
+// o intervalo do SM-2 vira a estabilidade (no SM-2 o intervalo TAMBÉM é "quanto tempo até
+// eu provavelmente esquecer", então o mapeamento é direto), e a taxa de erro histórica
+// vira a dificuldade. O campo sm2 NÃO é apagado — fica como rede pra poder voltar atrás.
+// Aplica uma resposta ao card. `g`: 1=não lembrei, 2=difícil, 3=lembrei, 4=fácil.
+// Devolve o intervalo em dias. R é calculado a partir de QUANDO o card foi visto pela
+// última vez — revisar atrasado (R baixo) rende mais estabilidade que revisar adiantado,
+// e é isso que o SM-2 não sabia fazer: pra ele, a data real da revisão era irrelevante.
+function fsrsAplicar(card,g){
+  const e=fsrsEstado(card);
+  let S,D;
+  if(!e){                       // primeira vez que este card é respondido
+    S=FSRS_W[g-1]; D=fsrsD0(g);
+  }else{
+    const base=card.ultimaRevisao||card.criacao;
+    const dias=base?Math.max(0,(Date.now()-new Date(base).getTime())/86400000):e.S;
+    const R=fsrsR(dias,e.S);
+    S=fsrsProxS(e.D,e.S,R,g); D=fsrsProxD(e.D,g);
+  }
+  card.fsrs={S:Math.round(S*1000)/1000,D:Math.round(D*100)/100};
+  return fsrsIntervalo(S);
+}
+// Prévia de cada botão ANTES de clicar, sem gravar nada no card.
+function fsrsPrevia(card,g){
+  const copia={acertos:card.acertos,erros:card.erros,sm2:card.sm2,fsrs:card.fsrs,
+               ultimaRevisao:card.ultimaRevisao,criacao:card.criacao};
+  return fsrsAplicar(copia,g);
+}
+function fsrsEstado(card){
+  if(card.fsrs&&card.fsrs.S>0)return{S:card.fsrs.S,D:card.fsrs.D};
+  const ac=card.acertos||0, er=card.erros||0, tot=ac+er;
+  if(!tot)return null;   // card novo de verdade: sem estado ainda
+  const S=(card.sm2&&card.sm2.interval>0)?card.sm2.interval:1;
+  const D=Math.min(10,Math.max(1,3+6*(er/tot)));
+  return{S,D};
+}
+// Quantos dias o card fica guardado a partir da última revisão.
 function fcNextInterval(card){
+  const e=fsrsEstado(card);
+  if(e)return fsrsIntervalo(e.S);
   return (card.sm2&&card.sm2.interval)||1;
 }
 function fcNextReview(card){
@@ -15948,8 +16026,7 @@ function fcGridMark(cardId,acertou){
     c.erros=(c.erros||0)+1;
     c.lastConf=1;
   }
-  if(!c.sm2)c.sm2={ef:2.5,reps:0,interval:1};
-  c.sm2=sm2Next(c.sm2,acertou?4:1);
+  fsrsAplicar(c,acertou?3:1);
   c.ultimaRevisao=new Date().toISOString();
   trackFCReviewOutcome(cardId,acertou,prevTouch);
   fcAwardReviewXP(cardId,acertou);
@@ -16053,7 +16130,7 @@ function fcStudyHTML(cards){
   const st=fcStatus(c);
   // Prévia dos intervalos de cada botão ANTES de escolher — mesma ideia do Anki (again/hard/good/easy
   // mostram quanto tempo falta ANTES de você clicar), calculada em cima do sm2 atual desse card.
-  const previewFor=(q)=>sm2Next(c.sm2||{ef:2.5,reps:0,interval:1},q).interval;
+  const previewFor=(conf)=>fsrsPrevia(c,conf);
   return`
     <div class="fc-progress-bar"><div class="fc-progress-fill" style="width:${pct}%"></div></div>
     <div class="fc-study-nav">
@@ -16092,9 +16169,9 @@ function fcStudyHTML(cards){
     </div>
     ${fcStudyFlipped?`<div class="fc-conf-row">
       <button class="fc-conf-btn fc-conf-1" onclick="fcStudyConf('${c.id}',1)">✗ Não lembrei<br><small>→ ${previewFor(1)}d</small></button>
-      <button class="fc-conf-btn fc-conf-2" onclick="fcStudyConf('${c.id}',2)">😅 Difícil<br><small>→ ${previewFor(3)}d</small></button>
-      <button class="fc-conf-btn fc-conf-3" onclick="fcStudyConf('${c.id}',3)">😊 Lembrei<br><small>→ ${previewFor(4)}d</small></button>
-      <button class="fc-conf-btn fc-conf-4" onclick="fcStudyConf('${c.id}',4)">⭐ Fácil!<br><small>→ ${previewFor(5)}d</small></button>
+      <button class="fc-conf-btn fc-conf-2" onclick="fcStudyConf('${c.id}',2)">😅 Difícil<br><small>→ ${previewFor(2)}d</small></button>
+      <button class="fc-conf-btn fc-conf-3" onclick="fcStudyConf('${c.id}',3)">😊 Lembrei<br><small>→ ${previewFor(3)}d</small></button>
+      <button class="fc-conf-btn fc-conf-4" onclick="fcStudyConf('${c.id}',4)">⭐ Fácil!<br><small>→ ${previewFor(4)}d</small></button>
       ${st==='dominado'
         ?`<button class="fc-conf-btn fc-conf-dom" onclick="fcDestravarDominado('${c.id}')">↩️ Devolver<br><small>volta pra revisão</small></button>`
         :`<button class="fc-conf-btn fc-conf-dom" onclick="fcStudyDominar('${c.id}')" title="Tira este card das revisões. Nada é apagado — dá pra rever os dominados quando quiser.">🏆 Dominado<br><small>não repete mais</small></button>`}
@@ -16325,19 +16402,18 @@ function fcStudyConf(cardId,conf){
   logFCReview(conf>=3);
   if(conf>=3){c.acertos=(c.acertos||0)+1;fcScoreRight++;}
   else{c.erros=(c.erros||0)+1;fcScoreWrong++;}
-  // Mesmo SM-2 das revisões de assunto: o intervalo cresce com o fator de facilidade do card
-  // (sobe quando você lembra bem, cai/reseta quando esquece), em vez de sempre voltar pro
-  // mesmo bucket fixo — é isso que torna a repetição espaçada "de verdade", tipo Anki.
-  const quality={1:1,2:3,3:4,4:5}[conf];
-  if(!c.sm2)c.sm2={ef:2.5,reps:0,interval:1};
-  c.sm2=sm2Next(c.sm2,quality);
+  // FSRS: os quatro botões passam a levar a quatro lugares diferentes de verdade. No SM-2
+  // "Difícil", "Lembrei" e "Fácil" devolviam o MESMO intervalo (a nota só mexia no fator de
+  // facilidade pra vez seguinte), e num card novo os quatro devolviam 1 dia.
+  // c.sm2 fica gravado do jeito que estava, sem ser atualizado: é a rede pra voltar atrás.
+  const dias=fsrsAplicar(c,conf);
   trackFCReviewOutcome(cardId,conf>=3,prevTouch);
   fcAwardReviewXP(cardId,conf>=3);
   saveDB();
   fcStudyIdx=(fcStudyIdx+1)%fcStudyCards.length;
   fcStudyFlipped=false;
   renderFCMbList();renderFCMain();updateFCBadge();
-  const d=c.sm2.interval;
+  const d=dias;
   const msgs={1:`✗ Agendado para ${d} dia${d>1?'s':''}`,2:`😅 Agendado para ${d} dia${d>1?'s':''}`,3:`😊 Agendado para ${d} dia${d>1?'s':''}`,4:`⭐ Agendado para ${d} dia${d>1?'s':''}!`};
   toast(msgs[conf]||'Revisão registrada',conf>=3?'var(--green)':'var(--orange)');
 }
