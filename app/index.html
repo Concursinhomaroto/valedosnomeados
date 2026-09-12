@@ -4475,6 +4475,163 @@ function backupCheckInicial(){
     setBackupEstado('erro',null,0,(e&&e.message)||String(e));
   });
 }
+// ===== MODELO DE ESTUDO: levar o CONTEÚDO pra outra conta, sem levar o progresso =====
+// Leva a estrutura (reinos, chefões, minibosses), os resumos, os fluxogramas, os
+// flashcards e os editais. NÃO leva, de propósito:
+//  - chaves de API (geminiApiKey, tavilyApiKey) — seriam as SUAS chaves gastando a SUA cota;
+//  - plano e pagamento (plan, planType, lastPaymentAt) — daria acesso pago sem pagar;
+//  - progresso (times, sessions, xp, lifetimeSeconds, streak, conquistas);
+//  - agenda de revisões e estado do SM-2 (revisions, sm2, acertos, erros, lastConf,
+//    ultimaRevisao, dominado). Esse é o mais importante: esse estado é um modelo da
+//    memória de QUEM ESTUDOU. Herdar o histórico de outra pessoa não adianta trabalho —
+//    o app passaria a esconder justamente o que a pessoa nunca viu, achando que ela sabe;
+//  - identidade (accountEmail, studyNickname) e a data da prova.
+const MODELO_FORMATO='vale-dos-nomeados-modelo-v1';
+function exportarModeloEstudo(){
+  const kingdoms=(db.kingdoms||[]).map(k=>({id:k.id,name:k.name,icon:k.icon||'🏰',color:k.color||null}));
+  const topics={};
+  let nSub=0,nResumo=0,nFluxo=0;
+  (db.kingdoms||[]).forEach(k=>{
+    topics[k.id]=(db.topics[k.id]||[]).map(t=>({
+      id:t.id,name:t.name,icon:t.icon||'⚔️',priority:t.priority||1,
+      subtopics:(t.subtopics||[]).map(sb=>{
+        nSub++;
+        const fora={id:sb.id,name:sb.name,priority:sb.priority||30};
+        // Resumo e fluxograma são conteúdo — vão. Mas sem o carimbo de quando VOCÊ
+        // gerou, que não diz nada pra quem recebe.
+        if(sb.resumo&&sb.resumo.texto){
+          nResumo++;
+          fora.resumo={texto:sb.resumo.texto,grounded:!!sb.resumo.grounded,
+                       via:sb.resumo.via||null,fontes:sb.resumo.fontes||[]};
+        }
+        if(sb.fluxograma&&sb.fluxograma.nos){
+          nFluxo++;
+          fora.fluxograma={raizId:sb.fluxograma.raizId,nos:sb.fluxograma.nos,
+                           origem:sb.fluxograma.origem||'ia',fontes:sb.fluxograma.fontes||[]};
+        }
+        if(sb.note)fora.note=sb.note;
+        return fora;
+      })
+    }));
+  });
+  // Flashcards: só o conteúdo. Mesmo recorte que fcExportDeck já usa.
+  const flashcards=Object.values(db.flashcards||{}).map(c=>({
+    mbId:c.mbId,pergunta:c.pergunta,resposta:c.resposta,
+    tags:c.tags||'',dificuldade:c.dificuldade||2
+  }));
+  const editais=(db.editais||[]).map(e=>({
+    nome:e.nome,cargo:e.cargo||'',banca:e.banca||'',data:e.data,icon:e.icon||'📝',
+    color:e.color||'#6c47ff',status:e.status||'inscrito',
+    disciplinas:(e.disciplinas||[]).map(d=>({
+      id:d.id,nome:d.nome,questoes:d.questoes||0,kingdomId:d.kingdomId||null,
+      // subId aponta pro miniboss: sobrevive porque os ids do miniboss vão junto.
+      assuntos:(d.assuntos||[]).map(a=>({id:a.id,nome:a.nome,subId:a.subId||null,prev:a.prev||0}))
+    }))
+  }));
+  const modelo={formato:MODELO_FORMATO,exportadoEm:new Date().toISOString(),
+                kingdoms,topics,flashcards,editais,
+                resumo:{reinos:kingdoms.length,minibosses:nSub,resumos:nResumo,
+                        fluxogramas:nFluxo,flashcards:flashcards.length,editais:editais.length}};
+  const nome=`modelo-de-estudo-${todayStr()}.json`;
+  const blob=new Blob([JSON.stringify(modelo,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=nome;document.body.appendChild(a);a.click();
+  document.body.removeChild(a);URL.revokeObjectURL(url);
+  toast(`📤 Modelo exportado: ${nSub} minibosses, ${nResumo} resumos, ${nFluxo} fluxogramas, ${flashcards.length} flashcards.`,'var(--green)');
+}
+// Importa SOMANDO, nunca substituindo: quem recebe pode já ter estudado alguma coisa,
+// e um "importar" que apaga o que existe seria perda de dados silenciosa.
+// Os ids do arquivo são reaproveitados quando estão livres — é isso que faz o vínculo
+// assunto-do-edital -> miniboss (a.subId) continuar apontando pro lugar certo do outro
+// lado. Quando o id já existe na conta que recebe, o item é pulado, não sobrescrito.
+function importarModeloArquivo(input){
+  const file=input&&input.files&&input.files[0];
+  if(!file)return;
+  input.value='';
+  const reader=new FileReader();
+  reader.onload=(ev)=>{
+    let m;
+    try{m=JSON.parse(ev.target.result);}catch(e){toast('⚠️ Arquivo inválido: não é um JSON.','var(--red)');return;}
+    if(!m||m.formato!==MODELO_FORMATO){
+      toast('⚠️ Este arquivo não é um modelo de estudo do Vale.','var(--red)');return;
+    }
+    const r=m.resumo||{};
+    if(!confirm(`Importar este modelo de estudo?\n\n`
+      +`• ${r.reinos||0} reino(s)\n• ${r.minibosses||0} miniboss(es)\n`
+      +`• ${r.resumos||0} resumo(s)\n• ${r.fluxogramas||0} fluxograma(s)\n`
+      +`• ${r.flashcards||0} flashcard(s)\n• ${r.editais||0} edital(is)\n\n`
+      +`Nada do que você já tem é apagado — o conteúdo é somado ao seu.\n`
+      +`O progresso, as revisões e o XP são SEUS: o material chega zerado, pra você estudar do começo.`))return;
+    if(!db.kingdoms)db.kingdoms=[];
+    if(!db.topics)db.topics={};
+    if(!db.flashcards)db.flashcards={};
+    if(!db.editais)db.editais=[];
+    const idsReino=new Set(db.kingdoms.map(k=>k.id));
+    const mapaReino={};
+    let nK=0,nT=0,nS=0,nF=0,nE=0;
+    (m.kingdoms||[]).forEach(k=>{
+      if(idsReino.has(k.id)){mapaReino[k.id]=k.id;return;}   // já existe: usa o que está lá
+      const novoK={id:k.id,name:k.name,icon:k.icon||'🏰'};
+      if(k.color)novoK.color=k.color;
+      db.kingdoms.push(novoK);idsReino.add(k.id);mapaReino[k.id]=k.id;nK++;
+    });
+    Object.keys(m.topics||{}).forEach(kid=>{
+      const destino=mapaReino[kid];
+      if(!destino)return;
+      if(!db.topics[destino])db.topics[destino]=[];
+      const idsTopico=new Set(db.topics[destino].map(t=>t.id));
+      (m.topics[kid]||[]).forEach(t=>{
+        if(idsTopico.has(t.id))return;
+        db.topics[destino].push({
+          id:t.id,name:t.name,icon:t.icon||'⚔️',priority:t.priority||1,
+          subtopics:(t.subtopics||[]).map(sb=>{
+            nS++;
+            // studied fica FALSO e não vem nenhuma revisão: o material chega novo pra
+            // quem recebe, que é o ponto de não levar o progresso junto.
+            const novoS={id:sb.id,name:sb.name,priority:sb.priority||30,studied:false};
+            if(sb.resumo)novoS.resumo={...sb.resumo,geradoEm:new Date().toISOString()};
+            if(sb.fluxograma)novoS.fluxograma={...sb.fluxograma,geradoEm:new Date().toISOString()};
+            if(sb.note)novoS.note=sb.note;
+            return novoS;
+          })
+        });
+        idsTopico.add(t.id);nT++;
+      });
+    });
+    // Flashcards com a mesma trava de duplicata do import de baralho.
+    const porChefao={};
+    Object.values(db.flashcards).forEach(c=>{
+      (porChefao[c.mbId]=porChefao[c.mbId]||new Set()).add(normalizeForDedup(c.pergunta));
+    });
+    (m.flashcards||[]).forEach(c=>{
+      if(!c||!c.pergunta||!c.resposta||!c.mbId)return;
+      const jaTem=porChefao[c.mbId]=porChefao[c.mbId]||new Set();
+      const chave=normalizeForDedup(c.pergunta);
+      if(jaTem.has(chave))return;
+      jaTem.add(chave);
+      const id='fc_'+genId();
+      db.flashcards[id]={id,mbId:c.mbId,pergunta:c.pergunta,resposta:c.resposta,
+        tags:c.tags||'',dificuldade:c.dificuldade||2,
+        acertos:0,erros:0,lastConf:0,criacao:new Date().toISOString(),ultimaRevisao:null};
+      nF++;
+    });
+    const nomesEdital=new Set(db.editais.map(e=>(e.nome||'').toLowerCase()));
+    (m.editais||[]).forEach(e=>{
+      if(nomesEdital.has((e.nome||'').toLowerCase()))return;
+      db.editais.push({...e,id:genId(),createdAt:todayStr()});
+      nomesEdital.add((e.nome||'').toLowerCase());nE++;
+    });
+    db.editais.sort((a,b)=>String(a.data||'').localeCompare(String(b.data||'')));
+    db.fcCreatedTotal=(db.fcCreatedTotal||0)+nF;
+    saveDB();
+    closeModal();
+    renderHeader();renderMap();updateRevBadge();updateEditaisBadge();updateFCBadge();
+    toast(`📥 Modelo importado: ${nK} reino(s), ${nT} chefão(ões), ${nS} miniboss(es), ${nF} flashcard(s), ${nE} edital(is).`,'var(--green)');
+  };
+  reader.onerror=()=>toast('⚠️ Não consegui ler o arquivo.','var(--red)');
+  reader.readAsText(file);
+}
 function abrirDetalhesBackup(){
   const st=backupEstado.estado,ultima=backupEstado.ultima;
   let corpo='';
@@ -4516,9 +4673,25 @@ function abrirDetalhesBackup(){
     <div id="backup-lista-usuario" style="display:flex;flex-direction:column;gap:8px;max-height:230px;overflow-y:auto;margin-bottom:14px">
       <div class="empty" style="padding:12px"><i class="fa fa-spinner fa-spin"></i><p>Carregando backups...</p></div>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
       <button class="btn" onclick="forcarBackupAgora()"><i class="fa fa-shield-halved"></i> Fazer backup agora</button>
       <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+    </div>
+
+    <div style="border-top:1px solid var(--border);padding-top:14px">
+      <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">📦 Modelo de estudo</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.55">
+        Leva o <b>conteúdo</b> pra outra conta: reinos, chefões, minibosses, resumos, fluxogramas,
+        flashcards e editais. <b>Não leva</b> suas chaves de IA, seu plano, seu XP, seu tempo de
+        estudo nem sua agenda de revisões — o material chega zerado do outro lado, porque
+        revisão espaçada só funciona com o histórico de quem está estudando.
+        Ao importar, nada do que já existe é apagado: o conteúdo é somado.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-cyan" onclick="exportarModeloEstudo()"><i class="fa fa-file-export"></i> Exportar meu modelo</button>
+        <label class="btn btn-ghost" for="modelo-import-inp" style="cursor:pointer"><i class="fa fa-file-import"></i> Importar um modelo</label>
+        <input type="file" id="modelo-import-inp" accept="application/json,.json" hidden onchange="importarModeloArquivo(this)">
+      </div>
     </div>`);
   renderBackupList('backup-lista-usuario');
 }
