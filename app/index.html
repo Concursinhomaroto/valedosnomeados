@@ -4450,7 +4450,13 @@ function renderBackupBadge(){
     else{cls='bk-erro';icone='fa-triangle-exclamation';txt='backup parado há '+dias+' dias';}
   }
   el.className='backup-badge'+(cls?' '+cls:'');
-  el.innerHTML='<i class="fa '+icone+'"></i> <span>'+escapeHtml(txt)+'</span>';
+  // A seta no fim e o title dizem que isto ABRE alguma coisa. Sem ela o selo le como
+  // rotulo de status, e quem nunca clicou nao descobre que ha um modal atras.
+  el.innerHTML='<i class="fa '+icone+'"></i> <span>'+escapeHtml(txt)+'</span>'
+    +'<i class="fa fa-chevron-right" style="font-size:8px;opacity:.65"></i>';
+  el.setAttribute('title','Ver as cópias de segurança e restaurar um dia anterior');
+  el.setAttribute('role','button');
+  el.setAttribute('tabindex','0');
 }
 // Lê o vdn_v1_backupMeta uma vez por sessão. O maybeBackupDB() curto-circuita no
 // localStorage quando já gravou hoje neste aparelho — ótimo pra economizar rede, péssimo
@@ -4487,6 +4493,27 @@ function backupCheckInicial(){
 //    o app passaria a esconder justamente o que a pessoa nunca viu, achando que ela sabe;
 //  - identidade (accountEmail, studyNickname) e a data da prova.
 const MODELO_FORMATO='vale-dos-nomeados-modelo-v1';
+// Mesmo bloco em dois lugares: no ⚙️ da barra lateral (onde a pessoa procura
+// "configurações") e no modal do selo de backup. O selo e uma pilula de 10px no titulo
+// do painel e le como rotulo de status, nao como botao — quem nao sabia que ele abre
+// modal nunca ia achar isto la dentro.
+function modeloEstudoBlocoHTML(){
+  return`<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+      <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">📦 Modelo de estudo</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.55">
+        Leva o <b>conteúdo</b> pra outra conta: reinos, chefões, minibosses, resumos, fluxogramas,
+        flashcards e editais. <b>Não leva</b> suas chaves de IA, seu plano, seu XP, seu tempo de
+        estudo nem sua agenda de revisões — o material chega zerado do outro lado, porque
+        revisão espaçada só funciona com o histórico de quem está estudando.
+        Ao importar, nada do que já existe é apagado: o conteúdo é somado.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-cyan" onclick="exportarModeloEstudo()"><i class="fa fa-file-export"></i> Exportar meu modelo</button>
+        <label class="btn btn-sm btn-ghost" for="modelo-import-inp" style="cursor:pointer"><i class="fa fa-file-import"></i> Importar um modelo</label>
+        <input type="file" id="modelo-import-inp" accept="application/json,.json" hidden onchange="importarModeloArquivo(this)">
+      </div>
+    </div>`;
+}
 function exportarModeloEstudo(){
   const kingdoms=(db.kingdoms||[]).map(k=>({id:k.id,name:k.name,icon:k.icon||'🏰',color:k.color||null}));
   const topics={};
@@ -4678,21 +4705,7 @@ function abrirDetalhesBackup(){
       <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
     </div>
 
-    <div style="border-top:1px solid var(--border);padding-top:14px">
-      <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">📦 Modelo de estudo</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.55">
-        Leva o <b>conteúdo</b> pra outra conta: reinos, chefões, minibosses, resumos, fluxogramas,
-        flashcards e editais. <b>Não leva</b> suas chaves de IA, seu plano, seu XP, seu tempo de
-        estudo nem sua agenda de revisões — o material chega zerado do outro lado, porque
-        revisão espaçada só funciona com o histórico de quem está estudando.
-        Ao importar, nada do que já existe é apagado: o conteúdo é somado.
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-cyan" onclick="exportarModeloEstudo()"><i class="fa fa-file-export"></i> Exportar meu modelo</button>
-        <label class="btn btn-ghost" for="modelo-import-inp" style="cursor:pointer"><i class="fa fa-file-import"></i> Importar um modelo</label>
-        <input type="file" id="modelo-import-inp" accept="application/json,.json" hidden onchange="importarModeloArquivo(this)">
-      </div>
-    </div>`);
+    ${modeloEstudoBlocoHTML()}`);
   renderBackupList('backup-lista-usuario');
 }
 // Botão de verificação: derruba os dois curto-circuitos (o do localStorage e o do
@@ -16549,7 +16562,7 @@ function openAISettingsModal(){
   // Se o aparelho não tem nenhuma voz marcada como português, ainda mostramos as
   // outras vozes disponíveis — melhor deixar o usuário tentar alguma do que travar
   // ele numa lista vazia sem nenhuma opção de escolha (era o que acontecia antes).
-  openModal('⚙️ IA e voz',`
+  openModal('⚙️ Configurações',`
     <div style="text-align:left">
       <p style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">
         Pra gerar flashcards, base legal, simulados e resumos a partir de arquivo, o app usa a IA do <b>Google Gemini</b>.
@@ -16599,7 +16612,17 @@ function openAISettingsModal(){
       <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-bottom:8px" onclick="testGeminiVoicePreview()"><i class="fa fa-microphone-lines"></i> Testar voz da IA</button>
       <div id="gemini-voice-test-status" style="font-size:10px;color:var(--muted);text-align:center;margin-bottom:18px;min-height:14px"></div>
 
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="saveGeminiApiKey()">Salvar</button>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:16px" onclick="saveGeminiApiKey()">Salvar</button>
+
+      ${modeloEstudoBlocoHTML()}
+      <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:14px">
+        <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px">🛡️ Cópia de segurança</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.55">
+          O app grava sozinho uma cópia inteira do seu banco uma vez por dia. Aqui dá pra ver
+          as cópias guardadas e voltar pra qualquer dia anterior.
+        </div>
+        <button class="btn btn-sm btn-ghost" onclick="abrirDetalhesBackup()"><i class="fa fa-shield-halved"></i> Ver cópias de segurança</button>
+      </div>
     </div>`);
 }
 async function testGeminiVoicePreview(){
