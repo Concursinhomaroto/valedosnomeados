@@ -1717,6 +1717,10 @@ nav{
 .fc-conf-2{background:rgba(234,88,12,0.1);color:var(--orange-t);border-color:rgba(234,88,12,0.2);}
 .fc-conf-3{background:rgba(245,158,11,0.1);color:#d97706;border-color:rgba(245,158,11,0.2);}
 .fc-conf-4{background:rgba(22,163,74,0.1);color:var(--green-t);border-color:rgba(22,163,74,0.2);}
+/* "Dominado" nao e mais uma nota de confianca — e tirar o card de circulacao. Por isso
+   se destaca das outras quatro em vez de virar a quinta da fileira. */
+.fc-conf-dom{background:rgba(180,83,9,0.10);color:#b45309;border-color:rgba(180,83,9,0.28);}
+.fc-conf-dom:hover{background:rgba(180,83,9,0.18);}
 .fc-conf-btn:hover{transform:scale(1.06);}
 
 /* MODO toggle */
@@ -15033,6 +15037,10 @@ function fcNextReview(card){
 // Agrupa o intervalo real (que agora varia livremente, tipo 1,6,9,15,37,90...) nos mesmos 4
 // buckets que a UI (filtros, timeline) já usa, só pra manter a categorização visual.
 function fcStatus(card){
+  // Dominado vence qualquer outro estado: o card sai da fila de estudo e para de
+  // aparecer, até você mandar buscá-lo de volta. É uma decisão sua, não do algoritmo,
+  // então nem o vencimento pela data desfaz.
+  if(card&&card.dominado)return 'dominado';
   const today=todayStr();
   const total=(card.acertos||0)+(card.erros||0);
   if(!total)return 'new';
@@ -15046,6 +15054,7 @@ function fcStatus(card){
 }
 
 function fcStatusLabel(st,card){
+  if(st==='dominado')return '🏆 Dominado';
   if(st==='new')return '✨ Novo';
   if(st==='due')return '🔥 Revisar';
   const days=card?fcNextInterval(card):null;
@@ -15053,6 +15062,7 @@ function fcStatusLabel(st,card){
 }
 
 function fcStatusColor(st){
+  if(st==='dominado')return 'var(--green-t)';
   return st==='new'?'var(--accent)':st==='due'?'var(--red)':st==='7'?'var(--orange)':st==='14'?'#d97706':st==='21'?'var(--cyan)':'var(--green)';
 }
 
@@ -15290,7 +15300,8 @@ function renderFCMain(){
     const allCards=Object.values(db.flashcards||{}).filter(c=>validTopicIds.has(c.mbId));
     const vencidos=allCards.filter(c=>fcStatus(c)==='due');
     const novos=allCards.filter(c=>fcStatus(c)==='new');
-    const emDia=allCards.filter(c=>!['due','new'].includes(fcStatus(c)));
+    const emDia=allCards.filter(c=>!['due','new','dominado'].includes(fcStatus(c)));
+    const dominados=allCards.filter(c=>fcStatus(c)==='dominado');
     const total=allCards.length;
 
     // Top 5 chefões com mais cards para revisar
@@ -15331,6 +15342,7 @@ function renderFCMain(){
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-cyan" onclick="fcOverviewClick('new')" ${novos.length?'':'disabled'} title="Só os cards que você ainda não estudou, de todas as matérias, embaralhados — sem revisão misturada"><i class="fa fa-wand-sparkles"></i> Só os novos${novos.length?` (${novos.length})`:''}</button>
             <button class="btn btn-primary" onclick="fcStudyAllKingdoms()" ${total?'':'disabled'} title="Junta os cards de todos os reinos numa fila só de estudo"><i class="fa fa-globe"></i> Estudar tudo</button>
+            ${dominados.length?`<button class="btn btn-ghost" onclick="fcEstudarDominados()" title="Rever os cards que você tirou de circulação. Eles não entram nas revisões normais."><i class="fa fa-trophy" style="color:#b45309"></i> Dominados (${dominados.length})</button>`:''}
           </div>
         </div>
         ${filterKingdom?`
@@ -15818,7 +15830,10 @@ function fcStudyHTML(cards){
   let studyCards=cards;
   if(fcStudyFilter==='due')studyCards=cards.filter(c=>fcStatus(c)==='due');
   else if(fcStudyFilter==='new')studyCards=cards.filter(c=>fcStatus(c)==='new');
-  else if(fcStudyFilter==='ok')studyCards=cards.filter(c=>!['due','new'].includes(fcStatus(c)));
+  else if(fcStudyFilter==='dominado')studyCards=cards.filter(c=>fcStatus(c)==='dominado');
+  else if(fcStudyFilter==='ok')studyCards=cards.filter(c=>!['due','new','dominado'].includes(fcStatus(c)));
+  // 'all' também exclui dominado: card dominado só aparece quando pedido de propósito.
+  else studyCards=cards.filter(c=>fcStatus(c)!=='dominado');
   if(!studyCards.length&&fcStudyFilter!=='all'){
     return`<div class="empty"><i class="fa fa-ghost"></i><p>Nenhum card nessa categoria.</p></div>`;
   }
@@ -15885,6 +15900,9 @@ function fcStudyHTML(cards){
       <button class="fc-conf-btn fc-conf-2" onclick="fcStudyConf('${c.id}',2)">😅 Difícil<br><small>→ ${previewFor(3)}d</small></button>
       <button class="fc-conf-btn fc-conf-3" onclick="fcStudyConf('${c.id}',3)">😊 Lembrei<br><small>→ ${previewFor(4)}d</small></button>
       <button class="fc-conf-btn fc-conf-4" onclick="fcStudyConf('${c.id}',4)">⭐ Fácil!<br><small>→ ${previewFor(5)}d</small></button>
+      ${st==='dominado'
+        ?`<button class="fc-conf-btn fc-conf-dom" onclick="fcDestravarDominado('${c.id}')">↩️ Devolver<br><small>volta pra revisão</small></button>`
+        :`<button class="fc-conf-btn fc-conf-dom" onclick="fcStudyDominar('${c.id}')" title="Tira este card das revisões. Nada é apagado — dá pra rever os dominados quando quiser.">🏆 Dominado<br><small>não repete mais</small></button>`}
     </div>`:'<div style="text-align:center;font-size:11px;color:var(--muted);margin-top:8px">Clique no card para revelar a resposta</div>'}
   `;
 }
@@ -16053,6 +16071,55 @@ function fcStudyFlip(){
   },10);
 }
 
+// "Dominado": tira o card de circulação sem apagar nada. Ele some das filas de estudo
+// (fcStatus passa a devolver 'dominado') e para de aparecer, até você pedir pra ver os
+// dominados e trazer de volta. O histórico — acertos, erros, sm2 — fica intacto, então
+// destravar devolve o card exatamente onde ele estava, e não como card novo.
+function fcStudyDominar(cardId){
+  if(!db.flashcards||!db.flashcards[cardId])return;
+  fcVoiceStop();fcVoiceLastKey='';
+  const c=db.flashcards[cardId];
+  c.dominado=true;
+  c.dominadoEm=new Date().toISOString();
+  saveDB();
+  // O card sai da fila DESTA sessão na hora. Sem isto ele continuaria na lista já
+  // montada (fcStudyCards) e voltaria a aparecer ao dar a volta no baralho — que é
+  // justamente a repetição que "dominado" existe pra acabar.
+  const pos=fcStudyCards.findIndex(x=>x.id===cardId);
+  if(pos>=0)fcStudyCards.splice(pos,1);
+  if(fcStudyIdx>=fcStudyCards.length)fcStudyIdx=0;
+  fcStudyFlipped=false;
+  renderFCMbList();renderFCMain();updateFCBadge();
+  toast('🏆 Dominado! Esse card não aparece mais nas revisões — veja os dominados quando quiser relembrar.','var(--green)');
+}
+// Devolve o card pras filas normais, com o histórico que ele já tinha.
+function fcDestravarDominado(cardId){
+  if(!db.flashcards||!db.flashcards[cardId])return;
+  const c=db.flashcards[cardId];
+  delete c.dominado;delete c.dominadoEm;
+  saveDB();
+  renderFCMbList();renderFCMain();updateFCBadge();
+  toast('↩️ Card de volta pra revisão, com o histórico que já tinha.','var(--accent)');
+}
+function fcDestravarTodosDominados(){
+  const todos=getAllFCEverywhere().filter(c=>c.dominado);
+  if(!todos.length){toast('Nenhum card dominado.','var(--muted)');return;}
+  if(!confirm(`Trazer os ${todos.length} cards dominados de volta pras revisões?\n\nO histórico de cada um é preservado — eles voltam de onde pararam, não como cards novos.`))return;
+  todos.forEach(c=>{delete c.dominado;delete c.dominadoEm;});
+  saveDB();renderFCMbList();renderFCMain();updateFCBadge();
+  toast(`↩️ ${todos.length} card${todos.length>1?'s':''} de volta pras revisões.`,'var(--accent)');
+}
+// Abre a fila só com os dominados, de todos os reinos — pra relembrar quando quiser.
+function fcEstudarDominados(){
+  const dom=getAllFCEverywhere().filter(c=>c.dominado);
+  if(!dom.length){toast('Você ainda não marcou nenhum card como dominado.','var(--muted)');return;}
+  fcSelectedMb={id:'__ALL__',name:'Dominados',icon:'🏆',kIcon:'',
+                kingdom:`${dom.length} card${dom.length!==1?'s':''} que você tirou de circulação`};
+  fcStudyFilter='dominado';
+  fcRevFilter='all';
+  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();
+  renderFCMbList();renderFCMain();
+}
 function fcStudyConf(cardId,conf){
   if(!db.flashcards||!db.flashcards[cardId])return;
   fcVoiceStop();fcVoiceLastKey='';
