@@ -16966,6 +16966,26 @@ async function callGeminiGenerateSearch(apiKey,prompt){
 // resposta só conta se o extractAIJson dela realmente funcionar; do contrário segue
 // tentando os próximos modelos candidatos (com busca, depois sem busca, depois os
 // descobertos via listGeminiModels) até achar uma que sirva.
+// Resposta que COMECOU um JSON e nao fechou = foi cortada no meio, nao e "formato
+// invalido". O Gemini nem sempre marca finishReason MAX_TOKENS quando isso acontece
+// (visto no console do usuario: o JSON terminava em "...tratamen"), e sem marcacao o
+// conserto que ja existe pra resposta cortada nunca era acionado. Aqui a deteccao e
+// nossa: conta chaves e colchetes fora de string; se sobrou algo aberto, foi corte.
+function jsonPareceCortado(raw){
+  const t=String(raw||'').trim().replace(/^```(?:json)?/i,'').trim();
+  if(!t||(t[0]!=='{'&&t[0]!=='[')) return false;
+  let prof=0,emTexto=false,escapa=false;
+  for(let k=0;k<t.length;k++){
+    const ch=t[k];
+    if(escapa){escapa=false;continue;}
+    if(ch==='\\'){escapa=true;continue;}
+    if(ch==='"'){emTexto=!emTexto;continue;}
+    if(emTexto)continue;
+    if(ch==='{'||ch==='[')prof++;
+    else if(ch==='}'||ch===']')prof--;
+  }
+  return emTexto||prof>0;
+}
 async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
   const attempts=[];
   let best=null; // primeiro JSON válido encontrado, mas sem confirmar busca real
@@ -16975,6 +16995,11 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
   // modelo 1 descobria que 2048 era curto, subia pra 4096 — e o modelo 2 recomeçava do
   // 2048, cortava de novo e subia de novo: seis chamadas repetindo uma conta já feita.
   let teto=maxOutputTokens;
+  // A escalada por resposta cortada vale UMA vez na geracao inteira, nao uma por
+  // modelo: sem isso, tres modelos cortando viravam seis chamadas (2048, 4096, 4096,
+  // 8192, 8192, 16384) — caro demais no teto de 20 por dia, e pra terminar em erro
+  // do mesmo jeito. Com a trava, o pior caso e quatro.
+  let dobrouPorCorte=false;
   async function tentarLista(models,comBusca){
     for(const model of models){
       // tryGeminiModelComRetry, nao tryGeminiModel: o 503 ("this model is currently
@@ -17009,6 +17034,17 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
         // respondeu de fato — e sem saber o que veio nao da pra consertar o prompt.
         console.error('Gemini respondeu, mas fora do formato JSON pedido:',model,
                       '\n--- inicio da resposta ---\n'+String(r.raw||'').slice(0,1200));
+      }
+      // Cortada no meio: mesmo problema de teto curto que r.cortado ja trata, so que
+      // sem o Gemini ter avisado. Repete o MESMO modelo com o dobro, uma vez.
+      if(!parsed&&!dobrouPorCorte&&jsonPareceCortado(r.raw)&&teto&&teto<65536){
+        dobrouPorCorte=true;
+        teto=teto*2;
+        const r2=await tryGeminiModel(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens:teto});
+        if(r2.ok){
+          r=r2;
+          try{parsed=extractAIJson(r.raw);}catch(e){}
+        }
       }
       if(parsed&&typeof parsed==='object'){
         if(r.grounded)return{parsed,grounded:true,fontes:r.fontes,consultas:r.consultas};
