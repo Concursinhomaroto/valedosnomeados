@@ -15377,7 +15377,7 @@ function fcStudyAllKingdoms(){
   if(!getAllFCEverywhere().length){toast('Nenhum flashcard criado ainda.','var(--muted)');return;}
   fcSelectedMb={id:'__ALL__',name:'Todos os Reinos',icon:'🌍',kIcon:'',kingdom:'Todos os reinos combinados'};
   fcStudyFilter='all';
-  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();fcReaprenderLimpar();
+  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();fcReaprenderLimpar();fcFilaInvalidar();
   db.fcGroupStudySessions=(db.fcGroupStudySessions||0)+1;saveDB();
   renderFCMbList();renderFCMain();
 }
@@ -15390,7 +15390,7 @@ function fcStudyKingdom(kingdomId){
   if(!getAllFCForKingdom(kingdomId).length){toast('Nenhum flashcard neste reino ainda.','var(--muted)');return;}
   fcSelectedMb={id:'__KINGDOM__'+kingdomId,name:k.name,icon:k.icon||'🏰',kIcon:'',kingdom:k.name,kColor:k.color};
   fcStudyFilter='all';
-  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();fcReaprenderLimpar();
+  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();fcReaprenderLimpar();fcFilaInvalidar();
   db.fcGroupStudySessions=(db.fcGroupStudySessions||0)+1;saveDB();
   renderFCMbList();renderFCMain();
 }
@@ -16136,11 +16136,27 @@ function fcStudyHTML(cards){
     // pra sempre só os cards mais antigos, e os criados depois nunca aparecem.
     return porStatus||(fcShuffleKeyFor(a.id)-fcShuffleKeyFor(b.id));
   });
-  // Reaproveita a fila viva quando ela já existe nesta sessão: sem isto, o card recolocado
-  // por fcReaprenderAgendar seria jogado fora no próximo render e nunca voltaria.
-  const mesmaFila=fcStudyCards.length>=sorted.length
-    &&sorted.every(c=>fcStudyCards.some(x=>x.id===c.id));
-  if(!mesmaFila)fcStudyCards=sorted;
+  // Reaproveita a fila viva desta sessão, senão o card recolocado por fcReaprenderAgendar
+  // seria jogado fora no próximo render e nunca voltaria.
+  // A comparação ANTES era "a fila atual contém tudo que o filtro pediu?" — e isso é sempre
+  // verdade quando o novo filtro é um SUBCONJUNTO do anterior. Com o baralho aberto em
+  // "Todos" (3.139), clicar em "Novos" (2.462) dava mesmaFila=true e a fila não trocava:
+  // NENHUM filtro funcionava depois do primeiro. Agora a fila carrega a chave de onde
+  // veio (baralho + filtro), e só é reaproveitada quando a chave é exatamente a mesma.
+  // A busca entra na chave pelo elemento, nao pela variavel `q` — ela e local de
+  // renderFCMain e nao existe aqui dentro; usa-la daria ReferenceError.
+  const busca=(document.getElementById('fc-filter-q')&&document.getElementById('fc-filter-q').value)||'';
+  const chave=[(fcSelectedMb&&fcSelectedMb.id)||'',fcStudyFilter||'all',fcRevFilter||'all',
+               busca,sorted.length].join('|');
+  if(fcFilaChave!==chave){
+    fcStudyCards=sorted;
+    fcFilaChave=chave;
+    fcStudyIdx=0;
+    // Fila nova = sessão nova: o reaprendizado da anterior não vale. Limpa o mapa direto,
+    // sem fcReaprenderLimpar(), que também zeraria a chave que acabamos de definir.
+    fcReaprender=new Map();
+    fcSessaoFim=false;
+  }
   if(fcStudyIdx>=fcStudyCards.length)fcStudyIdx=0;
   const sortedRef=fcStudyCards;
   const c=sortedRef[fcStudyIdx];
@@ -16371,8 +16387,10 @@ function fcCheckOverflow(){
 const FC_REAPRENDER_MS=10*60*1000;   // 10 minutos
 const FC_REAPRENDER_GAP=4;           // ou depois de 4 outros cards, o que vier primeiro
 let fcReaprender=new Map();          // cardId -> quando pode voltar (timestamp)
+let fcFilaChave='';                  // de qual baralho+filtro a fila viva foi montada
 let fcSessaoFim=false;               // true = fila acabou, mostrar o resumo
 function fcReaprenderLimpar(){ fcReaprender=new Map(); fcSessaoFim=false; }
+function fcFilaInvalidar(){ fcFilaChave=''; }
 // Recoloca o card mais à frente na fila desta sessão, sem duplicar.
 function fcReaprenderAgendar(cardId,card){
   fcReaprender.set(cardId,Date.now()+FC_REAPRENDER_MS);
@@ -16491,7 +16509,7 @@ function fcEstudarDominados(){
                 kingdom:`${dom.length} card${dom.length!==1?'s':''} que você tirou de circulação`};
   fcStudyFilter='dominado';
   fcRevFilter='all';
-  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();fcReaprenderLimpar();
+  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();fcReaprenderLimpar();fcFilaInvalidar();
   renderFCMbList();renderFCMain();
 }
 function fcStudyConf(cardId,conf){
@@ -16555,7 +16573,7 @@ function fcBossStudy(tipo){
   // Filtra os cards do chefão pelo tipo e vai para modo estudo
   fcVoiceStop();fcVoiceLastKey='';
   fcMode='study';
-  fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();fcReaprenderLimpar();
+  fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();fcReaprenderLimpar();fcFilaInvalidar();
   // Guardar o filtro para o modo estudo saber quais cards usar
   fcStudyFilter=tipo; // 'due','new','ok','all'
   renderFCMain();
@@ -16582,14 +16600,14 @@ function fcOverviewClick(tipo){
   // Sem isto, um filtro de revisão deixado ligado antes (ex: "vencidos") se somaria ao
   // filtro da categoria e a fila vinha vazia, sem explicação nenhuma na tela.
   fcRevFilter='all';
-  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();fcReaprenderLimpar();
+  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();fcReaprenderLimpar();fcFilaInvalidar();
   renderFCMbList();renderFCMain();
 }
 
 let fcStudyFilter='all'; // filtro do modo estudo
 
 function fcVoltar(){
-  fcReaprenderLimpar();
+  fcReaprenderLimpar();fcFilaInvalidar();
   fcSelectedMb=null;
   fcMode='grid';fcStudyIdx=0;fcStudyFlipped=false;
   fcStudyFilter='all';
@@ -16599,7 +16617,7 @@ function fcVoltar(){
 function fcSetMode(m){
   fcGridResetLimite();
   if(m!=='study')fcVoiceStop();
-  else fcShuffleSession();fcReaprenderLimpar(); // nova sessão de estudo começando: embaralha de novo os cards
+  else fcShuffleSession();fcReaprenderLimpar();fcFilaInvalidar(); // nova sessão de estudo começando: embaralha de novo os cards
   fcMode=m;fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;
   renderFCMain();
 }
