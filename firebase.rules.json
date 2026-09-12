@@ -23,6 +23,7 @@
     },
     "admin_index": {
       ".read": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'",
+      ".write": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'",
       "$uid": {
         ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'leonardobrunotlc@gmail.com')",
         "email": {

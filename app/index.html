@@ -5383,8 +5383,11 @@ async function adminReconstruirIndice(){
     const indice={};
     uids.forEach(uid=>{
       const d=(todas[uid]&&todas[uid].vdn_v1)||{};
-      indice[uid]={email:d.accountEmail||'',plan:d.plan||'trial',
-                   planType:d.planType||'',lastPaymentAt:d.lastPaymentAt||''};
+      // Corta no limite que a regra do admin_index aceita: um campo fora do tamanho
+      // reprovaria o .validate e derrubaria a reconstrução INTEIRA por causa de uma conta.
+      const corta=(v,n)=>String(v==null?'':v).slice(0,n);
+      indice[uid]={email:corta(d.accountEmail,120),plan:corta(d.plan||'trial',20),
+                   planType:corta(d.planType,20),lastPaymentAt:corta(d.lastPaymentAt,10)};
     });
     // set, e não update: conta excluída fora do app some da vitrine junto.
     await firebaseDB.ref(ADMIN_INDEX).set(indice);
