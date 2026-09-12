@@ -166,13 +166,36 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .exam-wrap{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
 .exam-wrap label{font-size:9px;color:rgba(255,255,255,0.7);font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;}
 .exam-wrap input[type=date]{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:6px 10px;border-radius:10px;font-size:12px;font-weight:700;width:100%;text-align:center;}
-.days-pill{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:10px 14px;text-align:center;margin-bottom:8px;}
-.days-pill .d-num{font-size:26px;font-weight:900;color:#fff;line-height:1;}
+.days-pill{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:10px 14px;text-align:center;margin-bottom:8px;transition:background 0.3s,border-color 0.3s;}
+.days-pill .d-num{font-size:26px;font-weight:900;color:#fff;line-height:1;font-variant-numeric:tabular-nums;}
 .days-pill .d-lbl{font-size:8px;letter-spacing:1px;color:rgba(255,255,255,0.65);margin-top:2px;}
+/* A data por extenso embaixo do número: "50" sozinho não diz quando é. */
+.days-pill .d-when{font-size:8.5px;color:rgba(255,255,255,0.5);margin-top:4px;letter-spacing:.4px;}
+/* A contagem muda de cor conforme a prova chega. Reta final não pode ter a mesma
+   cara de "faltam 300 dias" — a urgência é informação, não enfeite. */
+.days-pill[data-urg="perto"]{border-color:rgba(251,191,36,0.55);}
+.days-pill[data-urg="perto"] .d-num{color:#fcd34d;}
+.days-pill[data-urg="reta"]{background:rgba(220,38,38,0.24);border-color:rgba(248,113,113,0.55);}
+.days-pill[data-urg="reta"] .d-num{color:#fecaca;}
+.days-pill[data-urg="passou"]{background:rgba(21,128,61,0.22);border-color:rgba(74,222,128,0.45);}
 .xp-pill{background:linear-gradient(135deg,#fb923c,#f97316);border:1px solid rgba(251,146,60,0.4);border-radius:12px;padding:8px 14px;text-align:center;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 12px rgba(249,115,22,0.3);}
 .xp-pill:hover{transform:scale(1.03);box-shadow:0 6px 18px rgba(249,115,22,0.4);}
-.xp-pill .x-num{font-size:20px;font-weight:900;color:#fff;line-height:1;}
+.xp-pill .x-num{font-size:20px;font-weight:900;color:#fff;line-height:1;font-variant-numeric:tabular-nums;}
 .xp-pill .x-lbl{font-size:8px;letter-spacing:1px;color:rgba(255,255,255,0.85);}
+/* xpLevelInfo() já calculava pct e xpFalta — só não estavam aparecendo em lugar
+   nenhum. Ver o quanto falta pro próximo nível é o dado mais motivador que o app
+   tem, e ele estava sendo jogado fora a cada render. */
+.xp-pill .xp-bar{height:4px;background:rgba(0,0,0,0.28);border-radius:20px;margin-top:7px;overflow:hidden;}
+.xp-pill .xp-bar-fill{height:100%;background:rgba(255,255,255,0.92);border-radius:20px;transition:width 0.45s ease;}
+.xp-pill .x-next{font-size:8px;color:rgba(255,255,255,0.8);margin-top:4px;letter-spacing:.3px;}
+/* Separadores da navegação: nove botões numa lista plana viram um muro. Os rótulos
+   agrupam por quando cada coisa é usada, e de quebra ocupam o vão que sobrava. */
+.nav-group{
+  font-size:8px;font-weight:900;letter-spacing:1.6px;text-transform:uppercase;
+  color:rgba(255,255,255,0.38);padding:14px 14px 5px;display:flex;align-items:center;gap:8px;
+}
+.nav-group::after{content:"";flex:1;height:1px;background:rgba(255,255,255,0.12);}
+.nav-group:first-child{padding-top:2px;}
 
 /* Nav no sidebar */
 nav{
@@ -1970,18 +1993,22 @@ nav{
       <label><i class="fa fa-calendar-alt"></i> Data da Prova</label>
       <input type="date" id="exam-date">
     </div>
-    <div class="days-pill">
+    <div class="days-pill" id="days-pill">
       <div class="d-num" id="days-left">—</div>
       <div class="d-lbl">DIAS RESTANTES</div>
+      <div class="d-when" id="days-when"></div>
     </div>
-    <div class="xp-pill" id="xp-pill-btn">
+    <div class="xp-pill" id="xp-pill-btn" title="Ver a trilha de níveis">
       <div class="x-num" id="total-xp">0</div>
       <div class="x-lbl" id="xp-level-lbl">🌱 NÍVEL 1 · APRENDIZ DO VALE</div>
+      <div class="xp-bar"><div class="xp-bar-fill" id="xp-bar-fill" style="width:0%"></div></div>
+      <div class="x-next" id="xp-next-lbl"></div>
     </div>
   </div>
 
   <!-- Nav vertical -->
   <nav>
+    <div class="nav-group">Do dia</div>
     <button class="nav-btn active" id="nav-dashboard">
       <span class="nav-icon">🏆</span><span class="nav-label">PAINEL DO HERÓI</span>
     </button>
@@ -1989,6 +2016,7 @@ nav{
       <span class="nav-icon">👥</span><span class="nav-label">SALA DE ESTUDO</span>
       <span id="nav-sala-dot" title="Você está visível na sala agora" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(21,128,61,.22);margin-left:auto;flex-shrink:0"></span>
     </button>
+    <div class="nav-group">Estudo</div>
     <button class="nav-btn" id="nav-map">
       <span class="nav-icon">🗺️</span><span class="nav-label">MAPA DOS REINOS</span>
     </button>
@@ -2002,6 +2030,7 @@ nav{
       <span class="nav-icon">🏛️</span><span class="nav-label">SIMULADO GERAL</span>
       <span class="nav-badge" id="erros-badge" style="display:none">0</span>
     </button>
+    <div class="nav-group">Acompanhar</div>
     <button class="nav-btn" id="nav-editais">
       <span class="nav-icon">📋</span><span class="nav-label">EDITAIS</span>
       <span class="nav-badge" id="editais-badge" style="display:none">0</span>
@@ -4746,10 +4775,30 @@ function renderHeader(){
 function saveExamDate(){db.examDate=document.getElementById('exam-date').value;saveDB();updateDaysLeft();}
 function updateDaysLeft(){
   const el=document.getElementById('days-left');
-  if(!db.examDate){el.textContent='—';return;}
+  if(!el)return;
+  const pill=document.getElementById('days-pill');
+  const when=document.getElementById('days-when');
+  if(!db.examDate){
+    el.textContent='—';
+    if(when)when.textContent='';
+    if(pill)pill.removeAttribute('data-urg');
+    return;
+  }
   const d=daysDiff(todayStr(),db.examDate);
   el.textContent=d>=0?d:'✓';
-  el.style.opacity=d<10?'1':'1';
+  const lbl=document.querySelector('#days-pill .d-lbl');
+  if(lbl)lbl.textContent=d<0?'PROVA REALIZADA':(d===1?'DIA RESTANTE':'DIAS RESTANTES');
+  if(when){
+    // Data por extenso, no fuso local: "50" sozinho não diz quando é.
+    const dt=new Date(db.examDate+'T00:00:00');
+    when.textContent=isNaN(dt)?'':dt.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
+  }
+  if(pill){
+    if(d<0)pill.setAttribute('data-urg','passou');
+    else if(d<=30)pill.setAttribute('data-urg','reta');
+    else if(d<=60)pill.setAttribute('data-urg','perto');
+    else pill.removeAttribute('data-urg');
+  }
 }
 function isAfterExam(dateStr){return db.examDate&&dateStr>db.examDate;}
 
@@ -12014,9 +12063,17 @@ function xpLevelInfo(xp){
 function updateXPDisplay(){
   const info=xpLevelInfo(db.xp||0);
   const numEl=document.getElementById('total-xp');
-  if(numEl)numEl.textContent=(db.xp||0).toLocaleString();
+  if(numEl)numEl.textContent=(db.xp||0).toLocaleString('pt-BR');
   const lvlEl=document.getElementById('xp-level-lbl');
   if(lvlEl)lvlEl.textContent=`${info.icon} NÍVEL ${info.level} · ${info.titulo.toUpperCase()}`;
+  // pct e xpFalta ja vinham de xpLevelInfo e eram descartados: a barra so mostra
+  // o que a funcao ja calculava.
+  const bar=document.getElementById('xp-bar-fill');
+  if(bar)bar.style.width=info.pct+'%';
+  const next=document.getElementById('xp-next-lbl');
+  if(next)next.textContent=info.xpFalta>0
+    ?`faltam ${info.xpFalta.toLocaleString('pt-BR')} XP pro nível ${info.level+1}`
+    :'nível máximo';
 }
 function gainXP(n){
   if(!n)return;
