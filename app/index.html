@@ -15328,7 +15328,10 @@ function renderFCMain(){
             <div style="font-size:20px;font-weight:900;color:var(--text)">🃏 Seus Flashcards</div>
             <div style="font-size:12px;color:var(--muted);margin-top:4px">${total} cards no total — selecione um chefão para estudar ou criar cards</div>
           </div>
-          <button class="btn btn-primary" onclick="fcStudyAllKingdoms()" ${total?'':'disabled'} title="Junta os cards de todos os reinos numa fila só de estudo"><i class="fa fa-globe"></i> Estudar tudo</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-cyan" onclick="fcOverviewClick('new')" ${novos.length?'':'disabled'} title="Só os cards que você ainda não estudou, de todas as matérias, embaralhados — sem revisão misturada"><i class="fa fa-wand-sparkles"></i> Só os novos${novos.length?` (${novos.length})`:''}</button>
+            <button class="btn btn-primary" onclick="fcStudyAllKingdoms()" ${total?'':'disabled'} title="Junta os cards de todos os reinos numa fila só de estudo"><i class="fa fa-globe"></i> Estudar tudo</button>
+          </div>
         </div>
         ${filterKingdom?`
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;background:${filterKingdom.color}14;border:1.5px solid ${filterKingdom.color}40;border-radius:12px;padding:8px 14px">
@@ -15348,6 +15351,7 @@ function renderFCMain(){
             <span class="stat-icon">✨</span>
             <div class="stat-val" style="color:var(--accent)">${novos.length}</div>
             <div class="stat-lbl" style="color:var(--accent)">Novos</div>
+            <div style="font-size:9px;color:var(--muted);margin-top:3px">clique pra estudar</div>
           </div>
           <div class="stat-card" style="cursor:pointer;background:rgba(22,163,74,0.04);border-color:rgba(22,163,74,0.15)" onclick="fcOverviewClick('ok')">
             <span class="stat-icon">✅</span>
@@ -15821,6 +15825,10 @@ function fcStudyHTML(cards){
   const finalCards=studyCards.length?studyCards:cards;
   if(!finalCards.length)return`<div class="empty"><i class="fa fa-ghost"></i><p>Nenhum card para estudar.</p></div>`;
   const sorted=[...finalCards].sort((a,b)=>{
+    // Com um filtro de categoria ativo, a fila é SÓ sorteio. Ordenar por status aqui
+    // não teria efeito (todos têm o mesmo) e, pior, se tivesse, colocaria revisão na
+    // frente — que é justamente o que o modo "cards novos" não pode fazer.
+    if(fcStudyFilter&&fcStudyFilter!=='all')return fcShuffleKeyFor(a.id)-fcShuffleKeyFor(b.id);
     const o={due:0,new:1,7:2,14:3,21:4,41:5};
     const porStatus=(o[fcStatus(a)]||0)-(o[fcStatus(b)]||0);
     // Dentro do mesmo status, embaralhado (chave fixa pra sessão atual) em vez de sempre
@@ -16109,25 +16117,28 @@ function fcBossStudy(tipo){
   renderFCMain();
 }
 
+// Clicar num número do resumo geral ("Novos", "Revisar agora", "Em dia") estuda
+// TODOS os cards daquela categoria, de todos os reinos, embaralhados.
+// Antes isto escolhia o chefão com MAIS cards do tipo e abria só ele: quem tinha
+// cards novos espalhados por dez matérias caía numa só, e as outras nove não
+// apareciam nunca. Além de não ser o que o número prometia, estudar tudo de uma
+// matéria em bloco é pior que intercalar matérias na mesma sessão.
 function fcOverviewClick(tipo){
-  // No overview geral: encontrar o chefão com mais cards do tipo e abrir
   if(!db.flashcards)return;
-  let melhor=null,melhorCount=0;
-  db.kingdoms.forEach(k=>{
-    (db.topics[k.id]||[]).forEach(t=>{
-      const cards=getAllFCForTopic(t.id);
-      let count=0;
-      if(tipo==='due')count=cards.filter(c=>fcStatus(c)==='due').length;
-      else if(tipo==='new')count=cards.filter(c=>fcStatus(c)==='new').length;
-      else if(tipo==='ok')count=cards.filter(c=>!['due','new'].includes(fcStatus(c))).length;
-      if(count>melhorCount){melhorCount=count;melhor={t,k};}
-    });
-  });
-  if(!melhor){toast('Nenhum card nessa categoria','var(--muted)');return;}
-  const {t,k}=melhor;
-  fcSelectedMb={id:t.id,name:t.name,icon:t.icon||'⚔️',kIcon:k.icon||'🏰',kingdom:k.name,kColor:k.color};
+  const todos=getAllFCEverywhere();
+  const daCategoria=todos.filter(c=>tipo==='ok'
+    ?!['due','new'].includes(fcStatus(c))
+    :fcStatus(c)===tipo);
+  if(!daCategoria.length){toast('Nenhum card nessa categoria','var(--muted)');return;}
+  const nome={due:'Revisar agora',new:'Cards novos',ok:'Em dia'}[tipo]||'Todos';
+  const icone={due:'🔥',new:'✨',ok:'✅'}[tipo]||'🌍';
+  fcSelectedMb={id:'__ALL__',name:nome,icon:icone,kIcon:'',
+                kingdom:`${daCategoria.length} card${daCategoria.length!==1?'s':''} de todos os reinos, embaralhados`};
   fcStudyFilter=tipo;
-  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcShuffleSession();
+  // Sem isto, um filtro de revisão deixado ligado antes (ex: "vencidos") se somaria ao
+  // filtro da categoria e a fila vinha vazia, sem explicação nenhuma na tela.
+  fcRevFilter='all';
+  fcMode='study';fcStudyIdx=0;fcStudyFlipped=false;fcScoreRight=0;fcScoreWrong=0;fcShuffleSession();
   renderFCMbList();renderFCMain();
 }
 
