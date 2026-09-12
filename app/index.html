@@ -16150,6 +16150,15 @@ function fcStudyHTML(cards){
   // Prévia dos intervalos de cada botão ANTES de escolher — mesma ideia do Anki (again/hard/good/easy
   // mostram quanto tempo falta ANTES de você clicar), calculada em cima do sm2 atual desse card.
   const previewFor=(conf)=>fsrsPrevia(c,conf);
+  // "Não lembrei" e "Difícil" mostravam os dois "1d", porque a fórmula devolve 0,4 e 1,18
+  // dia e ambos arredondam pra 1 — o rótulo escondia que o comportamento é bem diferente.
+  // O que ACONTECE ao errar é o card voltar nesta sessão; a data em dias só vale depois
+  // que você acertar. Então o botão 1 mostra os minutos, que é o que vai acontecer mesmo.
+  const previaRotulo=(conf)=>{
+    if(conf===1)return `${Math.round(FC_REAPRENDER_MS/60000)} min · nesta sessão`;
+    const d=previewFor(conf);
+    return `${d} dia${d>1?'s':''}`;
+  };
   return`
     <div class="fc-progress-bar"><div class="fc-progress-fill" style="width:${pct}%"></div></div>
     <div class="fc-study-nav">
@@ -16187,10 +16196,10 @@ function fcStudyHTML(cards){
       </div>
     </div>
     ${fcStudyFlipped?`<div class="fc-conf-row">
-      <button class="fc-conf-btn fc-conf-1" onclick="fcStudyConf('${c.id}',1)">✗ Não lembrei<br><small>→ ${previewFor(1)}d</small></button>
-      <button class="fc-conf-btn fc-conf-2" onclick="fcStudyConf('${c.id}',2)">😅 Difícil<br><small>→ ${previewFor(2)}d</small></button>
-      <button class="fc-conf-btn fc-conf-3" onclick="fcStudyConf('${c.id}',3)">😊 Lembrei<br><small>→ ${previewFor(3)}d</small></button>
-      <button class="fc-conf-btn fc-conf-4" onclick="fcStudyConf('${c.id}',4)">⭐ Fácil!<br><small>→ ${previewFor(4)}d</small></button>
+      <button class="fc-conf-btn fc-conf-1" onclick="fcStudyConf('${c.id}',1)">✗ Não lembrei<br><small>→ ${previaRotulo(1)}</small></button>
+      <button class="fc-conf-btn fc-conf-2" onclick="fcStudyConf('${c.id}',2)">😅 Difícil<br><small>→ ${previaRotulo(2)}</small></button>
+      <button class="fc-conf-btn fc-conf-3" onclick="fcStudyConf('${c.id}',3)">😊 Lembrei<br><small>→ ${previaRotulo(3)}</small></button>
+      <button class="fc-conf-btn fc-conf-4" onclick="fcStudyConf('${c.id}',4)">⭐ Fácil!<br><small>→ ${previaRotulo(4)}</small></button>
       ${st==='dominado'
         ?`<button class="fc-conf-btn fc-conf-dom" onclick="fcDestravarDominado('${c.id}')">↩️ Devolver<br><small>volta pra revisão</small></button>`
         :`<button class="fc-conf-btn fc-conf-dom" onclick="fcStudyDominar('${c.id}')" title="Tira este card das revisões. Nada é apagado — dá pra rever os dominados quando quiser.">🏆 Dominado<br><small>não repete mais</small></button>`}
