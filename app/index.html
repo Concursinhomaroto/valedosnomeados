@@ -4433,6 +4433,12 @@ const BKP_META='vdn_v1_bkpMeta'; // {a:{data,ts}, b:{data,ts}} — que dia cada 
 // Caminhos dos modelos anteriores (as 30 cópias datadas, e a cópia única que veio depois).
 // São apagados na primeira vez que o backup novo roda; ver maybeBackupDB.
 const BKP_LEGADO=['vdn_v1_backups','vdn_v1_backupAtual','vdn_v1_backupSig','vdn_v1_backupMeta'];
+// Atalho local que evita ir ao Firebase a cada save só pra descobrir que o backup de hoje
+// já foi feito. O nome carrega a versão do modelo de propósito: quem já tinha rodado o
+// backup ANTIGO hoje tinha a chave velha marcada com a data de hoje, e o modelo novo
+// ficaria o dia inteiro achando que já tinha gravado — o selo diria "sem backup" até
+// amanhã. Trocar o nome faz a primeira gravação do modelo novo acontecer na hora.
+const BKP_LOCAL_DIA='vdn_bkp2_last_date';
 let backupCheckInFlight=false;
 let backupFailedThisSession=false; // evita bombardear o Firebase de novo a cada save se já falhou uma vez nesta sessão (ex: regra de permissão faltando) — tenta de novo na próxima sessão/dia
 
@@ -4520,7 +4526,7 @@ function maybeBackupDB(){
   // chama saveDB() várias vezes por sessão; só precisamos tocar o Firebase na primeira
   // vez que percebemos que o dia mudou).
   try{
-    if(localStorage.getItem('vdn_backup_last_date')===today)return;
+    if(localStorage.getItem(BKP_LOCAL_DIA)===today)return;
   }catch(e){}
   backupCheckInFlight=true;
   const metaRef=userRef(BKP_META),legadoRef=userRef('vdn_v1_backupMeta');
@@ -4531,7 +4537,7 @@ function maybeBackupDB(){
     if(jaHoje){
       // Outro dispositivo/aba desta mesma conta já gravou o backup de hoje — só evita
       // ficar checando de novo a cada save nesta sessão.
-      try{localStorage.setItem('vdn_backup_last_date',today);}catch(e){}
+      try{localStorage.setItem(BKP_LOCAL_DIA,today);}catch(e){}
       setBackupEstado('ok',today,meta[jaHoje].ts||0);
       backupCheckInFlight=false;
       return;
@@ -4545,7 +4551,7 @@ function maybeBackupDB(){
       // a mudança. Depois o nó de meta antigo não existe mais e isso não roda de novo.
       if(snapLegado.val())BKP_LEGADO.forEach(caminho=>{updates[caminho]=null;});
       return userRef('').update(updates).then(()=>{
-        try{localStorage.setItem('vdn_backup_last_date',today);}catch(e){}
+        try{localStorage.setItem(BKP_LOCAL_DIA,today);}catch(e){}
         setBackupEstado('ok',today,Date.now());
         backupCheckInFlight=false;
       }).catch(e=>{
@@ -4873,7 +4879,7 @@ function abrirDetalhesBackup(){
 // funcionando?" seja uma coisa que se testa em dois cliques, não uma coisa em que se
 // acredita.
 function forcarBackupAgora(){
-  try{localStorage.removeItem('vdn_backup_last_date');}catch(e){}
+  try{localStorage.removeItem(BKP_LOCAL_DIA);}catch(e){}
   backupFailedThisSession=false;
   backupCheckInFlight=false;
   setBackupEstado('checando');
