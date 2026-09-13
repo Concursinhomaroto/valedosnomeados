@@ -4733,7 +4733,11 @@ function exportarModeloEstudo(){
   });
   // Flashcards: só o conteúdo. Mesmo recorte que fcExportDeck já usa.
   const flashcards=Object.values(db.flashcards||{}).map(c=>({
-    mbId:c.mbId,pergunta:c.pergunta,resposta:c.resposta,
+    // subId/subNome junto: sem eles, TODO card amarrado a um miniboss perdia o vínculo
+    // ao passar pra outra conta — inclusive os gerados por miniboss, que são os únicos
+    // que já nascem com ele.
+    mbId:c.mbId,...(c.subId?{subId:c.subId,subNome:c.subNome||''}:{}),
+    pergunta:c.pergunta,resposta:c.resposta,
     tags:c.tags||'',dificuldade:c.dificuldade||2
   }));
   const editais=(db.editais||[]).map(e=>({
@@ -4828,7 +4832,8 @@ function importarModeloArquivo(input){
       if(jaTem.has(chave))return;
       jaTem.add(chave);
       const id='fc_'+genId();
-      db.flashcards[id]={id,mbId:c.mbId,pergunta:c.pergunta,resposta:c.resposta,
+      db.flashcards[id]={id,mbId:c.mbId,...(c.subId?{subId:c.subId,subNome:c.subNome||''}:{}),
+        pergunta:c.pergunta,resposta:c.resposta,
         tags:c.tags||'',dificuldade:c.dificuldade||2,
         acertos:0,erros:0,lastConf:0,criacao:new Date().toISOString(),ultimaRevisao:null};
       nF++;
@@ -8760,7 +8765,13 @@ function criarFlashcardDeQuestaoErrada(subId,q){
     ?`Gabarito: ${q.correta==='C'?'CERTO':'ERRADO'}${q.explicacao?'\n\n'+q.explicacao:''}`
     :`Resposta certa: ${q.correta}) ${altCorreta?altCorreta.texto:''}${q.explicacao?'\n\n'+q.explicacao:''}`;
   const id=genId();
-  db.flashcards[id]={id,mbId:topicId,pergunta,resposta,tags:'banco-de-erros',dificuldade:2,acertos:0,erros:0,lastConf:0,criacao:new Date().toISOString(),ultimaRevisao:null};
+  // subId/subNome vinham no parâmetro e eram jogados fora — e este é justamente o card
+  // mais valioso pra medir retenção por assunto: ele nasce de uma questão que você
+  // errou num assunto específico.
+  const subErro=simFindSub(subId);
+  db.flashcards[id]={id,mbId:topicId,subId,...(subErro?{subNome:subErro.name}:{}),
+    pergunta,resposta,tags:'banco-de-erros',dificuldade:2,acertos:0,erros:0,lastConf:0,
+    criacao:new Date().toISOString(),ultimaRevisao:null};
 }
 // Num item de duas alternativas, 50% e o resultado do chute. Somar certo/errado
 // e multipla escolha no mesmo balde compara coisas diferentes: 70% num
@@ -11718,7 +11729,7 @@ function computeStudyRecommendations(){
           tipo='revisao';
           reason=atraso>0?`venceu há ${atraso}d`:'na vez hoje';
           reasonIcon='🔁';
-          reasonBonus=300+Math.min(500,Math.round(revUrgencia(s)));
+          reasonBonus=300+Math.min(500,Math.round(revUrgencia(s,t.id)));
         }else if(notStudied){
           tipo='novo';reason='nunca estudado';reasonIcon='✨';reasonBonus=200;
         }else{
@@ -12046,6 +12057,50 @@ function revDominados(){
   })));
   return out;
 }
+
+// ===== RETENÇÃO MEDIDA DOS FLASHCARDS =====
+// O FSRS já calcula, por card, a chance de você lembrar dele AGORA (R). Somando os cards
+// de um assunto dá pra saber se ele está vivo ou escorregando — medido, não declarado.
+// O problema: o baralho é do CHEFÃO, e só 24% dos cards sabem de qual miniboss são. Em
+// vez de esperar a migração, o índice guarda as duas granularidades: usa a do assunto
+// quando há cards suficientes com vínculo, e cai pra do chefão quando não há. Sinal mais
+// grosso, mas medido e disponível pra 100% dos cards hoje.
+const REV_RET_MIN_SUB=3;     // menos que isso não é média de assunto
+const REV_RET_MIN_CHEFE=5;
+let revRetCache=null,revRetCacheKey='';
+function revRetencaoCard(c){
+  if(!c||!c.ultimaRevisao)return null;         // nunca revisado: sem medição
+  const st=fsrsEstado(c);
+  if(!st||!(st.S>0))return null;
+  const t=Math.max(0,daysDiff(c.ultimaRevisao,todayStr()));
+  return fsrsR(t,st.S);
+}
+// Índice montado de uma vez. Sem ele seriam 276 assuntos x 4870 cards a cada render.
+// A chave inclui lastModified, então qualquer save (inclusive responder um card)
+// reconstrói — e nada mais reconstrói à toa.
+function revRetencaoIndice(){
+  const key=todayStr()+'|'+(db.lastModified||0);
+  if(revRetCache&&revRetCacheKey===key)return revRetCache;
+  const porSub={},porChefe={};
+  Object.values(db.flashcards||{}).forEach(c=>{
+    const r=revRetencaoCard(c);
+    if(r===null)return;
+    if(c.subId){const a=porSub[c.subId]=porSub[c.subId]||{s:0,n:0};a.s+=r;a.n++;}
+    if(c.mbId){const a=porChefe[c.mbId]=porChefe[c.mbId]||{s:0,n:0};a.s+=r;a.n++;}
+  });
+  revRetCache={porSub,porChefe};revRetCacheKey=key;
+  return revRetCache;
+}
+// {r, n, fonte:'assunto'|'chefao'} ou null quando não há card revisado o bastante.
+function revRetencao(sub,topicId){
+  const ix=revRetencaoIndice();
+  const a=ix.porSub[sub.id];
+  if(a&&a.n>=REV_RET_MIN_SUB)return {r:a.s/a.n,n:a.n,fonte:'assunto'};
+  const c=topicId&&ix.porChefe[topicId];
+  if(c&&c.n>=REV_RET_MIN_CHEFE)return {r:c.s/c.n,n:c.n,fonte:'chefao'};
+  return null;
+}
+
 function revOrcamento(){return Math.max(10,+db.revOrcamentoMin||REV_ORCAMENTO_PADRAO);}
 
 // ===== QUANTO CUSTA UMA REVISÃO, MEDIDO =====
@@ -12110,8 +12165,15 @@ function revAcerto(sub){
 }
 // Peso do assunto na fila. Nunca zero: multiplicado pelos dias parados, um peso baixo
 // só estica o retorno, não cancela.
-function revPeso(sub){
+function revPeso(sub,topicId){
   let p=Math.max(REV_PISO,1-0.2*revPassadasBoas(sub));
+  // Retenção baixa puxa o assunto pra cima da fila; cards em dia deixam ele descer.
+  // A do chefão pesa menos que a do assunto, porque é aproximação.
+  const ret=revRetencao(sub,topicId);
+  if(ret){
+    const forca=ret.fonte==='assunto'?1:0.6;
+    p*=Math.max(0.5,1+forca*(0.85-ret.r));
+  }
   const ac=revAcerto(sub);
   if(ac!==null){
     // Amostra pequena não pode sacudir a fila: 5 questões respondidas quase não mexem,
@@ -12139,9 +12201,9 @@ function revDiasNaVez(sub){
 // nem prazo tinha. O tempo parado continua contando — é ele que decide entre dois
 // vencidos, e é por isso que um assunto de 49 dias sem olhar pode vir antes de um que
 // venceu há 3: são coisas diferentes e as duas aparecem no item.
-function revUrgencia(sub){
+function revUrgencia(sub,topicId){
   const atraso=revDiasNaVez(sub)||0;
-  return (revDiasParado(sub)+atraso*5)*revPeso(sub);
+  return (revDiasParado(sub)+atraso*5)*revPeso(sub,topicId);
 }
 
 // Todo assunto já estudado entra. Quem foi revisado HOJE sai — senão a mesma coisa
@@ -12161,8 +12223,8 @@ function revCandidatos(){
           .map(r=>r.date).sort()[0];
         if(pend&&pend>hoje)return;
         out.push({sub:s,topic:t,kingdom:k,
-                  dias:revDiasParado(s),peso:revPeso(s),atraso:revDiasNaVez(s),
-                  acerto:revAcerto(s),urg:revUrgencia(s)});
+                  dias:revDiasParado(s),peso:revPeso(s,t.id),atraso:revDiasNaVez(s),
+                  acerto:revAcerto(s),retencao:revRetencao(s,t.id),urg:revUrgencia(s,t.id)});
       });
     });
   });
@@ -12275,6 +12337,14 @@ function renderFilaRevisao(container){
     const selo=ac===null
       ?'<span style="font-size:10px;font-weight:800;padding:4px 9px;border-radius:999px;color:var(--orange-t);background:rgba(194,65,12,.10);border:1px dashed var(--orange-t);white-space:nowrap">sem medição</span>'
       :`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px"><b style="font-size:14px;font-weight:900;color:${corAc};font-variant-numeric:tabular-nums">${Math.round(ac*100)}%</b><span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">questões</span><span style="font-size:9px;color:var(--muted);font-weight:700">${it.sub.simStats.questoesTotal} resp.</span></div>`;
+    const rt=it.retencao;
+    const corRt=rt?(rt.r<0.6?'var(--red-t)':rt.r<0.8?'var(--orange-t)':'var(--green-t)'):'var(--muted)';
+    const seloRet=rt
+      ?`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px" title="${rt.fonte==='assunto'?`Média dos ${rt.n} flashcards deste assunto.`:`Ainda não há flashcards amarrados a este assunto — vale a média dos ${rt.n} cards do chefão inteiro.`}">
+          <b style="font-size:14px;font-weight:900;color:${corRt};font-variant-numeric:tabular-nums">${Math.round(rt.r*100)}%</b>
+          <span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">retenção</span>
+          <span style="font-size:9px;color:var(--muted);font-weight:700">${rt.fonte==='assunto'?'do assunto':'do chefão'}</span></div>`
+      :'';
     const risco=ac===null?'var(--orange)':ac<0.6?'var(--red)':ac<0.78?'var(--orange)':'var(--green)';
     return `<div class="rev-item" style="border-left:5px solid ${risco}">
       <span style="font-size:20px">${it.kingdom.icon}</span>
@@ -12284,6 +12354,7 @@ function renderFilaRevisao(container){
           it.atraso?` · <b style="color:var(--red-t)">prazo venceu há ${it.atraso} dia${it.atraso===1?'':'s'}</b>`
                    :it.atraso===0?' · <b style="color:var(--orange-t)">na vez hoje</b>':''}</div>
       </div>
+      ${seloRet}
       ${selo}
       <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
         <button class="btn btn-xs btn-primary" onclick="revAbrirTela('${it.sub.id}')"><i class="fa fa-book-open"></i> Revisar</button>
