@@ -1354,12 +1354,21 @@ nav{
    colunas espremidas. Classe própria em vez de mexer no .modal-box, que é usado por
    uns trinta modais que continuam bem a 520. */
 #modal.modal-wide .modal-box{max-width:1040px;}
-.revtela-corpo{display:grid;grid-template-columns:1.25fr 1fr;gap:18px;align-items:start;}
-@media(max-width:760px){.revtela-corpo{grid-template-columns:1fr;}}
-.revtela-col{min-width:0;}
+.revtela-corpo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:22px;align-items:start;}
+@media(max-width:760px){.revtela-corpo{grid-template-columns:1fr;gap:16px;}}
+.revtela-col{min-width:0;display:flex;flex-direction:column;}
+/* O resumo é lido, o fluxograma é olhado: as duas colunas rolam na mesma altura pra
+   nenhuma das duas esticar o modal sozinha. */
+.revtela-scroll{max-height:52vh;overflow-y:auto;overflow-x:auto;padding-right:8px;}
+.revtela-scroll::-webkit-scrollbar{width:4px;height:4px;}
+.revtela-scroll::-webkit-scrollbar-thumb{background:var(--accent);border-radius:2px;}
+.revtela-corpo .resumo-body{font-size:13px;line-height:1.65;}
+.revtela-corpo .resumo-body .resumo-h{font-size:11px;margin:16px 0 6px;}
+.revtela-corpo .resumo-body .resumo-h:first-child{margin-top:0;}
+/* Sem altura mínima o gráfico fica achatado num fiapo quando tem poucos nós. */
+.revtela-corpo .fluxo-chart-viewport{min-height:180px;}
 .revtela-rot{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
   color:var(--muted);margin-bottom:9px;display:flex;align-items:center;gap:6px;}
-.revtela-scroll{max-height:46vh;overflow-y:auto;padding-right:6px;}
 .revtela-vazio{border:1.5px dashed var(--border);border-radius:12px;padding:16px;
   display:flex;flex-direction:column;gap:10px;align-items:flex-start;background:var(--panel2);}
 .revtela-vazio p{font-size:12.5px;color:var(--text2);line-height:1.5;}
@@ -2175,6 +2184,7 @@ nav{
     <button class="chip" onclick="filterRevs('overdue',this)">🔴 Atrasadas</button>
     <button class="chip" onclick="filterRevs('today',this)">🔥 Hoje</button>
     <button class="chip" onclick="filterRevs('week',this)">📅 Próximos 7 dias</button>
+    <button class="chip" onclick="filterRevs('dominados',this)">🏆 Dominados</button>
     <button class="chip" onclick="filterRevs('done',this)">✅ Concluídas</button>
     <button class="chip" onclick="filterRevs('all',this)">📋 Todas</button>
   </div>
@@ -11396,7 +11406,11 @@ function completeRev(subId,idx,mode,quality){
     // quantos cabem por dia), esticado pelo peso, então o que você domina demora mais
     // mas nunca some. Ver REV_PISO.
     sub.revMastered=false;
-    const prox=revProxIntervalo(sub,quality);
+    // Prazo que a pessoa escolheu ganha do calculado — menos quando ela acabou de dizer
+    // que esqueceu tudo, que tem teto de uma semana de qualquer jeito.
+    let prox=revPrazoEscolhido||revProxIntervalo(sub,quality);
+    if(quality<3)prox=Math.min(prox,7);
+    revPrazoEscolhido=null;
     db.revisions[subId].push({date:addDays(todayStr(),prox),completed:false});
     toast(quality<3
       ?`😵 Anotado: você esqueceu esse. Volta em ${prox} dia${prox>1?'s':''} — e sobe na fila até lá.`
@@ -11961,7 +11975,51 @@ const REV_ORCAMENTO_PADRAO=60;  // minutos por dia reservados a revisão de assu
 // — o jeito mais certo de perder justamente aquele em que você mais investiu. Aqui o que
 // você domina estica (até ~4x o ciclo), mas sempre volta.
 const REV_PISO=0.25;
+// Escada de prazos. O intervalo derivado do ciclo era invisível e imprevisível — você
+// respondia e recebia um número que não conseguia antecipar. Aqui o prazo é uma escada
+// fixa que avança a cada revisão boa, e fica à vista antes de você responder, num seletor
+// que dá pra mudar. Previsível por padrão, seu quando você quiser.
+const REV_ESCADA_PADRAO=[7,14,21,30,45,60,90];
+function revEscada(){
+  const e=db.revEscada;
+  return (Array.isArray(e)&&e.length)?e.slice().sort((a,b)=>a-b):REV_ESCADA_PADRAO;
+}
+// Degrau sugerido: uma revisão boa avança um, uma ruim volta um.
+function revEscadaSugerida(sub){
+  const esc=revEscada();
+  const i=Math.min(esc.length-1,Math.max(0,revPassadasBoas(sub)));
+  return esc[i];
+}
 
+// Reino fora da revisão: História continua no mapa, continua estudável, continua com
+// flashcard — só não disputa as horas de revisão enquanto não estiver no seu edital.
+// Guardado por id num mapa próprio pra não tocar no objeto do reino (que vai e volta
+// pelo Modelo de Estudo).
+function revReinoFora(kid){return !!(db.revReinosFora&&db.revReinosFora[kid]);}
+function revToggleReino(kid){
+  if(!db.revReinosFora)db.revReinosFora={};
+  if(db.revReinosFora[kid])delete db.revReinosFora[kid]; else db.revReinosFora[kid]=true;
+  saveDB();renderRevisions();
+}
+// "Dominado" no assunto, igual ao do flashcard: decisão SUA, visível e reversível na aba
+// Dominados. Não confundir com o antigo revMastered, que era o algoritmo tirando o
+// assunto da fila sozinho, sem avisar e sem volta.
+function revDominar(subId,valor){
+  const sub=simFindSub(subId);
+  if(!sub)return;
+  sub.revDominado=valor!==false;
+  saveDB();renderRevisions();
+  toast(sub.revDominado?`🏆 "${sub.name}" marcado como dominado — sai da fila de revisão.`
+                       :`↩ "${sub.name}" voltou pra fila de revisão.`,
+        sub.revDominado?'var(--gold)':'var(--accent)');
+}
+function revDominados(){
+  const out=[];
+  db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>(t.subtopics||[]).forEach(s=>{
+    if(s.revDominado)out.push({sub:s,topic:t,kingdom:k});
+  })));
+  return out;
+}
 function revOrcamento(){return Math.max(10,+db.revOrcamentoMin||REV_ORCAMENTO_PADRAO);}
 function revCusto(){return Math.max(5,+db.revCustoMin||REV_CUSTO_PADRAO);}
 function revPorDia(){return Math.max(1,Math.floor(revOrcamento()/revCusto()));}
@@ -12018,13 +12076,20 @@ function revUrgencia(sub){return revDiasParado(sub)*revPeso(sub);}
 
 // Todo assunto já estudado entra. Quem foi revisado HOJE sai — senão a mesma coisa
 // voltaria no topo logo depois de você concluir.
+// Quem entra na fila. A DATA agendada decide QUANDO o assunto volta a ficar elegível —
+// é isso que faz o prazo que você escolheu valer de verdade. A urgência decide só a ORDEM
+// entre os que já estão elegíveis. Nada aqui vira "atrasado": ou está na vez, ou não está.
 function revCandidatos(){
   const hoje=todayStr(),out=[];
   db.kingdoms.forEach(k=>{
+    if(revReinoFora(k.id))return;
     (db.topics[k.id]||[]).forEach(t=>{
       (t.subtopics||[]).forEach(s=>{
-        if(!s.studied)return;
+        if(!s.studied||s.revDominado)return;
         if(revUltimoContato(s)===hoje&&revPassadas(s)>0)return;
+        const pend=(db.revisions[s.id]||[]).filter(r=>!r.completed&&r.date&&r.date.length===10)
+          .map(r=>r.date).sort()[0];
+        if(pend&&pend>hoje)return;
         out.push({sub:s,topic:t,kingdom:k,
                   dias:revDiasParado(s),peso:revPeso(s),
                   acerto:revAcerto(s),urg:revUrgencia(s)});
@@ -12034,29 +12099,40 @@ function revCandidatos(){
   out.sort((a,b)=>b.urg-a.urg);
   return out;
 }
+// Tudo que o sistema tem que manter vivo: estudado, não dominado, de reino ligado —
+// independente de já estar na vez hoje. É esse o número que dá o ciclo. Contar só quem
+// está elegível HOJE daria um ciclo minúsculo e falso, porque a maioria está esperando a
+// data chegar.
+function revPool(){
+  const out=[];
+  db.kingdoms.forEach(k=>{
+    if(revReinoFora(k.id))return;
+    (db.topics[k.id]||[]).forEach(t=>(t.subtopics||[]).forEach(s=>{
+      if(s.studied&&!s.revDominado)out.push(s);
+    }));
+  });
+  return out;
+}
 // O estado honesto da coleção: nada aqui é promessa, é só a sua capacidade dividida.
 function revEstado(){
-  const estudados=revCandidatos().length;
+  const estudados=revPool().length;
   const porDia=revPorDia();
   const ciclo=estudados?Math.round(estudados/porDia):0;
-  return {estudados,porDia,ciclo,orcamento:revOrcamento(),custo:revCusto()};
+  return {estudados,porDia,ciclo,elegiveis:revCandidatos().length,
+          dominados:revDominados().length,orcamento:revOrcamento(),custo:revCusto()};
 }
 // Próximo intervalo quando você conclui: sai do CICLO, não de uma fórmula de memória.
 // Assunto com peso alto volta antes do ciclo médio; o que você domina volta depois.
+// Prazo sugerido, em degraus da escada — não mais uma divisão por peso, que é o que
+// tornava o número imprevisível. Degrau = quantas revisões boas o assunto já teve.
 function revProxIntervalo(sub,quality){
-  const{ciclo}=revEstado();
-  const base=ciclo>0?ciclo:30;
-  const mult=REV_MULT_NOTA[quality]||1;
-  // Piso de 2 dias, não de 1: revisar um assunto é meia hora ou mais, e refazer isso
-  // amanhã de manhã não é realista. Quem precisa de contato imediato é o flashcard,
-  // que custa 10 segundos e já volta na mesma sessão.
-  let d=Math.min(365,Math.max(2,Math.round(base/revPeso(sub)*mult)));
-  // Teto pra quem respondeu que não lembrou. Só o multiplicador não basta: numa coleção
-  // grande o ciclo é de meses, e 15% de 55 dias ainda davam 11 dias pra um assunto que
-  // você acabou de dizer que esqueceu inteiro. Esquecer tem que voltar dentro da semana,
-  // independente do tamanho da coleção.
-  if(quality<3)d=Math.min(d,7);
-  return d;
+  const esc=revEscada();
+  let i=Math.min(esc.length-1,Math.max(0,revPassadasBoas(sub)));
+  if(quality>=5)i=Math.min(esc.length-1,i+1); // sabia de cor pula um degrau
+  if(quality===3)i=Math.max(0,i-1);           // com dificuldade segura um degrau
+  let d=esc[i];
+  if(quality<3)d=Math.min(7,esc[0]);          // esqueci tudo volta pro começo da escada
+  return Math.min(365,Math.max(2,d));
 }
 function revSalvarOrcamento(min){
   db.revOrcamentoMin=Math.max(10,Math.min(480,+min||REV_ORCAMENTO_PADRAO));
@@ -12068,7 +12144,7 @@ function revBarraHTML(){
   const e=revEstado();
   const corCiclo=e.ciclo<=60?'var(--green-t)':e.ciclo<=90?'var(--orange-t)':'var(--red-t)';
   let icone,aviso;
-  if(!e.estudados){icone='📘';aviso='Nenhum assunto estudado ainda — a fila começa quando você estudar o primeiro miniboss.';}
+  if(!e.estudados){icone='📘';aviso='Nenhum assunto na fila — estude um miniboss, ou religue um reino aqui embaixo.';}
   else if(e.ciclo<=60){icone='🟢';aviso=`<b>Sustentável.</b> Nesse ritmo você aguenta até cerca de ${e.porDia*90} assuntos antes de o ciclo esticar demais.`;}
   else if(e.ciclo<=90){icone='🟡';aviso='<b>Esticando.</b> O ciclo passou de dois meses. Ainda funciona enquanto os flashcards estiverem em dia — são eles que seguram o assunto entre uma revisão e a próxima.';}
   else{icone='🔴';aviso=`<b>Você está acumulando mais rápido do que mantém.</b> Com ciclo de ${e.ciclo} dias, voltar a um assunto deixa de ser revisão e vira reestudo. Dá pra corrigir aumentando o tempo por dia, barateando a revisão, ou segurando assunto novo.`;}
@@ -12077,7 +12153,9 @@ function revBarraHTML(){
     <div style="display:flex;flex-wrap:wrap;gap:10px 26px;align-items:flex-end">
       ${mt([e.estudados,'assuntos'])}
       <div style="display:flex;flex-direction:column;gap:1px"><b style="font-size:24px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${corCiclo}">${e.ciclo||'—'}</b><span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">dias de ciclo</span></div>
+      ${mt([Math.min(e.porDia,e.elegiveis),'na vez hoje'])}
       ${mt([e.porDia,'cabem hoje'])}
+      ${e.dominados?mt([e.dominados,'dominados']):''}
       <label style="margin-left:auto;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:flex;flex-direction:column;gap:4px">tempo por dia
         <select class="inp" style="min-width:120px;font-size:12px;text-transform:none;letter-spacing:0" onchange="revSalvarOrcamento(this.value)">
           ${[30,60,90,120,180,240].map(m=>`<option value="${m}" ${revOrcamento()===m?'selected':''}>${m<60?m+' min':(m/60)+'h'}</option>`).join('')}
@@ -12085,6 +12163,13 @@ function revBarraHTML(){
       </label>
     </div>
     <div style="margin-top:12px;padding-top:11px;border-top:1px solid var(--border);font-size:12px;color:var(--text2);display:flex;gap:8px;align-items:flex-start"><span>${icone}</span><span>${aviso}</span></div>
+    <div style="margin-top:12px;padding-top:11px;border-top:1px solid var(--border)">
+      <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Reinos nesta revisão <span style="font-weight:600;text-transform:none;letter-spacing:0">— desligar tira da fila sem apagar nada: o reino segue no mapa e continua estudável</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${db.kingdoms.map(k=>{const fora=revReinoFora(k.id);
+          return `<button class="btn btn-xs" style="${fora?'opacity:.5;text-decoration:line-through':'border-color:var(--accent);color:var(--accent)'}" onclick="revToggleReino('${k.id}')">${k.icon||''} ${escapeHtml(k.name)}</button>`;}).join('')||'<span style="font-size:11px;color:var(--muted)">Nenhum reino ainda.</span>'}
+      </div>
+    </div>
   </div>`;
 }
 function renderFilaRevisao(container){
@@ -12093,7 +12178,10 @@ function renderFilaRevisao(container){
   const fila=todos.slice(0,n);
   let html=revBarraHTML();
   if(!fila.length){
-    html+=`<div class="empty"><i class="fa fa-check-double"></i><p>${todos.length?'Tudo que cabia hoje já foi revisado. 🎉':'Estude um miniboss pra ele entrar na fila.'}</p></div>`;
+    const e=revEstado();
+    html+=`<div class="empty"><i class="fa fa-check-double"></i><p>${
+      e.estudados?'Nenhum assunto na vez hoje. 🎉<br><span style="font-size:11px;color:var(--muted)">Os '+e.estudados+' assuntos da sua fila estão todos com prazo pra frente.</span>'
+                 :'Estude um miniboss pra ele entrar na fila.'}</p></div>`;
     container.innerHTML=html;return;
   }
   html+=fila.map(it=>{
@@ -12114,6 +12202,7 @@ function renderFilaRevisao(container){
         <button class="btn btn-xs btn-primary" onclick="revAbrirTela('${it.sub.id}')"><i class="fa fa-book-open"></i> Revisar</button>
         <button class="btn btn-xs btn-green-s" onclick="revConcluirDaFila('${it.sub.id}',4)">✓ Revisei</button>
         <button class="btn btn-xs btn-ghost" title="Não lembrava — volta logo e sobe na fila" onclick="revConcluirDaFila('${it.sub.id}',1)">Preciso ver de novo</button>
+        <button class="btn btn-xs btn-ghost" title="Sai da fila de revisão. Dá pra desfazer na aba Dominados." onclick="revDominar('${it.sub.id}',true)">🏆 Dominado</button>
       </div>
     </div>`;
   }).join('');
@@ -12127,6 +12216,9 @@ function renderFilaRevisao(container){
 // "Revisei" na fila conclui a revisão pendente mais antiga daquele assunto; se não
 // houver nenhuma pendente (assunto que nunca teve revisão agendada), cria e conclui,
 // pra o histórico continuar sendo a mesma lista de sempre.
+// Prazo escolhido no seletor da tela de revisão, guardado só até a resposta sair.
+let revPrazoEscolhido=null;
+function revSetPrazo(v){revPrazoEscolhido=+v||null;}
 function revConcluirDaFila(subId,quality){
   const sub=simFindSub(subId);
   if(!sub)return;
@@ -12149,6 +12241,7 @@ function revAbrirTela(subId){
   const ctx=findTopicKingdomBySubId(subId);
   if(!ctx||!ctx.sub){toast('Assunto não encontrado.','var(--red)');return;}
   document.getElementById('modal').classList.add('modal-wide');
+  revPrazoEscolhido=revEscadaSugerida(ctx.sub);
   openModal(`🔁 Revisão — ${escapeHtml(ctx.sub.name)}`,revTelaHTML(subId));
   revTelaDesenhar(subId);
 }
@@ -12193,12 +12286,12 @@ function revTelaHTML(subId){
     <span style="color:var(--muted)">Pode fechar esta janela — a geração continua e fica salva.</span></p></div>`;
 
   const colResumo=gerandoR?carregando('Gerando o resumo...')
-    :temResumo?`<div class="revtela-scroll">${resumoFormatar(sub.resumo.texto)}</div>`
+    :temResumo?`<div class="revtela-scroll"><div class="resumo-body">${resumoFormatar(sub.resumo.texto)}</div></div>`
     :faltando('resumo','resumo','Sem ele a revisão não tem o que mostrar — dá pra gerar aqui mesmo ou revisar direto no miniboss.');
 
   const colFluxo=gerandoF?carregando('Gerando o fluxograma...')
-    :temFluxo?`<div id="revfluxo-${subId}"><div class="fluxo-chart-viewport"><div class="fluxo-chart">
-         ${fluxoRenderNode(sub.fluxograma.nos,sub.fluxograma.raizId)}</div></div></div>`
+    :temFluxo?`<div class="revtela-scroll"><div id="revfluxo-${subId}"><div class="fluxo-chart-viewport"><div class="fluxo-chart">
+         ${fluxoRenderNode(sub.fluxograma.nos,sub.fluxograma.raizId)}</div></div></div></div>`
     :faltando('fluxograma','fluxo','Ele é o que deixa a revisão rápida: a estrutura do assunto numa olhada.');
 
   return `${cab}
@@ -12213,12 +12306,18 @@ function revTelaHTML(subId){
       </div>
     </div>
     <div class="revtela-rodape">
+      <label style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;gap:6px">volta em
+        <select class="inp" style="padding:7px 9px;font-size:12px;font-weight:800;text-transform:none;letter-spacing:0;min-width:96px" onchange="revSetPrazo(this.value)">
+          ${revEscada().map(d=>`<option value="${d}" ${d===revEscadaSugerida(sub)?'selected':''}>${d} dias</option>`).join('')}
+        </select>
+      </label>
       <button class="btn btn-sm btn-green-s" onclick="revTelaResponder('${subId}',4)">✓ Revisei</button>
       <button class="btn btn-sm" onclick="revTelaResponder('${subId}',3)">😐 Com dificuldade</button>
       <button class="btn btn-sm" onclick="revTelaResponder('${subId}',1)">😵 Esqueci tudo</button>
+      <button class="btn btn-sm btn-ghost" title="Sai da fila de revisão. Dá pra desfazer na aba Dominados." onclick="revDominar('${subId}',true);revFecharTela()">🏆 Dominado</button>
       <button class="btn btn-sm btn-ghost" onclick="revIrAoMiniboss('${subId}')">
         <i class="fa fa-up-right-from-square"></i> Abrir o miniboss</button>
-      <span class="espaco">${revPassadas(sub)+1}ª passada</span>
+      <span class="espaco">${revPassadasBoas(sub)+1}ª passada</span>
     </div>`;
 }
 function revTelaResponder(subId,quality){
@@ -12248,10 +12347,33 @@ function revTelaGerar(subId,tipo){
   },800);
 }
 
+// Aba Dominados: a diferença entre "sai da fila" e "perdi o assunto" é poder ver e
+// desfazer. O antigo revMastered não tinha nem uma coisa nem outra.
+function renderDominadosRevisao(container){
+  const lista=revDominados();
+  if(!lista.length){
+    container.innerHTML=`<div class="empty"><i class="fa fa-trophy"></i>
+      <p>Nenhum assunto dominado ainda.<br><span style="font-size:11px;color:var(--muted)">Marcar como dominado tira o assunto da fila de revisão sem apagar nada — e você desfaz aqui quando quiser.</span></p></div>`;
+    return;
+  }
+  container.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+      ${lista.length} assunto${lista.length===1?'':'s'} fora da fila de revisão por escolha sua.
+    </div>`+lista.map(it=>`
+    <div class="rev-item">
+      <span style="font-size:20px">${it.kingdom.icon||'🏆'}</span>
+      <div class="rev-info">
+        <div class="rev-name">${escapeHtml(it.sub.name)}</div>
+        <div class="rev-sub">${escapeHtml(it.topic.name)} · ${escapeHtml(it.kingdom.name)} · ${revPassadasBoas(it.sub)} revisão(ões) boa(s)</div>
+      </div>
+      <button class="btn btn-xs" onclick="revDominar('${it.sub.id}',false)"><i class="fa fa-rotate-left"></i> Voltar pra fila</button>
+    </div>`).join('');
+}
+
 function renderRevisions(){
   renderErroAssuntos();
   const container=document.getElementById('revisions-list');
   if(revFilter==='fila'){renderFilaRevisao(container);return;}
+  if(revFilter==='dominados'){renderDominadosRevisao(container);return;}
   const today=todayStr();const in7=addDays(today,7);
   let items=getAllRevItems();
   // Filtros: itens bloqueados (anterior não concluída) nunca aparecem em atrasadas/hoje/semana
