@@ -12182,27 +12182,106 @@ function revCasarCard(card,subs){
 function revVarrerVinculos(){
   const porChefe={};
   db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>{porChefe[t.id]={topic:t,kingdom:k,subs:t.subtopics||[]};}));
-  const casados=[],res={alta:0,media:0};
+  const casados=[],res={alta:0,media:0},porVia={nome:0,resumo:0};
+  const indices={};
   let semVinculo=0,semChefe=0;
   Object.values(db.flashcards||{}).forEach(c=>{
     if(c.subId)return;
     semVinculo++;
     const ctx=porChefe[c.mbId];
     if(!ctx||!ctx.subs.length){semChefe++;return;}
-    const m=revCasarCard(c,ctx.subs);
+    // Primeiro o nome (mais preciso). Só quem não casa pelo nome vai pro resumo.
+    let m=revCasarCard(c,ctx.subs),via='nome';
+    if(!m){
+      if(!(c.mbId in indices))indices[c.mbId]=revIndiceChefao(ctx.topic);
+      m=revCasarPorResumo(c,indices[c.mbId]);
+      via='resumo';
+    }
     if(!m)return;
-    res[m.conf]++;
-    casados.push({cardId:c.id,subId:m.sub.id,subNome:m.sub.name,conf:m.conf,
+    res[m.conf]++;porVia[via]++;
+    casados.push({cardId:c.id,subId:m.sub.id,subNome:m.sub.name,conf:m.conf,via,
                   chefao:ctx.topic.name,tags:c.tags||'',pergunta:(c.pergunta||'').slice(0,90)});
   });
-  return {semVinculo,semChefe,casados,res};
+  return {semVinculo,semChefe,casados,res,porVia};
 }
+
+// ===== CASAMENTO PELO RESUMO DO MINIBOSS =====
+// Casar pelo NOME só pega o card que escreve o nome do assunto. Um card sobre Choque
+// Hipovolêmico que fala em "reposição volêmica" e nunca soletra o nome fica de fora —
+// e é a maioria. Só que o miniboss TEM um resumo, e "reposição volêmica" está lá dentro.
+//
+// A ideia: o vocabulário do resumo identifica o assunto melhor que o título dele. Mas só
+// serve o vocabulário DISTINTIVO — palavra que aparece no resumo de todos os irmãos do
+// mesmo chefão ("paciente", "enfermagem", "conduta") não identifica ninguém. Então cada
+// termo só entra no índice se aparecer no resumo de UM miniboss daquele chefão.
+const REV_TERMO_MIN=4;
+function revTextoDoSub(s){
+  let t=' '+(s.name||'')+' ';
+  if(s.resumo&&s.resumo.texto)t+=' '+s.resumo.texto;
+  const nos=s.fluxograma&&s.fluxograma.nos;
+  if(nos)Object.keys(nos).forEach(k=>{t+=' '+((nos[k]||{}).texto||'');});
+  return t.trim();
+}
+// Unigramas + bigramas. O bigrama é o que carrega o sentido ("reposicao volemica",
+// "parada cardiorrespiratoria"); a palavra solta erra muito mais.
+function revTermos(t){
+  const p=revNorm(t).split(' ').filter(w=>w.length>=REV_TERMO_MIN&&!REV_STOP.has(w));
+  const out=p.slice();
+  for(let i=0;i<p.length-1;i++)out.push(p[i]+' '+p[i+1]);
+  return out;
+}
+// termo distintivo -> miniboss, dentro de UM chefão. null quando não dá pra distinguir.
+function revIndiceChefao(topic){
+  const subs=topic.subtopics||[];
+  // Chefão de um miniboss só: todo card dele é daquele assunto, sem adivinhação.
+  if(subs.length===1)return {unico:subs[0],mapa:{}};
+  const comTexto=[];
+  subs.forEach(s=>{const t=revTextoDoSub(s);if(t&&t.length>60)comTexto.push({s,termos:revTermos(t)});});
+  // Com um resumo só entre vinte minibosses, TODO termo dele seria "distintivo" e
+  // puxaria os cards dos outros dezenove. Precisa de pelo menos dois pra comparar.
+  if(comTexto.length<2)return null;
+  const df={};
+  comTexto.forEach(x=>{const vis=new Set(x.termos);vis.forEach(w=>{df[w]=(df[w]||0)+1;});});
+  const mapa={};
+  comTexto.forEach(x=>{const vis=new Set(x.termos);vis.forEach(w=>{if(df[w]===1)mapa[w]=x.s;});});
+  return {unico:null,mapa};
+}
+function revCasarPorResumo(card,ix){
+  if(!ix)return null;
+  if(ix.unico)return {sub:ix.unico,conf:'alta'};
+  const pontos={};
+  const marca=(txt,peso)=>{
+    revTermos(txt).forEach(w=>{
+      const s=ix.mapa[w];
+      if(!s)return;
+      const bi=w.indexOf(' ')>=0?2:1;
+      const p=pontos[s.id]=pontos[s.id]||{sub:s,v:0,tag:0,bi:0};
+      p.v+=peso*bi;
+      if(peso>=3)p.tag++;
+      if(bi>1)p.bi++;
+    });
+  };
+  marca(card.tags||'',3);                       // a tag é o sinal mais limpo
+  marca((card.pergunta||'')+' '+(card.resposta||''),1);
+  const lista=Object.values(pontos).sort((a,b)=>b.v-a.v);
+  if(!lista.length)return null;
+  const m=lista[0],seg=lista[1]?lista[1].v:0;
+  if(m.v<6)return null;                         // sinal fraco: não amarra
+  if(seg>0&&m.v<seg*2)return null;              // dois assuntos disputam: não chuta
+  const conf=(m.tag>=2||m.bi>=2||m.v>=14)?'alta':'media';
+  return {sub:m.sub,conf};
+}
+
 let revVarreduraCache=null;
 function revAbrirVarredura(){
   const v=revVarreduraCache=revVarrerVinculos();
-  const amostra=v.casados.slice(0,4).concat(
-    v.casados.filter(x=>x.conf==='media').slice(0,4),
-    v.casados.slice(-4)).filter((x,i,a)=>a.findIndex(y=>y.cardId===x.cardId)===i).slice(0,10);
+  // Amostra puxa dos dois caminhos e das duas confianças — senão ela mostraria só os
+  // casamentos por nome, que são os fáceis, e você aprovaria sem ver os difíceis.
+  const amostra=v.casados.filter(x=>x.via==='nome').slice(0,3).concat(
+    v.casados.filter(x=>x.via==='resumo'&&x.conf==='alta').slice(0,5),
+    v.casados.filter(x=>x.via==='resumo'&&x.conf==='media').slice(0,4),
+    v.casados.filter(x=>x.conf==='media').slice(0,2))
+    .filter((x,i,a)=>a.findIndex(y=>y.cardId===x.cardId)===i).slice(0,12);
   const jaAuto=Object.values(db.flashcards||{}).filter(c=>c.vinculoAuto).length;
   openModal('🔗 Amarrar flashcards ao assunto',`
     <div style="font-size:12.5px;color:var(--text2);line-height:1.6;margin-bottom:14px">
@@ -12217,6 +12296,11 @@ function revAbrirVarredura(){
       <div><b style="font-size:22px;font-weight:900;color:var(--orange-t)">${v.res.media}</b><div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase">casaram · média</div></div>
       <div><b style="font-size:22px;font-weight:900;color:var(--muted)">${v.semVinculo-v.casados.length}</b><div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase">seguem sem</div></div>
     </div>
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">
+      <b>${v.porVia.nome}</b> casaram pelo <b>nome</b> do miniboss ·
+      <b>${v.porVia.resumo}</b> pelo <b>vocabulário do resumo</b> dele
+      <span style="display:block;margin-top:3px">O resumo pega o que o nome não pega: um card que fala em “reposição volêmica” e nunca escreve “Choque Hipovolêmico”. Só entram as palavras que aparecem no resumo de <b>um</b> miniboss e não nos dos irmãos — as que todos compartilham não identificam ninguém.</span>
+    </div>
     ${v.casados.length?`
     <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px">Amostra — confira antes de aplicar</div>
     <div style="max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
@@ -12225,7 +12309,7 @@ function revAbrirVarredura(){
         <div style="color:var(--muted);margin-top:3px">
           ${x.tags?`🏷️ ${escapeHtml(x.tags)} · `:''}${escapeHtml(x.chefao)}
           → <b style="color:${x.conf==='alta'?'var(--green-t)':'var(--orange-t)'}">${escapeHtml(x.subNome)}</b>
-          <span style="font-size:9.5px">(${x.conf})</span></div></div>`).join('')}
+          <span style="font-size:9.5px">(${x.conf} · via ${x.via})</span></div></div>`).join('')}
     </div>`:'<p style="font-size:12.5px;color:var(--muted);margin-bottom:16px">Nenhum card casou com um nome de miniboss. Nada a aplicar.</p>'}
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       ${v.res.alta?`<button class="btn btn-primary" onclick="revAplicarVarredura('alta')">Aplicar só os de alta (${v.res.alta})</button>`:''}
