@@ -1350,6 +1350,22 @@ nav{
 #modal{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.4);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:20px;}
 #modal.open{display:flex;}
 .modal-box{background:var(--panel);border:1.5px solid var(--border);border-radius:22px;padding:26px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.15);}
+/* A tela de revisão precisa caber resumo e fluxograma lado a lado — 520px viram duas
+   colunas espremidas. Classe própria em vez de mexer no .modal-box, que é usado por
+   uns trinta modais que continuam bem a 520. */
+#modal.modal-wide .modal-box{max-width:1040px;}
+.revtela-corpo{display:grid;grid-template-columns:1.25fr 1fr;gap:18px;align-items:start;}
+@media(max-width:760px){.revtela-corpo{grid-template-columns:1fr;}}
+.revtela-col{min-width:0;}
+.revtela-rot{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:9px;display:flex;align-items:center;gap:6px;}
+.revtela-scroll{max-height:46vh;overflow-y:auto;padding-right:6px;}
+.revtela-vazio{border:1.5px dashed var(--border);border-radius:12px;padding:16px;
+  display:flex;flex-direction:column;gap:10px;align-items:flex-start;background:var(--panel2);}
+.revtela-vazio p{font-size:12.5px;color:var(--text2);line-height:1.5;}
+.revtela-rodape{display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+  margin-top:18px;padding-top:14px;border-top:1.5px solid var(--border);}
+.revtela-rodape .espaco{margin-left:auto;font-size:11px;color:var(--muted);font-weight:700;}
 .modal-box::-webkit-scrollbar{width:4px;}
 .modal-box::-webkit-scrollbar-thumb{background:var(--accent);border-radius:2px;}
 .modal-title{font-size:17px;font-weight:900;color:var(--text);display:flex;align-items:center;gap:8px;margin-bottom:20px;}
@@ -7952,8 +7968,10 @@ function fluxoRenderNode(nos,id,vistos){
 // usar uma barra de rolagem: um fluxograma pode ter quantos nós for preciso, mas
 // precisa continuar visível de cara. Chamada de novo sempre que o painel é redesenhado
 // (gerar/editar), quando é aberto, no resize da janela e ao trocar de modo de zoom.
-function fluxoDrawConnectors(subId){
-  const viewport=document.querySelector(`#fluxo-${subId} .fluxo-chart-viewport`);
+// raizSel permite desenhar o mesmo fluxograma dentro de outro container (a tela de
+// revisão), sem duplicar o id #fluxo-<subId> que o painel do miniboss já usa.
+function fluxoDrawConnectors(subId,raizSel){
+  const viewport=document.querySelector(`${raizSel||('#fluxo-'+subId)} .fluxo-chart-viewport`);
   const chart=viewport?viewport.querySelector('.fluxo-chart'):null;
   if(!chart)return;
   // Reseta a escala ANTES de medir — senão as posições capturadas já viriam encolhidas,
@@ -12093,7 +12111,7 @@ function renderFilaRevisao(container){
       </div>
       ${selo}
       <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
-        <button class="btn btn-xs btn-primary" onclick="goToSubtopic('${it.sub.id}')"><i class="fa fa-book-open"></i> Revisar</button>
+        <button class="btn btn-xs btn-primary" onclick="revAbrirTela('${it.sub.id}')"><i class="fa fa-book-open"></i> Revisar</button>
         <button class="btn btn-xs btn-green-s" onclick="revConcluirDaFila('${it.sub.id}',4)">✓ Revisei</button>
         <button class="btn btn-xs btn-ghost" title="Não lembrava — volta logo e sobe na fila" onclick="revConcluirDaFila('${it.sub.id}',1)">Preciso ver de novo</button>
       </div>
@@ -12119,6 +12137,117 @@ function revConcluirDaFila(subId,quality){
   revs[idx].date=todayStr();
   completeRev(subId,idx,'fila',quality||4);
 }
+
+// ===== TELA DE REVISÃO =====
+// O botão "Revisar" jogava você no miniboss inteiro — cronômetro, simulado, flashcards,
+// edição — e revisar um assunto virava uma hora. Mas a conta é implacável: com 326
+// assuntos, a 60 min por revisão e 2h por dia você cobre 31% do conteúdo até a prova; a
+// 20 min, 92%. Baratear a revisão vale três vezes mais do que qualquer ajuste no
+// agendador. Esta tela é só o que a revisão precisa: o resumo de um lado, o fluxograma do
+// outro, e os botões de responder. Nada mais.
+function revAbrirTela(subId){
+  const ctx=findTopicKingdomBySubId(subId);
+  if(!ctx||!ctx.sub){toast('Assunto não encontrado.','var(--red)');return;}
+  document.getElementById('modal').classList.add('modal-wide');
+  openModal(`🔁 Revisão — ${escapeHtml(ctx.sub.name)}`,revTelaHTML(subId));
+  revTelaDesenhar(subId);
+}
+// closeModal é global e usado por dezenas de telas: em vez de mexer nele, quem abre
+// larga limpa o marcador ao sair.
+function revFecharTela(){
+  document.getElementById('modal').classList.remove('modal-wide');
+  closeModal();
+}
+function revTelaDesenhar(subId){
+  // O fluxograma só pode ser medido depois de estar visível — mesma razão do painel
+  // do miniboss (ver toggleFluxo).
+  setTimeout(()=>fluxoDrawConnectors(subId,'#revfluxo-'+subId),30);
+}
+function revTelaHTML(subId){
+  const ctx=findTopicKingdomBySubId(subId);
+  if(!ctx||!ctx.sub)return '<p>Assunto não encontrado.</p>';
+  const{sub,topic,kingdom}=ctx;
+  const dias=revDiasParado(sub);
+  const ac=revAcerto(sub);
+  const temResumo=!!(sub.resumo&&sub.resumo.texto);
+  const temFluxo=!!(sub.fluxograma&&sub.fluxograma.nos&&sub.fluxograma.raizId);
+  const gerandoR=resumoGenerating.has(subId), gerandoF=fluxoGenerating.has(subId);
+
+  const cab=`<div style="font-size:11.5px;color:var(--muted);font-weight:700;margin:-8px 0 16px">
+    ${escapeHtml(topic.name)} · ${kingdom.icon||''} ${escapeHtml(kingdom.name)} ·
+    há ${dias} dia${dias===1?'':'s'} sem olhar
+    ${ac===null?' · <span style="color:var(--orange-t)">sem medição em questões</span>'
+              :` · ${Math.round(ac*100)}% em ${sub.simStats.questoesTotal} questões`}
+  </div>`;
+
+  const faltando=(o,acao,texto)=>`<div class="revtela-vazio">
+    <p><b>Este assunto ainda não tem ${o}.</b><br>${texto}</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-sm btn-primary" onclick="revTelaGerar('${subId}','${acao}')">
+        <i class="fa fa-wand-magic-sparkles"></i> Gerar ${o} agora</button>
+      <button class="btn btn-sm" onclick="revIrAoMiniboss('${subId}')">
+        <i class="fa fa-up-right-from-square"></i> Abrir o miniboss</button>
+    </div></div>`;
+
+  const carregando=t=>`<div class="revtela-vazio"><p><i class="fa fa-spinner fa-spin"></i> ${t}<br>
+    <span style="color:var(--muted)">Pode fechar esta janela — a geração continua e fica salva.</span></p></div>`;
+
+  const colResumo=gerandoR?carregando('Gerando o resumo...')
+    :temResumo?`<div class="revtela-scroll">${resumoFormatar(sub.resumo.texto)}</div>`
+    :faltando('resumo','resumo','Sem ele a revisão não tem o que mostrar — dá pra gerar aqui mesmo ou revisar direto no miniboss.');
+
+  const colFluxo=gerandoF?carregando('Gerando o fluxograma...')
+    :temFluxo?`<div id="revfluxo-${subId}"><div class="fluxo-chart-viewport"><div class="fluxo-chart">
+         ${fluxoRenderNode(sub.fluxograma.nos,sub.fluxograma.raizId)}</div></div></div>`
+    :faltando('fluxograma','fluxo','Ele é o que deixa a revisão rápida: a estrutura do assunto numa olhada.');
+
+  return `${cab}
+    <div class="revtela-corpo">
+      <div class="revtela-col">
+        <div class="revtela-rot"><i class="fa fa-file-lines"></i> Resumo</div>
+        ${colResumo}
+      </div>
+      <div class="revtela-col">
+        <div class="revtela-rot"><i class="fa fa-diagram-project"></i> Fluxograma</div>
+        ${colFluxo}
+      </div>
+    </div>
+    <div class="revtela-rodape">
+      <button class="btn btn-sm btn-green-s" onclick="revTelaResponder('${subId}',4)">✓ Revisei</button>
+      <button class="btn btn-sm" onclick="revTelaResponder('${subId}',3)">😐 Com dificuldade</button>
+      <button class="btn btn-sm" onclick="revTelaResponder('${subId}',1)">😵 Esqueci tudo</button>
+      <button class="btn btn-sm btn-ghost" onclick="revIrAoMiniboss('${subId}')">
+        <i class="fa fa-up-right-from-square"></i> Abrir o miniboss</button>
+      <span class="espaco">${revPassadas(sub)+1}ª passada</span>
+    </div>`;
+}
+function revTelaResponder(subId,quality){
+  revConcluirDaFila(subId,quality);
+  revFecharTela();
+}
+function revIrAoMiniboss(subId){
+  revFecharTela();
+  goToSubtopic(subId);
+}
+// Gera sem sair da revisão. As funções de geração atualizam o painel do miniboss quando
+// ele existe no DOM e não fazem nada quando não existe (todas checam o elemento antes),
+// então dá pra chamá-las daqui — só é preciso saber a hora de redesenhar.
+function revTelaGerar(subId,tipo){
+  if(tipo==='resumo')generateResumoWeb(subId); else generateFluxograma(subId);
+  const corpo=document.getElementById('modal-body');
+  if(corpo)corpo.innerHTML=revTelaHTML(subId);
+  const t=setInterval(()=>{
+    const ocupado=tipo==='resumo'?resumoGenerating.has(subId):fluxoGenerating.has(subId);
+    const aberto=document.getElementById('modal').classList.contains('open');
+    if(!aberto){clearInterval(t);return;}
+    if(!ocupado){
+      clearInterval(t);
+      const c=document.getElementById('modal-body');
+      if(c){c.innerHTML=revTelaHTML(subId);revTelaDesenhar(subId);}
+    }
+  },800);
+}
+
 function renderRevisions(){
   renderErroAssuntos();
   const container=document.getElementById('revisions-list');
