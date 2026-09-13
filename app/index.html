@@ -2167,7 +2167,14 @@ nav{
 <div class="screen" id="screen-revisions">
   <div class="sec-title">🔔 Câmara de Revisões</div>
 
-  <div class="section-card">
+  <div class="filter-row">
+    <button class="chip active" onclick="filterRevs('fila',this)">🎯 Fila de hoje</button>
+    <button class="chip" onclick="filterRevs('dominados',this)">🏆 Dominados</button>
+    <button class="chip" onclick="filterRevs('done',this)">✅ Concluídas</button>
+    <button class="chip" onclick="filterRevs('all',this)">📋 Todas</button>
+    <button class="chip" onclick="filterRevs('erros',this)">🎯 Mais erro</button>
+  </div>
+  <div id="err-assuntos-card" class="section-card" style="display:none">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap">
       <div style="font-size:13px;font-weight:900;color:var(--text)">🎯 Assuntos que mais erro em questões</div>
       <span style="font-size:10.5px;color:var(--muted);font-weight:700" id="err-assuntos-count"></span>
@@ -2178,13 +2185,6 @@ nav{
       <button class="btn btn-primary" onclick="addErroAssunto()"><i class="fa fa-plus"></i> Registrar erro</button>
     </div>
     <div id="err-assuntos-list" style="margin-top:14px"></div>
-  </div>
-
-  <div class="filter-row">
-    <button class="chip active" onclick="filterRevs('fila',this)">🎯 Fila de hoje</button>
-    <button class="chip" onclick="filterRevs('dominados',this)">🏆 Dominados</button>
-    <button class="chip" onclick="filterRevs('done',this)">✅ Concluídas</button>
-    <button class="chip" onclick="filterRevs('all',this)">📋 Todas</button>
   </div>
   <div id="revisions-list"></div>
 </div>
@@ -11435,7 +11435,10 @@ function completeRev(subId,idx,mode,quality){
   saveDB();
   updateRevBadge();renderMap();renderHeader();
   if(subTopic)refreshSubs(subTopic,subTopic.id);
-  if(mode==='list')renderRevisions();
+  // 'fila' tambem redesenha: sem isso, concluir pela fila (ou pela tela de revisão)
+  // deixava o assunto concluído na lista até você sair e voltar da tela — e o próximo
+  // da fila não subia pro lugar dele.
+  if(mode==='list'||mode==='fila')renderRevisions();
   else if(mode==='dashboard')renderDashboard();
   else closeModal();
 }
@@ -12450,7 +12453,13 @@ function renderDominadosRevisao(container){
 
 function renderRevisions(){
   renderErroAssuntos();
+  // "Assuntos que mais erro" ocupava o topo da tela inteira, empurrando a fila pra baixo
+  // em toda visita. Vira aba: só aparece quando você pede.
+  const caixaErros=document.getElementById('err-assuntos-card');
   const container=document.getElementById('revisions-list');
+  if(caixaErros)caixaErros.style.display=revFilter==='erros'?'':'none';
+  if(container)container.style.display=revFilter==='erros'?'none':'';
+  if(revFilter==='erros')return;
   if(revFilter==='fila'){renderFilaRevisao(container);return;}
   if(revFilter==='dominados'){renderDominadosRevisao(container);return;}
   const today=todayStr();const in7=addDays(today,7);
