@@ -12064,8 +12064,13 @@ function revEscadaSugerida(sub){
 function revReinoFora(kid){return !!(db.revReinosFora&&db.revReinosFora[kid]);}
 function revToggleReino(kid){
   if(!db.revReinosFora)db.revReinosFora={};
+  const k=(db.kingdoms||[]).find(x=>x.id===kid);
   if(db.revReinosFora[kid])delete db.revReinosFora[kid]; else db.revReinosFora[kid]=true;
   saveDB();renderRevisions();
+  toast(db.revReinosFora[kid]
+    ?`⏸ "${(k&&k.name)||'Reino'}" pausado — sai da fila de revisão e da de flashcards. Continua inteiro pra estudar.`
+    :`▶ "${(k&&k.name)||'Reino'}" de volta às filas.`,
+    db.revReinosFora[kid]?'var(--gold)':'var(--accent)');
 }
 // "Dominado" no assunto, igual ao do flashcard: decisão SUA, visível e reversível na aba
 // Dominados. Não confundir com o antigo revMastered, que era o algoritmo tirando o
@@ -12565,7 +12570,7 @@ function revBarraHTML(){
     <div style="margin-top:12px;padding-top:11px;border-top:1px solid var(--border)">
       ${(()=>{const sem=Object.values(db.flashcards||{}).filter(c=>!c.subId).length;
         return sem?`<div style="font-size:11px;color:var(--muted);margin-bottom:10px"><b>${sem}</b> flashcard${sem===1?'':'s'} sem assunto — a retenção deles vale a média do chefão. <span class="dash-verlink" onclick="revAbrirVarredura()">tentar amarrar</span></div>`:'';})()}
-      <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Reinos nesta revisão <span style="font-weight:600;text-transform:none;letter-spacing:0">— desligar tira da fila sem apagar nada: o reino segue no mapa e continua estudável</span></div>
+      <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Reinos nesta revisão <span style="font-weight:600;text-transform:none;letter-spacing:0">— desligar tira o reino <b>desta fila e da de flashcards</b>, sem apagar nada: ele segue no mapa e continua estudável quando você escolher</span></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${db.kingdoms.map(k=>{const fora=revReinoFora(k.id);
           return `<button class="btn btn-xs" style="${fora?'opacity:.5;text-decoration:line-through':'border-color:var(--accent);color:var(--accent)'}" onclick="revToggleReino('${k.id}')">${k.icon||''} ${escapeHtml(k.name)}</button>`;}).join('')||'<span style="font-size:11px;color:var(--muted)">Nenhum reino ainda.</span>'}
@@ -16473,8 +16478,25 @@ function getAllFCForTopic(topicId){
   if(!db.flashcards)return[];
   return Object.values(db.flashcards).filter(c=>c.mbId===topicId);
 }
-function getAllFCEverywhere(){
-  return Object.values(db.flashcards||{});
+// Chefões de reinos pausados. Pausar um reino ("não vou revisar História agora, mas
+// quero ela aqui pra quando eu for estudar") é diferente de dominar: dominado é sobre o
+// card, pausa é sobre o escopo do seu edital agora. É o MESMO interruptor da Câmara de
+// Revisões, então o reino sai das duas filas de uma vez.
+function fcTopicosPausados(){
+  const fora=new Set();
+  (db.kingdoms||[]).forEach(k=>{
+    if(revReinoFora(k.id))(db.topics[k.id]||[]).forEach(t=>fora.add(t.id));
+  });
+  return fora;
+}
+// A fila GLOBAL (Revisar agora, Novos, Em dia, Estudar tudo) pula os pausados. O reino
+// continua inteiro: "Estudar por Reino" vai nele normalmente, porque lá a escolha é
+// deliberada — passe incluirPausados quando precisar de tudo.
+function getAllFCEverywhere(incluirPausados){
+  const todos=Object.values(db.flashcards||{});
+  if(incluirPausados)return todos;
+  const fora=fcTopicosPausados();
+  return fora.size?todos.filter(c=>!fora.has(c.mbId)):todos;
 }
 // Todos os flashcards de todos os chefões de UM reino só — junta os mbId (=topic.id)
 // que pertencem àquele reino. Usado por "Estudar por Reino" (meio-termo entre estudar
@@ -16704,7 +16726,9 @@ function renderFCMain(){
     const validTopicIds=new Set();
     db.kingdoms.forEach(k=>{(db.topics[k.id]||[]).forEach(t=>validTopicIds.add(t.id));});
 
-    const allCards=Object.values(db.flashcards||{}).filter(c=>validTopicIds.has(c.mbId));
+    const pausados=fcTopicosPausados();
+    const allCards=Object.values(db.flashcards||{})
+      .filter(c=>validTopicIds.has(c.mbId)&&!pausados.has(c.mbId));
     const vencidos=allCards.filter(c=>fcStatus(c)==='due');
     const novos=allCards.filter(c=>fcStatus(c)==='new');
     const emDia=allCards.filter(c=>!['due','new','dominado'].includes(fcStatus(c)));
@@ -16734,9 +16758,11 @@ function renderFCMain(){
     // vencidos daquele reino inteiro — só aparece sem filtro de reino ativo e com 2+
     // reinos com cards (com 1 só, "Estudar tudo" já cobre a mesma coisa).
     const kingdomStudyRows=db.kingdoms
-      .map(k=>{const cards=getAllFCForKingdom(k.id);return cards.length?{kingdom:k,total:cards.length,due:cards.filter(c=>fcStatus(c)==='due').length}:null;})
+      .map(k=>{const cards=getAllFCForKingdom(k.id);return cards.length?{kingdom:k,total:cards.length,
+        due:cards.filter(c=>fcStatus(c)==='due').length,pausado:revReinoFora(k.id)}:null;})
       .filter(Boolean)
-      .sort((a,b)=>b.due-a.due||b.total-a.total);
+      // Pausado desce pro fim da lista, mas não some: é de lá que se retoma.
+      .sort((a,b)=>(a.pausado?1:0)-(b.pausado?1:0)||b.due-a.due||b.total-a.total);
 
     el.innerHTML=`
       <div style="padding:4px 0">
@@ -16788,9 +16814,10 @@ function renderFCMain(){
               <div onclick="fcStudyKingdom('${r.kingdom.id}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--panel);border:1.5px solid ${r.kingdom.color}30;border-left:4px solid ${r.kingdom.color};border-radius:12px;cursor:pointer;transition:all .15s" onmouseover="this.style.transform='translateX(4px)'" onmouseout="this.style.transform='translateX(0)'">
                 <span style="font-size:22px">${r.kingdom.icon||'🏰'}</span>
                 <div style="flex:1">
-                  <div style="font-size:13px;font-weight:800;color:${r.kingdom.color}">${r.kingdom.name}</div>
-                  <div style="font-size:10px;color:var(--muted)">${r.total} card${r.total!==1?'s':''}${r.due?` · ${r.due} vencido${r.due!==1?'s':''}`:''}</div>
+                  <div style="font-size:13px;font-weight:800;color:${r.pausado?'var(--muted)':r.kingdom.color}">${r.kingdom.name}${r.pausado?' <span style="font-size:9.5px;font-weight:800;color:var(--gold-t);border:1px solid var(--gold-t);border-radius:999px;padding:1px 7px;vertical-align:middle">pausado</span>':''}</div>
+                  <div style="font-size:10px;color:var(--muted)">${r.total} card${r.total!==1?'s':''}${r.pausado?' · fora da fila de revisão':(r.due?` · ${r.due} vencido${r.due!==1?'s':''}`:'')}</div>
                 </div>
+                <button class="btn btn-xs btn-ghost" title="${r.pausado?'Voltar a contar este reino na fila de revisão':'Tirar este reino da fila de revisão, sem apagar nada — ele continua aqui pra estudar quando você quiser'}" onclick="event.stopPropagation();revToggleReino('${r.kingdom.id}');renderFCMbList();renderFCMain();">${r.pausado?'▶':'⏸'}</button>
                 <button class="btn btn-xs btn-primary" onclick="event.stopPropagation();fcStudyKingdom('${r.kingdom.id}')"><i class="fa fa-play"></i> Estudar</button>
               </div>`).join('')}
           </div>
