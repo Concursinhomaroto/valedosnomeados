@@ -2268,7 +2268,7 @@ nav{
 
     <div class="section-card dash-card">
       <div class="dash-head">
-        <div class="sec-title dash-sec">🧭 Fila de hoje</div>
+        <div class="sec-title dash-sec">🧭 O que fazer agora</div>
         <div class="dash-conta" id="fila-conta"></div>
       </div>
       <div class="dash-scroll"><div id="next-steps-list"></div></div>
@@ -11711,14 +11711,14 @@ function computeStudyRecommendations(){
 
         let reason,reasonIcon,reasonBonus,tipo;
         if(overdueCount>0){
-          // O atraso em dias diz mais que a contagem: "72d" ordena a cabeca do
-          // usuario, "1 revisão atrasada" era igual em todas as linhas.
-          let pior=0;
-          revs.forEach((r,i)=>{
-            const prevDone=revs.slice(0,i).every(p=>p.completed);
-            if(!r.completed&&prevDone&&s.studied&&r.date<today)pior=Math.max(pior,daysDiff(r.date,today));
-          });
-          tipo='revisao';reason=`revisão · ${pior}d`;reasonIcon='🔁';reasonBonus=300+overdueCount*5;
+          // Mesma linguagem e mesma ordem da Câmara: o chip diz há quanto tempo o PRAZO
+          // venceu (não "revisão · 2d", que não dizia de quê), e o bônus sai da urgência
+          // real, pra esta caixa e a fila não discordarem sobre o que vem primeiro.
+          const atraso=revDiasNaVez(s)||0;
+          tipo='revisao';
+          reason=atraso>0?`venceu há ${atraso}d`:'na vez hoje';
+          reasonIcon='🔁';
+          reasonBonus=300+Math.min(500,Math.round(revUrgencia(s)));
         }else if(notStudied){
           tipo='novo';reason='nunca estudado';reasonIcon='✨';reasonBonus=200;
         }else{
@@ -11869,10 +11869,16 @@ function renderNextSteps(){
   }
   const items=todos.slice(0,8);
   const foco=edFocoIndice();
-  if(conta)conta.innerHTML=`${foco?`<span title="Priorizando ${escapeHtml(foco.edital.nome)}">${foco.edital.icon} ${escapeHtml(foco.edital.nome)}</span> · `:''}<b>${items.length}</b> de ${todos.length} · <span class="dash-verlink" onclick="abrirRevisoesAtrasadas()">ver tudo</span>`;
+  const nRev=todos.filter(x=>x.tipo==='revisao').length;
+  const nNovo=todos.filter(x=>x.tipo==='novo').length;
+  if(conta)conta.innerHTML=`${foco?`<span title="Priorizando ${escapeHtml(foco.edital.nome)}">${foco.edital.icon} ${escapeHtml(foco.edital.nome)}</span> · `:''}`
+    +`<b>${nRev}</b> revis${nRev===1?'ão':'ões'} · <b>${nNovo}</b> por estudar`
+    +` · <span class="dash-verlink" onclick="abrirRevisoesAtrasadas()">ver a fila</span>`;
   const cls={revisao:'fila-rev',novo:'fila-novo',fraco:'fila-fraco'};
+  // Revisão abre a TELA de revisão (resumo + fluxograma); o resto abre o miniboss.
+  // Mandar todo mundo pro miniboss era o que fazia a revisão custar uma hora.
   el.innerHTML=items.map((it,i)=>`
-    <div class="next-step-item" onclick="goToSubtopic('${it.subId}')">
+    <div class="next-step-item" onclick="${it.tipo==='revisao'?`revAbrirTela('${it.subId}')`:`goToSubtopic('${it.subId}')`}">
       <div class="next-step-rank">${i+1}</div>
       <div class="next-step-info">
         <div class="next-step-name">${it.edital?`<span title="Cai no edital em foco">${it.edital}</span> `:''}${escapeHtml(it.subName)}</div>
