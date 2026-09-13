@@ -441,6 +441,7 @@ nav{
 .topic-icon-el{font-size:22px;}
 .topic-name-el{flex:1;font-size:14px;font-weight:800;color:var(--text);}
 .topic-meta{font-size:10px;color:var(--muted);display:flex;gap:10px;align-items:center;}
+.topic-fire{font-size:13px;letter-spacing:-2px;white-space:nowrap;flex-shrink:0;}
 .topic-body{padding:16px 18px;border-top:1.5px solid var(--border);background:var(--panel2);}
 
 /* ===== SUBTOPIC (MINIBOSS) ===== */
@@ -1875,6 +1876,25 @@ nav{
 }
 
 /* ===== RESPONSIVE — MOBILE (sidebar vira topbar compacta + bottom nav) ===== */
+/* ===== CELULAR: transbordos que existiam desde antes da barra de baixo ===== */
+@media(max-width:768px){
+  /* "Do dia", "Estudo", "Acompanhar" são títulos de seção da lateral. Quando a nav
+     deita e vira barra de baixo, eles viram ITENS da barra — apareciam espremidos
+     entre os botões, comendo a largura deles e embaralhando os rótulos. */
+  .nav-group{display:none;}
+}
+@media(max-width:600px){
+  /* A linha do chefão tinha nome + chamas + contadores + três botões + seta numa
+     linha só. Em 393px os botões saíam pela direita (o de excluir ficava inalcançável)
+     e as chamas empilhavam na vertical. Agora o nome ocupa a primeira linha com o
+     ícone, e o resto desce pra segunda. */
+  .topic-head{flex-wrap:wrap;padding:12px 14px;gap:8px 10px;}
+  .topic-name-el{flex:1 1 calc(100% - 46px);min-width:0;font-size:13.5px;}
+  .topic-head .fa-chevron-down{margin-left:auto;}
+  .topic-meta{flex-wrap:wrap;gap:6px;}
+  /* Mesmo aperto na linha do miniboss. */
+  .sub-item{flex-wrap:wrap;}
+}
 @media(max-width:768px){
   #sidebar{
     width:100%;height:auto;min-height:var(--mobile-topbar-h);
@@ -1890,7 +1910,10 @@ nav{
 
   .sidebar-info{
     padding:0;border:0;display:flex;flex-direction:row;align-items:center;
-    gap:4px;flex-wrap:nowrap;overflow-x:auto;flex-shrink:0;
+    /* min-width:0 + poder encolher é o que faz a rolagem horizontal acontecer DENTRO
+       deste bloco. Com flex-shrink:0 ele mantinha a largura do conteúdo e estourava
+       33px pra fora da janela, levando a pílula de XP junto. */
+    gap:4px;flex-wrap:nowrap;overflow-x:auto;min-width:0;flex:1 1 auto;
   }
   .exam-wrap{flex-direction:row;gap:4px;margin:0;flex-shrink:0;}
   .exam-wrap label{display:none;}
@@ -1901,6 +1924,12 @@ nav{
   .xp-pill{padding:4px 8px;flex-shrink:0;}
   .xp-pill .x-num{font-size:12px;}
   .xp-pill .x-lbl{display:none;}
+  /* "faltam 1.874 XP pro nível" é a linha mais longa do topo. Em tela de telefone ela
+     sozinha empurrava a pílula pra fora, obrigando a rolar o cabeçalho de lado só pra
+     ver o XP. A barrinha de progresso continua — ela mostra o mesmo, sem texto. */
+  .xp-pill .x-next{display:none;}
+  .xp-pill .xp-bar{margin-top:4px;width:52px;}
+  .xp-pill{padding:4px 8px;}
 
   nav{
     position:fixed;left:0;right:0;bottom:0;top:auto;
@@ -6812,7 +6841,7 @@ function renderTopics(){
       <div class="topic-head" onclick="toggleTopic('${topic.id}')">
         <span class="topic-icon-el">${topic.icon}</span>
         <span class="topic-name-el">${buscaMarca(topic.name,buscaReinoTermo)}</span>
-        <span style="font-size:13px;letter-spacing:-2px" title="Prioridade">${'🔥'.repeat(topic.priority||1)}</span>
+        <span class="topic-fire" title="Prioridade">${'🔥'.repeat(topic.priority||1)}</span>
         <div class="topic-meta">
           <span>👾 ${subs.length}</span>
           <span class="time-chip"><i class="fa fa-clock"></i> ${fmtTime(studied)}</span>
