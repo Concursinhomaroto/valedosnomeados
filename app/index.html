@@ -8699,6 +8699,9 @@ function simPanelHTML(s){
         <option value="10" selected>10 questões</option>
         <option value="15">15 questões</option>
         <option value="20">20 questões</option>
+        <option value="30">30 questões</option>
+        <option value="40">40 questões</option>
+        <option value="50">50 questões</option>
       </select>
     </div>
     <button class="btn btn-sm btn-pink" style="width:100%;justify-content:center" onclick="generateSimulado('${s.id}')"><i class="fa fa-wand-magic-sparkles"></i> Gerar simulado com IA</button>
@@ -9245,13 +9248,26 @@ function materialParaQtd(qtd){
 // (a primeira busca do Tavily e a restrita a dominio oficial).
 const RETENTATIVA_MATERIAL=6000;
 
+// Lote de questoes por chamada. A resposta e UM JSON: se ela e cortada por teto de
+// saida, o parse falha inteiro e se perdem TODAS as questoes daquela chamada, nao so a
+// ultima. Pedir 50 de uma vez estourava e voltava zero — e as quatro tentativas pediam
+// 50 de novo, gastando quatro chamadas do teto diario pra terminar sem nada. Em lotes de
+// 20, cada resposta cabe com folga e o que cada uma traz fica guardado.
+const SIM_LOTE_MAX=20;
+// Teto de saida proporcional ao lote: uma questao com enunciado, alternativas e
+// explicacao da uns 350-400 tokens. O piso cobre lotes pequenos, o topo evita pedir o
+// maximo a toa (resposta grande e mais lenta e mais cara).
+function simTetoSaida(qtd){return Math.min(32768,Math.max(4096,Math.round(qtd*420)+1200));}
+
 async function gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,rotulo}){
   const questoes=[];
   const vistas=new Set();
   let tentativas=0;
-  const MAX_TENTATIVAS=4;
+  // Mais lotes precisam de mais tentativas — senao 50 questoes parariam no 4o lote
+  // mesmo indo tudo bem. Sobram 3 de folga pra repetir lote que falhar.
+  const MAX_TENTATIVAS=Math.max(4,Math.ceil(quantidade/SIM_LOTE_MAX)+3);
   while(questoes.length<quantidade&&tentativas<MAX_TENTATIVAS){
-    const faltam=quantidade-questoes.length;
+    const faltam=Math.min(SIM_LOTE_MAX,quantidade-questoes.length);
     const base=buildPrompt(faltam,questoes.map(q=>q.questao));
     const material=busca&&busca.material
       ?(tentativas===0?busca.material:cortarNoPonto(busca.material,RETENTATIVA_MATERIAL))
@@ -9260,7 +9276,7 @@ async function gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,
     tentativas++;
     let arr;
     try{
-      const raw=await callGeminiGenerate(apiKey,prompt);
+      const raw=await callGeminiGenerate(apiKey,prompt,{maxOutputTokens:simTetoSaida(faltam)});
       const parsed=extractAIJson(raw);
       arr=Array.isArray(parsed)?parsed:(Array.isArray(parsed?.questoes)?parsed.questoes:(Array.isArray(parsed?.itens)?parsed.itens:null));
     }catch(e){
@@ -9279,7 +9295,7 @@ async function gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,
   }
   if(!questoes.length)throw new Error(`IA não retornou questões válidas para "${rotulo}".`);
   if(questoes.length<quantidade){
-    toast(`⚠️ "${rotulo}": só foi possível gerar ${questoes.length} de ${quantidade} questões pedidas — a IA repetiu ou não completou a quantidade após algumas tentativas.`,'var(--orange)');
+    toast(`⚠️ "${rotulo}": saíram ${questoes.length} de ${quantidade} questões — a IA repetiu ou não completou depois de algumas tentativas. O simulado funciona com as que vieram.`,'var(--orange)');
   }
   return questoes;
 }
