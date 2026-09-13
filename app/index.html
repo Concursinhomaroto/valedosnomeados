@@ -12022,7 +12022,35 @@ function revDominados(){
   return out;
 }
 function revOrcamento(){return Math.max(10,+db.revOrcamentoMin||REV_ORCAMENTO_PADRAO);}
-function revCusto(){return Math.max(5,+db.revCustoMin||REV_CUSTO_PADRAO);}
+
+// ===== QUANTO CUSTA UMA REVISÃO, MEDIDO =====
+// Os 20 minutos eram chute. E o ciclo inteiro (assuntos ÷ quantos cabem por dia) depende
+// dele: se a revisão leva 5 minutos e o app supõe 20, a barra diz que cabem 12 por dia
+// quando cabem 48 — e o ciclo aparece quatro vezes maior do que é. A tela de revisão
+// agora cronometra sozinha, do abrir ao responder.
+const REV_AMOSTRAS_MIN=5;      // antes disso, segue no palpite — média de 2 revisões não é média
+const REV_AMOSTRAS_MAX=30;     // janela móvel: o que vale é o seu ritmo de agora
+const REV_DUR_MIN_S=30;        // abriu e fechou: não foi revisão
+const REV_DUR_MAX_S=90*60;     // abriu e foi almoçar: não conta
+function revRegistrarDuracao(segundos){
+  if(!(segundos>=REV_DUR_MIN_S&&segundos<=REV_DUR_MAX_S))return;
+  if(!Array.isArray(db.revDuracoes))db.revDuracoes=[];
+  db.revDuracoes.push(Math.round(segundos));
+  if(db.revDuracoes.length>REV_AMOSTRAS_MAX)
+    db.revDuracoes=db.revDuracoes.slice(-REV_AMOSTRAS_MAX);
+}
+// Mediana, não média: uma revisão em que você parou pra atender o telefone não pode
+// deslocar a conta inteira.
+function revCustoMedido(){
+  const v=(db.revDuracoes||[]).slice().sort((a,b)=>a-b);
+  if(v.length<REV_AMOSTRAS_MIN)return null;
+  const m=v.length%2?v[(v.length-1)/2]:(v[v.length/2-1]+v[v.length/2])/2;
+  return Math.max(1,Math.round(m/60));
+}
+function revCusto(){
+  if(+db.revCustoMin)return Math.max(1,+db.revCustoMin); // ajuste manual, se houver
+  return revCustoMedido()||REV_CUSTO_PADRAO;
+}
 function revPorDia(){return Math.max(1,Math.floor(revOrcamento()/revCusto()));}
 
 // Última vez que você olhou o assunto INTEIRO: a revisão concluída mais recente, ou o
@@ -12134,7 +12162,8 @@ function revEstado(){
   const porDia=revPorDia();
   const ciclo=estudados?Math.round(estudados/porDia):0;
   return {estudados,porDia,ciclo,elegiveis:revCandidatos().length,
-          dominados:revDominados().length,orcamento:revOrcamento(),custo:revCusto()};
+          dominados:revDominados().length,orcamento:revOrcamento(),custo:revCusto(),
+          medido:revCustoMedido(),amostras:(db.revDuracoes||[]).length};
 }
 // Próximo intervalo quando você conclui: sai do CICLO, não de uma fórmula de memória.
 // Assunto com peso alto volta antes do ciclo médio; o que você domina volta depois.
@@ -12170,6 +12199,10 @@ function revBarraHTML(){
       <div style="display:flex;flex-direction:column;gap:1px"><b style="font-size:24px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${corCiclo}">${e.ciclo||'—'}</b><span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">dias de ciclo</span></div>
       ${mt([Math.min(e.porDia,e.elegiveis),'na vez hoje'])}
       ${mt([e.porDia,'cabem hoje'])}
+      <div style="display:flex;flex-direction:column;gap:1px" title="${e.medido?'Mediana das suas últimas '+e.amostras+' revisões cronometradas.':'Ainda é uma estimativa — a tela de revisão cronometra sozinha e o número vira o seu depois de '+REV_AMOSTRAS_MIN+' revisões.'}">
+        <b style="font-size:24px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${e.medido?'var(--cyan-t)':'var(--muted)'}">${e.custo}<span style="font-size:13px">min</span></b>
+        <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">${e.medido?'por revisão · medido':'por revisão · estimado'}</span>
+      </div>
       ${e.dominados?mt([e.dominados,'dominados']):''}
       <label style="margin-left:auto;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:flex;flex-direction:column;gap:4px">tempo por dia
         <select class="inp" style="min-width:120px;font-size:12px;text-transform:none;letter-spacing:0" onchange="revSalvarOrcamento(this.value)">
@@ -12235,6 +12268,8 @@ function renderFilaRevisao(container){
 // pra o histórico continuar sendo a mesma lista de sempre.
 // Prazo escolhido no seletor da tela de revisão, guardado só até a resposta sair.
 let revPrazoEscolhido=null;
+// Quando a tela de revisão abriu — vira a medição de quanto custa uma revisão de verdade.
+let revAbertoEm=0;
 function revSetPrazo(v){revPrazoEscolhido=+v||null;}
 function revConcluirDaFila(subId,quality){
   const sub=simFindSub(subId);
@@ -12258,6 +12293,7 @@ function revAbrirTela(subId){
   const ctx=findTopicKingdomBySubId(subId);
   if(!ctx||!ctx.sub){toast('Assunto não encontrado.','var(--red)');return;}
   document.getElementById('modal').classList.add('modal-wide');
+  revAbertoEm=Date.now();
   revPrazoEscolhido=revEscadaSugerida(ctx.sub);
   openModal(`🔁 Revisão — ${escapeHtml(ctx.sub.name)}`,revTelaHTML(subId));
   revTelaDesenhar(subId);
@@ -12265,6 +12301,7 @@ function revAbrirTela(subId){
 // closeModal é global e usado por dezenas de telas: em vez de mexer nele, quem abre
 // larga limpa o marcador ao sair.
 function revFecharTela(){
+  revAbertoEm=0; // fechou sem responder: não é revisão, não entra na medição
   document.getElementById('modal').classList.remove('modal-wide');
   closeModal();
 }
@@ -12352,6 +12389,7 @@ function revTelaHTML(subId){
     </div>`;
 }
 function revTelaResponder(subId,quality){
+  if(revAbertoEm){revRegistrarDuracao((Date.now()-revAbertoEm)/1000);revAbertoEm=0;}
   revConcluirDaFila(subId,quality);
   revFecharTela();
 }
