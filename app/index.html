@@ -11378,9 +11378,12 @@ function completeRev(subId,idx,mode,quality){
     // quantos cabem por dia), esticado pelo peso, então o que você domina demora mais
     // mas nunca some. Ver REV_PISO.
     sub.revMastered=false;
-    const prox=revProxIntervalo(sub);
+    const prox=revProxIntervalo(sub,quality);
     db.revisions[subId].push({date:addDays(todayStr(),prox),completed:false});
-    toast(`✅ Revisão concluída! +${revXp} XP · Volta em ${prox} dia${prox>1?'s':''} 📅`,'var(--green)');
+    toast(quality<3
+      ?`😵 Anotado: você esqueceu esse. Volta em ${prox} dia${prox>1?'s':''} — e sobe na fila até lá.`
+      :`✅ Revisão concluída! +${revXp} XP · Volta em ${prox} dia${prox>1?'s':''} 📅`,
+      quality<3?'var(--orange)':'var(--green)');
     gainXP(revXp);
   } else {
     gainXP(15);
@@ -11957,6 +11960,16 @@ function revUltimoContato(sub){
 function revPassadas(sub){
   return (db.revisions[sub.id]||[]).filter(r=>r.completed).length;
 }
+// Só passada BOA conta como progresso. Uma revisão em que você respondeu "esqueci
+// tudo" não pode empurrar o assunto pro piso de peso junto com as que correram bem —
+// era isso que fazia um assunto esquecido descer na fila em vez de subir. Entradas
+// antigas, de antes de existir nota, contam como boas pra não bagunçar o histórico.
+function revPassadasBoas(sub){
+  return (db.revisions[sub.id]||[]).filter(r=>r.completed&&(r.quality===undefined||r.quality>=4)).length;
+}
+// Quanto a última resposta encurta ou estica a volta. É o que faz "Esqueci tudo"
+// significar alguma coisa: sem isso o intervalo saía só do ciclo e a nota era enfeite.
+const REV_MULT_NOTA={1:0.15,2:0.25,3:0.5,4:1,5:1.6};
 // Sua taxa de acerto em questões DESTE assunto, que cada simulado já acumula em
 // sub.simStats. É medido, não auto-declarado — e prevê prova melhor que qualquer peso
 // que alguém digite à mão. null quando o assunto ainda não tem simulado nenhum.
@@ -11968,7 +11981,7 @@ function revAcerto(sub){
 // Peso do assunto na fila. Nunca zero: multiplicado pelos dias parados, um peso baixo
 // só estica o retorno, não cancela.
 function revPeso(sub){
-  let p=Math.max(REV_PISO,1-0.2*revPassadas(sub));
+  let p=Math.max(REV_PISO,1-0.2*revPassadasBoas(sub));
   const ac=revAcerto(sub);
   if(ac!==null){
     // Amostra pequena não pode sacudir a fila: 5 questões respondidas quase não mexem,
@@ -12012,10 +12025,20 @@ function revEstado(){
 }
 // Próximo intervalo quando você conclui: sai do CICLO, não de uma fórmula de memória.
 // Assunto com peso alto volta antes do ciclo médio; o que você domina volta depois.
-function revProxIntervalo(sub){
+function revProxIntervalo(sub,quality){
   const{ciclo}=revEstado();
   const base=ciclo>0?ciclo:30;
-  return Math.min(365,Math.max(3,Math.round(base/revPeso(sub))));
+  const mult=REV_MULT_NOTA[quality]||1;
+  // Piso de 2 dias, não de 1: revisar um assunto é meia hora ou mais, e refazer isso
+  // amanhã de manhã não é realista. Quem precisa de contato imediato é o flashcard,
+  // que custa 10 segundos e já volta na mesma sessão.
+  let d=Math.min(365,Math.max(2,Math.round(base/revPeso(sub)*mult)));
+  // Teto pra quem respondeu que não lembrou. Só o multiplicador não basta: numa coleção
+  // grande o ciclo é de meses, e 15% de 55 dias ainda davam 11 dias pra um assunto que
+  // você acabou de dizer que esqueceu inteiro. Esquecer tem que voltar dentro da semana,
+  // independente do tamanho da coleção.
+  if(quality<3)d=Math.min(d,7);
+  return d;
 }
 function revSalvarOrcamento(min){
   db.revOrcamentoMin=Math.max(10,Math.min(480,+min||REV_ORCAMENTO_PADRAO));
@@ -12071,7 +12094,8 @@ function renderFilaRevisao(container){
       ${selo}
       <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
         <button class="btn btn-xs btn-primary" onclick="goToSubtopic('${it.sub.id}')"><i class="fa fa-book-open"></i> Revisar</button>
-        <button class="btn btn-xs btn-green-s" onclick="revConcluirDaFila('${it.sub.id}')">✓ Revisei</button>
+        <button class="btn btn-xs btn-green-s" onclick="revConcluirDaFila('${it.sub.id}',4)">✓ Revisei</button>
+        <button class="btn btn-xs btn-ghost" title="Não lembrava — volta logo e sobe na fila" onclick="revConcluirDaFila('${it.sub.id}',1)">Preciso ver de novo</button>
       </div>
     </div>`;
   }).join('');
@@ -12085,7 +12109,7 @@ function renderFilaRevisao(container){
 // "Revisei" na fila conclui a revisão pendente mais antiga daquele assunto; se não
 // houver nenhuma pendente (assunto que nunca teve revisão agendada), cria e conclui,
 // pra o histórico continuar sendo a mesma lista de sempre.
-function revConcluirDaFila(subId){
+function revConcluirDaFila(subId,quality){
   const sub=simFindSub(subId);
   if(!sub)return;
   const revs=db.revisions[subId]=(db.revisions[subId]||[])
@@ -12093,7 +12117,7 @@ function revConcluirDaFila(subId){
   let idx=revs.findIndex(r=>!r.completed);
   if(idx<0){revs.push({date:todayStr(),completed:false});idx=revs.length-1;}
   revs[idx].date=todayStr();
-  completeRev(subId,idx,'fila',4);
+  completeRev(subId,idx,'fila',quality||4);
 }
 function renderRevisions(){
   renderErroAssuntos();
