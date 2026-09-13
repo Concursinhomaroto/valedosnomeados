@@ -5969,12 +5969,24 @@ function createKingdom(){
 function renameKingdom(kingdomId){
   const k=db.kingdoms.find(x=>x.id===kingdomId);
   if(!k)return;
-  openModal('✎ Renomear Reino',`
+  // O ícone não tinha onde ser editado em lugar nenhum do app: um reino com ícone
+  // quebrado (aconteceu — um emoji virou U+FFFD no banco) só dava pra consertar pelo
+  // console. Agora sai junto do nome, que é onde a pessoa vai procurar.
+  const quebrado=String(k.icon||'').indexOf('\uFFFD')>=0;
+  openModal('✎ Editar Reino',`
     <div style="display:flex;flex-direction:column;gap:14px">
-      <div>
-        <label style="font-size:11px;font-weight:800;color:var(--text2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Novo nome</label>
-        <input class="inp" id="rn-kingdom-name" value="${escapeHtml(k.name)}" style="width:100%">
+      <div style="display:flex;gap:10px">
+        <div style="flex:0 0 86px">
+          <label style="font-size:11px;font-weight:800;color:var(--text2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Ícone</label>
+          <input class="inp" id="rn-kingdom-icon" value="${escapeHtml(iconeReino(k.icon))}" maxlength="8" style="width:100%;text-align:center;font-size:22px">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:11px;font-weight:800;color:var(--text2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Nome</label>
+          <input class="inp" id="rn-kingdom-name" value="${escapeHtml(k.name)}" style="width:100%">
+        </div>
       </div>
+      ${quebrado?`<div style="font-size:11.5px;color:var(--orange-t);background:rgba(194,65,12,.10);border:1px solid rgba(194,65,12,.28);border-radius:9px;padding:8px 10px;line-height:1.5">
+        O ícone deste reino está corrompido no banco (vinha aparecendo como <b>??</b>). Coloque o emoji que você quer aqui em cima e salve pra consertar de vez.</div>`:''}
       <button class="btn btn-primary" onclick="saveKingdomRename('${kingdomId}')" style="width:100%;justify-content:center"><i class="fa fa-check"></i> Salvar</button>
     </div>
   `);
@@ -5985,6 +5997,10 @@ function saveKingdomRename(kingdomId){
   const name=document.getElementById('rn-kingdom-name').value.trim();
   if(!name){toast('⚠️ Digite um nome','var(--red)');return;}
   k.name=name;
+  const ic=document.getElementById('rn-kingdom-icon');
+  // iconeReino de novo na saída: não adianta consertar a tela se o campo puder gravar
+  // lixo de volta no banco.
+  if(ic)k.icon=iconeReino(ic.value);
   saveDB();closeModal();renderMap();
   if(currentKingdom&&currentKingdom.id===kingdomId)openKingdom(k);
   if(document.getElementById('screen-vale')?.classList.contains('active')&&typeof renderValeMap==='function')renderValeMap();
