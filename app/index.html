@@ -2276,7 +2276,7 @@ nav{
 
     <div class="section-card dash-card">
       <div class="dash-head">
-        <div class="sec-title dash-sec">⚠️ Dívida de revisão</div>
+        <div class="sec-title dash-sec">🔁 Revisão — na vez</div>
         <button id="notif-permission-btn" class="btn btn-xs btn-ghost" style="display:none" onclick="requestNotifPermission()" title="Receber um aviso quando houver revisões atrasadas">🔔 Lembretes</button>
       </div>
       <div id="divida-resumo"></div>
@@ -11674,11 +11674,14 @@ function computeStudyRecommendations(){
   db.kingdoms.forEach(k=>{
     (db.topics[k.id]||[]).forEach(t=>{
       (t.subtopics||[]).forEach(s=>{
+        // Mesma régua da Câmara: assunto dominado ou de reino desligado não pode ser
+        // recomendado como revisão — você tirou ele da fila de propósito.
+        const revivel=s.studied&&!s.revDominado&&!revReinoFora(k.id);
         const revs=db.revisions[s.id]||[];
         let overdueCount=0;
-        revs.forEach((r,i)=>{
+        if(revivel)revs.forEach((r,i)=>{
           const prevDone=revs.slice(0,i).every(p=>p.completed);
-          if(!r.completed&&prevDone&&s.studied&&r.date<today)overdueCount++;
+          if(!r.completed&&prevDone&&r.date<today)overdueCount++;
         });
         const notStudied=!s.studied;
         let weakPct=null;
@@ -12768,50 +12771,56 @@ function renderDashboard(){
     {icon:dashLvl.icon,val:(db.xp||0).toLocaleString(),lbl:`Nível ${dashLvl.level} · ${dashLvl.titulo}`,color:'var(--gold)'},
   ].map(s=>`<div class="stat-card"><span class="stat-icon">${s.icon}</span><div class="stat-val" style="color:${s.color}">${s.val}</div><div class="stat-lbl">${s.lbl}</div></div>`).join('');
 
-  // Dívida de revisão: o cartão passa a medir, não a listar. Listar 5 de 37 numa
-  // caixa rolante escondia o tamanho do problema e repetia "75d atraso" cinco
-  // vezes; o número, a mais antiga e a barra por reino é que dizem o que atacar.
-  const todasAtrasadas=getAllRevItems().filter(i=>!i.completed&&!i.locked&&i.studied&&i.date<today)
-    .sort((a,b)=>a.date.localeCompare(b.date));
+  // O cartão agora mede pela MESMA régua da Câmara de Revisões: só conta o que está
+  // elegível de verdade (reino ligado, não dominado, prazo chegado) e chama as coisas
+  // pelo nome do modelo novo. Antes ele lia getAllRevItems() por data, então mostrava
+  // "76 atrasadas" incluindo reino desligado e assunto dominado — e a palavra "dívida"
+  // contradizia a fila, que existe justamente pra não ter dívida.
+  const est=revEstado();
+  const fila=revCandidatos();
+  const vencidos=fila.filter(c=>(c.atraso||0)>0);
   const rEl=document.getElementById('divida-resumo');
   const oEl=document.getElementById('dash-overdue-revs');
-  if(!todasAtrasadas.length){
+  if(!fila.length){
     if(rEl)rEl.innerHTML='';
-    oEl.innerHTML=`<div class="empty" style="padding:20px"><i class="fa fa-party-horn"></i><p>Sem revisões atrasadas! Continue assim! 🎉</p></div>`;
+    oEl.innerHTML=`<div class="empty" style="padding:20px"><i class="fa fa-party-horn"></i><p>${
+      est.estudados?'Nada na vez hoje — está tudo com prazo pra frente. 🎉'
+                   :'Estude um miniboss pra ele entrar na fila.'}</p></div>`;
   }else{
     const porReino={};
-    todasAtrasadas.forEach(i=>{
-      const nome=i.kingdomName||'—';
-      if(!porReino[nome])porReino[nome]={n:0,icon:i.kingdomIcon,cor:i.kingdomColor};
+    fila.forEach(c=>{
+      const nome=c.kingdom.name||'—';
+      if(!porReino[nome])porReino[nome]={n:0,cor:c.kingdom.color};
       porReino[nome].n++;
     });
     const paleta=['#8b5cf6','#ec4899','#f59e0b','#10b981','#0891b2','#ef4444'];
     const reinos=Object.entries(porReino).sort((a,b)=>b[1].n-a[1].n)
       .map(([nome,v],i)=>({nome,n:v.n,cor:v.cor||paleta[i%paleta.length]}));
-    const total=todasAtrasadas.length;
-    const maisAntiga=daysDiff(todasAtrasadas[0].date,today);
-    const lote=todasAtrasadas.slice(0,5).map(i=>i.subId);
+    const total=fila.length;
+    const cabem=Math.min(est.porDia,total);
+    const maisAntiga=vencidos.length?vencidos[0].atraso:0;
     if(rEl)rEl.innerHTML=`
       <div class="div-topo">
-        <div class="div-num">${total}</div>
-        <div class="div-txt"><b>revisõe${total===1?'':'s'} atrasada${total===1?'':'s'}</b>
-          a mais antiga há ${maisAntiga} dia${maisAntiga===1?'':'s'}<br>
-          ${reinos[0].n} só em ${reinos[0].nome}</div>
+        <div class="div-num" style="${vencidos.length?'':'color:var(--accent)'}">${total}</div>
+        <div class="div-txt"><b>assunto${total===1?'':'s'} na vez</b>
+          ${vencidos.length?`${vencidos.length} com prazo vencido, o mais antigo há ${maisAntiga} dia${maisAntiga===1?'':'s'}`
+                           :'nenhum com prazo vencido'}<br>
+          ${cabem} cabe${cabem===1?'':'m'} hoje · ciclo de ${est.ciclo||'—'} dias</div>
       </div>
       <div class="div-barra">${reinos.map(r=>`<i style="width:${(r.n/total*100).toFixed(1)}%;background:${r.cor}" title="${r.nome}: ${r.n}"></i>`).join('')}</div>
-      <div class="div-leg">${reinos.slice(0,4).map(r=>`<span><i class="div-pt" style="background:${r.cor}"></i>${r.nome} ${r.n}</span>`).join('')}</div>
-      <button class="div-btn" onclick="abrirRevisoesAtrasadas()">Atacar as ${Math.min(5,total)} mais antiga${Math.min(5,total)===1?'':'s'} →</button>`;
-    // Sobram só as duas mais antigas como amostra, com um botão por linha em vez
-    // de dois empilhados — eram eles que esticavam a linha pra 75px.
-    oEl.innerHTML=todasAtrasadas.slice(0,2).map(item=>{
-      const d=daysDiff(item.date,today);
-      return`<div class="rev-item overdue">
-        <button class="btn btn-xs btn-green-s" title="Marcar como revisada" onclick="openRevQualityPicker('${item.subId}',${item.idx},'dashboard')">✓</button>
-        <div class="rev-info"><div class="rev-name">${item.subName}</div><div class="rev-sub">${item.kingdomName} · ${item.topicName||item.date}</div></div>
-        <span class="rev-cd cd-over">${d}d</span>
-        <button class="btn btn-xs btn-ghost" title="Já reestudei esse assunto — recomeçar o agendamento de revisão a partir de hoje" onclick="resetarRevisoes('${item.subId}');renderDashboard()"><i class="fa fa-rotate"></i></button>
-      </div>`;
-    }).join('');
+      <div class="div-leg">${reinos.slice(0,4).map(r=>`<span><i class="div-pt" style="background:${r.cor}"></i>${escapeHtml(r.nome)} ${r.n}</span>`).join('')}</div>
+      <button class="div-btn" onclick="abrirRevisoesAtrasadas()">Abrir a fila de hoje →</button>`;
+    // Amostra dos dois primeiros, com as mesmas ações da fila: revisar de verdade ou
+    // marcar que revisou. "Já reestudei" saiu — quem recomeça o agendamento hoje é a
+    // própria escada de prazos.
+    oEl.innerHTML=fila.slice(0,2).map(c=>`
+      <div class="rev-item${(c.atraso||0)>0?' overdue':''}">
+        <button class="btn btn-xs btn-green-s" title="Marcar como revisado" onclick="revConcluirDaFila('${c.sub.id}',4);renderDashboard()">✓</button>
+        <div class="rev-info"><div class="rev-name">${escapeHtml(c.sub.name)}</div>
+          <div class="rev-sub">${escapeHtml(c.kingdom.name)} · ${escapeHtml(c.topic.name)}</div></div>
+        <span class="rev-cd ${(c.atraso||0)>0?'cd-over':'cd-today'}">${(c.atraso||0)>0?c.atraso+'d':'hoje'}</span>
+        <button class="btn btn-xs btn-ghost" title="Abrir a tela de revisão" onclick="revAbrirTela('${c.sub.id}')"><i class="fa fa-book-open"></i></button>
+      </div>`).join('');
   }
 
   // O que estudar agora
@@ -12846,10 +12855,12 @@ function renderDashboard(){
 
 // O botao de lote leva pra aba "Atrasadas" das Revisoes, que ja e a tela feita
 // pra resolver varias de uma vez — nao inventa um fluxo novo em cima do painel.
+// Abre a Câmara na Fila de hoje, que é onde o vencido agora aparece — a aba "Atrasadas"
+// que este botão procurava deixou de existir quando a fila passou a ordenar tudo junto.
 function abrirRevisoesAtrasadas(){
   showScreen('revisions');
   setTimeout(()=>{
-    const aba=document.querySelector('#screen-revisions .filter-row .chip[onclick*="overdue"]');
+    const aba=document.querySelector('#screen-revisions .filter-row .chip[onclick*="\'fila\'"]');
     if(aba)aba.click();
   },80);
 }
