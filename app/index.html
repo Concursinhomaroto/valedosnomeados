@@ -12101,6 +12101,139 @@ function revRetencao(sub,topicId){
   return null;
 }
 
+
+// ===== VARREDURA: AMARRAR FLASHCARD AO ASSUNTO =====
+// O baralho é do CHEFÃO, então 76% dos cards não sabem de qual miniboss são — e sem isso
+// a retenção do assunto cai pra aproximação do chefão inteiro. Esta varredura tenta
+// descobrir: o nome do miniboss aparece no card? As TAGS são o melhor sinal, porque são
+// palavras-chave do assunto ("reposicao volemica,samu"), não texto corrido.
+//
+// Regra de ouro aqui é PRECISÃO, não cobertura: um card amarrado no assunto errado
+// envenena a medição dos dois assuntos. Por isso só olha os minibosses do próprio
+// chefão do card (5 a 25 candidatos em vez de 265), exige o nome quase inteiro e exige
+// folga sobre o segundo colocado. Na dúvida, não amarra.
+const REV_STOP=new Set(['de','da','do','das','dos','e','a','o','as','os','em','no','na',
+  'nos','nas','para','por','com','um','uma','ao','aos','seu','sua','que','the','of']);
+function revNorm(t){
+  return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function revTokensNome(t){
+  return revNorm(t).split(' ').filter(w=>w.length>=3&&!REV_STOP.has(w));
+}
+// Devolve {sub, conf:'alta'|'media'} ou null.
+function revCasarCard(card,subs){
+  const tags=' '+revNorm(card.tags)+' ';
+  const corpo=' '+revNorm(card.pergunta)+' '+revNorm(card.resposta)+' ';
+  let melhor=null,segundo=0;
+  subs.forEach(s=>{
+    const toks=revTokensNome(s.name);
+    if(!toks.length)return;
+    let achados=0,emTag=0;
+    toks.forEach(w=>{
+      const re=' '+w;
+      if(tags.indexOf(re)>=0){achados++;emTag++;}
+      else if(corpo.indexOf(re)>=0)achados++;
+    });
+    if(!achados)return;
+    const cobertura=achados/toks.length;
+    const score=cobertura*(1+emTag/toks.length);
+    if(!melhor||score>melhor.score){segundo=melhor?melhor.score:segundo;melhor={sub:s,score,cobertura,emTag,toks:toks.length};}
+    else if(score>segundo)segundo=score;
+  });
+  if(!melhor)return null;
+  if(melhor.cobertura<0.999)return null;              // o nome INTEIRO tem que estar lá
+  if(segundo>0&&melhor.score<segundo*1.3)return null;  // dois assuntos disputam: não chuta
+  // Nome de uma palavra só achado no corpo (não na tag) é o caso mais frágil: uma palavra
+  // comum aparece em card de outro assunto sem ser o tema dele.
+  const conf=(melhor.emTag>0)?'alta':(melhor.toks>=2?'alta':'media');
+  return {sub:melhor.sub,conf};
+}
+// Passada a seco: não grava nada.
+function revVarrerVinculos(){
+  const porChefe={};
+  db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>{porChefe[t.id]={topic:t,kingdom:k,subs:t.subtopics||[]};}));
+  const casados=[],res={alta:0,media:0};
+  let semVinculo=0,semChefe=0;
+  Object.values(db.flashcards||{}).forEach(c=>{
+    if(c.subId)return;
+    semVinculo++;
+    const ctx=porChefe[c.mbId];
+    if(!ctx||!ctx.subs.length){semChefe++;return;}
+    const m=revCasarCard(c,ctx.subs);
+    if(!m)return;
+    res[m.conf]++;
+    casados.push({cardId:c.id,subId:m.sub.id,subNome:m.sub.name,conf:m.conf,
+                  chefao:ctx.topic.name,tags:c.tags||'',pergunta:(c.pergunta||'').slice(0,90)});
+  });
+  return {semVinculo,semChefe,casados,res};
+}
+let revVarreduraCache=null;
+function revAbrirVarredura(){
+  const v=revVarreduraCache=revVarrerVinculos();
+  const amostra=v.casados.slice(0,4).concat(
+    v.casados.filter(x=>x.conf==='media').slice(0,4),
+    v.casados.slice(-4)).filter((x,i,a)=>a.findIndex(y=>y.cardId===x.cardId)===i).slice(0,10);
+  const jaAuto=Object.values(db.flashcards||{}).filter(c=>c.vinculoAuto).length;
+  openModal('🔗 Amarrar flashcards ao assunto',`
+    <div style="font-size:12.5px;color:var(--text2);line-height:1.6;margin-bottom:14px">
+      O baralho é do chefão, então a maior parte dos cards não sabe de qual miniboss é — e
+      sem isso a retenção do assunto vale a média do chefão inteiro. A varredura procura o
+      <b>nome do miniboss</b> nas tags e no texto do card, <b>só entre os minibosses do
+      próprio chefão</b>. Na dúvida, não amarra.
+    </div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px">
+      <div><b style="font-size:22px;font-weight:900">${v.semVinculo}</b><div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase">sem assunto hoje</div></div>
+      <div><b style="font-size:22px;font-weight:900;color:var(--green-t)">${v.res.alta}</b><div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase">casaram · alta</div></div>
+      <div><b style="font-size:22px;font-weight:900;color:var(--orange-t)">${v.res.media}</b><div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase">casaram · média</div></div>
+      <div><b style="font-size:22px;font-weight:900;color:var(--muted)">${v.semVinculo-v.casados.length}</b><div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase">seguem sem</div></div>
+    </div>
+    ${v.casados.length?`
+    <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px">Amostra — confira antes de aplicar</div>
+    <div style="max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+      ${amostra.map(x=>`<div style="background:var(--panel2);border:1.5px solid var(--border);border-radius:9px;padding:8px 10px;font-size:11.5px">
+        <div style="color:var(--text)">${escapeHtml(x.pergunta)}${x.pergunta.length>=90?'…':''}</div>
+        <div style="color:var(--muted);margin-top:3px">
+          ${x.tags?`🏷️ ${escapeHtml(x.tags)} · `:''}${escapeHtml(x.chefao)}
+          → <b style="color:${x.conf==='alta'?'var(--green-t)':'var(--orange-t)'}">${escapeHtml(x.subNome)}</b>
+          <span style="font-size:9.5px">(${x.conf})</span></div></div>`).join('')}
+    </div>`:'<p style="font-size:12.5px;color:var(--muted);margin-bottom:16px">Nenhum card casou com um nome de miniboss. Nada a aplicar.</p>'}
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${v.res.alta?`<button class="btn btn-primary" onclick="revAplicarVarredura('alta')">Aplicar só os de alta (${v.res.alta})</button>`:''}
+      ${v.casados.length?`<button class="btn" onclick="revAplicarVarredura('tudo')">Aplicar alta + média (${v.casados.length})</button>`:''}
+      ${jaAuto?`<button class="btn btn-ghost" onclick="revDesfazerVarredura()"><i class="fa fa-rotate-left"></i> Desfazer varredura (${jaAuto})</button>`:''}
+      <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+    </div>
+    <p style="font-size:11px;color:var(--muted);margin-top:12px">Tudo que for amarrado aqui fica marcado como automático — dá pra desfazer de uma vez, sem tocar nos cards que já tinham assunto.</p>`);
+}
+function revAplicarVarredura(modo){
+  const v=revVarreduraCache;
+  if(!v)return;
+  let n=0;
+  v.casados.forEach(x=>{
+    if(modo==='alta'&&x.conf!=='alta')return;
+    const c=db.flashcards[x.cardId];
+    if(!c||c.subId)return;
+    c.subId=x.subId;c.subNome=x.subNome;c.vinculoAuto=true;
+    n++;
+  });
+  saveDB();
+  closeModal();
+  toast(`🔗 ${n} flashcard${n===1?'':'s'} amarrado${n===1?'':'s'} ao assunto.`,'var(--green)');
+  renderRevisions();
+}
+function revDesfazerVarredura(){
+  let n=0;
+  Object.values(db.flashcards||{}).forEach(c=>{
+    if(!c.vinculoAuto)return;
+    delete c.subId;delete c.subNome;delete c.vinculoAuto;n++;
+  });
+  saveDB();
+  closeModal();
+  toast(`↩ ${n} vínculo${n===1?'':'s'} automático${n===1?'':'s'} desfeito${n===1?'':'s'}.`,'var(--accent)');
+  renderRevisions();
+}
+
 function revOrcamento(){return Math.max(10,+db.revOrcamentoMin||REV_ORCAMENTO_PADRAO);}
 
 // ===== QUANTO CUSTA UMA REVISÃO, MEDIDO =====
@@ -12311,6 +12444,8 @@ function revBarraHTML(){
     </div>
     <div style="margin-top:12px;padding-top:11px;border-top:1px solid var(--border);font-size:12px;color:var(--text2);display:flex;gap:8px;align-items:flex-start"><span>${icone}</span><span>${aviso}</span></div>
     <div style="margin-top:12px;padding-top:11px;border-top:1px solid var(--border)">
+      ${(()=>{const sem=Object.values(db.flashcards||{}).filter(c=>!c.subId).length;
+        return sem?`<div style="font-size:11px;color:var(--muted);margin-bottom:10px"><b>${sem}</b> flashcard${sem===1?'':'s'} sem assunto — a retenção deles vale a média do chefão. <span class="dash-verlink" onclick="revAbrirVarredura()">tentar amarrar</span></div>`:'';})()}
       <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Reinos nesta revisão <span style="font-weight:600;text-transform:none;letter-spacing:0">— desligar tira da fila sem apagar nada: o reino segue no mapa e continua estudável</span></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${db.kingdoms.map(k=>{const fora=revReinoFora(k.id);
