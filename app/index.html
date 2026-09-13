@@ -2155,7 +2155,8 @@ nav{
   </div>
 
   <div class="filter-row">
-    <button class="chip active" onclick="filterRevs('overdue',this)">🔴 Atrasadas</button>
+    <button class="chip active" onclick="filterRevs('fila',this)">🎯 Fila de hoje</button>
+    <button class="chip" onclick="filterRevs('overdue',this)">🔴 Atrasadas</button>
     <button class="chip" onclick="filterRevs('today',this)">🔥 Hoje</button>
     <button class="chip" onclick="filterRevs('week',this)">📅 Próximos 7 dias</button>
     <button class="chip" onclick="filterRevs('done',this)">✅ Concluídas</button>
@@ -5076,7 +5077,7 @@ let simActive={}; // subId -> {questoes,quantidade,corrected} do simulado em and
 let simGeralConfig={selectedSubIds:new Set()}; // seleção de assuntos pro Simulado Geral (tela de configuração)
 let simGeralActive=null; // {questoes,startedAt,limiteSec,corrected,tempoGastoSec,finishedAt} do simulado geral em andamento
 let sgTimerInterval=null;
-let revFilter='overdue';
+let revFilter='fila';
 let mbFilter='all';
 let errFilter='pending';
 
@@ -11366,19 +11367,20 @@ function completeRev(subId,idx,mode,quality){
         if(sub.sm2.reps===0)sub.sm2.reps=1; // já teve ao menos uma revisão de verdade nesse intervalo
       }
     }
-    sub.sm2=sm2Next(sub.sm2,quality);
-    const mastered=sub.sm2.reps>=3&&sub.sm2.interval>=90&&quality>=4;
+    sub.sm2=sm2Next(sub.sm2,quality); // mantido como histórico/rede de segurança
     // Recall ativo vale mais que tempo passivo, mas escalado pela qualidade do
     // lembrete — antes era 100 XP fixo tanto pra "esqueci tudo" quanto pra "sabia de
     // cor", o que valia 3-6x uma hora inteira de estudo livre, desbalanceando tudo.
     const revXp={1:15,3:25,4:35,5:40}[quality]||20;
-    if(mastered){
-      sub.revMastered=true;
-      toast(`🎉 Domínio total! Você lembrou bem várias vezes seguidas — sem mais revisões agendadas por agora. +${revXp} XP`,'var(--green)');
-    }else{
-      db.revisions[subId].push({date:addDays(todayStr(),sub.sm2.interval),completed:false});
-      toast(`✅ Revisão concluída! +${revXp} XP · Próxima em ${sub.sm2.interval} dia${sub.sm2.interval>1?'s':''} 📅`,'var(--green)');
-    }
+    // O "domínio total" marcava revMastered e o assunto saía da fila PARA SEMPRE — o
+    // jeito mais certo de perder justamente aquele em que você mais investiu pra
+    // aprender. Agora sempre volta: o intervalo sai do CICLO da sua fila (assuntos ÷
+    // quantos cabem por dia), esticado pelo peso, então o que você domina demora mais
+    // mas nunca some. Ver REV_PISO.
+    sub.revMastered=false;
+    const prox=revProxIntervalo(sub);
+    db.revisions[subId].push({date:addDays(todayStr(),prox),completed:false});
+    toast(`✅ Revisão concluída! +${revXp} XP · Volta em ${prox} dia${prox>1?'s':''} 📅`,'var(--green)');
     gainXP(revXp);
   } else {
     gainXP(15);
@@ -11920,9 +11922,183 @@ function removeErroAssunto(id){
   renderErroAssuntos();
 }
 
+// ===== FILA DE REVISÃO POR ORÇAMENTO =====
+// A Câmara de Revisões era um calendário de vencimentos: cada assunto ganhava uma data e
+// tudo que passasse dela virava "atrasada". Com 326 assuntos isso não tem conserto — a
+// pilha de atrasados é MATEMATICAMENTE permanente, porque o que cabe num dia é o que o
+// seu tempo permite, não o que o calendário marcou. A fila abaixo inverte: o app não
+// promete data nenhuma, ele ordena por urgência e corta no tamanho do seu dia. O que não
+// coube hoje não venceu — só não era o mais importante hoje.
+//
+// O ciclo (de quantos em quantos dias um assunto volta) deixa de ser uma fórmula e vira
+// uma consequência: assuntos ÷ quantos cabem por dia. Se você revisar mais, encurta; se
+// acumular mais assunto, estica. E é esse número que avisa, com meses de antecedência,
+// que você está adicionando mais rápido do que consegue manter.
+const REV_CUSTO_PADRAO=20;      // minutos por revisão, até existir medição real
+const REV_ORCAMENTO_PADRAO=60;  // minutos por dia reservados a revisão de assunto
+// Peso mínimo. O sistema antigo marcava revMastered e o assunto saía da fila PARA SEMPRE
+// — o jeito mais certo de perder justamente aquele em que você mais investiu. Aqui o que
+// você domina estica (até ~4x o ciclo), mas sempre volta.
+const REV_PISO=0.25;
+
+function revOrcamento(){return Math.max(10,+db.revOrcamentoMin||REV_ORCAMENTO_PADRAO);}
+function revCusto(){return Math.max(5,+db.revCustoMin||REV_CUSTO_PADRAO);}
+function revPorDia(){return Math.max(1,Math.floor(revOrcamento()/revCusto()));}
+
+// Última vez que você olhou o assunto INTEIRO: a revisão concluída mais recente, ou o
+// primeiro estudo se ainda não houve nenhuma.
+function revUltimoContato(sub){
+  let ultima=null;
+  (db.revisions[sub.id]||[]).forEach(r=>{
+    if(r.completed&&r.date&&typeof r.date==='string'&&(!ultima||r.date>ultima))ultima=r.date;
+  });
+  return ultima||sub.studiedAt||null;
+}
+function revPassadas(sub){
+  return (db.revisions[sub.id]||[]).filter(r=>r.completed).length;
+}
+// Sua taxa de acerto em questões DESTE assunto, que cada simulado já acumula em
+// sub.simStats. É medido, não auto-declarado — e prevê prova melhor que qualquer peso
+// que alguém digite à mão. null quando o assunto ainda não tem simulado nenhum.
+function revAcerto(sub){
+  const st=sub&&sub.simStats;
+  if(!st||!st.questoesTotal)return null;
+  return st.acertosTotal/st.questoesTotal;
+}
+// Peso do assunto na fila. Nunca zero: multiplicado pelos dias parados, um peso baixo
+// só estica o retorno, não cancela.
+function revPeso(sub){
+  let p=Math.max(REV_PISO,1-0.2*revPassadas(sub));
+  const ac=revAcerto(sub);
+  if(ac!==null){
+    // Amostra pequena não pode sacudir a fila: 5 questões respondidas quase não mexem,
+    // 30+ mexem por inteiro.
+    const conf=Math.min(1,(sub.simStats.questoesTotal||0)/30);
+    p*=Math.max(0.4,1+conf*(0.6-ac));
+  }
+  const pri=sub.priority===100?1.15:sub.priority===30?0.9:1;
+  return Math.max(REV_PISO,p*pri);
+}
+function revDiasParado(sub){
+  const base=revUltimoContato(sub);
+  return base?Math.max(0,daysDiff(base,todayStr())):365;
+}
+function revUrgencia(sub){return revDiasParado(sub)*revPeso(sub);}
+
+// Todo assunto já estudado entra. Quem foi revisado HOJE sai — senão a mesma coisa
+// voltaria no topo logo depois de você concluir.
+function revCandidatos(){
+  const hoje=todayStr(),out=[];
+  db.kingdoms.forEach(k=>{
+    (db.topics[k.id]||[]).forEach(t=>{
+      (t.subtopics||[]).forEach(s=>{
+        if(!s.studied)return;
+        if(revUltimoContato(s)===hoje&&revPassadas(s)>0)return;
+        out.push({sub:s,topic:t,kingdom:k,
+                  dias:revDiasParado(s),peso:revPeso(s),
+                  acerto:revAcerto(s),urg:revUrgencia(s)});
+      });
+    });
+  });
+  out.sort((a,b)=>b.urg-a.urg);
+  return out;
+}
+// O estado honesto da coleção: nada aqui é promessa, é só a sua capacidade dividida.
+function revEstado(){
+  const estudados=revCandidatos().length;
+  const porDia=revPorDia();
+  const ciclo=estudados?Math.round(estudados/porDia):0;
+  return {estudados,porDia,ciclo,orcamento:revOrcamento(),custo:revCusto()};
+}
+// Próximo intervalo quando você conclui: sai do CICLO, não de uma fórmula de memória.
+// Assunto com peso alto volta antes do ciclo médio; o que você domina volta depois.
+function revProxIntervalo(sub){
+  const{ciclo}=revEstado();
+  const base=ciclo>0?ciclo:30;
+  return Math.min(365,Math.max(3,Math.round(base/revPeso(sub))));
+}
+function revSalvarOrcamento(min){
+  db.revOrcamentoMin=Math.max(10,Math.min(480,+min||REV_ORCAMENTO_PADRAO));
+  saveDB();
+  renderRevisions();
+}
+
+function revBarraHTML(){
+  const e=revEstado();
+  const corCiclo=e.ciclo<=60?'var(--green-t)':e.ciclo<=90?'var(--orange-t)':'var(--red-t)';
+  let icone,aviso;
+  if(!e.estudados){icone='📘';aviso='Nenhum assunto estudado ainda — a fila começa quando você estudar o primeiro miniboss.';}
+  else if(e.ciclo<=60){icone='🟢';aviso=`<b>Sustentável.</b> Nesse ritmo você aguenta até cerca de ${e.porDia*90} assuntos antes de o ciclo esticar demais.`;}
+  else if(e.ciclo<=90){icone='🟡';aviso='<b>Esticando.</b> O ciclo passou de dois meses. Ainda funciona enquanto os flashcards estiverem em dia — são eles que seguram o assunto entre uma revisão e a próxima.';}
+  else{icone='🔴';aviso=`<b>Você está acumulando mais rápido do que mantém.</b> Com ciclo de ${e.ciclo} dias, voltar a um assunto deixa de ser revisão e vira reestudo. Dá pra corrigir aumentando o tempo por dia, barateando a revisão, ou segurando assunto novo.`;}
+  const mt=n=>`<div style="display:flex;flex-direction:column;gap:1px"><b style="font-size:24px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums">${n[0]}</b><span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">${n[1]}</span></div>`;
+  return `<div class="section-card" style="margin-bottom:14px">
+    <div style="display:flex;flex-wrap:wrap;gap:10px 26px;align-items:flex-end">
+      ${mt([e.estudados,'assuntos'])}
+      <div style="display:flex;flex-direction:column;gap:1px"><b style="font-size:24px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${corCiclo}">${e.ciclo||'—'}</b><span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">dias de ciclo</span></div>
+      ${mt([e.porDia,'cabem hoje'])}
+      <label style="margin-left:auto;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:flex;flex-direction:column;gap:4px">tempo por dia
+        <select class="inp" style="min-width:120px;font-size:12px;text-transform:none;letter-spacing:0" onchange="revSalvarOrcamento(this.value)">
+          ${[30,60,90,120,180,240].map(m=>`<option value="${m}" ${revOrcamento()===m?'selected':''}>${m<60?m+' min':(m/60)+'h'}</option>`).join('')}
+        </select>
+      </label>
+    </div>
+    <div style="margin-top:12px;padding-top:11px;border-top:1px solid var(--border);font-size:12px;color:var(--text2);display:flex;gap:8px;align-items:flex-start"><span>${icone}</span><span>${aviso}</span></div>
+  </div>`;
+}
+function renderFilaRevisao(container){
+  const todos=revCandidatos();
+  const n=revPorDia();
+  const fila=todos.slice(0,n);
+  let html=revBarraHTML();
+  if(!fila.length){
+    html+=`<div class="empty"><i class="fa fa-check-double"></i><p>${todos.length?'Tudo que cabia hoje já foi revisado. 🎉':'Estude um miniboss pra ele entrar na fila.'}</p></div>`;
+    container.innerHTML=html;return;
+  }
+  html+=fila.map(it=>{
+    const ac=it.acerto;
+    const corAc=ac===null?'var(--muted)':ac<0.6?'var(--red-t)':ac<0.78?'var(--orange-t)':'var(--green-t)';
+    const selo=ac===null
+      ?'<span style="font-size:10px;font-weight:800;padding:4px 9px;border-radius:999px;color:var(--orange-t);background:rgba(194,65,12,.10);border:1px dashed var(--orange-t);white-space:nowrap">sem medição</span>'
+      :`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px"><b style="font-size:14px;font-weight:900;color:${corAc};font-variant-numeric:tabular-nums">${Math.round(ac*100)}%</b><span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">questões</span><span style="font-size:9px;color:var(--muted);font-weight:700">${it.sub.simStats.questoesTotal} resp.</span></div>`;
+    const risco=ac===null?'var(--orange)':ac<0.6?'var(--red)':ac<0.78?'var(--orange)':'var(--green)';
+    return `<div class="rev-item" style="border-left:5px solid ${risco}">
+      <span style="font-size:20px">${it.kingdom.icon}</span>
+      <div class="rev-info">
+        <div class="rev-name">${escapeHtml(it.sub.name)}</div>
+        <div class="rev-sub">${escapeHtml(it.topic.name)} · ${escapeHtml(it.kingdom.name)} · há ${it.dias} dia${it.dias===1?'':'s'} sem olhar</div>
+      </div>
+      ${selo}
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+        <button class="btn btn-xs btn-primary" onclick="goToSubtopic('${it.sub.id}')"><i class="fa fa-book-open"></i> Revisar</button>
+        <button class="btn btn-xs btn-green-s" onclick="revConcluirDaFila('${it.sub.id}')">✓ Revisei</button>
+      </div>
+    </div>`;
+  }).join('');
+  if(todos.length>n){
+    html+=`<div style="font-size:12.5px;color:var(--muted);text-align:center;padding:14px;border:1.5px dashed var(--border);border-radius:11px;margin-top:8px">
+      Por hoje é isso. <b>Sem atrasadas, sem dívida.</b><br>
+      Os outros ${todos.length-n} assuntos não venceram — só não eram os mais importantes hoje.</div>`;
+  }
+  container.innerHTML=html;
+}
+// "Revisei" na fila conclui a revisão pendente mais antiga daquele assunto; se não
+// houver nenhuma pendente (assunto que nunca teve revisão agendada), cria e conclui,
+// pra o histórico continuar sendo a mesma lista de sempre.
+function revConcluirDaFila(subId){
+  const sub=simFindSub(subId);
+  if(!sub)return;
+  const revs=db.revisions[subId]=(db.revisions[subId]||[])
+    .filter(r=>r.date&&typeof r.date==='string'&&r.date.length===10);
+  let idx=revs.findIndex(r=>!r.completed);
+  if(idx<0){revs.push({date:todayStr(),completed:false});idx=revs.length-1;}
+  revs[idx].date=todayStr();
+  completeRev(subId,idx,'fila',4);
+}
 function renderRevisions(){
   renderErroAssuntos();
   const container=document.getElementById('revisions-list');
+  if(revFilter==='fila'){renderFilaRevisao(container);return;}
   const today=todayStr();const in7=addDays(today,7);
   let items=getAllRevItems();
   // Filtros: itens bloqueados (anterior não concluída) nunca aparecem em atrasadas/hoje/semana
