@@ -12101,8 +12101,13 @@ function revRetencaoCard(c){
   if(!c||!c.ultimaRevisao)return null;         // nunca revisado: sem medição
   const st=fsrsEstado(c);
   if(!st||!(st.S>0))return null;
-  const t=Math.max(0,daysDiff(c.ultimaRevisao,todayStr()));
-  return fsrsR(t,st.S);
+  // ultimaRevisao do flashcard é ISO COMPLETO ("2026-09-13T18:00:00.000Z"), não
+  // "AAAA-MM-DD" como nas revisões de miniboss. daysDiff concatena 'T00:00:00' na data,
+  // então o ISO inteiro virava "...ZT00:00:00" — data inválida, NaN, e um único card
+  // assim envenenava a média inteira do assunto e do chefão (era o "NaN%" na fila).
+  const t=Math.max(0,daysDiff(String(c.ultimaRevisao).slice(0,10),todayStr()));
+  const r=fsrsR(t,st.S);
+  return isFinite(r)?r:null;                   // cinto de segurança: nada de NaN no total
 }
 // Índice montado de uma vez. Sem ele seriam 276 assuntos x 4870 cards a cada render.
 // A chave inclui lastModified, então qualquer save (inclusive responder um card)
@@ -12114,6 +12119,7 @@ function revRetencaoIndice(){
   Object.values(db.flashcards||{}).forEach(c=>{
     const r=revRetencaoCard(c);
     if(r===null)return;
+    if(!isFinite(r))return;
     if(c.subId){const a=porSub[c.subId]=porSub[c.subId]||{s:0,n:0};a.s+=r;a.n++;}
     if(c.mbId){const a=porChefe[c.mbId]=porChefe[c.mbId]||{s:0,n:0};a.s+=r;a.n++;}
   });
