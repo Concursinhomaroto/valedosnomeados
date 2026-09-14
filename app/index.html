@@ -533,6 +533,9 @@ nav{
 .sim-q{border-top:1px dashed var(--border);padding-top:10px;margin-top:10px;}
 .sim-q:first-of-type{border-top:none;padding-top:0;margin-top:0;}
 .sim-q-text{font-size:12.5px;font-weight:700;color:var(--text);line-height:1.5;margin-bottom:8px;}
+/* Texto base de um item (caso clinico, texto de portugues). Sem ele, o item que o
+   cita nao pode ser respondido — vem em fonte normal pra nao competir com o enunciado. */
+.sim-apoio{font-size:12px;font-weight:500;color:var(--text);line-height:1.6;white-space:pre-wrap;background:rgba(59,130,246,0.07);border-left:3px solid rgba(59,130,246,0.5);border-radius:6px;padding:10px 12px;margin-bottom:10px;}
 .sim-alts{display:flex;flex-direction:column;gap:6px;}
 .sim-alt{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text2);line-height:1.5;padding:7px 10px;border-radius:10px;border:1.5px solid var(--border2);cursor:pointer;background:var(--panel2);}
 .sim-alt:hover{border-color:var(--pink);}
@@ -9646,7 +9649,8 @@ function simNormalizaQuestao(q,formato){
     if(!texto||!letra)return null;
     return{questao:texto,alternativas:SIM_ALTS_CE.map(a=>({...a})),correta:letra,
            explicacao:String(q.explicacao||'').trim(),formato:'certoerrado',
-           ...(q.assunto!==undefined?{assunto:q.assunto}:{})};
+           ...(q.assunto!==undefined?{assunto:q.assunto}:{}),
+           ...(q.textoApoio?{textoApoio:String(q.textoApoio).trim()}:{})};
   }
   if(!q.questao||!Array.isArray(q.alternativas)||!q.correta)return null;
   // Ter enunciado, alternativas e um campo "correta" preenchido nao basta: se a
@@ -9905,6 +9909,242 @@ async function generateSimulado(subId){
 }
 
 // ===== SIMULADO GERAL (multi-assunto, cronometrado) =====
+// ===== PROVA FEITA FORA, COLADA AQUI =====
+// Gerar simulado pela API custa cota; um Gemini Pro faz prova ilimitada e com pesquisa.
+// Faltava so a porta de entrada: o Simulado Geral guarda apenas {questoes, startedAt,
+// limiteSec, corrected, formato, nivel} e nao esta preso a nenhum chefao — entao uma
+// prova colada que chegue no formato interno ganha de graca a prova cronometrada, a
+// correcao, a distribuicao por miniboss, o Banco de Erros e o flashcard de cada erro.
+function textoApoioHTML(q){
+  if(!q||!q.textoApoio)return'';
+  return`<div class="sim-apoio">${escapeHtml(q.textoApoio)}</div>`;
+}
+// Nome do assunto (texto livre vindo da IA) -> miniboss cadastrado. Exato primeiro;
+// depois um nome contido no outro; por ultimo, sobreposicao de palavras com folga sobre
+// o segundo colocado — sem a folga, "Choque" casaria igual com "Choque septico" e
+// "Choque hipovolemico", e a questao iria pro assunto errado em silencio.
+function simIndiceAssuntos(){
+  const out=[];
+  db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>(t.subtopics||[]).forEach(sub=>{
+    out.push({sub,topic:t,kingdom:k,norm:revNorm(sub.name),toks:revTokensNome(sub.name)});
+  })));
+  return out;
+}
+function simCasarAssunto(nome,ix){
+  const n=revNorm(nome);
+  if(!n)return null;
+  let achado=ix.find(c=>c.norm===n);
+  if(achado)return achado;
+  const contidos=ix.filter(c=>c.norm&&(n.includes(c.norm)||c.norm.includes(n)));
+  if(contidos.length===1)return contidos[0];
+  if(contidos.length>1){
+    contidos.sort((a,b)=>b.norm.length-a.norm.length);
+    if(contidos[0].norm.length>contidos[1].norm.length)return contidos[0];
+  }
+  const alvo=new Set(revTokensNome(nome));
+  if(!alvo.size)return null;
+  let melhor=null,melhorV=0,segundo=0;
+  ix.forEach(c=>{
+    if(!c.toks.length)return;
+    const v=c.toks.filter(t=>alvo.has(t)).length/c.toks.length;
+    if(v>melhorV){segundo=melhorV;melhorV=v;melhor=c;}
+    else if(v>segundo)segundo=v;
+  });
+  return (melhorV>=0.6&&melhorV>=segundo*1.3)?melhor:null;
+}
+// Lote acumulado entre colagens: 120 itens em JSON passam de 40 mil caracteres e o chat
+// corta. Colar em partes e somar e a diferenca entre importar a prova e perde-la.
+let simColarLote=[];
+let simColarEscolhas={};   // nome do assunto nao reconhecido -> subId escolhido a mao
+function simColarPromptTexto(){
+  const fmt=(document.getElementById('sg-colar-fmt')||{}).value||'certoerrado';
+  const qtd=parseInt((document.getElementById('sg-colar-qtd')||{}).value,10)||60;
+  const ce=fmt==='certoerrado';
+  const exemplo=ce
+    ?`[{"assunto":"Lei do Exercício Profissional","textoApoio":"","afirmacao":"...","gabarito":"C","explicacao":"..."}]`
+    :`[{"assunto":"Lei do Exercício Profissional","textoApoio":"","questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"..."}]`;
+  return`Você é um elaborador de questões de concurso público brasileiro, no estilo Cebraspe (Cespe).
+
+TAREFA: gere EXATAMENTE ${qtd} ${ce?'itens de julgamento CERTO/ERRADO':'questões de múltipla escolha (A a E, só uma correta)'} inéditos, de nível difícil, para concurso da área de enfermagem.
+
+PESQUISE NA INTERNET antes de elaborar. Hoje é ${new Date().toLocaleDateString('pt-BR')}. Use a versão vigente de cada lei, diretriz e protocolo, e não a que você lembra do treino.
+
+REGRAS DE CONTEÚDO
+- Todo número em algarismo, nunca por extenso: "36 graus", "2 mL/kg", "7 dias", "30%", "artigo 5º".
+- NÃO afirme quem pode executar um procedimento (competência privativa, ato delegável, "sob supervisão de") sem ter confirmado na fonte. Sondagem vesical, por exemplo, é privativa do Enfermeiro. Na dúvida, não cobre esse ponto.
+- Não cite número de lei, artigo ou resolução que você não confirmou.
+${ce?`- Cada item é UMA afirmação a ser julgada. Sem "Julgue o item" na frente, sem alternativas.
+- No estilo Cebraspe o item errado erra por UM detalhe (um número trocado, uma conduta fora de ordem, uma exceção ignorada, um "sempre/nunca" indevido) — não por ser absurdo.
+- Equilibre CERTO e ERRADO ao longo dos ${qtd} itens.
+- A explicação diz por que está certo, ou exatamente qual parte está errada e qual seria a correta.`
+    :`- 5 alternativas (A a E), uma só correta.
+- A letra correta deve variar entre A, B, C, D e E ao longo das ${qtd} questões.
+- Explicação de 1 a 3 frases do porquê a correta está certa.`}
+- Se o item depender de um texto base (caso clínico, texto de português), repita esse texto no campo "textoApoio" de CADA item que o usa. Quem não usa, deixa "".
+
+CAMPO "assunto"
+- Em cada item, escreva no campo "assunto" o NOME DO ASSUNTO ESPECÍFICO que ele cobra — o mais específico possível, como um tópico de edital.
+- Bom: "Sondagem vesical", "Lei 7.498/1986", "Precauções de contato", "Choque séptico", "Crase".
+- Ruim: "Enfermagem", "Legislação", "Português" — genérico demais.
+- Use o mesmo nome exato para todos os itens do mesmo assunto.
+
+FORMATO DA RESPOSTA
+Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no formato exato:
+${exemplo}`;
+}
+function simColarCopiarPrompt(){
+  const txt=simColarPromptTexto();
+  const ok=()=>toast('📋 Prompt copiado — cole no Gemini.','var(--green)');
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(ok,()=>simColarFallbackCopia(txt,ok));
+  }else simColarFallbackCopia(txt,ok);
+}
+function simColarFallbackCopia(txt,ok){
+  const ta=document.createElement('textarea');
+  ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try{document.execCommand('copy');ok();}catch(e){toast('⚠️ Não consegui copiar — selecione o texto do prompt à mão.','var(--orange)');}
+  document.body.removeChild(ta);
+}
+// Um JSON truncado nao perde so o ultimo item: o parse falha inteiro. Por isso a
+// mensagem de erro precisa dizer QUAL dos dois problemas aconteceu, senao a saida
+// obvia (colar de novo) e a errada (o certo e pedir menos itens por vez).
+function simColarAdicionar(){
+  const ta=document.getElementById('sg-colar-txt');
+  if(!ta)return;
+  const bruto=(ta.value||'').trim();
+  if(!bruto){toast('⚠️ Cole a resposta do Gemini primeiro.','var(--red)');return;}
+  let arr=null;
+  try{arr=extractAIJson(bruto);}catch(e){
+    const cortado=bruto.lastIndexOf('[')>bruto.lastIndexOf(']');
+    toast(cortado
+      ?'❌ O JSON está cortado no meio — a resposta do Gemini não veio inteira. Peça menos itens por vez (30 a 40) e cole em partes.'
+      :'❌ Não achei um JSON válido nessa colagem. Cole a resposta inteira do Gemini, do [ até o ].','var(--red)');
+    return;
+  }
+  if(!Array.isArray(arr)){toast('❌ Isso não é uma lista de questões.','var(--red)');return;}
+  let ok=0,descartadas=0;
+  arr.forEach(item=>{
+    if(!item||typeof item!=='object'){descartadas++;return;}
+    const fmt=(item.alternativas&&Array.isArray(item.alternativas)&&item.alternativas.length>2)?'multipla':'certoerrado';
+    const q=simNormalizaQuestao(item,fmt);
+    if(!q){descartadas++;return;}
+    q.assunto=String(item.assunto||'').trim();
+    simColarLote.push(q); ok++;
+  });
+  ta.value='';
+  renderSimGeralScreen();
+  toast(ok
+    ?`📥 ${ok} questão(ões) no lote${descartadas?` · ${descartadas} descartada(s) por gabarito que não bate com as alternativas`:''}.`
+    :'❌ Nenhuma questão aproveitável nessa colagem.',ok?'var(--green)':'var(--red)');
+}
+function simColarLimpar(){
+  if(simColarLote.length&&!confirm('Descartar as '+simColarLote.length+' questões do lote?'))return;
+  simColarLote=[]; simColarEscolhas={};
+  renderSimGeralScreen();
+}
+// Agrupa o lote pelo nome de assunto que a IA escreveu, ja resolvido pro miniboss.
+function simColarMapa(){
+  const ix=simIndiceAssuntos();
+  const grupos={};
+  simColarLote.forEach(q=>{
+    const nome=q.assunto||'(sem assunto)';
+    const g=grupos[nome]=grupos[nome]||{nome,n:0,alvo:null};
+    g.n++;
+    if(g.alvo===null){
+      const escolhido=simColarEscolhas[nome];
+      g.alvo=escolhido?(ix.find(c=>c.sub.id===escolhido)||null):simCasarAssunto(nome,ix);
+      g.auto=!escolhido;
+    }
+  });
+  return {grupos:Object.values(grupos).sort((a,b)=>b.n-a.n),ix};
+}
+function simColarEscolher(nome,subId){
+  if(subId)simColarEscolhas[nome]=subId; else delete simColarEscolhas[nome];
+  renderSimGeralScreen();
+}
+function simColarIniciar(){
+  if(!simColarLote.length)return;
+  const {grupos}=simColarMapa();
+  const semAlvo=grupos.filter(g=>!g.alvo);
+  if(semAlvo.length){
+    toast(`⚠️ ${semAlvo.length} assunto(s) ainda sem miniboss: ${semAlvo.slice(0,3).map(g=>g.nome).join(', ')}${semAlvo.length>3?'...':''}`,'var(--orange)');
+    return;
+  }
+  const porNome={};
+  grupos.forEach(g=>{porNome[g.nome]=g.alvo;});
+  const tempoMin=parseInt((document.getElementById('sg-colar-tempo')||{}).value,10)||0;
+  const questoes=simColarLote.map(q=>{
+    const c=porNome[q.assunto||'(sem assunto)'];
+    const{assunto,...limpa}=q;
+    return{...limpa,subId:c.sub.id,subName:c.sub.name,topicName:c.topic.name,
+           kingdomId:c.kingdom.id,kingdomName:c.kingdom.name,kingdomIcon:iconeReino(c.kingdom.icon)};
+  });
+  const formato=questoes.every(q=>q.formato==='certoerrado')?'certoerrado':'multipla';
+  simGeralActive={questoes,startedAt:Date.now(),limiteSec:tempoMin>0?tempoMin*60:0,
+                  corrected:false,formato,nivel:'dificil',importado:true};
+  simColarLote=[]; simColarEscolhas={};
+  renderSimGeralScreen();
+  toast(`🏛️ Prova importada — ${questoes.length} questões. Bom jogo.`,'var(--accent)');
+}
+function simColarHTML(){
+  const {grupos,ix}=simColarMapa();
+  const estudados=ix.filter(c=>c.sub.studied);
+  const opcoes=(sel)=>estudados.map(c=>`<option value="${c.sub.id}"${sel===c.sub.id?' selected':''}>${escapeHtml(c.kingdom.name)} · ${escapeHtml(c.sub.name)}</option>`).join('');
+  const total=simColarLote.length;
+  return`<div class="section-card">
+    <div class="sec-title" style="margin-bottom:4px">📋 Colar prova pronta</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600">
+      Gere no Gemini (ou em qualquer IA), cole a resposta aqui e responda por aqui — sem gastar cota da sua chave. Correção, Banco de Erros e estatísticas por assunto funcionam igual.
+    </div>
+    <div class="sim-config-row" style="flex-wrap:wrap">
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Formato:</label>
+      <select id="sg-colar-fmt" class="inp" style="width:auto;padding:6px 10px">
+        <option value="certoerrado">Certo / Errado</option>
+        <option value="multipla">Múltipla escolha</option>
+      </select>
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Quantidade:</label>
+      <select id="sg-colar-qtd" class="inp" style="width:auto;padding:6px 10px">
+        <option value="30">30</option><option value="40" selected>40</option>
+        <option value="60">60</option><option value="120">120</option>
+      </select>
+      <button class="btn btn-sm btn-primary" onclick="simColarCopiarPrompt()"><i class="fa fa-copy"></i> Copiar prompt</button>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin:8px 0 10px;line-height:1.5">
+      Acima de 40 itens a resposta costuma vir cortada — e JSON cortado se perde inteiro. Peça em partes e cole cada parte aqui: elas somam.
+    </div>
+    <textarea id="sg-colar-txt" class="inp" spellcheck="false" placeholder="Cole aqui a resposta do Gemini (o JSON)..."
+      style="width:100%;min-height:120px;font-family:ui-monospace,monospace;font-size:11px;line-height:1.5;resize:vertical"></textarea>
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+      <button class="btn btn-sm btn-pink" onclick="simColarAdicionar()"><i class="fa fa-plus"></i> Adicionar ao lote</button>
+      ${total?`<button class="btn btn-sm btn-ghost" onclick="simColarLimpar()"><i class="fa fa-trash"></i> Descartar lote</button>`:''}
+    </div>
+    ${total?`
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:10px">
+      <div style="font-size:11px;font-weight:800;color:var(--text);margin-bottom:8px">${total} questões no lote — onde cada uma vai contar:</div>
+      ${grupos.map(g=>`
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;padding:4px 0;border-bottom:1px solid var(--border)">
+          <span style="font-weight:800;min-width:34px;font-variant-numeric:tabular-nums">${g.n}×</span>
+          <span style="flex:1;min-width:120px">${escapeHtml(g.nome)}</span>
+          ${g.alvo
+            ? `<span style="color:var(--green-t);font-weight:700">→ ${iconeReino(g.alvo.kingdom.icon)} ${escapeHtml(g.alvo.sub.name)}</span>
+               <button class="btn btn-xs btn-ghost" title="Trocar o assunto" onclick="simColarEscolher('${escapeAttrJs(g.nome)}','')"><i class="fa fa-pen"></i></button>`
+            : `<select class="inp" style="padding:4px 8px;font-size:11px;max-width:260px" onchange="simColarEscolher('${escapeAttrJs(g.nome)}',this.value)">
+                 <option value="">— escolha o miniboss —</option>${opcoes(null)}
+               </select>`}
+        </div>`).join('')}
+      <div class="sim-config-row" style="margin-top:12px;flex-wrap:wrap">
+        <label style="font-size:11px;color:var(--muted);font-weight:700">Tempo:</label>
+        <select id="sg-colar-tempo" class="inp" style="width:auto;padding:6px 10px">
+          <option value="0">Sem cronômetro</option>
+          <option value="60">1 hora</option><option value="120">2 horas</option>
+          <option value="180">3 horas</option><option value="240">4 horas</option>
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="simColarIniciar()"><i class="fa fa-play"></i> Iniciar prova</button>
+      </div>
+    </div>`:''}
+  </div>`;
+}
 function renderSimGeralScreen(){
   const container=document.getElementById('simgeral-content');
   if(!container)return;
@@ -9914,7 +10154,7 @@ function renderSimGeralScreen(){
     return;
   }
   sgStopTimerTick();
-  container.innerHTML=simGeralConfigHTML();
+  container.innerHTML=simColarHTML()+simGeralConfigHTML();
   // sem isto, os contadores por chefao/reino e o custo do Tavily nasceriam
   // zerados mesmo com assuntos ja selecionados de uma visita anterior
   sgUpdateSummary();
@@ -10324,6 +10564,7 @@ function simGeralExamHTML(){
       ${active.questoes.map((q,i)=>`
         <div class="sim-q sg-q">
           <div class="sg-q-tag">${q.kingdomIcon} ${q.kingdomName} · ${q.topicName} · ${q.subName}</div>
+          ${textoApoioHTML(q)}
           <div class="sim-q-text">${i+1}. ${escapeHtml(q.questao)}</div>
           <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
             ${(q.alternativas||[]).map(alt=>`<div class="sim-alt${q.userAnswer===alt.letra?' sim-selected':''}" onclick="sgSelectAnswer(${i},'${escapeAttrJs(alt.letra)}')"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`).join('')}
@@ -10498,6 +10739,7 @@ function simGeralResultsHTML(){
       ${active.questoes.map((q,i)=>`
         <div class="sim-q${q.problematico?' sim-q-flagged':''}">
           <div class="sg-q-tag">${q.kingdomIcon} ${q.kingdomName} · ${q.topicName} · ${q.subName}</div>
+          ${textoApoioHTML(q)}
           <div class="sim-q-text">${i+1}. ${escapeHtml(q.questao)}</div>
           <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
             ${(q.alternativas||[]).map(alt=>{
