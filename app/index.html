@@ -9957,13 +9957,21 @@ function simCasarAssunto(nome,ix){
 let simColarLote=[];
 let simColarEscolhas={};   // nome do assunto nao reconhecido -> subId escolhido a mao
 let simColarMeta=0;        // quantos itens foram pedidos, pra tela saber quanto falta
+let simColarLista=[];      // a lista numerada que foi pro prompt — o "assunto":N aponta pra ela
 function simColarPromptTexto(){
   const fmt=(document.getElementById('sg-colar-fmt')||{}).value||'certoerrado';
   const qtd=parseInt((document.getElementById('sg-colar-qtd')||{}).value,10)||60;
   const ce=fmt==='certoerrado';
   const exemplo=ce
-    ?`[{"assunto":"Lei do Exercício Profissional","textoApoio":"","afirmacao":"...","gabarito":"C","explicacao":"..."}]`
-    :`[{"assunto":"Lei do Exercício Profissional","textoApoio":"","questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"..."}]`;
+    ?`[{"assunto":7,"assuntoNome":"Sondagem vesical","textoApoio":"","afirmacao":"...","gabarito":"C","explicacao":"..."}]`
+    :`[{"assunto":7,"assuntoNome":"Sondagem vesical","textoApoio":"","questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"..."}]`;
+  // A lista fechada e o que impede a IA de devolver 120 assuntos diferentes, um por
+  // questao — que foi o que aconteceu pedindo "o nome mais especifico possivel": nada
+  // casava com o cadastro e sobravam 120 seletores pra resolver a mao.
+  simColarLista=simIndiceAssuntos().filter(c=>c.sub.studied);
+  const listaTxt=simColarLista.length
+    ? simColarLista.map((c,i)=>`${i+1}. ${c.sub.name} (${c.kingdom.name} / ${c.topic.name})`).join('\n')
+    : '(nenhum assunto estudado cadastrado)';
   return`Você é um elaborador de questões de concurso público brasileiro, no estilo Cebraspe (Cespe).
 
 TAREFA: gere EXATAMENTE ${qtd} ${ce?'itens de julgamento CERTO/ERRADO':'questões de múltipla escolha (A a E, só uma correta)'} inéditos, de nível difícil, para concurso da área de enfermagem.
@@ -9983,11 +9991,16 @@ ${ce?`- Cada item é UMA afirmação a ser julgada. Sem "Julgue o item" na frent
 - Explicação de 1 a 3 frases do porquê a correta está certa.`}
 - Se o item depender de um texto base (caso clínico, texto de português), repita esse texto no campo "textoApoio" de CADA item que o usa. Quem não usa, deixa "".
 
-CAMPO "assunto"
-- Em cada item, escreva no campo "assunto" o NOME DO ASSUNTO ESPECÍFICO que ele cobra — o mais específico possível, como um tópico de edital.
-- Bom: "Sondagem vesical", "Lei 7.498/1986", "Precauções de contato", "Choque séptico", "Crase".
-- Ruim: "Enfermagem", "Legislação", "Português" — genérico demais.
-- Use o mesmo nome exato para todos os itens do mesmo assunto.
+ASSUNTOS (lista fechada — cobre SÓ o que está aqui)
+${listaTxt}
+
+- Cada item cobra UM assunto da lista acima, e traz dois campos: "assunto" com o NÚMERO
+  do assunto na lista, e "assuntoNome" com o nome dele copiado exatamente como está escrito.
+- NÃO invente assunto fora da lista, nem crie um nome mais específico do que o da lista.
+  Se o ponto que você quer cobrar é um detalhe dentro de um assunto da lista, use o número
+  do assunto que o contém.
+- Distribua os ${qtd} itens pelos assuntos da lista, priorizando os que mais caem em prova.
+  Pode repetir assunto; não precisa cobrir todos.
 
 ENTREGA
 - Responda com os ${qtd} itens de uma vez, se couber.
@@ -10063,7 +10076,11 @@ function simColarAdicionar(){
     const fmt=(item.alternativas&&Array.isArray(item.alternativas)&&item.alternativas.length>2)?'multipla':'certoerrado';
     const q=simNormalizaQuestao(item,fmt);
     if(!q){descartadas++;return;}
-    q.assunto=String(item.assunto||'').trim();
+    // O numero da lista e o caminho principal; o nome copiado e o plano B pra quando
+    // ele erra a contagem. Guarda os dois: a resolucao acontece em simColarMapa.
+    const n=parseInt(item.assunto,10);
+    q.assuntoIdx=(isFinite(n)&&n>=1&&n<=simColarLista.length)?n:null;
+    q.assunto=String(item.assuntoNome||(isFinite(n)?'':item.assunto)||'').trim();
     simColarLote.push(q); ok++;
   });
   ta.value='';
@@ -10093,54 +10110,71 @@ function simColarLimpar(){
   renderSimGeralScreen();
 }
 // Agrupa o lote pelo nome de assunto que a IA escreveu, ja resolvido pro miniboss.
+// Resolve uma questao do lote no miniboss: numero da lista -> escolha manual -> nome.
+function simColarAlvo(q,ix,cacheNome){
+  if(q.assuntoIdx&&simColarLista[q.assuntoIdx-1])return simColarLista[q.assuntoIdx-1];
+  const nome=q.assunto||'';
+  if(simColarEscolhas[nome])return ix.find(c=>c.sub.id===simColarEscolhas[nome])||null;
+  if(!nome)return null;
+  if(!(nome in cacheNome))cacheNome[nome]=simCasarAssunto(nome,ix);
+  return cacheNome[nome];
+}
+// Agrupa pelo miniboss onde a questao vai contar — nao pelo nome que a IA escreveu.
+// Agrupar pelo nome cru transformava 120 questoes em 120 linhas de "1x".
 function simColarMapa(){
   const ix=simIndiceAssuntos();
+  const cacheNome={};
   const grupos={};
   simColarLote.forEach(q=>{
-    const nome=q.assunto||'(sem assunto)';
-    const g=grupos[nome]=grupos[nome]||{nome,n:0,alvo:null};
+    const alvo=simColarAlvo(q,ix,cacheNome);
+    const chave=alvo?('s:'+alvo.sub.id):('n:'+(q.assunto||'(sem assunto)'));
+    const g=grupos[chave]=grupos[chave]||{chave,alvo,n:0,
+      nome:alvo?alvo.sub.name:(q.assunto||'(sem assunto)'),nomesIA:new Set()};
     g.n++;
-    if(g.alvo===null){
-      const escolhido=simColarEscolhas[nome];
-      g.alvo=escolhido?(ix.find(c=>c.sub.id===escolhido)||null):simCasarAssunto(nome,ix);
-      g.auto=!escolhido;
-    }
+    if(q.assunto)g.nomesIA.add(q.assunto);
   });
-  return {grupos:Object.values(grupos).sort((a,b)=>b.n-a.n),ix};
+  const lista=Object.values(grupos).map(g=>({...g,nomesIA:[...g.nomesIA]}));
+  // Pendencias primeiro: e o que trava a largada.
+  lista.sort((a,b)=>(!a.alvo)-(!b.alvo)||b.n-a.n);
+  return {grupos:lista,ix};
 }
 function simColarEscolher(nome,subId){
   if(subId)simColarEscolhas[nome]=subId; else delete simColarEscolhas[nome];
   renderSimGeralScreen();
 }
-function simColarIniciar(){
+function simColarIniciar(descartarSobras){
   if(!simColarLote.length)return;
-  const {grupos}=simColarMapa();
+  const {grupos,ix}=simColarMapa();
   const semAlvo=grupos.filter(g=>!g.alvo);
-  if(semAlvo.length){
-    toast(`⚠️ ${semAlvo.length} assunto(s) ainda sem miniboss: ${semAlvo.slice(0,3).map(g=>g.nome).join(', ')}${semAlvo.length>3?'...':''}`,'var(--orange)');
+  if(semAlvo.length&&!descartarSobras){
+    toast(`⚠️ ${semAlvo.length} assunto(s) ainda sem miniboss — escolha, ou use "Começar sem elas".`,'var(--orange)');
     return;
   }
-  const porNome={};
-  grupos.forEach(g=>{porNome[g.nome]=g.alvo;});
+  const cacheNome={};
   const tempoMin=parseInt((document.getElementById('sg-colar-tempo')||{}).value,10)||0;
-  const questoes=simColarLote.map(q=>{
-    const c=porNome[q.assunto||'(sem assunto)'];
-    const{assunto,...limpa}=q;
-    return{...limpa,subId:c.sub.id,subName:c.sub.name,topicName:c.topic.name,
-           kingdomId:c.kingdom.id,kingdomName:c.kingdom.name,kingdomIcon:iconeReino(c.kingdom.icon)};
+  const questoes=[];
+  let fora=0;
+  simColarLote.forEach(q=>{
+    const c=simColarAlvo(q,ix,cacheNome);
+    if(!c){fora++;return;}
+    const{assunto,assuntoIdx,...limpa}=q;
+    questoes.push({...limpa,subId:c.sub.id,subName:c.sub.name,topicName:c.topic.name,
+           kingdomId:c.kingdom.id,kingdomName:c.kingdom.name,kingdomIcon:iconeReino(c.kingdom.icon)});
   });
+  if(!questoes.length){toast('❌ Nenhuma questão com assunto resolvido.','var(--red)');return;}
   const formato=questoes.every(q=>q.formato==='certoerrado')?'certoerrado':'multipla';
   simGeralActive={questoes,startedAt:Date.now(),limiteSec:tempoMin>0?tempoMin*60:0,
                   corrected:false,formato,nivel:'dificil',importado:true};
   simColarLote=[]; simColarEscolhas={}; simColarMeta=0;
   renderSimGeralScreen();
-  toast(`🏛️ Prova importada — ${questoes.length} questões. Bom jogo.`,'var(--accent)');
+  toast(`🏛️ Prova importada — ${questoes.length} questões${fora?` · ${fora} deixada(s) de fora por não ter assunto`:''}. Bom jogo.`,'var(--accent)');
 }
 function simColarHTML(){
   const {grupos,ix}=simColarMapa();
   const estudados=ix.filter(c=>c.sub.studied);
   const opcoes=(sel)=>estudados.map(c=>`<option value="${c.sub.id}"${sel===c.sub.id?' selected':''}>${escapeHtml(c.kingdom.name)} · ${escapeHtml(c.sub.name)}</option>`).join('');
   const total=simColarLote.length;
+  const pend=grupos.filter(g=>!g.alvo).reduce((a,g)=>a+g.n,0);
   return`<div class="section-card">
     <div class="sec-title" style="margin-bottom:4px">📋 Colar prova pronta</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600">
@@ -10163,9 +10197,10 @@ function simColarHTML(){
         ?`<button class="btn btn-sm btn-gold" onclick="simColarCopiarContinuar()"><i class="fa fa-forward"></i> Pedir o resto (${simColarMeta-simColarLote.length})</button>`:''}
     </div>
     <div style="font-size:10px;color:var(--muted);margin:8px 0 10px;line-height:1.5">
-      Uma prova de 120 raramente sai numa resposta só. O prompt já manda o Gemini fechar o
-      JSON direito e avisar quanto falta — aí você clica em <b>Pedir o resto</b>, cola de novo,
-      e as partes somam aqui.
+      O prompt leva a lista dos seus <b>${ix.filter(c=>c.sub.studied).length} assuntos estudados</b> e pede que a IA
+      escolha dentro dela — é isso que faz a questão pousar no miniboss certo em vez de voltar
+      com um nome inventado. Uma prova de 120 raramente sai numa resposta só: ele fecha o JSON
+      e avisa quanto falta, aí você clica em <b>Pedir o resto</b> e cola de novo.
     </div>
     ${simColarMeta?`<div style="margin:0 0 10px">
       <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px">
@@ -10184,15 +10219,15 @@ function simColarHTML(){
     </div>
     ${total?`
     <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:10px">
-      <div style="font-size:11px;font-weight:800;color:var(--text);margin-bottom:8px">${total} questões no lote — onde cada uma vai contar:</div>
+      <div style="font-size:11px;font-weight:800;color:var(--text);margin-bottom:8px">${total} questões no lote${pend?` — <span style="color:var(--orange-t)">${pend} sem assunto</span>`:' — tudo com assunto'}:</div>
       ${grupos.map(g=>`
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;padding:4px 0;border-bottom:1px solid var(--border)">
           <span style="font-weight:800;min-width:34px;font-variant-numeric:tabular-nums">${g.n}×</span>
-          <span style="flex:1;min-width:120px">${escapeHtml(g.nome)}</span>
           ${g.alvo
-            ? `<span style="color:var(--green-t);font-weight:700">→ ${iconeReino(g.alvo.kingdom.icon)} ${escapeHtml(g.alvo.sub.name)}</span>
-               <button class="btn btn-xs btn-ghost" title="Trocar o assunto" onclick="simColarEscolher('${escapeAttrJs(g.nome)}','')"><i class="fa fa-pen"></i></button>`
-            : `<select class="inp" style="padding:4px 8px;font-size:11px;max-width:260px" onchange="simColarEscolher('${escapeAttrJs(g.nome)}',this.value)">
+            ? `<span style="flex:1;min-width:140px;font-weight:700;color:var(--green-t)">${iconeReino(g.alvo.kingdom.icon)} ${escapeHtml(g.alvo.sub.name)}</span>
+               ${g.nomesIA.length?`<span style="flex:2;min-width:160px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(g.nomesIA.join(' · '))}">← ${escapeHtml(g.nomesIA.slice(0,2).join(' · '))}${g.nomesIA.length>2?` +${g.nomesIA.length-2}`:''}</span>`:'<span style="flex:2"></span>'}`
+            : `<span style="flex:1;min-width:140px">${escapeHtml(g.nome)}</span>
+               <select class="inp" style="padding:4px 8px;font-size:11px;max-width:260px" onchange="simColarEscolher('${escapeAttrJs(g.nome)}',this.value)">
                  <option value="">— escolha o miniboss —</option>${opcoes(null)}
                </select>`}
         </div>`).join('')}
@@ -10204,6 +10239,7 @@ function simColarHTML(){
           <option value="180">3 horas</option><option value="240">4 horas</option>
         </select>
         <button class="btn btn-sm btn-primary" onclick="simColarIniciar()"><i class="fa fa-play"></i> Iniciar prova</button>
+        ${pend?`<button class="btn btn-sm btn-ghost" title="Começa a prova só com as questões que têm assunto — as outras são descartadas" onclick="simColarIniciar(true)">Começar sem elas (${total-pend})</button>`:''}
       </div>
     </div>`:''}
   </div>`;
