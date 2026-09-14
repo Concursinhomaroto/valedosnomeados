@@ -7014,6 +7014,7 @@ function cyclePriority(subId,topicId){
 // pra sempre.
 let resumoEditando=new Set();
 function resumoEditar(subId){
+  resumoColando.delete(subId);
   resumoEditando.add(subId);
   resumoRefreshPanel(subId);
 }
@@ -7034,6 +7035,61 @@ function resumoSalvarEdicao(subId){
   resumoRefreshPanel(subId);
   toast('✎ Resumo corrigido.','var(--green)');
 }
+// Colar o texto direto (a lei, o artigo, o trecho da apostila) em vez de anexar
+// arquivo. Nem todo material vem em PDF: as vezes o que se tem e um trecho copiado
+// do Planalto, e converter isso em arquivo so pra fazer upload e trabalho a toa.
+// O texto colado entra pelo MESMO caminho do arquivo — generateResumo so precisa de
+// algo com .name, .type e .text(), entao um objeto com esses tres campos serve, e o
+// fatiamento em partes, o prompt e o tratamento de erro continuam sendo um so.
+function textoComoArquivo(txt){
+  return {name:'Texto colado',type:'text/plain',__colado:true,text:async()=>txt};
+}
+let resumoColando=new Set();
+function resumoAbrirColar(subId){
+  resumoColando.delete(subId);
+  resumoEditando.delete(subId);
+  resumoColando.add(subId);
+  resumoRefreshPanel(subId);
+  const ta=document.getElementById('resumo-colar-'+subId);
+  if(ta)ta.focus();
+}
+function resumoCancelarColar(subId){
+  resumoColando.delete(subId);
+  resumoRefreshPanel(subId);
+}
+function resumoColarContou(subId){
+  const ta=document.getElementById('resumo-colar-'+subId);
+  const el=document.getElementById('resumo-colar-n-'+subId);
+  if(ta&&el)el.textContent=ta.value.trim().length.toLocaleString('pt-BR')+' caracteres';
+}
+function resumoGerarDoTexto(subId){
+  const ta=document.getElementById('resumo-colar-'+subId);
+  if(!ta)return;
+  const txt=ta.value.trim();
+  if(txt.length<50){toast('⚠️ Cole um pouco mais de texto — o mínimo é 50 caracteres.','var(--red)');return;}
+  resumoColando.delete(subId);
+  resumoRefreshPanel(subId);
+  generateResumo(subId,textoComoArquivo(txt));
+}
+function resumoColarHTML(s){
+  const tem=!!(s.resumo&&s.resumo.texto);
+  return`
+    <div class="resumo-header">
+      <div class="resumo-title"><i class="fa fa-clipboard"></i> Colar o texto</div>
+      <div class="resumo-actions">
+        <button class="btn btn-xs btn-primary" onclick="resumoGerarDoTexto('${s.id}')"><i class="fa fa-wand-magic-sparkles"></i> Gerar resumo</button>
+        <button class="btn btn-xs btn-ghost" onclick="resumoCancelarColar('${s.id}')">Cancelar</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
+      Cole aqui o material — o artigo da lei, o trecho da apostila, o que for. A IA lê
+      só isso e monta o resumo a partir dele, sem pesquisar na internet.${tem?' <b>O resumo atual vai ser substituído.</b>':''}
+    </div>
+    <textarea id="resumo-colar-${s.id}" class="inp" spellcheck="false" oninput="resumoColarContou('${s.id}')"
+      placeholder="Cole o texto aqui (Ctrl+V)..."
+      style="width:100%;min-height:300px;font-family:inherit;font-size:12.5px;line-height:1.6;resize:vertical"></textarea>
+    <div style="font-size:10px;color:var(--muted);margin-top:6px;text-align:right" id="resumo-colar-n-${s.id}">0 caracteres</div>`;
+}
 function resumoEditorHTML(s){
   return`
     <div class="resumo-header">
@@ -7053,6 +7109,7 @@ function resumoEditorHTML(s){
 }
 
 function resumoPanelHTML(s){
+  if(resumoColando.has(s.id)&&!resumoGenerating.has(s.id))return resumoColarHTML(s);
   if(resumoGenerating.has(s.id)){
     const modo=resumoGenerating.get(s.id);
     return`<div class="resumo-header"><div class="resumo-title"><i class="fa fa-file-lines"></i> Resumo com IA</div></div>
@@ -7066,19 +7123,21 @@ function resumoPanelHTML(s){
     const isLoadingAudio=isMine&&resumoSpeakMode==='loading';
     const isSpeaking=isMine&&(resumoSpeakMode==='audio'||(resumoSpeakMode==='browser'&&window.speechSynthesis&&window.speechSynthesis.speaking));
     const isPaused=isSpeaking&&resumoSpeakPaused;
+    const isColado=s.resumo.origem==='colado';
     const fonteTxt=isWeb
       ?(s.resumo.grounded?', com apoio de pesquisa na internet e dos seus flashcards':' ⚠️ SEM pesquisa na internet — saiu do conhecimento treinado do modelo, que tem data de corte. Não confie em número, prazo ou dose daqui sem conferir')
-      :' a partir do arquivo enviado';
+      :(isColado?' a partir do texto que você colou, e só dele':' a partir do arquivo enviado');
     const ouvirBtn=isLoadingAudio
       ?`<button class="btn btn-xs btn-gold" disabled><i class="fa fa-spinner fa-spin"></i> Gerando áudio...</button>`
       :`<button class="btn btn-xs ${isSpeaking?'btn-gold':'btn-ghost'}" onclick="resumoToggleSpeak('${s.id}')" title="${isSpeaking?(isPaused?'Continuar leitura':'Pausar leitura'):'Ouvir resumo'}"><i class="fa fa-${isSpeaking?(isPaused?'play':'pause'):'volume-high'}"></i> ${isSpeaking?(isPaused?'Continuar':'Pausar'):'Ouvir'}</button>`;
     return`
       <div class="resumo-header">
-        <div class="resumo-title"><i class="fa fa-file-lines"></i> Resumo${isWeb?' 🌐':(s.resumo.fileName?` — ${s.resumo.fileName}`:'')}</div>
+        <div class="resumo-title"><i class="fa fa-file-lines"></i> Resumo${isWeb?' 🌐':(isColado?' 📋 Texto colado':(s.resumo.fileName?` — ${s.resumo.fileName}`:''))}</div>
         <div class="resumo-actions">
           ${ouvirBtn}
           ${isSpeaking||isLoadingAudio?`<button class="btn btn-xs btn-ghost" onclick="resumoSpeakStop()" title="Parar leitura"><i class="fa fa-stop"></i></button>`:''}
           <button class="btn btn-xs btn-ghost" onclick="resumoEditar('${s.id}')" title="Corrigir o texto à mão — sem gastar chamada de IA"><i class="fa fa-pen"></i> Corrigir</button>
+          <button class="btn btn-xs btn-ghost" onclick="resumoAbrirColar('${s.id}')" title="Gerar de novo colando o texto direto — a lei, o artigo, o trecho da apostila"><i class="fa fa-clipboard"></i> Colar texto</button>
           <button class="btn btn-xs btn-ghost" onclick="generateResumoWeb('${s.id}')" title="Gerar de novo buscando na internet + flashcards, sem precisar de arquivo"><i class="fa fa-globe"></i> Pesquisar</button>
           <label class="btn btn-xs btn-ghost" style="cursor:pointer" title="Gerar de novo a partir de um arquivo">
             <i class="fa fa-paperclip"></i> Arquivo
@@ -7105,6 +7164,7 @@ function resumoPanelHTML(s){
     <div style="text-align:center;font-size:10px;color:var(--muted);margin:12px 0;display:flex;align-items:center;gap:8px">
       <span style="flex:1;height:1px;background:var(--border)"></span>ou<span style="flex:1;height:1px;background:var(--border)"></span>
     </div>
+    <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-bottom:6px" onclick="resumoAbrirColar('${s.id}')"><i class="fa fa-clipboard"></i> Colar o texto direto (sem arquivo)</button>
     <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center" onclick="generateResumoWeb('${s.id}')"><i class="fa fa-globe"></i> Gerar buscando na internet (sem arquivo)</button>
     <div style="font-size:9.5px;color:var(--muted);text-align:center;margin-top:6px">A IA pesquisa as principais atualizações do tema e também usa os flashcards já cadastrados nesse chefão como contexto, quando existirem.</div>
   `;
@@ -7330,7 +7390,7 @@ async function generateResumo(subId,file){
       resumoFinal=(await callGeminiGenerate(apiKey,resumoPromptConsolida(contexto,parciais)+RESUMO_FECHAMENTO)).trim();
     }
 
-    sub.resumo={texto:resumoFinal,geradoEm:new Date().toISOString(),fileName:file.name,origem:'arquivo'};
+    sub.resumo={texto:resumoFinal,geradoEm:new Date().toISOString(),fileName:file.name,origem:file.__colado?'colado':'arquivo'};
     saveDB();
     toast('📄 Resumo gerado!','var(--green)');
   }catch(e){
