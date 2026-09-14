@@ -9956,6 +9956,7 @@ function simCasarAssunto(nome,ix){
 // corta. Colar em partes e somar e a diferenca entre importar a prova e perde-la.
 let simColarLote=[];
 let simColarEscolhas={};   // nome do assunto nao reconhecido -> subId escolhido a mao
+let simColarMeta=0;        // quantos itens foram pedidos, pra tela saber quanto falta
 function simColarPromptTexto(){
   const fmt=(document.getElementById('sg-colar-fmt')||{}).value||'certoerrado';
   const qtd=parseInt((document.getElementById('sg-colar-qtd')||{}).value,10)||60;
@@ -9988,16 +9989,44 @@ CAMPO "assunto"
 - Ruim: "Enfermagem", "Legislação", "Português" — genérico demais.
 - Use o mesmo nome exato para todos os itens do mesmo assunto.
 
+ENTREGA
+- Responda com os ${qtd} itens de uma vez, se couber.
+- Se perceber que NÃO vai caber na resposta, PARE num item completo, feche o array
+  corretamente com ] e escreva na linha seguinte: CONTINUA — faltam N itens.
+  Nunca corte no meio de um item: um JSON cortado se perde inteiro, não só a última linha.
+- Quando eu pedir a continuação, gere os itens que faltam sem repetir nenhum dos anteriores.
+
 FORMATO DA RESPOSTA
 Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no formato exato:
 ${exemplo}`;
 }
-function simColarCopiarPrompt(){
-  const txt=simColarPromptTexto();
-  const ok=()=>toast('📋 Prompt copiado — cole no Gemini.','var(--green)');
+// Pedido de continuacao. O Gemini ja tem a conversa inteira como contexto, entao aqui
+// basta lembrar o que falta e o que nao pode repetir.
+function simColarPromptContinuar(){
+  const falta=Math.max(0,simColarMeta-simColarLote.length);
+  const jaVistos=simColarLote.slice(-8).map(q=>'- '+String(q.questao||'').slice(0,90)).join('\n');
+  return`Continue a mesma prova: gere os ${falta||'próximos'} itens que faltam, no MESMO formato JSON e com as MESMAS regras de antes.
+
+NÃO repita nenhum item já gerado. Os últimos que você me mandou foram:
+${jaVistos}
+
+Mesma regra de entrega: se não couber tudo, pare num item completo, feche o array com ] e escreva CONTINUA — faltam N itens.
+Responda APENAS com o array JSON, sem markdown e sem texto antes ou depois.`;
+}
+function simColarCopiarContinuar(){
+  const txt=simColarPromptContinuar();
+  simColarCopiaTexto(txt,'📋 Pedido de continuação copiado — cole no MESMO chat do Gemini.');
+}
+function simColarCopiaTexto(txt,msg){
+  const ok=()=>toast(msg,'var(--green)');
   if(navigator.clipboard&&navigator.clipboard.writeText){
     navigator.clipboard.writeText(txt).then(ok,()=>simColarFallbackCopia(txt,ok));
   }else simColarFallbackCopia(txt,ok);
+}
+function simColarCopiarPrompt(){
+  simColarMeta=parseInt((document.getElementById('sg-colar-qtd')||{}).value,10)||0;
+  simColarCopiaTexto(simColarPromptTexto(),'📋 Prompt copiado — cole no Gemini.');
+  renderSimGeralScreen();
 }
 function simColarFallbackCopia(txt,ok){
   const ta=document.createElement('textarea');
@@ -10014,13 +10043,18 @@ function simColarAdicionar(){
   if(!ta)return;
   const bruto=(ta.value||'').trim();
   if(!bruto){toast('⚠️ Cole a resposta do Gemini primeiro.','var(--red)');return;}
-  let arr=null;
+  let arr=null,resgatado=false;
   try{arr=extractAIJson(bruto);}catch(e){
-    const cortado=bruto.lastIndexOf('[')>bruto.lastIndexOf(']');
-    toast(cortado
-      ?'❌ O JSON está cortado no meio — a resposta do Gemini não veio inteira. Peça menos itens por vez (30 a 40) e cole em partes.'
-      :'❌ Não achei um JSON válido nessa colagem. Cole a resposta inteira do Gemini, do [ até o ].','var(--red)');
-    return;
+    // Resposta cortada no meio de um item: em vez de perder os 118 que vieram inteiros,
+    // volta ate o ultimo item completo e fecha o array ali. So depois disso desiste.
+    arr=simColarResgatar(bruto);
+    if(!arr){
+      toast(bruto.lastIndexOf('[')>bruto.lastIndexOf(']')
+        ?'❌ A resposta veio cortada e nem o começo deu pra aproveitar. Peça no Gemini: "refaça fechando o array JSON corretamente".'
+        :'❌ Não achei um JSON válido nessa colagem. Cole a resposta inteira do Gemini, do [ até o ].','var(--red)');
+      return;
+    }
+    resgatado=true;
   }
   if(!Array.isArray(arr)){toast('❌ Isso não é uma lista de questões.','var(--red)');return;}
   let ok=0,descartadas=0;
@@ -10035,12 +10069,27 @@ function simColarAdicionar(){
   ta.value='';
   renderSimGeralScreen();
   toast(ok
-    ?`📥 ${ok} questão(ões) no lote${descartadas?` · ${descartadas} descartada(s) por gabarito que não bate com as alternativas`:''}.`
-    :'❌ Nenhuma questão aproveitável nessa colagem.',ok?'var(--green)':'var(--red)');
+    ?`📥 ${ok} questão(ões) no lote${resgatado?' — a resposta veio cortada e eu aproveitei até o último item completo':''}${descartadas?` · ${descartadas} descartada(s) por gabarito que não bate com as alternativas`:''}.`
+    :'❌ Nenhuma questão aproveitável nessa colagem.',ok?(resgatado?'var(--orange)':'var(--green)'):'var(--red)');
+}
+// Corta o texto no ultimo item completo e fecha o array ali. Tenta do fim pra tras
+// porque o ultimo "}" pode ser de um objeto de alternativa, nao do item.
+function simColarResgatar(bruto){
+  const ini=bruto.indexOf('[');
+  if(ini<0)return null;
+  let corte=bruto.lastIndexOf('}');
+  for(let i=0;i<60&&corte>ini;i++){
+    try{
+      const a=JSON.parse(bruto.slice(ini,corte+1)+']');
+      if(Array.isArray(a)&&a.length)return a;
+    }catch(e){}
+    corte=bruto.lastIndexOf('}',corte-1);
+  }
+  return null;
 }
 function simColarLimpar(){
   if(simColarLote.length&&!confirm('Descartar as '+simColarLote.length+' questões do lote?'))return;
-  simColarLote=[]; simColarEscolhas={};
+  simColarLote=[]; simColarEscolhas={}; simColarMeta=0;
   renderSimGeralScreen();
 }
 // Agrupa o lote pelo nome de assunto que a IA escreveu, ja resolvido pro miniboss.
@@ -10083,7 +10132,7 @@ function simColarIniciar(){
   const formato=questoes.every(q=>q.formato==='certoerrado')?'certoerrado':'multipla';
   simGeralActive={questoes,startedAt:Date.now(),limiteSec:tempoMin>0?tempoMin*60:0,
                   corrected:false,formato,nivel:'dificil',importado:true};
-  simColarLote=[]; simColarEscolhas={};
+  simColarLote=[]; simColarEscolhas={}; simColarMeta=0;
   renderSimGeralScreen();
   toast(`🏛️ Prova importada — ${questoes.length} questões. Bom jogo.`,'var(--accent)');
 }
@@ -10105,14 +10154,28 @@ function simColarHTML(){
       </select>
       <label style="font-size:11px;color:var(--muted);font-weight:700">Quantidade:</label>
       <select id="sg-colar-qtd" class="inp" style="width:auto;padding:6px 10px">
-        <option value="30">30</option><option value="40" selected>40</option>
-        <option value="60">60</option><option value="120">120</option>
+        <option value="40">40</option><option value="60">60</option>
+        <option value="120"${(simColarMeta||120)===120?' selected':''}>120 (prova cheia)</option>
+        <option value="180">180</option>
       </select>
       <button class="btn btn-sm btn-primary" onclick="simColarCopiarPrompt()"><i class="fa fa-copy"></i> Copiar prompt</button>
+      ${simColarMeta&&simColarLote.length&&simColarLote.length<simColarMeta
+        ?`<button class="btn btn-sm btn-gold" onclick="simColarCopiarContinuar()"><i class="fa fa-forward"></i> Pedir o resto (${simColarMeta-simColarLote.length})</button>`:''}
     </div>
     <div style="font-size:10px;color:var(--muted);margin:8px 0 10px;line-height:1.5">
-      Acima de 40 itens a resposta costuma vir cortada — e JSON cortado se perde inteiro. Peça em partes e cole cada parte aqui: elas somam.
+      Uma prova de 120 raramente sai numa resposta só. O prompt já manda o Gemini fechar o
+      JSON direito e avisar quanto falta — aí você clica em <b>Pedir o resto</b>, cola de novo,
+      e as partes somam aqui.
     </div>
+    ${simColarMeta?`<div style="margin:0 0 10px">
+      <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px">
+        <span>${simColarLote.length} de ${simColarMeta} itens</span>
+        <span>${simColarLote.length>=simColarMeta?'completo':(simColarMeta-simColarLote.length)+' faltando'}</span>
+      </div>
+      <div style="height:6px;border-radius:3px;background:var(--border);overflow:hidden">
+        <div style="height:100%;width:${Math.min(100,Math.round(simColarLote.length/simColarMeta*100))}%;background:var(--accent)"></div>
+      </div>
+    </div>`:''}
     <textarea id="sg-colar-txt" class="inp" spellcheck="false" placeholder="Cole aqui a resposta do Gemini (o JSON)..."
       style="width:100%;min-height:120px;font-family:ui-monospace,monospace;font-size:11px;line-height:1.5;resize:vertical"></textarea>
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
