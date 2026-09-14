@@ -7003,6 +7003,55 @@ function cyclePriority(subId,topicId){
 }
 
 // ===== RESUMO (IA a partir de arquivo anexado, com leitura em voz) =====
+
+// ===== CORRIGIR O RESUMO À MÃO =====
+// Nao havia como corrigir um resumo: so regenerar, que gasta cota e pode inventar de
+// novo. E resumo errado nao fica parado — ele e o material da tela de revisao, o
+// fluxograma nasce dele, e o que esta escrito ali e o que vai ser decorado.
+// Caso real: a IA afirmou que o Tecnico de Enfermagem pode fazer sondagem vesical em
+// paciente de menor complexidade. E privativa do Enfermeiro. Uma frase plausivel,
+// com numero de resolucao junto, que so quem e da area pega — e que ficaria no app
+// pra sempre.
+let resumoEditando=new Set();
+function resumoEditar(subId){
+  resumoEditando.add(subId);
+  resumoRefreshPanel(subId);
+}
+function resumoCancelarEdicao(subId){
+  resumoEditando.delete(subId);
+  resumoRefreshPanel(subId);
+}
+function resumoSalvarEdicao(subId){
+  const sub=simFindSub(subId);
+  const ta=document.getElementById('resumo-edit-'+subId);
+  if(!sub||!sub.resumo||!ta)return;
+  const novo=ta.value.trim();
+  if(!novo){toast('⚠️ O resumo não pode ficar vazio.','var(--red)');return;}
+  sub.resumo.texto=novo;
+  sub.resumo.editadoEm=new Date().toISOString();
+  resumoEditando.delete(subId);
+  saveDB();
+  resumoRefreshPanel(subId);
+  toast('✎ Resumo corrigido.','var(--green)');
+}
+function resumoEditorHTML(s){
+  return`
+    <div class="resumo-header">
+      <div class="resumo-title"><i class="fa fa-pen"></i> Corrigindo o resumo</div>
+      <div class="resumo-actions">
+        <button class="btn btn-xs btn-primary" onclick="resumoSalvarEdicao('${s.id}')"><i class="fa fa-check"></i> Salvar</button>
+        <button class="btn btn-xs btn-ghost" onclick="resumoCancelarEdicao('${s.id}')">Cancelar</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
+      Texto puro. Título de seção em MAIÚSCULAS terminado em dois-pontos vira cabeçalho;
+      linha começando por "Na prática:" vira o bloco verde. Separe os blocos com uma
+      linha em branco.
+    </div>
+    <textarea id="resumo-edit-${s.id}" class="inp" spellcheck="true"
+      style="width:100%;min-height:340px;font-family:inherit;font-size:12.5px;line-height:1.6;resize:vertical">${escapeHtml(s.resumo.texto||'')}</textarea>`;
+}
+
 function resumoPanelHTML(s){
   if(resumoGenerating.has(s.id)){
     const modo=resumoGenerating.get(s.id);
@@ -7010,6 +7059,7 @@ function resumoPanelHTML(s){
       <div class="resumo-status"><i class="fa fa-spinner fa-spin"></i> <span class="resumo-status-txt">${modo==='web'?'Pesquisando na internet...':'Lendo o arquivo...'}</span></div>`;
   }
   if(s.resumo&&s.resumo.texto){
+    if(resumoEditando.has(s.id))return resumoEditorHTML(s);
     const geradoEm=s.resumo.geradoEm?new Date(s.resumo.geradoEm).toLocaleDateString('pt-BR'):'';
     const isWeb=s.resumo.origem==='web';
     const isMine=resumoSpeakSubId===s.id;
@@ -7028,6 +7078,7 @@ function resumoPanelHTML(s){
         <div class="resumo-actions">
           ${ouvirBtn}
           ${isSpeaking||isLoadingAudio?`<button class="btn btn-xs btn-ghost" onclick="resumoSpeakStop()" title="Parar leitura"><i class="fa fa-stop"></i></button>`:''}
+          <button class="btn btn-xs btn-ghost" onclick="resumoEditar('${s.id}')" title="Corrigir o texto à mão — sem gastar chamada de IA"><i class="fa fa-pen"></i> Corrigir</button>
           <button class="btn btn-xs btn-ghost" onclick="generateResumoWeb('${s.id}')" title="Gerar de novo buscando na internet + flashcards, sem precisar de arquivo"><i class="fa fa-globe"></i> Pesquisar</button>
           <label class="btn btn-xs btn-ghost" style="cursor:pointer" title="Gerar de novo a partir de um arquivo">
             <i class="fa fa-paperclip"></i> Arquivo
@@ -7039,7 +7090,7 @@ function resumoPanelHTML(s){
       ${isSpeaking?`<div style="font-size:9.5px;color:var(--muted);margin:-4px 0 8px;display:flex;align-items:center;gap:5px">${resumoSpeakMode==='audio'?'<i class=\"fa fa-lock-open\"></i> Áudio da IA — continua tocando com a tela travada.':'<i class=\"fa fa-triangle-exclamation\"></i> Voz do navegador — para se a tela travar (configure sua chave de IA pra ouvir com a tela travada).'}</div>`:''}
       <div class="resumo-body">${resumoFormatar(s.resumo.texto)}</div>
       ${fontesHTML(s.resumo.fontes,s.resumo.consultas,s.resumo.diag)}
-      <div class="resumo-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm}${fonteTxt} — confira sempre a fonte oficial antes de usar na prova.</div>
+      <div class="resumo-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm}${fonteTxt} — confira sempre a fonte oficial antes de usar na prova.${s.resumo.editadoEm?` <b style="color:var(--green-t)">Corrigido por você em ${new Date(s.resumo.editadoEm).toLocaleDateString('pt-BR')}</b> — gerar de novo apaga a sua correção.`:''}</div>
     `;
   }
   return`
