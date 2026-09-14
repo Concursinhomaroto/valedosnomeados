@@ -8808,6 +8808,166 @@ function simFindSub(subId){
   }
   return sub;
 }
+// ---- Simulado feito fora da plataforma --------------------------------------
+// Caderno no Qconcursos, prova antiga em papel, simulado de cursinho: o resultado
+// existia e nao entrava em lugar nenhum. E questao respondida e o sinal mais forte
+// que o app tem — sub.simStats manda no peso da fila de revisao (revPeso), em
+// "assuntos que mais erro em questoes" e nos totais do dashboard.
+//
+// Quantidade SOZINHA nao pode entrar: somar 50 questoes sem somar os acertos derruba
+// a taxa do assunto e ele sobe na fila como se estivesse sendo errado inteiro. Por
+// isso o registro exige acertos, e exige formato — 70% num certo/errado nao vale o
+// mesmo que 70% numa multipla escolha, e simPctEfetivo ja corrige isso por formato.
+//
+// Fica em sub.simExternos, FORA de simHistorico, de proposito: simHistorico guarda
+// so as 5 ultimas tentativas e e de onde sai o Banco de Erros. Registrar cinco
+// cadernos de fora ali dentro despejaria as questoes erradas de verdade pra fora do
+// Banco de Erros — perder enunciado errado pra ganhar um contador seria um mau
+// negocio. Aqui os dois convivem.
+const SIM_EXT_MAX=500, SIM_EXT_GUARDA=20;
+let simExternoAberto=new Set();
+function simExternoRefresh(subId){
+  const sub=simFindSub(subId);
+  const w=document.getElementById('sim-'+subId);
+  if(w&&sub)w.innerHTML=simPanelHTML(sub);
+}
+function simAbrirExterno(subId){
+  simExternoAberto.add(subId);
+  simExternoRefresh(subId);
+  const el=document.getElementById('sim-ext-qtd-'+subId);
+  if(el)el.focus();
+}
+function simFecharExterno(subId){
+  simExternoAberto.delete(subId);
+  simExternoRefresh(subId);
+}
+// Acertos nao pode passar da quantidade, senao o aproveitamento passa de 100% e
+// contamina a media do reino inteiro. O aviso e imediato, enquanto da pra corrigir.
+function simExternoConfere(subId){
+  const q=parseInt((document.getElementById('sim-ext-qtd-'+subId)||{}).value,10);
+  const a=parseInt((document.getElementById('sim-ext-ac-'+subId)||{}).value,10);
+  const el=document.getElementById('sim-ext-aviso-'+subId);
+  if(!el)return;
+  if(!isFinite(q)||!isFinite(a)||q<=0){el.textContent='';return;}
+  if(a>q){el.innerHTML='<b style="color:var(--red-t)">Acertos nao podem passar da quantidade.</b>';return;}
+  const pct=Math.round(a/q*100);
+  el.innerHTML='Aproveitamento: <b>'+pct+'%</b> ('+a+'/'+q+' · '+(q-a)+' erro'+(q-a===1?'':'s')+')';
+}
+function simRegistrarExterno(subId){
+  const sub=simFindSub(subId);
+  if(!sub)return;
+  const qtd=parseInt((document.getElementById('sim-ext-qtd-'+subId)||{}).value,10);
+  const ac=parseInt((document.getElementById('sim-ext-ac-'+subId)||{}).value,10);
+  const fmt=(document.getElementById('sim-ext-fmt-'+subId)||{}).value||'multipla';
+  const data=((document.getElementById('sim-ext-data-'+subId)||{}).value||'').slice(0,10)||todayStr();
+  const fonte=((document.getElementById('sim-ext-fonte-'+subId)||{}).value||'').trim().slice(0,60);
+  if(!isFinite(qtd)||qtd<1||qtd>SIM_EXT_MAX){toast('⚠️ Quantidade tem que ser entre 1 e '+SIM_EXT_MAX+' questões.','var(--red)');return;}
+  if(!isFinite(ac)||ac<0){toast('⚠️ Informe quantas você acertou.','var(--red)');return;}
+  if(ac>qtd){toast('⚠️ Você marcou mais acertos do que questões.','var(--red)');return;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(data)||data>todayStr()){toast('⚠️ Data inválida ou no futuro.','var(--red)');return;}
+
+  sub.simStats=sub.simStats||{tentativas:0,questoesTotal:0,acertosTotal:0};
+  sub.simStats.tentativas++;
+  sub.simStats.questoesTotal+=qtd;
+  sub.simStats.acertosTotal+=ac;
+  if(!sub.simStats.porFormato)sub.simStats.porFormato={};
+  const pf=sub.simStats.porFormato[fmt]=sub.simStats.porFormato[fmt]||{tentativas:0,questoes:0,acertos:0};
+  pf.tentativas++; pf.questoes+=qtd; pf.acertos+=ac;
+
+  sub.simExternos=sub.simExternos||[];
+  sub.simExternos.unshift({id:genId(),data,quantidade:qtd,acertos:ac,formato:fmt,fonte,
+                           registradoEm:new Date().toISOString()});
+  sub.simExternos=sub.simExternos.slice(0,SIM_EXT_GUARDA);
+
+  simExternoAberto.delete(subId);
+  saveDB();
+  simExternoRefresh(subId);
+  toast('✍️ '+ac+'/'+qtd+' registradas — já valem no peso da revisão.','var(--green)');
+}
+// Numero digitado a mao e numero digitado errado. Sem desfazer, um "150" no lugar de
+// "15" fica pra sempre: simStats acumula a vida toda e nunca e recalculado do zero
+// (simHistorico so guarda as 5 ultimas). O desfazer subtrai exatamente o que somou —
+// mesma tecnica ja usada em toggleQuestaoProblematica.
+function simRemoverExterno(subId,extId){
+  const sub=simFindSub(subId);
+  if(!sub||!sub.simExternos)return;
+  const i=sub.simExternos.findIndex(x=>x.id===extId);
+  if(i<0)return;
+  const e=sub.simExternos[i];
+  if(!confirm('Apagar esse registro de '+e.acertos+'/'+e.quantidade+' questões? As estatísticas do assunto voltam ao que eram.'))return;
+  sub.simExternos.splice(i,1);
+  if(sub.simStats){
+    sub.simStats.tentativas=Math.max(0,(sub.simStats.tentativas||0)-1);
+    sub.simStats.questoesTotal=Math.max(0,(sub.simStats.questoesTotal||0)-e.quantidade);
+    sub.simStats.acertosTotal=Math.max(0,(sub.simStats.acertosTotal||0)-e.acertos);
+    const pf=sub.simStats.porFormato&&sub.simStats.porFormato[e.formato||'multipla'];
+    if(pf){
+      pf.tentativas=Math.max(0,(pf.tentativas||0)-1);
+      pf.questoes=Math.max(0,(pf.questoes||0)-e.quantidade);
+      pf.acertos=Math.max(0,(pf.acertos||0)-e.acertos);
+    }
+  }
+  saveDB();
+  simExternoRefresh(subId);
+  toast('↺ Registro apagado.','var(--accent)');
+}
+function simExternoTotais(s){
+  const l=s.simExternos||[];
+  return{n:l.length,
+         questoes:l.reduce((a,e)=>a+(e.quantidade||0),0),
+         acertos:l.reduce((a,e)=>a+(e.acertos||0),0)};
+}
+function simExternoFormHTML(s){
+  const fmt=db.simFormato||'multipla';
+  return`
+    <div class="sim-header"><div class="sim-title"><i class="fa fa-pen-to-square"></i> Simulado feito fora</div></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+      Só deste miniboss — se a prova tinha vários assuntos, registre a fatia que era
+      <b>${escapeHtml(s.name)}</b>. Entra nas suas estatísticas igual a um simulado daqui.
+    </div>
+    <div class="sim-config-row" style="flex-wrap:wrap">
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Questões:</label>
+      <input id="sim-ext-qtd-${s.id}" class="inp" type="number" min="1" max="${SIM_EXT_MAX}" inputmode="numeric"
+        style="width:80px;padding:6px 10px" oninput="simExternoConfere('${s.id}')">
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Acertos:</label>
+      <input id="sim-ext-ac-${s.id}" class="inp" type="number" min="0" max="${SIM_EXT_MAX}" inputmode="numeric"
+        style="width:80px;padding:6px 10px" oninput="simExternoConfere('${s.id}')">
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Formato:</label>
+      <select id="sim-ext-fmt-${s.id}" class="inp" style="width:auto;padding:6px 10px">
+        <option value="multipla"${fmt==='multipla'?' selected':''}>Múltipla escolha</option>
+        <option value="certoerrado"${fmt==='certoerrado'?' selected':''}>Certo / Errado</option>
+      </select>
+    </div>
+    <div class="sim-config-row" style="flex-wrap:wrap;margin-top:6px">
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Data:</label>
+      <input id="sim-ext-data-${s.id}" class="inp" type="date" max="${todayStr()}" value="${todayStr()}" style="width:auto;padding:6px 10px">
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Onde:</label>
+      <input id="sim-ext-fonte-${s.id}" class="inp" type="text" maxlength="60" placeholder="Qconcursos, prova SESAU 2023..." style="flex:1;min-width:140px;padding:6px 10px">
+    </div>
+    <div id="sim-ext-aviso-${s.id}" style="font-size:11px;color:var(--muted);margin:8px 0;min-height:16px"></div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-sm btn-pink" style="flex:1;justify-content:center" onclick="simRegistrarExterno('${s.id}')"><i class="fa fa-check"></i> Registrar</button>
+      <button class="btn btn-sm btn-ghost" onclick="simFecharExterno('${s.id}')">Cancelar</button>
+    </div>`;
+}
+function simExternoListaHTML(s){
+  const l=s.simExternos||[];
+  if(!l.length)return'';
+  return`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+    <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Feitos fora daqui</div>
+    ${l.map(e=>{
+      const pct=e.quantidade?Math.round(e.acertos/e.quantidade*100):0;
+      return`<div style="display:flex;align-items:center;gap:8px;font-size:11px;padding:3px 0;color:var(--muted)">
+        <span style="font-variant-numeric:tabular-nums;color:${faixaCor(pct)};font-weight:800;min-width:38px">${pct}%</span>
+        <span style="font-variant-numeric:tabular-nums">${e.acertos}/${e.quantidade}</span>
+        <span>${SIM_FMT_LBL[e.formato]||e.formato}</span>
+        <span>${e.data.slice(8,10)}/${e.data.slice(5,7)}</span>
+        ${e.fonte?`<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">· ${escapeHtml(e.fonte)}</span>`:'<span style="flex:1"></span>'}
+        <button class="btn btn-xs btn-ghost" title="Apagar esse registro" onclick="simRemoverExterno('${s.id}','${e.id}')"><i class="fa fa-xmark"></i></button>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
 function simPanelHTML(s){
   if(simGenerating.has(s.id)){
     return`<div class="sim-header"><div class="sim-title"><i class="fa fa-list-check"></i> Simulado rápido</div></div><div class="sim-empty"><i class="fa fa-spinner fa-spin"></i> Gerando questões...</div>`;
@@ -8857,13 +9017,15 @@ function simPanelHTML(s){
       <div class="sim-disclaimer"><i class="fa fa-triangle-exclamation"></i> Questões geradas por IA para treino — não são questões oficiais de banca.</div>
     `;
   }
+  if(simExternoAberto.has(s.id))return simExternoFormHTML(s);
   const stats=s.simStats;
+  const ext=simExternoTotais(s);
   return`
     <div class="sim-header"><div class="sim-title"><i class="fa fa-list-check"></i> Simulado rápido</div></div>
     ${stats?(()=>{
       const linhas=Object.keys(stats.porFormato||{}).filter(f=>stats.porFormato[f].questoes>0)
         .map(f=>simResumoFormato(f,stats.porFormato[f]));
-      return`<div style="text-align:center"><span class="sim-stat-badge"><i class="fa fa-chart-simple"></i> Histórico: ${stats.acertosTotal}/${stats.questoesTotal} acertos (${Math.round(stats.acertosTotal/stats.questoesTotal*100)}%) em ${stats.tentativas} simulado${stats.tentativas>1?'s':''}</span></div>
+      return`<div style="text-align:center"><span class="sim-stat-badge"><i class="fa fa-chart-simple"></i> Histórico: ${stats.acertosTotal}/${stats.questoesTotal} acertos (${Math.round(stats.acertosTotal/stats.questoesTotal*100)}%) em ${stats.tentativas} simulado${stats.tentativas>1?'s':''}${ext.questoes?` · ${ext.questoes} de fora`:''}</span></div>
       ${linhas.length>1?`<div class="sim-fmt-split">${linhas.map(f=>
         `<span><b style="color:${f.cor}">${f.corrigido}%</b> ${f.lbl} <i>(${f.acertos}/${f.questoes}${f.formato==='certoerrado'?` · bruto ${f.pct}% · saldo ${f.saldo>=0?'+':''}${f.saldo}`:''})</i></span>`).join('')}</div>`:''}`;
     })():''}
@@ -8892,6 +9054,8 @@ function simPanelHTML(s){
       </select>
     </div>
     <button class="btn btn-sm btn-pink" style="width:100%;justify-content:center" onclick="generateSimulado('${s.id}')"><i class="fa fa-wand-magic-sparkles"></i> Gerar simulado com IA</button>
+    <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-top:6px" onclick="simAbrirExterno('${s.id}')" title="Você fez questões desse assunto fora da plataforma — registre aqui pra contarem"><i class="fa fa-pen-to-square"></i> Registrar simulado feito fora</button>
+    ${simExternoListaHTML(s)}
     <div class="sim-disclaimer"><i class="fa fa-triangle-exclamation"></i> Questões geradas por IA para treino — não são questões oficiais de banca.</div>
   `;
 }
