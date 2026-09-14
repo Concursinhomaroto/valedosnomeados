@@ -10133,13 +10133,46 @@ function simColarLimpar(){
   renderSimGeralScreen();
 }
 // Agrupa o lote pelo nome de assunto que a IA escreveu, ja resolvido pro miniboss.
+// Os 3 candidatos mais parecidos, SEM o limiar do casamento automatico. Quando o
+// automatico se recusa a decidir (por falta de folga sobre o segundo), quem decide e
+// voce — e escolher entre 3 botoes custa um clique, nao uma cacada num seletor de 326.
+function simColarSugestoes(nome,ix,n){
+  const alvo=new Set(revTokensNome(nome));
+  const nn=revNorm(nome);
+  if(!alvo.size&&!nn)return[];
+  const pont=ix.map(c=>{
+    let v=c.toks.length?c.toks.filter(t=>alvo.has(t)).length/c.toks.length:0;
+    if(c.norm&&nn&&(nn.includes(c.norm)||c.norm.includes(nn)))v=Math.max(v,0.9);
+    return{c,v};
+  }).filter(x=>x.v>0);
+  pont.sort((a,b)=>b.v-a.v);
+  return pont.slice(0,n||3).map(x=>x.c);
+}
+// Apelido que voce ja resolveu uma vez fica gravado: "Regencia nominal" -> Regencia
+// resolve sozinho na proxima prova. E o que faz o trabalho manual encolher a cada prova
+// em vez de se repetir inteiro.
+function simColarApelido(nome){
+  const k=revNorm(nome);
+  const id=k&&db.simColarApelidos&&db.simColarApelidos[k];
+  return id||null;
+}
+function simColarGravarApelido(nome,subId){
+  const k=revNorm(nome);
+  if(!k)return;
+  if(!db.simColarApelidos)db.simColarApelidos={};
+  if(subId)db.simColarApelidos[k]=subId; else delete db.simColarApelidos[k];
+  saveDB();
+}
 // Resolve uma questao do lote no miniboss: numero da lista -> escolha manual -> nome.
 function simColarAlvo(q,ix,cacheNome){
   if(q.assuntoIdx&&simColarLista[q.assuntoIdx-1])return simColarLista[q.assuntoIdx-1];
   const nome=q.assunto||'';
   if(simColarEscolhas[nome])return ix.find(c=>c.sub.id===simColarEscolhas[nome])||null;
   if(!nome)return null;
-  if(!(nome in cacheNome))cacheNome[nome]=simCasarAssunto(nome,ix);
+  if(!(nome in cacheNome)){
+    const ap=simColarApelido(nome);
+    cacheNome[nome]=(ap&&ix.find(c=>c.sub.id===ap))||simCasarAssunto(nome,ix);
+  }
   return cacheNome[nome];
 }
 // Agrupa pelo miniboss onde a questao vai contar — nao pelo nome que a IA escreveu.
@@ -10163,6 +10196,7 @@ function simColarMapa(){
 }
 function simColarEscolher(nome,subId){
   if(subId)simColarEscolhas[nome]=subId; else delete simColarEscolhas[nome];
+  simColarGravarApelido(nome,subId);
   renderSimGeralScreen();
 }
 function simColarIniciar(descartarSobras){
@@ -10223,7 +10257,10 @@ function simColarHTML(){
       O prompt leva a lista dos seus <b>${ix.filter(c=>c.sub.studied).length} assuntos estudados</b> e pede que a IA
       escolha dentro dela — é isso que faz a questão pousar no miniboss certo em vez de voltar
       com um nome inventado. Uma prova de 120 raramente sai numa resposta só: ele fecha o JSON
-      e avisa quanto falta, aí você clica em <b>Pedir o resto</b> e cola de novo.
+      e avisa quanto falta, aí você clica em <b>Pedir o resto</b> e cola de novo.${(()=>{
+        const n=Object.keys(db.simColarApelidos||{}).length;
+        return n?` Já aprendi <b>${n} nome(s)</b> de provas anteriores — esses resolvem sozinhos.`:'';
+      })()}
     </div>
     ${simColarMeta?`<div style="margin:0 0 10px">
       <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px">
@@ -10250,8 +10287,10 @@ function simColarHTML(){
             ? `<span style="flex:1;min-width:140px;font-weight:700;color:var(--green-t)">${iconeReino(g.alvo.kingdom.icon)} ${escapeHtml(g.alvo.sub.name)}</span>
                ${g.nomesIA.length?`<span style="flex:2;min-width:160px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(g.nomesIA.join(' · '))}">← ${escapeHtml(g.nomesIA.slice(0,2).join(' · '))}${g.nomesIA.length>2?` +${g.nomesIA.length-2}`:''}</span>`:'<span style="flex:2"></span>'}`
             : `<span style="flex:1;min-width:140px">${escapeHtml(g.nome)}</span>
-               <select class="inp" style="padding:4px 8px;font-size:11px;max-width:260px" onchange="simColarEscolher('${escapeAttrJs(g.nome)}',this.value)">
-                 <option value="">— escolha o miniboss —</option>${opcoes(null)}
+               ${simColarSugestoes(g.nome,ix,3).map(c=>
+                 `<button class="btn btn-xs btn-ghost" title="${escapeHtml(c.kingdom.name+' / '+c.topic.name)}" onclick="simColarEscolher('${escapeAttrJs(g.nome)}','${c.sub.id}')">${escapeHtml(c.sub.name)}</button>`).join('')}
+               <select class="inp" style="padding:4px 8px;font-size:11px;max-width:200px" onchange="simColarEscolher('${escapeAttrJs(g.nome)}',this.value)">
+                 <option value="">— outro —</option>${opcoes(null)}
                </select>`}
         </div>`).join('')}
       <div class="sim-config-row" style="margin-top:12px;flex-wrap:wrap">
