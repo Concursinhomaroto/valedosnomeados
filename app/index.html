@@ -2167,6 +2167,7 @@ nav{
     <span id="bc-kingdom" style="font-weight:800;color:var(--text)"></span>
   </div>
   <div class="sec-title" id="kingdom-title"></div>
+  <div id="kingdom-externos"></div>
 
   <div class="add-form">
     <span style="font-size:18px">⚔️</span>
@@ -6621,6 +6622,7 @@ function openKingdom(k){
   document.getElementById('bc-kingdom').textContent=(k.icon||'🏰')+' '+k.name;
   document.getElementById('kingdom-title').innerHTML=`<span style="font-size:22px">${k.icon||'🏰'}</span><span style="color:${k.color};cursor:pointer" onclick="renameKingdom('${k.id}')" title="Clique para renomear">${k.name.toUpperCase()} <span style="font-size:12px;opacity:0.6">✎</span></span>`;
   renderTopics();
+  renderReinoExternos();
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('screen-kingdom').classList.add('active');
@@ -8967,6 +8969,142 @@ function simExternoListaHTML(s){
       </div>`;
     }).join('')}
   </div>`;
+}
+// ---- Simulado por REINO -----------------------------------------------------
+// "Faco 100 questoes de Enfermagem, nao escolho assunto." O registro por miniboss
+// nao cobre isso, e RATEAR as 100 entre os assuntos do reino seria pior que nao
+// registrar: inventaria um desempenho por assunto que nunca foi medido e mandaria
+// isso direto pro peso da fila. Entao fica no nivel em que foi medido — o reino —
+// e so age onde nao existe medida melhor.
+function reinoExtLista(kid){return (db.simExternosReino&&db.simExternosReino[kid])||[];}
+// Monta um objeto no formato de simStats pra poder reusar simPctEfetivo, que ja sabe
+// descontar o chute do certo/errado (70% num certo/errado valem 40% corrigidos).
+function reinoExtStats(kid){
+  const l=reinoExtLista(kid);
+  if(!l.length)return null;
+  const st={tentativas:l.length,questoesTotal:0,acertosTotal:0,porFormato:{}};
+  l.forEach(e=>{
+    st.questoesTotal+=e.quantidade||0;
+    st.acertosTotal+=e.acertos||0;
+    const f=e.formato||'multipla';
+    const pf=st.porFormato[f]=st.porFormato[f]||{tentativas:0,questoes:0,acertos:0};
+    pf.tentativas++; pf.questoes+=e.quantidade||0; pf.acertos+=e.acertos||0;
+  });
+  return st.questoesTotal?st:null;
+}
+function reinoAbrirExterno(){
+  if(!currentKingdom)return;
+  reinoExtAberto=true;
+  renderReinoExternos();
+  const el=document.getElementById('reino-ext-qtd');
+  if(el)el.focus();
+}
+function reinoFecharExterno(){reinoExtAberto=false;renderReinoExternos();}
+function reinoExternoConfere(){
+  const q=parseInt((document.getElementById('reino-ext-qtd')||{}).value,10);
+  const a=parseInt((document.getElementById('reino-ext-ac')||{}).value,10);
+  const el=document.getElementById('reino-ext-aviso');
+  if(!el)return;
+  if(!isFinite(q)||!isFinite(a)||q<=0){el.textContent='';return;}
+  if(a>q){el.innerHTML='<b style="color:var(--red-t)">Acertos nao podem passar da quantidade.</b>';return;}
+  const pct=Math.round(a/q*100);
+  const fmt=(document.getElementById('reino-ext-fmt')||{}).value||'multipla';
+  const corr=simPctCorrigido(pct,fmt);
+  el.innerHTML='Aproveitamento: <b>'+pct+'%</b> ('+a+'/'+q+')'
+    +(corr!==pct?' · <b>'+corr+'%</b> descontando o chute do certo/errado':'');
+}
+function reinoRegistrarExterno(){
+  if(!currentKingdom)return;
+  const kid=currentKingdom.id;
+  const qtd=parseInt((document.getElementById('reino-ext-qtd')||{}).value,10);
+  const ac=parseInt((document.getElementById('reino-ext-ac')||{}).value,10);
+  const fmt=(document.getElementById('reino-ext-fmt')||{}).value||'multipla';
+  const data=((document.getElementById('reino-ext-data')||{}).value||'').slice(0,10)||todayStr();
+  const fonte=((document.getElementById('reino-ext-fonte')||{}).value||'').trim().slice(0,60);
+  if(!isFinite(qtd)||qtd<1||qtd>SIM_EXT_MAX){toast('⚠️ Quantidade tem que ser entre 1 e '+SIM_EXT_MAX+' questões.','var(--red)');return;}
+  if(!isFinite(ac)||ac<0){toast('⚠️ Informe quantas você acertou.','var(--red)');return;}
+  if(ac>qtd){toast('⚠️ Você marcou mais acertos do que questões.','var(--red)');return;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(data)||data>todayStr()){toast('⚠️ Data inválida ou no futuro.','var(--red)');return;}
+  if(!db.simExternosReino)db.simExternosReino={};
+  const l=db.simExternosReino[kid]=db.simExternosReino[kid]||[];
+  l.unshift({id:genId(),data,quantidade:qtd,acertos:ac,formato:fmt,fonte,
+             registradoEm:new Date().toISOString()});
+  db.simExternosReino[kid]=l.slice(0,SIM_EXT_GUARDA);
+  reinoExtAberto=false;
+  saveDB();
+  renderReinoExternos();
+  toast('✍️ '+ac+'/'+qtd+' registradas no reino.','var(--green)');
+}
+function reinoRemoverExterno(extId){
+  if(!currentKingdom)return;
+  const l=reinoExtLista(currentKingdom.id);
+  const i=l.findIndex(x=>x.id===extId);
+  if(i<0)return;
+  const e=l[i];
+  if(!confirm('Apagar esse registro de '+e.acertos+'/'+e.quantidade+' questões?'))return;
+  l.splice(i,1);
+  saveDB();
+  renderReinoExternos();
+  toast('↺ Registro apagado.','var(--accent)');
+}
+let reinoExtAberto=false;
+function reinoExtFormHTML(k){
+  const fmt=db.simFormato||'multipla';
+  return`<div class="sim-config-row" style="flex-wrap:wrap">
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Questões:</label>
+      <input id="reino-ext-qtd" class="inp" type="number" min="1" max="${SIM_EXT_MAX}" inputmode="numeric"
+        style="width:80px;padding:6px 10px" oninput="reinoExternoConfere()">
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Acertos:</label>
+      <input id="reino-ext-ac" class="inp" type="number" min="0" max="${SIM_EXT_MAX}" inputmode="numeric"
+        style="width:80px;padding:6px 10px" oninput="reinoExternoConfere()">
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Formato:</label>
+      <select id="reino-ext-fmt" class="inp" style="width:auto;padding:6px 10px" onchange="reinoExternoConfere()">
+        <option value="multipla"${fmt==='multipla'?' selected':''}>Múltipla escolha</option>
+        <option value="certoerrado"${fmt==='certoerrado'?' selected':''}>Certo / Errado</option>
+      </select>
+    </div>
+    <div class="sim-config-row" style="flex-wrap:wrap;margin-top:6px">
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Data:</label>
+      <input id="reino-ext-data" class="inp" type="date" max="${todayStr()}" value="${todayStr()}" style="width:auto;padding:6px 10px">
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Onde:</label>
+      <input id="reino-ext-fonte" class="inp" type="text" maxlength="60" placeholder="Qconcursos, simulado do cursinho..." style="flex:1;min-width:140px;padding:6px 10px">
+    </div>
+    <div id="reino-ext-aviso" style="font-size:11px;color:var(--muted);margin:8px 0;min-height:16px"></div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-sm btn-pink" style="flex:1;justify-content:center" onclick="reinoRegistrarExterno()"><i class="fa fa-check"></i> Registrar</button>
+      <button class="btn btn-sm btn-ghost" onclick="reinoFecharExterno()">Cancelar</button>
+    </div>`;
+}
+function renderReinoExternos(){
+  const box=document.getElementById('kingdom-externos');
+  if(!box)return;
+  const k=currentKingdom;
+  if(!k){box.innerHTML='';return;}
+  const st=reinoExtStats(k.id);
+  const l=reinoExtLista(k.id);
+  const ef=st?simPctEfetivo(st):null;
+  const cab=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:${reinoExtAberto||l.length?'8px':'0'}">
+      <span style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em"><i class="fa fa-pen-to-square"></i> Questões feitas fora daqui</span>
+      ${st?`<span class="sim-stat-badge">${st.acertosTotal}/${st.questoesTotal} · <b style="color:${faixaCorTexto(ef.corrigido)}">${ef.corrigido}%</b>${ef.corrigido!==ef.bruto?` <i style="font-weight:600">(bruto ${ef.bruto}%)</i>`:''}</span>`:''}
+      ${reinoExtAberto?'':`<button class="btn btn-xs btn-ghost" onclick="reinoAbrirExterno()" title="Você fez questões deste reino inteiro, sem separar por assunto"><i class="fa fa-plus"></i> Registrar</button>`}
+    </div>`;
+  const lista=l.length?`<div>${l.map(e=>{
+      const pct=e.quantidade?Math.round(e.acertos/e.quantidade*100):0;
+      return`<div style="display:flex;align-items:center;gap:8px;font-size:11px;padding:2px 0;color:var(--muted)">
+        <span style="font-variant-numeric:tabular-nums;color:${faixaCorTexto(pct)};font-weight:800;min-width:38px">${pct}%</span>
+        <span style="font-variant-numeric:tabular-nums">${e.acertos}/${e.quantidade}</span>
+        <span>${SIM_FMT_LBL[e.formato]||e.formato}</span>
+        <span>${e.data.slice(8,10)}/${e.data.slice(5,7)}</span>
+        ${e.fonte?`<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">· ${escapeHtml(e.fonte)}</span>`:'<span style="flex:1"></span>'}
+        <button class="btn btn-xs btn-ghost" title="Apagar esse registro" onclick="reinoRemoverExterno('${e.id}')"><i class="fa fa-xmark"></i></button>
+      </div>`;}).join('')}
+    <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.5">
+      Isso mede o reino, não cada assunto — então pesa na fila só nos assuntos que
+      ainda não têm simulado próprio, e com metade da força de um resultado medido no
+      assunto. Onde houver simulado do miniboss, ele manda.
+    </div>`:'';
+  box.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin:0 0 12px">
+      ${cab}${reinoExtAberto?reinoExtFormHTML(k):lista}</div>`;
 }
 function simPanelHTML(s){
   if(simGenerating.has(s.id)){
@@ -12746,6 +12884,28 @@ function revAcerto(sub){
   if(!st||!st.questoesTotal)return null;
   return st.acertosTotal/st.questoesTotal;
 }
+// topicId -> kingdomId, em cache: revPeso roda uma vez por assunto na montagem da fila,
+// e varrer todos os reinos a cada chamada faria disso um O(n²) com 326 assuntos.
+let revKingCache=null, revKingCacheKey='';
+function revReinoDoTopico(topicId){
+  const key=(db.lastModified||0)+'|'+((db.kingdoms||[]).length);
+  if(!revKingCache||revKingCacheKey!==key){
+    const m={};
+    (db.kingdoms||[]).forEach(k=>((db.topics||{})[k.id]||[]).forEach(t=>{m[t.id]=k.id;}));
+    revKingCache=m; revKingCacheKey=key;
+  }
+  return revKingCache[topicId]||null;
+}
+// Aproveitamento medido no REINO inteiro — as questões feitas fora sem separar por
+// assunto. Já vem descontando o chute do certo/errado, via simPctEfetivo. É tapa-buraco:
+// só entra onde o assunto não tem simulado nenhum, e com metade da força.
+function revAcertoReino(kid){
+  if(!kid)return null;
+  const st=reinoExtStats(kid);
+  if(!st)return null;
+  const ef=simPctEfetivo(st);
+  return ef?{pct:ef.corrigido/100,questoes:st.questoesTotal}:null;
+}
 // Peso do assunto na fila. Nunca zero: multiplicado pelos dias parados, um peso baixo
 // só estica o retorno, não cancela.
 function revPeso(sub,topicId){
@@ -12763,6 +12923,15 @@ function revPeso(sub,topicId){
     // 30+ mexem por inteiro.
     const conf=Math.min(1,(sub.simStats.questoesTotal||0)/30);
     p*=Math.max(0.4,1+conf*(0.6-ac));
+  }else{
+    // Sem simulado no assunto, vale o que foi medido no reino — mas pela metade, porque
+    // é a média de um reino inteiro, não a medida deste assunto. Nunca sobrepõe um
+    // resultado do próprio miniboss: só ocupa o vazio.
+    const rk=revAcertoReino(revReinoDoTopico(topicId));
+    if(rk){
+      const conf=Math.min(1,rk.questoes/30)*0.5;
+      p*=Math.max(0.4,1+conf*(0.6-rk.pct));
+    }
   }
   const pri=sub.priority===100?1.15:sub.priority===30?0.9:1;
   return Math.max(REV_PISO,p*pri);
