@@ -8418,13 +8418,14 @@ async function generateFluxograma(subId){
 
   try{
     let parsed,grounded=null,fontesFluxo=[],viaFluxo=null;
-    // O teto acompanha o limite de tamanho do prompt (25 nós / 3.000 caracteres):
-    // 3.000 caracteres de JSON em português são cerca de 900 tokens, então 2048 deixa
-    // mais de duas vezes de folga. Se ainda assim vier cortado, callGeminiJSON repete o
-    // MESMO modelo com o dobro — não é preciso reservar o máximo em toda geração por
-    // causa da exceção. Era 32768: o fluxograma pedia 4x mais que o resumo, sendo o
-    // recurso que deveria produzir MENOS texto dos dois.
-    const FLUXO_MAX_OUTPUT_TOKENS=2048;
+    // 3.000 caracteres de JSON em português são ~900 tokens, então 2048 PARECIA folga de
+    // sobra — e era, se o modelo só escrevesse a resposta. Só que os Gemini 3.x PENSAM
+    // antes de responder, e os tokens de raciocínio saem deste mesmo teto. Com 2048 o
+    // modelo gastava o orçamento pensando e a resposta vinha cortada SEMPRE: o
+    // fluxograma era o único recurso com teto apertado (o resumo usa 8192, os simulados
+    // de 4096 a 22200), e era o único que falhava sempre. Não é folga pro texto: é
+    // espaço pro raciocínio mais o texto.
+    const FLUXO_MAX_OUTPUT_TOKENS=8192;
     if(usarWeb){
       const contexto=`REINO/ÁREA: ${kingdom.name}\nCHEFÃO/TÓPICO: ${topic.name}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
       // Sem resumo pra usar de base: pesquisa. Tavily primeiro, grounding do
@@ -18401,6 +18402,8 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
   let best=null; // primeiro JSON válido encontrado, mas sem confirmar busca real
   let sawRateLimit=false;
   let limiteInfo=null,houve404JSON=false;
+  let houveDefinitivo=false; // chave inválida, modelo inexistente, JSON ruim: repetir não resolve
+  const soTemporarioJSON=()=>attempts.length>0&&!houveDefinitivo;
   // O teto aprendido vale pra TODOS os modelos seguintes desta chamada. Sem isso, o
   // modelo 1 descobria que 2048 era curto, subia pra 4096 — e o modelo 2 recomeçava do
   // 2048, cortava de novo e subia de novo: seis chamadas repetindo uma conta já feita.
@@ -18410,14 +18413,16 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
   // 8192, 8192, 16384) — caro demais no teto de 20 por dia, e pra terminar em erro
   // do mesmo jeito. Com a trava, o pior caso e quatro.
   let dobrouPorCorte=false;
-  async function tentarLista(models,comBusca){
+  // comRetry=false na primeira passada. Um 503 e falha DA GOOGLE, mas conta na SUA cota
+  // de 20 por dia por modelo — insistir tres vezes no mesmo modelo sobrecarregado queima
+  // tres requisicoes pra descobrir o que a primeira ja disse. E sobrecarga e POR MODELO:
+  // quase sempre o vizinho esta de pe. Entao primeiro passa por todos uma vez; so se
+  // TODOS falharem por motivo passageiro e que vale insistir, aí sim com espera.
+  async function tentarLista(models,comBusca,comRetry){
     for(const model of models){
-      // tryGeminiModelComRetry, nao tryGeminiModel: o 503 ("this model is currently
-      // experiencing high demand") e passageiro e some repetindo em 1s/3s — e o resumo
-      // sempre repetiu, porque callGeminiGenerate usa a versao com retry. O fluxograma
-      // era o unico que desistia do modelo no primeiro 503, o que o deixava bem mais
-      // fragil que o resumo exatamente nos momentos de sobrecarga da Google.
-      let r=await tryGeminiModelComRetry(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens:teto});
+      let r=comRetry
+        ?await tryGeminiModelComRetry(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens:teto})
+        :await tryGeminiModel(apiKey,model,prompt,{useSearch:!!comBusca,maxOutputTokens:teto});
       // Resposta CORTADA nao e falha do modelo: e teto de saida curto pra ESTE assunto.
       // Ir pro proximo modelo com o mesmo teto so corta de novo — eram quatro chamadas
       // desperdicadas terminando em erro. O certo e repetir o MESMO modelo com o dobro.
@@ -18432,6 +18437,7 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
         // Por modelo, nao por chave: segue tentando os outros.
         if(r.limite){sawRateLimit=true;limiteInfo=r;}
         if(r.http===404)houve404JSON=true;
+        if(!r.temporario)houveDefinitivo=true;
         continue;
       }
       geminiAnotarModeloOk(model);
@@ -18477,16 +18483,23 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
   }
   const ordem=geminiOrdemModelos();
   if(useSearch){
-    const hit=await tentarLista(ordem,true);
+    const hit=await tentarLista(ordem,true,false);
     if(hit)return hit;
     // Busca não trouxe nada aproveitável — tenta de novo sem a ferramenta de busca, que
     // costuma obedecer melhor à instrução de responder só com JSON.
-    const hit2=await tentarLista(ordem,false);
+    const hit2=await tentarLista(ordem,false,false);
     if(hit2)return hit2;
   }else{
-    const hit=await tentarLista(ordem,false);
+    const hit=await tentarLista(ordem,false,false);
     if(hit)return hit;
   }
+  // Aqui NÃO existe passada de repetição, e é de propósito. Se os três modelos
+  // responderam 503, a Google está sobrecarregada de verdade — esperar 1 e 3 segundos
+  // não muda isso, e repetir os três custaria mais NOVE requisições da cota de 20 por
+  // dia POR MODELO. Um usuário queimou 8 numa tentativa; a versão com repetição chegava
+  // a 12. Melhor devolver o erro na hora, dizendo o que fazer, e preservar a cota pra
+  // quando a Google voltar. Quem quiser insistir clica de novo — e aí é escolha dele,
+  // não do app gastando por conta própria.
   if(best)return best;
   if(houve404JSON){
     const discovered=(await listGeminiModels(apiKey)).filter(m=>!GEMINI_MODEL_CANDIDATES.includes(m));
