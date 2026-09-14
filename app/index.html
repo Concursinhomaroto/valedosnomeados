@@ -7154,10 +7154,14 @@ function resumoFileSelected(subId,inputEl){
 // respondia ao que estava mais fresco. E o mesmo erro que fez o fluxograma ignorar o
 // formato pedido; aqui ele fazia uns resumos sairem sem titulo em maiusculas e sem
 // "Na pratica:", e outros sairem certinhos, sem padrao aparente.
+// As regras 4 e 5 nao sao de formato, mas ficam aqui pelo mesmo motivo: e o ultimo
+// lugar que o modelo le. A 5 nasceu de um resumo que afirmou que o Tecnico de
+// Enfermagem pode fazer sondagem vesical em paciente de menor complexidade — nao
+// pode, e privativa do Enfermeiro, e a frase vinha com numero de resolucao do lado.
 const RESUMO_FECHAMENTO=`
 
 =====================================================================
-LEMBRETE FINAL DE FORMATO — vale acima de qualquer coisa dita antes
+LEMBRETE FINAL — vale acima de qualquer coisa dita antes
 =====================================================================
 1) Cada seção começa com um TÍTULO CURTO EM MAIÚSCULAS terminado em dois pontos,
    sozinho na linha, e o texto da seção vem na linha seguinte.
@@ -7167,11 +7171,24 @@ LEMBRETE FINAL DE FORMATO — vale acima de qualquer coisa dita antes
    parte das seções deve ter a sua.
 3) Separe cada bloco com UMA linha em branco. Sem markdown: nada de #, de ** ou de
    bullets com símbolos.
+4) TODO número vai em ALGARISMO, nunca por extenso: "36 graus" e não "trinta e seis
+   graus"; "4 tipos", "2 mL/kg", "7 dias", "12 anos", "30%", "3ª fase", "artigo 5º".
+   Vale pra quantidade, dose, temperatura, prazo, idade, percentual, ordinal, número
+   de artigo e de lei. Se o número cair no começo da frase, reescreva a frase pra ele
+   não abrir — não o escreva por extenso pra resolver.
+5) NÃO afirme quem pode ou não pode executar um procedimento — competência privativa,
+   ato delegável, "sob supervisão de", "cabe ao técnico", "é privativo do" — a menos
+   que isso esteja LITERALMENTE no material acima (ou na fonte que você pesquisou).
+   Não deduza a partir do que costuma acontecer no serviço. Se o ponto for importante
+   e você não tiver a fonte na mão, escreva-o como pendência, assim: "Conferir na Lei
+   7.498/1986 e nas resoluções do COFEN quem pode executar." E nunca cite número de
+   lei, artigo ou resolução pra sustentar uma competência que você não confirmou —
+   número ao lado de uma frase errada é justamente o que faz ela passar despercebida.
 
 Exemplo do formato esperado:
 
 CLASSIFICAÇÃO DOS CHOQUES:
-O choque é classificado em quatro tipos conforme o mecanismo... (texto da seção)
+O choque é classificado em 4 tipos conforme o mecanismo... (texto da seção)
 
 Na prática: Paciente vítima de trauma com hemorragia externa volumosa evolui com
 taquicardia e hipotensão — quadro de choque hipovolêmico.`;
@@ -7189,6 +7206,8 @@ REGRAS:
 - Não invente informação que não esteja no material. Se algo estiver ambíguo ou incompleto no texto, sinalize isso brevemente em vez de completar por conta própria.
 - Depois de apresentar um conceito, critério, classificação ou prazo, ancore-o num EXEMPLO de aplicação, numa linha começando por "Na prática:" — uma situação curta mostrando a teoria acontecendo (uma cena de plantão, um caso, a situação de serviço em que a regra é acionada). Serve pra correlacionar teoria e prática; se o ponto já for autoexplicativo, pule.
 - O exemplo pode ser uma situação hipotética montada a partir do próprio material, mas NÃO pode introduzir número, prazo, dose ou nome de norma que não esteja no material.
+- Todo número em algarismo, nunca por extenso: "36 graus", "2 mL/kg", "7 dias", "30%", "artigo 5º" — inclusive quantidade, idade, prazo e ordinal.
+- Não afirme competência profissional (quem pode executar um procedimento, o que é privativo, o que é delegável, o que é "sob supervisão") sem que esteja no material. Não deduza pelo que é comum no serviço, e não cite número de lei ou resolução pra sustentar competência não confirmada — deixe como "conferir na Lei 7.498/1986 e nas resoluções do COFEN".
 - Escreva em texto corrido organizado por tópicos, sem markdown (sem #, sem **, sem bullets com símbolos especiais — use só quebras de linha e frases objetivas), porque esse texto também vai ser lido em voz alta.
 
 MATERIAL:
@@ -7204,6 +7223,8 @@ ${contexto}
 REGRAS:
 - Texto corrido organizado por tópicos, sem markdown.
 - Não invente informação que não esteja no material.
+- Todo número em algarismo, nunca por extenso: "36 graus", "2 mL/kg", "7 dias", "30%", "artigo 5º" — inclusive quantidade, idade, prazo e ordinal.
+- Não afirme competência profissional (quem pode executar um procedimento, o que é privativo, o que é delegável, o que é "sob supervisão") sem que esteja no material. Não deduza pelo que é comum no serviço, e não cite número de lei ou resolução pra sustentar competência não confirmada — deixe como "conferir na Lei 7.498/1986 e nas resoluções do COFEN".
 
 PARTE ${parte}/${total} DO MATERIAL:
 ${texto}`;
@@ -7221,6 +7242,8 @@ REGRAS:
 - Não invente nada que não esteja nas anotações abaixo.
 - Depois de apresentar um conceito, critério, classificação ou prazo, ancore-o num EXEMPLO de aplicação, numa linha começando por "Na prática:" — uma situação curta mostrando a teoria acontecendo (uma cena de plantão, um caso, a situação de serviço em que a regra é acionada). Serve pra correlacionar teoria e prática; se o ponto já for autoexplicativo, pule.
 - O exemplo pode ser uma situação hipotética montada a partir do próprio material, mas NÃO pode introduzir número, prazo, dose ou nome de norma que não esteja no material.
+- Todo número em algarismo, nunca por extenso: "36 graus", "2 mL/kg", "7 dias", "30%", "artigo 5º" — inclusive quantidade, idade, prazo e ordinal.
+- Não afirme competência profissional (quem pode executar um procedimento, o que é privativo, o que é delegável, o que é "sob supervisão") sem que esteja no material. Não deduza pelo que é comum no serviço, e não cite número de lei ou resolução pra sustentar competência não confirmada — deixe como "conferir na Lei 7.498/1986 e nas resoluções do COFEN".
 - Texto corrido organizado por tópicos, sem markdown (sem #, sem **, sem bullets com símbolos especiais), porque também vai ser lido em voz alta.
 
 ANOTAÇÕES POR PARTE:
@@ -7585,6 +7608,8 @@ REGRAS:
 - Se não tiver certeza sobre uma informação específica (data exata, número de lei, etc.), sinalize isso como algo a confirmar, em vez de inventar.
 - Depois de apresentar um conceito, critério, classificação ou prazo, ancore-o num EXEMPLO de aplicação, numa linha começando por "Na prática:" — uma situação curta (uma ou duas frases) mostrando a teoria acontecendo. Em conteúdo clínico, uma cena de plantão ou um caso de paciente; em norma e legislação, a situação de serviço em que ela é acionada. Serve pra correlacionar teoria e prática, não pra alongar: se o ponto já for autoexplicativo, pule o exemplo.
 - O exemplo PODE ser hipotético, e isso é permitido — mas ele não pode introduzir número, prazo, dose ou nome de norma que você não confirmou na pesquisa. Exemplo ilustrativo usa só dados que já apareceram no próprio resumo.
+- Todo número em algarismo, nunca por extenso: "36 graus", "2 mL/kg", "7 dias", "30%", "artigo 5º" — inclusive quantidade, idade, prazo e ordinal.
+- Não afirme competência profissional (quem pode executar um procedimento, o que é privativo, o que é delegável, o que é "sob supervisão") sem que esteja no material. Não deduza pelo que é comum no serviço, e não cite número de lei ou resolução pra sustentar competência não confirmada — deixe como "conferir na Lei 7.498/1986 e nas resoluções do COFEN".
 - Escreva em texto corrido organizado por tópicos, sem markdown (sem #, sem **, sem bullets com símbolos especiais), porque esse texto também vai ser lido em voz alta.
 - Português brasileiro correto e natural, em frases completas. Revise concordância verbal e nominal, regência, crase e pontuação antes de responder — este texto vai ser estudado e também lido em voz alta, então frase truncada ou torta atrapalha de verdade.`;
 }
