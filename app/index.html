@@ -9960,7 +9960,7 @@ let simColarMeta=0;        // quantos itens foram pedidos, pra tela saber quanto
 let simColarLista=[];      // a lista numerada que foi pro prompt — o "assunto":N aponta pra ela
 function simColarPromptTexto(){
   const fmt=(document.getElementById('sg-colar-fmt')||{}).value||'certoerrado';
-  const qtd=parseInt((document.getElementById('sg-colar-qtd')||{}).value,10)||60;
+  const qtd=parseInt((document.getElementById('sg-colar-qtd')||{}).value,10)||120;
   const ce=fmt==='certoerrado';
   const exemplo=ce
     ?`[{"assunto":7,"assuntoNome":"Sondagem vesical","textoApoio":"","afirmacao":"...","gabarito":"C","explicacao":"..."}]`
@@ -9968,49 +9968,72 @@ function simColarPromptTexto(){
   // A lista fechada e o que impede a IA de devolver 120 assuntos diferentes, um por
   // questao — que foi o que aconteceu pedindo "o nome mais especifico possivel": nada
   // casava com o cadastro e sobravam 120 seletores pra resolver a mao.
-  simColarLista=simIndiceAssuntos().filter(c=>c.sub.studied);
+  // Reino pausado fica de fora: e o mesmo sinal de "isso nao esta no meu edital" que ja
+  // tira o reino da fila de revisao — nao faz sentido cair numa prova de treino.
+  simColarLista=simIndiceAssuntos().filter(c=>c.sub.studied&&!revReinoFora(c.kingdom.id));
   const listaTxt=simColarLista.length
     ? simColarLista.map((c,i)=>`${i+1}. ${c.sub.name} (${c.kingdom.name} / ${c.topic.name})`).join('\n')
     : '(nenhum assunto estudado cadastrado)';
-  return`Você é um elaborador de questões de concurso público brasileiro, no estilo Cebraspe (Cespe).
+  // Proporcao real por reino: e o que faz a prova parecer com a de verdade, em vez de
+  // dar o mesmo peso a um reino de 200 assuntos e a um de 10.
+  const porReino={};
+  simColarLista.forEach(c=>{porReino[c.kingdom.name]=(porReino[c.kingdom.name]||0)+1;});
+  const nomes=Object.keys(porReino);
+  const distrib=nomes.length>1
+    ? nomes.map(n=>`${n}: cerca de ${Math.max(1,Math.round(qtd*porReino[n]/simColarLista.length))} ${ce?'itens':'questões'}`).join(' · ')
+    : '';
+  return`Você é um elaborador de questões de concurso público brasileiro, no estilo Cebraspe (Cespe). Sua especialidade é prova para cargo de Enfermeiro.
 
-TAREFA: gere EXATAMENTE ${qtd} ${ce?'itens de julgamento CERTO/ERRADO':'questões de múltipla escolha (A a E, só uma correta)'} inéditos, de nível difícil, para concurso da área de enfermagem.
+TAREFA
+Gere EXATAMENTE ${qtd} ${ce?'itens de julgamento CERTO/ERRADO':'questões de múltipla escolha, de A a E, com uma só correta'} inéditos, de nível difícil — o nível de quem disputa vaga direta, não o de quem está começando.
 
-PESQUISE NA INTERNET antes de elaborar. Hoje é ${new Date().toLocaleDateString('pt-BR')}. Use a versão vigente de cada lei, diretriz e protocolo, e não a que você lembra do treino.
+ANTES DE ESCREVER: PESQUISE NA INTERNET
+Hoje é ${new Date().toLocaleDateString('pt-BR')}. Use a versão VIGENTE de cada lei, resolução, diretriz e protocolo — não a que você lembra do treinamento. Confira especialmente o que mudou nos últimos 3 anos: resoluções do COFEN, portarias do Ministério da Saúde, diretrizes de ressuscitação, RDC da ANVISA e normas de biossegurança. Se a fonte que você achou for uma apostila ou um resumo de terceiros, desconfie: prefira o texto oficial.
 
-REGRAS DE CONTEÚDO
-- Todo número em algarismo, nunca por extenso: "36 graus", "2 mL/kg", "7 dias", "30%", "artigo 5º".
-- NÃO afirme quem pode executar um procedimento (competência privativa, ato delegável, "sob supervisão de") sem ter confirmado na fonte. Sondagem vesical, por exemplo, é privativa do Enfermeiro. Na dúvida, não cobre esse ponto.
-- Não cite número de lei, artigo ou resolução que você não confirmou.
-${ce?`- Cada item é UMA afirmação a ser julgada. Sem "Julgue o item" na frente, sem alternativas.
-- No estilo Cebraspe o item errado erra por UM detalhe (um número trocado, uma conduta fora de ordem, uma exceção ignorada, um "sempre/nunca" indevido) — não por ser absurdo.
-- Equilibre CERTO e ERRADO ao longo dos ${qtd} itens.
-- A explicação diz por que está certo, ou exatamente qual parte está errada e qual seria a correta.`
-    :`- 5 alternativas (A a E), uma só correta.
-- A letra correta deve variar entre A, B, C, D e E ao longo das ${qtd} questões.
-- Explicação de 1 a 3 frases do porquê a correta está certa.`}
-- Se o item depender de um texto base (caso clínico, texto de português), repita esse texto no campo "textoApoio" de CADA item que o usa. Quem não usa, deixa "".
+ASSUNTOS — LISTA FECHADA
+Cobre SÓ o que está nesta lista. Ela é o edital desta prova.
 
-ASSUNTOS (lista fechada — cobre SÓ o que está aqui)
 ${listaTxt}
 
-- Cada item cobra UM assunto da lista acima, e traz dois campos: "assunto" com o NÚMERO
-  do assunto na lista, e "assuntoNome" com o nome dele copiado exatamente como está escrito.
-- NÃO invente assunto fora da lista, nem crie um nome mais específico do que o da lista.
-  Se o ponto que você quer cobrar é um detalhe dentro de um assunto da lista, use o número
-  do assunto que o contém.
-- Distribua os ${qtd} itens pelos assuntos da lista, priorizando os que mais caem em prova.
-  Pode repetir assunto; não precisa cobrir todos.
+- Cada item cobra UM assunto da lista, e traz dois campos: "assunto" com o NÚMERO do assunto na lista e "assuntoNome" com o nome dele copiado exatamente como está escrito acima.
+- NÃO invente assunto fora da lista. NÃO crie um nome mais específico que o da lista: se o ponto que você quer cobrar é um detalhe dentro de um assunto listado, use o número do assunto que o contém.
+- Não precisa cobrir todos os assuntos, e pode repetir o mesmo assunto em vários itens.${distrib?`
+- Distribua na proporção da lista — ${distrib}.`:''}
+- Dentro de cada assunto, varie o ângulo: conceito, exceção, prazo, sequência de conduta, cálculo, competência. Não faça 4 itens sobre a mesma frase.
+
+REGRAS DE CONTEÚDO
+- Todo número em ALGARISMO, nunca por extenso: "36 graus", "2 mL/kg", "7 dias", "12 anos", "30%", "artigo 5º".
+- NÃO afirme quem pode ou não pode executar um procedimento — competência privativa, ato delegável, "sob supervisão de", "cabe ao técnico" — sem ter confirmado na fonte. Sondagem vesical, por exemplo, é privativa do Enfermeiro em qualquer situação. Na dúvida, não cobre esse ponto.
+- Nunca cite número de lei, artigo ou resolução que você não confirmou na pesquisa. Número ao lado de uma afirmação errada é o que faz ela passar despercebida.
+- Nada de pegadinha de português em item de conteúdo técnico: o que está sendo medido é o conteúdo.
+- Nenhum item pode repetir outro da mesma prova, nem ser variação próxima de outro.
+${ce?`
+REGRAS DO CERTO/ERRADO
+- Cada item é UMA afirmação a ser julgada. Escreva a afirmação direta, sem "Julgue o item" na frente e sem alternativas.
+- O item ERRADO erra por UM detalhe — um número trocado, uma conduta fora de ordem, uma exceção ignorada, um "sempre/nunca" indevido, uma via de administração trocada. Nunca por ser absurdo: item absurdo não mede nada.
+- Equilibre o gabarito: aproximadamente metade CERTO e metade ERRADO ao longo dos ${qtd} itens, sem blocos longos da mesma resposta.
+- A explicação diz por que está certo; se estiver errado, aponta exatamente qual parte da afirmação está incorreta e qual seria a redação correta.`
+    :`
+REGRAS DA MÚLTIPLA ESCOLHA
+- Exatamente 5 alternativas (A a E), uma só correta.
+- As 4 erradas têm que ser plausíveis: erro clássico da prática, número próximo do certo, conduta da etapa vizinha. Alternativa obviamente absurda é alternativa desperdiçada.
+- A letra correta deve variar entre A, B, C, D e E ao longo das ${qtd} questões, em proporção parecida — não concentre em B e C.
+- A explicação tem de 1 a 3 frases e diz por que a correta está certa.`}
+
+TEXTO DE APOIO
+- Se um grupo de itens depender de um texto base (um texto de português a interpretar, um caso clínico, um trecho de norma), escreva esse texto UMA vez e repita ele INTEIRO no campo "textoApoio" de CADA item que o usa.
+- Itens que não dependem de texto base levam "textoApoio": "".
 
 ENTREGA
 - Responda com os ${qtd} itens de uma vez, se couber.
-- Se perceber que NÃO vai caber na resposta, PARE num item completo, feche o array
-  corretamente com ] e escreva na linha seguinte: CONTINUA — faltam N itens.
-  Nunca corte no meio de um item: um JSON cortado se perde inteiro, não só a última linha.
+- Se perceber que NÃO vai caber, PARE num item completo, feche o array corretamente com ] e escreva na linha seguinte: CONTINUA — faltam N itens. Nunca corte no meio de um item: um JSON cortado se perde inteiro, não só a última linha.
 - Quando eu pedir a continuação, gere os itens que faltam sem repetir nenhum dos anteriores.
 
-FORMATO DA RESPOSTA
-Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no formato exato:
+FORMATO DA RESPOSTA — leia com atenção, é o que mais dá errado
+- Responda APENAS com um array JSON. Sem markdown, sem cerca de código, sem texto antes ou depois.
+- Dentro dos textos, use aspas simples se precisar citar algo. Aspas duplas sem escape quebram o JSON inteiro.
+- Sem vírgula sobrando antes de ] ou }. Sem comentários. Sem quebra de linha dentro de um valor.
+- Formato exato de cada item:
 ${exemplo}`;
 }
 // Pedido de continuacao. O Gemini ja tem a conversa inteira como contexto, entao aqui
