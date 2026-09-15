@@ -18967,9 +18967,15 @@ const GEMINI_MODEL_CANDIDATES=['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6
 // (20). Quem gera resumo, flashcard e fluxograma o dia inteiro esgota os quatro acima e
 // fica sem nada — era o 429 que aparecia sempre no fluxograma, que costuma ser a última
 // ação depois do resumo. O Flash Lite tem teto diário muito maior (500).
-// Só é acionada quando alguém recusou por COTA (429). Numa queda da Google (503) ela
-// fica fora: é a mesma infraestrutura, estaria caída também, e tentar só somaria
-// mais três requisições e mais espera a um erro que já é conhecido.
+// Acionada quando alguém recusou por COTA (429) E TAMBÉM por SOBRECARGA (503).
+//
+// Eu já tinha deixado o 503 de fora, com o argumento de que "é a mesma infraestrutura,
+// estaria caída também". Errado, e custou caro: o 503 do Gemini não é queda do serviço,
+// é "This model is currently experiencing high demand" — pressão de capacidade NAQUELE
+// modelo, no nível gratuito, que é o primeiro a ser preterido quando os Flash enchem.
+// O Lite é outro modelo, de pool bem mais folgado, e é justamente o que ainda responde
+// quando os três Flash estão lotados. Custa UMA requisição, depois de três que já
+// falharam — e era a diferença entre o fluxograma sair e não sair.
 const GEMINI_MODELO_RESERVA='gemini-flash-lite-latest';
 // Toda chamada recomecava a lista no primeiro modelo. Se a chave da pessoa nao tem
 // acesso aos dois primeiros, cada acao no app queimava duas requisicoes so pra
@@ -19006,9 +19012,21 @@ function geminiOrdemModelos(lista){
   if(!geminiModeloOk||base.indexOf(geminiModeloOk)<0)return base;
   return [geminiModeloOk,...base.filter(m=>m!==geminiModeloOk)];
 }
+// Teto de espera por requisicao. Sem isso, uma chamada que a Google deixa pendurada
+// segura o app indefinidamente — e como os modelos sao tentados EM SEQUENCIA, tres
+// pendurados viram uma espera longa antes do erro. O teto e generoso de proposito
+// (um simulado grande pensa bastante antes de escrever) e cresce com o tamanho do
+// pedido; o corte conta como temporario, entao o proximo modelo e a reserva ainda
+// sao tentados normalmente.
+function geminiTimeoutMs(maxOut){
+  return (maxOut&&maxOut>16384)?300000:180000;
+}
 async function tryGeminiModel(apiKey,model,prompt,opts){
+  const maxOut=(opts&&opts.maxOutputTokens)||8192;
+  const ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  const prazo=ctrl?setTimeout(()=>ctrl.abort(),geminiTimeoutMs(maxOut)):null;
   try{
-    const body={contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:(opts&&opts.maxOutputTokens)||8192}};
+    const body={contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:maxOut}};
     // Grounding com Google Search: a IA pesquisa na internet antes de responder, em vez
     // de usar só o que aprendeu no treinamento. Usado no Resumo "sem arquivo".
     // Nome da ferramenta de busca mudou entre gerações do Gemini: 'google_search'
@@ -19019,6 +19037,7 @@ async function tryGeminiModel(apiKey,model,prompt,opts){
     const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
+      ...(ctrl?{signal:ctrl.signal}:{}),
       // maxOutputTokens explícito: sem isso a API usa um teto padrão que, em respostas
       // grandes (ex: simulado com muitas questões), corta o JSON no meio e quebra o
       // parse — o pedido então volta com menos itens do que o solicitado (ou falha).
@@ -19091,7 +19110,10 @@ async function tryGeminiModel(apiKey,model,prompt,opts){
            motivo:grounded?null:'o modelo respondeu, mas não usou a busca (nenhuma fonte veio na resposta)'};
   }catch(e){
     // fetch que nem chegou a responder (rede caiu, DNS, timeout) tambem e temporario
-    return{ok:false,reason:e.message,temporario:true};
+    const abortado=e&&(e.name==='AbortError'||/abort/i.test(e.message||''));
+    return{ok:false,reason:abortado?`sem resposta em ${Math.round(geminiTimeoutMs(maxOut)/1000)}s`:e.message,temporario:true};
+  }finally{
+    if(prazo)clearTimeout(prazo);
   }
 }
 // Tenta o MESMO modelo de novo quando o erro e temporario, esperando 1s e depois 3s.
@@ -19129,7 +19151,14 @@ function geminiMensagemErro(attempts,tudoTemporario,limite){
     const dica=semTavily?' Você está sem chave do Tavily: assim quem pesquisa na internet é o próprio Gemini, que é a chamada mais cara. Configure em ⚙️ IA e voz (1.000 buscas grátis por mês) pra gastar bem menos.':'';
     return `Você atingiu o limite de uso da sua chave do Gemini (erro 429).${q} Isso não é chave inválida: é cota — a gratuita tem teto por minuto e por dia.${dica}`;
   }
-  if(tudoTemporario)return 'A IA do Google está sobrecarregada agora (erro 503). Não é problema da sua chave nem da sua conta — espere um ou dois minutos e tente de novo.';
+  if(tudoTemporario){
+    // Nem todo temporario e 503: quando a Google aceita o pedido e nao devolve nada,
+    // o app corta por tempo. Dizer "erro 503" nesse caso e mentira, e mentira em
+    // mensagem de erro faz a pessoa procurar o problema no lugar errado.
+    const soTempo=attempts.length>0&&attempts.every(a=>/sem resposta em/.test(a));
+    if(soTempo)return 'O Gemini aceitou o pedido mas não respondeu a tempo — em nenhum modelo, nem no reserva. Quase sempre é sobrecarga momentânea do lado deles: espere um ou dois minutos e tente de novo.';
+    return 'A IA do Google está sobrecarregada agora (erro 503) — inclusive o modelo reserva, que o app já tentou por último. Não é problema da sua chave nem da sua conta, e não gastou cota do seu dia. Espere um ou dois minutos e tente de novo.';
+  }
   return `Nenhum modelo do Gemini respondeu. Tentativas: ${attempts.join(' · ')||'nenhuma'}. Verifique se sua chave em aistudio.google.com/apikey está válida.`;
 }
 // Consulta quais modelos a própria chave tem acesso (ListModels) — usado só como
@@ -19189,7 +19218,10 @@ async function callGeminiGenerate(apiKey,prompt,opts){
       if(r.limite){limite=r;break;}
     }
   }
-  if(limite){
+  // Mesma regra do caminho JSON: o Lite entra tanto por cota (429) quanto por
+  // sobrecarga (503). Pool diferente dos Flash — e quando os Flash estao lotados, ele
+  // costuma ser o unico que ainda responde.
+  if(limite||soTemporario){
     const rr=await tryGeminiModel(apiKey,GEMINI_MODELO_RESERVA,prompt,opts);
     if(rr.ok)return rr.raw;
     attempts.push(`${GEMINI_MODELO_RESERVA} (${rr.reason})`);
@@ -19273,6 +19305,7 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
   const attempts=[];
   let best=null; // primeiro JSON válido encontrado, mas sem confirmar busca real
   let sawRateLimit=false;
+  let sawTemporario=false;   // 503/500/502/504: sobrecarga, nao cota
   let limiteInfo=null,houve404JSON=false;
   let houveDefinitivo=false; // chave inválida, modelo inexistente, JSON ruim: repetir não resolve
   const soTemporarioJSON=()=>attempts.length>0&&!houveDefinitivo;
@@ -19308,6 +19341,7 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
         attempts.push(`${model} (${r.reason})`);
         // Por modelo, nao por chave: segue tentando os outros.
         if(r.limite){sawRateLimit=true;limiteInfo=r;}
+        if(r.temporario)sawTemporario=true;
         if(r.http===404)houve404JSON=true;
         if(!r.temporario)houveDefinitivo=true;
         continue;
@@ -19379,10 +19413,13 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
     if(hit3)return hit3;
   }
   if(best)return best;
-  if(sawRateLimit){
+  // Cota estourada OU sobrecarga: nos dois casos o Lite e a ultima carta, e e uma carta
+  // boa — pool diferente dos Flash. Uma requisicao a mais, depois de tres que ja falharam.
+  if(sawRateLimit||sawTemporario){
     const hitR=await tentarLista([GEMINI_MODELO_RESERVA],false);
     if(hitR)return hitR;
-    throw new Error(geminiMensagemErro(attempts,false,limiteInfo||{}));
+    if(sawRateLimit)throw new Error(geminiMensagemErro(attempts,false,limiteInfo||{}));
+    throw new Error(geminiMensagemErro(attempts,soTemporarioJSON(),null));
   }
   throw new Error(`Nenhum modelo respondeu com um JSON válido. Tentativas: ${attempts.join(' · ')||'nenhuma'}.`);
 }
