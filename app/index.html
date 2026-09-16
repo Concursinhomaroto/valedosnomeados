@@ -18568,7 +18568,6 @@ function fcStudyConf(cardId,conf){
   const c=db.flashcards[cardId];
   const prevTouch=c.ultimaRevisao||c.criacao;
   c.lastConf=conf;
-  c.ultimaRevisao=new Date().toISOString();
   logFCReview(conf>=3);
   if(conf>=3){c.acertos=(c.acertos||0)+1;fcScoreRight++;}
   else{c.erros=(c.erros||0)+1;fcScoreWrong++;}
@@ -18576,7 +18575,17 @@ function fcStudyConf(cardId,conf){
   // "Difícil", "Lembrei" e "Fácil" devolviam o MESMO intervalo (a nota só mexia no fator de
   // facilidade pra vez seguinte), e num card novo os quatro devolviam 1 dia.
   // c.sm2 fica gravado do jeito que estava, sem ser atualizado: é a rede pra voltar atrás.
+  //
+  // A ORDEM AQUI É O CÁLCULO. fsrsAplicar mede quantos dias se passaram desde
+  // ultimaRevisao pra saber a retenção no momento da resposta, e é essa retenção que
+  // define o quanto a estabilidade cresce: lembrar de algo que estava quase esquecido
+  // vale muito; lembrar de algo revisado agora há pouco não vale quase nada. Carimbar
+  // ultimaRevisao=agora ANTES da conta fazia "dias" ser sempre 0, R≈1 e o ganho de
+  // estabilidade colapsar — o botão prometia 5 dias (a prévia usava a data antiga, a
+  // certa) e o card era agendado pra 1. Valia pros quatro botões: todo intervalo saía
+  // encurtado, o que engorda a fila do dia seguinte. fcGridMark já fazia na ordem certa.
   const dias=fsrsAplicar(c,conf);
+  c.ultimaRevisao=new Date().toISOString();
   trackFCReviewOutcome(cardId,conf>=3,prevTouch);
   fcAwardReviewXP(cardId,conf>=3);
   saveDB();
