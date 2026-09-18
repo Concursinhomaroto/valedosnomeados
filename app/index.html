@@ -14246,9 +14246,9 @@ function renderWeeklyPlan(){
     // um filho flex se recusa a encolher abaixo do proprio conteudo sem isso, entao um
     // nome comprido empurrava o cartao pra fora da coluna em vez de ser cortado.
     const itemsHtml=(day.items||[]).map((item,idx)=>`
-      <div class="plan-item" style="border-left:3px solid ${escapeHtml(item.kColor||'var(--accent)')}" title="${escapeHtml(item.name+' — '+(item.topic||'')+' · '+(item.kingdom||''))}">
+      <div class="plan-item" style="border-left:3px solid ${escapeHtml(item.kColor||'var(--accent)')}" title="${escapeHtml(item.subId&&item.topic?item.name+' — '+item.topic+' · '+(item.kingdom||''):item.name)}">
         <div class="plan-item-dot" style="background:${escapeHtml(item.kColor||'var(--accent)')}"></div>
-        <div style="flex:1;min-width:0"><div class="plan-item-text">${escapeHtml(item.name)}</div><div class="plan-item-sub">${escapeHtml(item.topic)} · ${escapeHtml(item.kingdom)}</div></div>
+        <div style="flex:1;min-width:0"><div class="plan-item-text">${escapeHtml(item.name)}</div>${item.subId&&(item.topic||item.kingdom)?`<div class="plan-item-sub">${escapeHtml(item.topic||'')} · ${escapeHtml(item.kingdom||'')}</div>`:''}</div>
         <button onclick="removePlanItem('${day.ds}',${idx})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 4px;flex-shrink:0" title="Remover">✕</button>
       </div>`).join('');
     return`<div class="day-col${day.isToday?' today-col':''}">
@@ -14268,8 +14268,12 @@ function renderWeeklyPlan(){
   }).join('')}</div>`;
 }
 
+// Nem tudo que entra na semana e miniboss: prova simulada, academia, consulta,
+// "terminar a redacao", dia de folga. Exigir um assunto cadastrado pra poder marcar
+// qualquer coisa fazia a agenda so servir pra metade da semana. O campo de texto vem
+// primeiro e com o foco; o miniboss continua ali como atalho, porque o item ligado a um
+// miniboss guarda chefao, reino e cor.
 function openAddPlanItem(ds){
-  // Montar lista de todos os minibosses disponíveis
   let opts='';
   db.kingdoms.forEach(k=>{
     (db.topics[k.id]||[]).forEach(t=>{
@@ -14279,9 +14283,16 @@ function openAddPlanItem(ds){
     });
   });
   const html=`
-    <div style="margin-bottom:12px;font-size:13px;color:var(--text2);font-weight:600">Escolha o assunto para adicionar na agenda:</div>
+    <div style="margin-bottom:6px;font-size:13px;color:var(--text2);font-weight:700">O que vai nesse dia?</div>
+    <input id="plan-livre" class="inp" style="width:100%;margin-bottom:6px;font-size:13px" maxlength="80"
+      placeholder="Ex: Simulado de 120 questões, academia, revisar redação..."
+      onkeydown="if(event.key==='Enter'){event.preventDefault();confirmAddPlanItem('${ds}');}">
+    <div style="font-size:10.5px;color:var(--muted);margin-bottom:14px">Escreva qualquer coisa — não precisa ser um assunto cadastrado.</div>
+    <div style="text-align:center;font-size:10px;color:var(--muted);margin:0 0 12px;display:flex;align-items:center;gap:8px">
+      <span style="flex:1;height:1px;background:var(--border)"></span>ou puxe um miniboss<span style="flex:1;height:1px;background:var(--border)"></span>
+    </div>
     <select id="plan-sub-sel" class="inp" style="width:100%;margin-bottom:14px;font-size:12px">
-      <option value="">— Selecione um miniboss —</option>
+      <option value="">— Nenhum (usar o texto acima) —</option>
       ${opts}
     </select>
     <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -14289,17 +14300,30 @@ function openAddPlanItem(ds){
       <button class="btn btn-primary" onclick="confirmAddPlanItem('${ds}')"><i class="fa fa-plus"></i> Adicionar</button>
     </div>`;
   openModal('📅 Adicionar à Agenda — '+new Date(ds+'T00:00:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'}), html);
+  setTimeout(()=>{const el=document.getElementById('plan-livre');if(el)el.focus();},60);
 }
 
 function confirmAddPlanItem(ds){
   const sel=document.getElementById('plan-sub-sel');
-  if(!sel||!sel.value){toast('⚠️ Selecione um assunto','var(--red)');return;}
-  const [subId,name,topic,kingdom,kColor]=sel.value.split('|').map((v,i)=>i>1?decodeURIComponent(v):v);
+  const livreEl=document.getElementById('plan-livre');
+  const livre=((livreEl&&livreEl.value)||'').trim().slice(0,80);
   if(!db.weeklyPlan)db.weeklyPlan={};
   if(!db.weeklyPlan[ds])db.weeklyPlan[ds]=[];
-  // Evitar duplicata
-  if(db.weeklyPlan[ds].some(x=>x.subId===subId)){toast('Já está na agenda deste dia','var(--orange)');return;}
-  db.weeklyPlan[ds].push({subId,name:decodeURIComponent(name),topic:decodeURIComponent(topic),kingdom:decodeURIComponent(kingdom),kColor:decodeURIComponent(kColor)});
+  const lista=db.weeklyPlan[ds];
+  if(sel&&sel.value){
+    const [subId,name,topic,kingdom,kColor]=sel.value.split('|').map((v,i)=>i>1?decodeURIComponent(v):v);
+    if(lista.some(x=>x.subId===subId)){toast('Já está na agenda deste dia','var(--orange)');return;}
+    lista.push({subId,name:decodeURIComponent(name),topic:decodeURIComponent(topic),kingdom:decodeURIComponent(kingdom),kColor:decodeURIComponent(kColor)});
+  }else{
+    if(!livre){toast('⚠️ Escreva o que vai nesse dia, ou escolha um miniboss','var(--red)');return;}
+    // A duplicata do miniboss e por id; a do item livre tem que ser pelo nome, senao
+    // `x.subId===subId` com os dois undefined fazia QUALQUER item livre ser recusado
+    // depois do primeiro.
+    if(lista.some(x=>!x.subId&&normalizeForDedup(x.name)===normalizeForDedup(livre))){
+      toast('Já está na agenda deste dia','var(--orange)');return;
+    }
+    lista.push({name:livre,livre:true});
+  }
   saveDB();closeModal();renderWeeklyPlan();
   toast('✅ Adicionado à agenda!','var(--green)');
 }
