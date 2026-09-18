@@ -14277,12 +14277,13 @@ function renderWeeklyPlan(){
           <div style="font-size:9px;color:var(--muted);font-weight:600;margin-top:1px">${dateLabel}</div>
         </div>
         ${day.isToday?'<span class="day-today-pill">HOJE</span>':''}
-        ${!isSun?`<button class="plan-add-btn" onclick="openAddPlanItem('${day.ds}')" title="Adicionar assunto">＋</button>`:''}
+        <button class="plan-add-btn" onclick="openAddPlanItem('${day.ds}')" title="Adicionar">＋</button>
       </div>
-      ${isSun
-        ?`<div class="plan-empty-day" title="Domingo é dia de descanso">🌟<span class="plan-lbl"> Descanso</span></div>`
-        :`${itemsHtml}${!itemsHtml?'<div class="plan-empty-day" style="cursor:pointer" title="Adicionar assunto" onclick="openAddPlanItem(\''+day.ds+'\')">＋<span class="plan-lbl"> Adicionar assunto</span></div>':''}`
-      }
+      ${itemsHtml}${!itemsHtml
+        ? (isSun
+            ?`<div class="plan-empty-day" style="cursor:pointer" title="Domingo é dia de descanso — mas dá pra marcar alguma coisa, se quiser" onclick="openAddPlanItem('${day.ds}')">🌟<span class="plan-lbl"> Descanso</span></div>`
+            :`<div class="plan-empty-day" style="cursor:pointer" title="Adicionar" onclick="openAddPlanItem('${day.ds}')">＋<span class="plan-lbl"> Adicionar</span></div>`)
+        :''}
     </div>`;
   }).join('')}</div>`;
 }
