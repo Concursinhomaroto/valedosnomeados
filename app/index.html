@@ -8058,6 +8058,92 @@ function closeFluxo(subId){
   if(wrap){wrap.classList.remove('fluxo-open');wrap.style.display='';}
 }
 
+// ---- Fluxograma feito fora, colado aqui -------------------------------------
+// Mesma saida que ja resolveu o simulado: a cota gratuita da API e pequena e anda
+// sobrecarregada, e um Gemini Pro faz isso sem teto. O que o app precisa e da arvore em
+// JSON — de onde ela vem nao importa, porque fluxoFlattenArvore ja valida tipo, texto,
+// numero de ramos e profundidade antes de gravar qualquer coisa.
+let fluxoColando=new Set();
+function fluxoAbrirColar(subId){
+  fluxoColando.add(subId);
+  fluxoRefreshPanel(subId);
+  const ta=document.getElementById('fluxo-colar-'+subId);
+  if(ta)ta.focus();
+}
+function fluxoFecharColar(subId){
+  fluxoColando.delete(subId);
+  fluxoRefreshPanel(subId);
+}
+function fluxoColarPromptTexto(subId){
+  const sub=simFindSub(subId);
+  if(!sub)return'';
+  const topicId=findTopicIdForSub(subId);
+  const{topic,kingdom}=findTopicAndKingdom(topicId);
+  const base=(sub.resumo&&sub.resumo.texto||'').trim();
+  const ctx=`REINO/ÁREA: ${kingdom?kingdom.name:''}\nCHEFÃO/TÓPICO: ${topic?topic.name:''}\nMINIBOSS/ASSUNTO ESPECÍFICO: ${sub.name}`;
+  // Com resumo, ele e a fonte — o fluxograma tem que ser a espinha DO QUE o aluno ja
+  // tem escrito, senao vira um segundo material que nao conversa com o primeiro.
+  const tarefa=base
+    ? `TAREFA: monte um fluxograma da estrutura do assunto abaixo, a partir do MATERIAL que vem no fim deste pedido. Não invente nada que não esteja nele.`
+    : `TAREFA: pesquise na internet as informações mais atuais e importantes sobre o assunto abaixo (legislação oficial, diretriz oficial, doutrina consolidada) e monte um fluxograma da estrutura dele. Hoje é ${new Date().toLocaleDateString('pt-BR')} — use a versão vigente de cada lei, diretriz e protocolo.`;
+  return`Você é um professor especialista em concursos públicos brasileiros, especialista em transformar conteúdo de estudo em fluxogramas de memorização.
+
+${tarefa}
+
+${ctx}
+
+${FLUXO_JSON_REGRAS}
+${FLUXO_FECHAMENTO}${base?`\n\nMATERIAL:\n${base.slice(0,40000)}`:''}`;
+}
+function fluxoColarCopiarPrompt(subId){
+  simColarCopiaTexto(fluxoColarPromptTexto(subId),'📋 Prompt copiado — cole no Gemini.');
+}
+function fluxoColarAplicar(subId){
+  const sub=simFindSub(subId);
+  const ta=document.getElementById('fluxo-colar-'+subId);
+  if(!sub||!ta)return;
+  const bruto=(ta.value||'').trim();
+  if(!bruto){toast('⚠️ Cole a resposta do Gemini primeiro.','var(--red)');return;}
+  let raw=null;
+  try{raw=extractAIJson(bruto);}catch(e){
+    toast('❌ Não achei um JSON válido nessa colagem. Cole a resposta inteira, do { até o }.','var(--red)');
+    return;
+  }
+  if(!raw||typeof raw!=='object'||Array.isArray(raw)){
+    toast('❌ Isso não é uma árvore de fluxograma — tem que começar com { e ter "texto" e "ramos".','var(--red)');
+    return;
+  }
+  const{raizId,nos}=fluxoFlattenArvore(raw);
+  const n=Object.keys(nos).length;
+  // Uma arvore vazia vira um unico no "(sem texto)" e apagaria o fluxograma que estava
+  // la — o preco de aceitar lixo e alto demais pra uma checagem tao barata.
+  if(n<2){toast('❌ A árvore veio com 1 nó só. Confira se colou a resposta inteira.','var(--red)');return;}
+  sub.fluxograma={raizId,nos,origem:'colado',grounded:null,via:null,
+                  doResumo:!!(sub.resumo&&sub.resumo.texto),fontes:[],
+                  geradoEm:new Date().toISOString()};
+  fluxoColando.delete(subId);
+  saveDB();
+  fluxoRefreshPanel(subId);
+  toast(`🔀 Fluxograma importado — ${n} nós.`,'var(--green)');
+}
+function fluxoColarHTML(s){
+  const temResumo=!!(s.resumo&&s.resumo.texto);
+  return`
+    <div class="fluxo-header">
+      <div class="fluxo-title"><i class="fa fa-clipboard"></i> Colar fluxograma pronto</div>
+      <div class="fluxo-actions">
+        <button class="btn btn-xs btn-primary" onclick="fluxoColarCopiarPrompt('${s.id}')"><i class="fa fa-copy"></i> Copiar prompt</button>
+        <button class="btn btn-xs btn-ghost" onclick="fluxoFecharColar('${s.id}')">Cancelar</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
+      Copie o prompt, cole no Gemini e traga a resposta de volta pra cá. Não gasta cota da sua chave.
+      ${temResumo?'O prompt já leva o <b>Resumo deste miniboss</b> como material.':'Sem resumo aqui, o prompt pede que ele pesquise na internet.'}
+    </div>
+    <textarea id="fluxo-colar-${s.id}" class="inp" spellcheck="false" placeholder="Cole aqui o JSON que o Gemini devolveu..."
+      style="width:100%;min-height:140px;font-family:ui-monospace,monospace;font-size:11px;line-height:1.5;resize:vertical"></textarea>
+    <button class="btn btn-sm btn-pink" style="width:100%;justify-content:center;margin-top:8px" onclick="fluxoColarAplicar('${s.id}')"><i class="fa fa-check"></i> Montar fluxograma</button>`;
+}
 function fluxoPanelHTML(s){
   fluxoMigrateLegacy(s);
   if(fluxoGenerating.has(s.id)){
@@ -8066,6 +8152,7 @@ function fluxoPanelHTML(s){
       <div class="fluxo-status"><i class="fa fa-spinner fa-spin"></i> ${modo==='web'?'Pesquisando na internet e montando o fluxograma...':'A IA está montando o fluxograma...'}</div>`;
   }
   const temFluxo=!!(s.fluxograma&&s.fluxograma.nos&&s.fluxograma.raizId);
+  if(fluxoColando.has(s.id))return fluxoColarHTML(s);
   if(fluxoEditing.has(s.id)&&temFluxo){
     return`
       <div class="fluxo-header">
@@ -8080,7 +8167,8 @@ function fluxoPanelHTML(s){
     const geradoEm=s.fluxograma.geradoEm?new Date(s.fluxograma.geradoEm).toLocaleDateString('pt-BR'):'';
     const fg=s.fluxograma;
     const nF=(fg.fontes||[]).length;
-    const origem=fg.origem==='manual'?'Criado manualmente'
+    const origem=fg.origem==='colado'?'Gerado no Gemini e colado aqui'
+      :fg.origem==='manual'?'Criado manualmente'
       :fg.origem==='web'
         ?(fg.grounded?(fg.via==='tavily'?`Gerado com ${nF} fontes pesquisadas`:'Gerado por IA com pesquisa na internet')
                     :'Gerado por IA (busca indisponível — conhecimento já treinado do modelo)')
@@ -8098,6 +8186,7 @@ function fluxoPanelHTML(s){
         <div class="fluxo-actions">
           <button class="btn btn-xs btn-ghost" onclick="fluxoToggleZoomMode('${s.id}')" title="${modoZoom==='fit'?'Ver no tamanho real, com rolagem lateral':'Encolher pra caber tudo na tela, sem precisar rolar'}"><i class="fa fa-magnifying-glass"></i> ${modoZoom==='fit'?'Tamanho real':'Ajustar à tela'}</button>
           <button class="btn btn-xs btn-ghost" onclick="fluxoStartEditing('${s.id}')"><i class="fa fa-pen"></i> Editar</button>
+          <button class="btn btn-xs btn-ghost" onclick="fluxoAbrirColar('${s.id}')" title="Gerar no Gemini e colar aqui — não gasta cota"><i class="fa fa-clipboard"></i> Colar</button>
           <button class="btn btn-xs btn-ghost" onclick="fluxoRegenerar('${s.id}')" title="Gerar de novo com IA (substitui o atual)"><i class="fa fa-arrows-rotate"></i> Gerar de novo</button>
         </div>
       </div>
@@ -8120,6 +8209,7 @@ function fluxoPanelHTML(s){
     <div style="text-align:center;font-size:10px;color:var(--muted);margin:12px 0;display:flex;align-items:center;gap:8px">
       <span style="flex:1;height:1px;background:var(--border)"></span>ou<span style="flex:1;height:1px;background:var(--border)"></span>
     </div>
+    <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-bottom:6px" onclick="fluxoAbrirColar('${s.id}')"><i class="fa fa-clipboard"></i> Gerar no Gemini e colar aqui (sem gastar cota)</button>
     <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center" onclick="fluxoStartManual('${s.id}')"><i class="fa fa-pen"></i> Criar do zero, manualmente</button>
   `;
 }
@@ -18995,6 +19085,21 @@ const GEMINI_MODELO_RESERVA='gemini-flash-lite-latest';
 // ocupado uma vez pra que o app passe a usar um modelo mais fraco PARA SEMPRE, e o
 // resumo piora sem explicação. Depois da validade, volta a começar pelo primeiro da
 // lista, que é o melhor; se ele estiver ocupado de novo, a dica se renova sozinha.
+// DISJUNTOR. Uma varredura que termina com TODOS os modelos em 503 ja provou o que
+// precisava provar. Clicar de novo em seguida repete a prova e queima 4 requisicoes por
+// clique — no teto de 20 por dia por modelo, meia duzia de cliques apaga o dia. Depois
+// de uma varredura assim, os proximos pedidos falham na hora, sem rede, ate o prazo
+// passar. Nao e desistir: e nao pagar duas vezes pela mesma resposta.
+const GEMINI_SOBRECARGA_MS=3*60*1000;
+let geminiSobrecargaAte=0;
+function geminiSobrecarregado(){return Date.now()<geminiSobrecargaAte;}
+function geminiSegundosParaTentar(){return Math.max(1,Math.ceil((geminiSobrecargaAte-Date.now())/1000));}
+function geminiMarcarSobrecarga(){geminiSobrecargaAte=Date.now()+GEMINI_SOBRECARGA_MS;}
+function geminiLimparSobrecarga(){geminiSobrecargaAte=0;}
+function geminiErroSobrecarga(){
+  const s=geminiSegundosParaTentar();
+  return `A IA do Google recusou todos os modelos por sobrecarga há menos de ${Math.round(GEMINI_SOBRECARGA_MS/60000)} minutos. Não vou repetir o pedido agora: cada tentativa gasta da sua cota do dia e voltaria o mesmo erro. Tente de novo em ${s>60?Math.ceil(s/60)+' min':s+'s'} — ou gere no Gemini e cole aqui, que não usa cota nenhuma.`;
+}
 const GEMINI_MODELO_OK_KEY='vdn_gemini_modelo_ok';
 const GEMINI_MODELO_OK_VALIDADE_MS=30*60*1000;   // 30 min
 let geminiModeloOk=null,geminiModeloOkEm=0;
@@ -19196,6 +19301,7 @@ async function listGeminiModels(apiKey){
 // resposta no meio quando ela e longa — foi o que fez um PDF com 100 perguntas
 // virar 33 flashcards: o JSON estourou o teto e voltou pela metade.
 async function callGeminiGenerate(apiKey,prompt,opts){
+  if(geminiSobrecarregado())throw new Error(geminiErroSobrecarga());
   const attempts=[];
   let soTemporario=true;   // vira false no primeiro erro de verdade (chave, modelo)
   let limite=null,houve404=false;
@@ -19232,10 +19338,11 @@ async function callGeminiGenerate(apiKey,prompt,opts){
   // costuma ser o unico que ainda responde.
   if(limite||soTemporario){
     const rr=await tryGeminiModel(apiKey,GEMINI_MODELO_RESERVA,prompt,opts);
-    if(rr.ok)return rr.raw;
+    if(rr.ok){geminiLimparSobrecarga();return rr.raw;}
     attempts.push(`${GEMINI_MODELO_RESERVA} (${rr.reason})`);
     if(rr.limite)limite=rr;
   }
+  if(soTemporario&&!limite)geminiMarcarSobrecarga();
   throw new Error(geminiMensagemErro(attempts,soTemporario,limite));
 }
 // Igual ao callGeminiGenerate, mas pedindo pra IA pesquisar na internet antes de responder
@@ -19311,6 +19418,7 @@ function jsonPareceCortado(raw){
   return emTexto||prof>0;
 }
 async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
+  if(geminiSobrecarregado())throw new Error(geminiErroSobrecarga());
   const attempts=[];
   let best=null; // primeiro JSON válido encontrado, mas sem confirmar busca real
   let sawRateLimit=false;
@@ -19356,6 +19464,7 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
         continue;
       }
       geminiAnotarModeloOk(model);
+      geminiLimparSobrecarga();
       // extractAIJson LANÇA exceção (não devolve null) quando não consegue parsear —
       // sem o try/catch aqui, uma resposta ruim de UM modelo derrubava a tentativa
       // inteira em vez de simplesmente seguir pro próximo candidato da lista.
@@ -19428,6 +19537,7 @@ async function callGeminiJSON(apiKey,prompt,useSearch,maxOutputTokens){
     const hitR=await tentarLista([GEMINI_MODELO_RESERVA],false);
     if(hitR)return hitR;
     if(sawRateLimit)throw new Error(geminiMensagemErro(attempts,false,limiteInfo||{}));
+    if(soTemporarioJSON())geminiMarcarSobrecarga();
     throw new Error(geminiMensagemErro(attempts,soTemporarioJSON(),null));
   }
   throw new Error(`Nenhum modelo respondeu com um JSON válido. Tentativas: ${attempts.join(' · ')||'nenhuma'}.`);
