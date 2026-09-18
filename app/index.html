@@ -1178,18 +1178,35 @@ nav{
 /* A agenda dentro da primeira dobra: 7 dias sempre lado a lado, em versão
    compacta. Fora da dobra ela segue com o auto-fill de 200px, que é o certo
    quando tem a largura da tela inteira. */
-.dash-fold .week-plan-grid{grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;height:100%}
+/* minmax(0,1fr) espremia os 7 dias em qualquer largura: no iPad a coluna ficou com 75px
+   e sobraram 31px pro nome — menos que uma palavra. Com um piso de 112px, os 7 dias
+   continuam lado a lado quando ha espaco (viram 1fr) e viram rolagem horizontal quando
+   nao ha, em vez de encolher ate o texto sumir. */
+.dash-fold .week-plan-grid{grid-template-columns:repeat(7,minmax(112px,1fr));gap:6px;
+  height:100%;overflow-x:auto;overflow-y:hidden;padding-bottom:2px}
+.dash-fold .week-plan-grid::-webkit-scrollbar{height:5px}
+.dash-fold .week-plan-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 .dash-fold .day-col{padding:9px 8px;border-radius:9px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .dash-fold .day-header{font-size:10px;letter-spacing:.3px;margin-bottom:6px;flex-wrap:wrap;gap:2px}
 .dash-fold .day-today-pill{padding:1px 5px;font-size:7.5px}
 .dash-fold .plan-item{padding:6px 8px;margin-bottom:5px;border-radius:8px;gap:6px}
 .dash-fold .plan-item-dot{width:6px;height:6px;margin-top:3px}
-/* Coluna de ~90px: numa linha so, "Teorias de Enfermagem" virava "Teorias de Enfer…" e
-   nao dava pra saber qual assunto era. Em duas linhas cabe quase sempre o nome inteiro,
-   e o corte so acontece quando e longo de verdade. */
-.dash-fold .plan-item-text{font-size:10px;line-height:1.25;overflow:hidden;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
-  white-space:normal;overflow-wrap:anywhere}
+/* Coluna de ~100px. Aqui o nome e a UNICA coisa que importa, e ele estava disputando a
+   largura com uma bolinha e um botao de remover: no iPad sobrou tao pouco espaco que o
+   cartao apareceu VAZIO, so com o ponto e o X. Entao, no modo apertado, a bolinha some
+   (a borda esquerda colorida ja diz o reino) e o X sai do fluxo pro canto — a largura
+   inteira do cartao passa a ser do texto.
+   Sem -webkit-line-clamp de proposito: e caixa flexivel antiga, so com prefixo, e o
+   recorte tem que funcionar em qualquer motor. max-height em em faz o mesmo e e CSS
+   normal. E break-word no lugar de anywhere: anywhere quebra no meio da palavra mesmo
+   quando dava pra passar pra linha de baixo, e num espaco curto isso vira uma coluna de
+   letras soltas. */
+.dash-fold .plan-item{display:block;position:relative;padding:5px 15px 5px 7px}
+.dash-fold .plan-item-dot{display:none}
+.dash-fold .plan-item-body{display:block}
+.dash-fold .plan-rm{position:absolute;top:0;right:0;font-size:10px;padding:2px 3px;opacity:.65}
+.dash-fold .plan-item-text{font-size:10px;line-height:1.25;white-space:normal;
+  overflow-wrap:break-word;overflow:hidden;max-height:3.75em}
 .dash-fold .plan-item-sub{font-size:8.5px;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dash-fold .plan-add-btn{font-size:11px!important;padding:0!important;width:18px;height:18px;line-height:1}
 /* "＋ Adicionar assunto" e "Descanso" não cabem numa coluna de ~100px: viram só
@@ -1870,8 +1887,10 @@ nav{
 .plan-item:last-child{margin-bottom:0;}
 .plan-item:hover{border-color:var(--border2);box-shadow:0 2px 8px rgba(108,71,255,0.08);}
 .plan-item-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;}
-.plan-item-text{font-size:11px;font-weight:700;color:var(--text);line-height:1.4;flex:1;min-width:0;overflow-wrap:anywhere;}
+.plan-item-body{flex:1;min-width:0;}
+.plan-item-text{font-size:11px;font-weight:700;color:var(--text);line-height:1.4;min-width:0;overflow-wrap:break-word;}
 .plan-item-sub{font-size:9px;color:var(--muted);margin-top:2px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.plan-rm{background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 4px;flex-shrink:0;line-height:1;}
 .plan-tag{font-size:9px;font-weight:900;padding:1px 6px;border-radius:20px;flex-shrink:0;}
 .plan-tag-new{background:rgba(220,38,38,0.1);color:var(--red-t);}
 .plan-tag-pend{background:rgba(234,88,12,0.1);color:var(--orange-t);}
@@ -14248,8 +14267,8 @@ function renderWeeklyPlan(){
     const itemsHtml=(day.items||[]).map((item,idx)=>`
       <div class="plan-item" style="border-left:3px solid ${escapeHtml(item.kColor||'var(--accent)')}" title="${escapeHtml(item.subId&&item.topic?item.name+' — '+item.topic+' · '+(item.kingdom||''):item.name)}">
         <div class="plan-item-dot" style="background:${escapeHtml(item.kColor||'var(--accent)')}"></div>
-        <div style="flex:1;min-width:0"><div class="plan-item-text">${escapeHtml(item.name)}</div>${item.subId&&(item.topic||item.kingdom)?`<div class="plan-item-sub">${escapeHtml(item.topic||'')} · ${escapeHtml(item.kingdom||'')}</div>`:''}</div>
-        <button onclick="removePlanItem('${day.ds}',${idx})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 4px;flex-shrink:0" title="Remover">✕</button>
+        <div class="plan-item-body"><div class="plan-item-text">${escapeHtml(item.name)}</div>${item.subId&&(item.topic||item.kingdom)?`<div class="plan-item-sub">${escapeHtml(item.topic||'')} · ${escapeHtml(item.kingdom||'')}</div>`:''}</div>
+        <button class="plan-rm" onclick="removePlanItem('${day.ds}',${idx})" title="Remover">✕</button>
       </div>`).join('');
     return`<div class="day-col${day.isToday?' today-col':''}">
       <div class="day-header" style="color:${day.isToday?'var(--accent)':'var(--text2)'}">
