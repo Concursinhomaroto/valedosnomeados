@@ -817,13 +817,37 @@ nav{
    do jeito que sempre foi. O limite de 68ch e a centralização foram iniciativa
    minha, não foram pedidos, e estão revertidos. */
 .resumo-body{font-size:12.5px;color:var(--text2);line-height:1.7;}
-.resumo-marca{background:linear-gradient(transparent 55%,rgba(250,204,21,0.55) 55%);
-  color:inherit;border-radius:2px;cursor:pointer;padding:0 1px;}
-.resumo-marca:hover{background:linear-gradient(transparent 55%,rgba(248,113,113,0.5) 55%);}
+/* Antes era um degrade cobrindo so os 45% de baixo — ficava com cara de sublinhado,
+   nao de marca-texto. Agora o grifo cobre a linha inteira, com um respiro em cima e
+   embaixo pra nao encostar na linha vizinha. */
+.resumo-marca{color:inherit;border-radius:3px;cursor:pointer;
+  padding:2px 2px;margin:0 -1px;box-decoration-break:clone;
+  -webkit-box-decoration-break:clone;
+  background:var(--marca-a);}
+.resumo-marca[data-cor="v"]{background:var(--marca-v);}
+.resumo-marca[data-cor="r"]{background:var(--marca-r);}
+.resumo-marca[data-cor="z"]{background:var(--marca-z);}
+.resumo-marca:hover{outline:2px solid rgba(220,38,38,0.55);outline-offset:0;}
+:root{--marca-a:rgba(250,204,21,0.55);--marca-v:rgba(74,222,128,0.45);
+      --marca-r:rgba(244,114,182,0.45);--marca-z:rgba(96,165,250,0.45);}
+.marca-paleta{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;
+  border:1.5px solid var(--border);border-radius:999px;}
+.marca-pen{width:15px;height:15px;border-radius:50%;cursor:pointer;padding:0;
+  border:1.5px solid rgba(0,0,0,0.18);transition:transform .12s;}
+.marca-pen:hover{transform:scale(1.15);}
+.marca-pen.ativa{box-shadow:0 0 0 2px var(--accent);}
+.marca-pen[data-cor="a"]{background:var(--marca-a);}
+.marca-pen[data-cor="v"]{background:var(--marca-v);}
+.marca-pen[data-cor="r"]{background:var(--marca-r);}
+.marca-pen[data-cor="z"]{background:var(--marca-z);}
 .marca-btn{display:none;position:fixed;z-index:9999;align-items:center;gap:6px;
   background:var(--accent);color:#fff;border:none;border-radius:999px;
   padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;
   box-shadow:0 4px 16px rgba(0,0,0,0.35);}
+.marca-btn[data-cor="a"]{box-shadow:0 4px 16px rgba(0,0,0,.35),inset 0 -3px 0 var(--marca-a);}
+.marca-btn[data-cor="v"]{box-shadow:0 4px 16px rgba(0,0,0,.35),inset 0 -3px 0 var(--marca-v);}
+.marca-btn[data-cor="r"]{box-shadow:0 4px 16px rgba(0,0,0,.35),inset 0 -3px 0 var(--marca-r);}
+.marca-btn[data-cor="z"]{box-shadow:0 4px 16px rgba(0,0,0,.35),inset 0 -3px 0 var(--marca-z);}
 /* Era white-space:pre-line, e aí CADA linha em branco do texto virava um vão de ~21px
    (line-height 1.7). Como a IA separa tópicos com linha em branco — às vezes duas — o
    resumo saía esparramado: o conteúdo bom, a organização não. Agora os blocos viram
@@ -7188,6 +7212,7 @@ function resumoPanelHTML(s){
         <div class="resumo-actions">
           ${ouvirBtn}
           ${isSpeaking||isLoadingAudio?`<button class="btn btn-xs btn-ghost" onclick="resumoSpeakStop()" title="Parar leitura"><i class="fa fa-stop"></i></button>`:''}
+          ${marcaPaletaHTML()}
           <button class="btn btn-xs btn-ghost" onclick="resumoEditar('${s.id}')" title="Corrigir o texto à mão — sem gastar chamada de IA"><i class="fa fa-pen"></i> Corrigir</button>
           <button class="btn btn-xs btn-ghost" onclick="resumoAbrirColar('${s.id}')" title="Gerar de novo colando o texto direto — a lei, o artigo, o trecho da apostila"><i class="fa fa-clipboard"></i> Colar texto</button>
           <button class="btn btn-xs btn-ghost" onclick="generateResumoWeb('${s.id}')" title="Gerar de novo buscando na internet + flashcards, sem precisar de arquivo"><i class="fa fa-globe"></i> Pesquisar</button>
@@ -8653,6 +8678,31 @@ passagem, pra dar liga, tudo bem; desenvolver o assunto do vizinho, não.`;
 // existir continua valendo, e a que sumiu do texto simplesmente nao aparece — em vez de
 // grudar num pedaco errado.
 const MARCA_MIN=3;
+// Quatro canetas. A cor fica na marca ({c}), nao no resumo: marca antiga, sem c, e
+// amarela — entao nada precisa de migracao.
+const MARCA_CORES=[
+  {id:'a',nome:'Amarelo'},
+  {id:'v',nome:'Verde'},
+  {id:'r',nome:'Rosa'},
+  {id:'z',nome:'Azul'}
+];
+const MARCA_COR_KEY='vdn_marca_cor';
+let marcaCor=(()=>{try{const c=localStorage.getItem(MARCA_COR_KEY);
+  return MARCA_CORES.some(x=>x.id===c)?c:'a';}catch(e){return 'a';}})();
+function marcaTrocarCor(c){
+  if(!MARCA_CORES.some(x=>x.id===c))return;
+  marcaCor=c;
+  try{localStorage.setItem(MARCA_COR_KEY,c);}catch(e){}
+  document.querySelectorAll('.marca-pen').forEach(b=>{
+    b.classList.toggle('ativa',b.getAttribute('data-cor')===c);
+  });
+  if(marcaBotao)marcaBotao.setAttribute('data-cor',c);
+}
+function marcaPaletaHTML(){
+  return`<span class="marca-paleta" title="Cor do marca-texto — selecione um trecho e clique na cor">
+    ${MARCA_CORES.map(c=>`<button class="marca-pen${c.id===marcaCor?' ativa':''}" data-cor="${c.id}" title="${c.nome}" aria-label="${c.nome}"></button>`).join('')}
+  </span>`;
+}
 function resumoMarcas(sub){return (sub&&sub.resumo&&sub.resumo.marcas)||[];}
 function marcaNosDeTexto(root){
   const out=[];
@@ -8705,6 +8755,7 @@ function marcaAplicar(root,sub){
     meio.splitText(ate-de);
     const mk=document.createElement('mark');
     mk.className='resumo-marca';
+    mk.setAttribute('data-cor',(marcas[f.idx]&&marcas[f.idx].c)||'a');
     mk.setAttribute('data-marca',String(f.idx));
     mk.title='Clique para tirar a marcação';
     mk.textContent=meio.nodeValue;
@@ -8733,7 +8784,7 @@ function marcaSalvarSelecao(subId){
     const lim=t.trim();
     const abs=p.ini+de+esq;
     const n=full.slice(0,abs).split(lim).length-1;   // quantas vezes ja apareceu antes
-    novas.push({t:lim,n});
+    novas.push({t:lim,n,c:marcaCor});
   });
   if(!novas.length)return false;
   sub.resumo.marcas=resumoMarcas(sub).concat(novas);
@@ -8781,6 +8832,7 @@ function marcaMostrarBotao(subId){
     marcaBotao.id='marca-btn';
     marcaBotao.className='marca-btn';
     marcaBotao.innerHTML='<i class="fa fa-highlighter"></i> Marcar';
+    marcaBotao.setAttribute('data-cor',marcaCor);
     // mousedown e nao click: o click chega depois que o navegador ja desfez a selecao
     // em alguns aparelhos, e ai nao havia mais o que marcar.
     marcaBotao.addEventListener('mousedown',e=>{e.preventDefault();marcaConfirmar();});
@@ -8788,6 +8840,7 @@ function marcaMostrarBotao(subId){
     document.body.appendChild(marcaBotao);
   }
   marcaBotao.dataset.sub=subId;
+  marcaBotao.setAttribute('data-cor',marcaCor);
   const sel=window.getSelection();
   if(!sel||!sel.rangeCount)return;
   const r=sel.getRangeAt(0).getBoundingClientRect();
@@ -8822,6 +8875,22 @@ function marcaConfirmar(){
       marcaMostrarBotao(subId);
     },10);
   };
+  // mousedown com preventDefault: clicar num botao normal apagaria a selecao antes de
+  // chegar o click, e ai nao haveria mais o que marcar.
+  const naCaneta=e=>{
+    const b=e.target&&e.target.closest&&e.target.closest('.marca-pen');
+    if(!b)return;
+    e.preventDefault();
+    marcaTrocarCor(b.getAttribute('data-cor'));
+    const sel=window.getSelection();
+    if(!sel||sel.isCollapsed||!sel.rangeCount)return;
+    const root=marcaRaizDe(sel.getRangeAt(0).commonAncestorContainer);
+    const subId=root&&root.getAttribute('data-sub');
+    if(!subId||String(sel).trim().length<MARCA_MIN)return;
+    if(marcaSalvarSelecao(subId)){marcaEsconderBotao();marcaAplicarTodas();}
+  };
+  document.addEventListener('mousedown',naCaneta);
+  document.addEventListener('touchstart',naCaneta,{passive:false});
   document.addEventListener('mouseup',aoSoltar);
   document.addEventListener('touchend',aoSoltar);
   document.addEventListener('scroll',marcaEsconderBotao,true);
@@ -14130,7 +14199,9 @@ function revTelaHTML(subId){
   return `${cab}
     <div class="revtela-corpo">
       <div class="revtela-col">
-        <div class="revtela-rot"><i class="fa fa-file-lines"></i> Resumo</div>
+        <div class="revtela-rot"><i class="fa fa-file-lines"></i> Resumo
+          ${temResumo?`<span style="margin-left:auto">${marcaPaletaHTML()}</span>`:''}
+        </div>
         ${colResumo}
       </div>
       <div class="revtela-col">
