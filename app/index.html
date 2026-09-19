@@ -711,6 +711,8 @@ nav{
 .sim-fmt-split{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px;
   font-size:10.5px;font-weight:800;color:var(--text2);}
 .sim-fmt-split i{font-style:normal;color:var(--muted);font-weight:700;}
+.sg-refaz-nota{background:rgba(108,71,255,0.08);border:1px solid rgba(108,71,255,0.25);
+  border-radius:10px;padding:8px 11px;margin:8px 0 0;font-size:11.5px;line-height:1.5;color:var(--text2);}
 .sg-formato-linha{text-align:center;font-size:11px;font-weight:800;color:var(--muted);margin-top:8px;}
 .sg-formato-linha b{color:var(--text2);}
 .sim-alts-ce .sim-alt{flex:1;text-align:center;font-weight:800;}
@@ -10437,7 +10439,7 @@ function renderSimGeralScreen(){
     return;
   }
   sgStopTimerTick();
-  container.innerHTML=simColarHTML()+simGeralConfigHTML();
+  container.innerHTML=simColarHTML()+provasGuardadasHTML()+simGeralConfigHTML();
   // sem isto, os contadores por chefao/reino e o custo do Tavily nasceriam
   // zerados mesmo com assuntos ja selecionados de uma visita anterior
   sgUpdateSummary();
@@ -10903,12 +10905,168 @@ function sgTickTimer(){
     el.textContent='⏱ '+fmtHMS(elapsedSec);
   }
 }
+// ===== PROVAS GUARDADAS =====
+// Uma prova de 120 itens que o Gemini Pro levou minutos pra escrever era consumida UMA
+// vez e evaporava: db.simGeral.historico so guarda o agregado, o simHistorico por
+// miniboss guarda as 5 ultimas tentativas e ainda emagrece as questoes certas no
+// salvamento, e simGeralReset jogava a prova ativa fora. Sobreviviam so os erros.
+//
+// Guardar a prova inteira abre o treino que mais rende em certo/errado: refazer semanas
+// depois e comparar. Custo medido: ~600 bytes por questao, ~70 KB numa prova de 120.
+const PROVAS_MAX=10;
+const PROVAS_BYTES_MAX=1600000;   // ~1,6 MB no total; acima disso a mais antiga sai
+function provasLista(){return (db.provas||[]).slice();}
+function provaAchar(id){return (db.provas||[]).find(p=>p.id===id)||null;}
+// Guarda a questao INTEIRA (com alternativas e explicacao), sem a resposta dada: a
+// resposta pertence a TENTATIVA, nao a questao. E o que permite refazer do zero e
+// comparar a 1a com a 2a sem duplicar o enunciado.
+function provaLimparQuestao(q){
+  const {userAnswer,_histId,_qIdxInHist,revisado,problematico,...limpa}=q;
+  return limpa;
+}
+function provaGuardar(active,assuntosResumo){
+  if(!active||!active.questoes||!active.questoes.length)return null;
+  const acertos=active.questoes.filter(q=>q.userAnswer===q.correta).length;
+  const prova={
+    id:genId(),
+    criadaEm:new Date().toISOString(),
+    formato:active.formato||'multipla',
+    nivel:active.nivel||'dificil',
+    limiteSec:active.limiteSec||0,
+    origem:active.importado?'colado':'ia',
+    questoes:active.questoes.map(provaLimparQuestao),
+    tentativas:[{data:new Date().toISOString(),
+                 respostas:active.questoes.map(q=>q.userAnswer||''),
+                 acertos,tempoGastoSec:active.tempoGastoSec||0}]
+  };
+  db.provas=db.provas||[];
+  db.provas.unshift(prova);
+  provasAparar();
+  return prova.id;
+}
+// Teto duplo: por quantidade e por tamanho. So a quantidade nao basta — dez provas de
+// 180 itens com explicacao longa passariam de 2 MB, e o registro inteiro do usuario e
+// reescrito a cada saveDB.
+function provasAparar(){
+  if(!db.provas)return;
+  if(db.provas.length>PROVAS_MAX)db.provas=db.provas.slice(0,PROVAS_MAX);
+  let bytes=JSON.stringify(db.provas).length;
+  while(db.provas.length>1&&bytes>PROVAS_BYTES_MAX){
+    db.provas.pop();
+    bytes=JSON.stringify(db.provas).length;
+  }
+}
+function provaRefazer(id){
+  const prova=provaAchar(id);
+  if(!prova)return;
+  if(simGeralActive&&!simGeralActive.corrected
+     &&!confirm('Você tem um simulado em andamento. Começar a refazer esta prova descarta o que está na tela. Continuar?'))return;
+  const tempoMin=parseInt((document.getElementById('prova-refazer-tempo-'+id)||{}).value,10);
+  const limite=isFinite(tempoMin)?tempoMin*60:(prova.limiteSec||0);
+  simGeralActive={
+    questoes:prova.questoes.map(q=>({...q})),   // copia: refazer nao suja a guardada
+    startedAt:Date.now(),limiteSec:limite,corrected:false,
+    formato:prova.formato,nivel:prova.nivel,
+    importado:prova.origem==='colado',
+    provaId:prova.id,refazendo:true,
+    tentativaNum:(prova.tentativas||[]).length+1
+  };
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+  toast(`🔁 Refazendo a prova — ${simGeralActive.questoes.length} questões, ${simGeralActive.tentativaNum}ª tentativa.`,'var(--accent)');
+}
+// Refacao NAO entra em simStats, e isso e decisao, nao esquecimento. simStats manda no
+// peso da fila de revisao e em "assuntos que mais erro"; responder de novo item cujo
+// gabarito voce ja viu mede memoria daquele item, nao conhecimento do assunto — e
+// empurraria o assunto pra baixo da fila justamente por voce ter treinado nele. Pelo
+// mesmo motivo nao cria flashcard nem entra no Banco de Erros de novo: a questao ja
+// esta la desde a primeira vez. O que a refacao registra e a comparacao, e o tempo,
+// que e estudo de verdade.
+function provaCorrigirRefacao(){
+  const active=simGeralActive;
+  const prova=provaAchar(active.provaId);
+  const acertos=active.questoes.filter(q=>q.userAnswer===q.correta).length;
+  if(prova){
+    prova.tentativas=prova.tentativas||[];
+    prova.tentativas.push({data:new Date().toISOString(),
+      respostas:active.questoes.map(q=>q.userAnswer||''),
+      acertos,tempoGastoSec:active.tempoGastoSec||0});
+  }
+  if(active.tempoGastoSec>0){
+    db.lifetimeSeconds=(db.lifetimeSeconds||0)+active.tempoGastoSec;
+    logSessionEvent('simulado',active.tempoGastoSec,null);
+  }
+  const xp=Math.round(active.questoes.length/2)+acertos;
+  gainXP(xp);
+  saveDB();
+  renderSimGeralScreen();
+  toast(`🔁 Refação concluída — ${acertos}/${active.questoes.length} · +${xp} XP (não conta nas estatísticas por assunto).`,'var(--accent)');
+}
+// Como foi na tentativa anterior a esta, pra tela poder mostrar o antes e o depois.
+function provaTentativaAnterior(active){
+  const prova=provaAchar(active&&active.provaId);
+  if(!prova||!prova.tentativas)return null;
+  const n=(active.tentativaNum||2)-1;
+  return prova.tentativas[n-1]||null;
+}
+function provaApagar(id){
+  const prova=provaAchar(id);
+  if(!prova)return;
+  if(!confirm(`Apagar esta prova de ${prova.questoes.length} questões? As estatísticas que ela já gerou continuam — some só a prova guardada, e não dá pra refazer depois.`))return;
+  db.provas=(db.provas||[]).filter(p=>p.id!==id);
+  saveDB();
+  renderSimGeralScreen();
+  toast('🗑️ Prova apagada.','var(--accent)');
+}
+function provaLiquido(t,total){return (t.acertos||0)-(total-(t.acertos||0));}
+function provasGuardadasHTML(){
+  const lista=provasLista();
+  if(!lista.length)return'';
+  return`<div class="section-card">
+    <div class="sec-title" style="margin-bottom:4px">🗄️ Provas guardadas</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600">
+      Refazer semanas depois é o treino que mais rende em certo/errado. A refação não mexe nas suas estatísticas por assunto — ela só compara com a vez anterior.
+    </div>
+    ${lista.map(p=>{
+      const ce=(p.formato||'multipla')==='certoerrado';
+      const total=p.questoes.length;
+      const ts=p.tentativas||[];
+      const linhas=ts.map((t,i)=>{
+        const pct=total?Math.round(t.acertos/total*100):0;
+        const liq=provaLiquido(t,total);
+        return`<span style="white-space:nowrap">${i+1}ª: <b style="color:${faixaCorTexto(simPctCorrigido(pct,p.formato))}">${t.acertos}/${total}</b>${ce?` · líq. ${liq>=0?'+':''}${liq}`:` · ${pct}%`}</span>`;
+      }).join('<span style="color:var(--border)"> → </span>');
+      return`<div style="border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px">
+          <b style="font-size:12px">${total} questões</b>
+          <span style="color:var(--muted)">${ce?'✔️✖️ Certo/Errado':'🔤 Múltipla escolha'}</span>
+          <span style="color:var(--muted)">${p.origem==='colado'?'📋 colada':'🤖 gerada aqui'}</span>
+          <span style="color:var(--muted)">${new Date(p.criadaEm).toLocaleDateString('pt-BR')}</span>
+          <span style="flex:1"></span>
+          <select id="prova-refazer-tempo-${p.id}" class="inp" style="width:auto;padding:4px 8px;font-size:11px">
+            <option value="0"${!p.limiteSec?' selected':''}>Sem cronômetro</option>
+            <option value="60"${p.limiteSec===3600?' selected':''}>1 hora</option>
+            <option value="120"${p.limiteSec===7200?' selected':''}>2 horas</option>
+            <option value="180"${p.limiteSec===10800?' selected':''}>3 horas</option>
+            <option value="240"${p.limiteSec===14400?' selected':''}>4 horas</option>
+          </select>
+          <button class="btn btn-xs btn-primary" onclick="provaRefazer('${p.id}')"><i class="fa fa-rotate-left"></i> Refazer</button>
+          <button class="btn btn-xs btn-ghost" onclick="provaApagar('${p.id}')" title="Apagar a prova guardada"><i class="fa fa-trash"></i></button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">${linhas}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
 function simGeralCorrigir(){
   if(!simGeralActive||simGeralActive.corrected)return;
   sgStopTimerTick();
   simGeralActive.corrected=true;
   simGeralActive.finishedAt=Date.now();
   simGeralActive.tempoGastoSec=Math.floor((simGeralActive.finishedAt-simGeralActive.startedAt)/1000);
+  // Refacao tem caminho proprio: nada de simStats, simHistorico, Banco de Erros ou
+  // flashcard. Sai daqui antes de tudo isso.
+  if(simGeralActive.refazendo)return provaCorrigirRefacao();
 
   // Distribui o resultado de volta pra cada assunto envolvido, reaproveitando
   // simStats/simHistorico do simulado por miniboss — assim o dashboard, a recomendação
@@ -10978,10 +11136,12 @@ function simGeralCorrigir(){
   const simGeralXp=totalQuestoes+totalAcertos*2+20;
   gainXP(simGeralXp);
 
+  provaGuardar(simGeralActive,assuntosResumo);
+
   saveDB();
   updateErrosBadge();
   renderSimGeralScreen();
-  toast(`🏁 Simulado geral finalizado! ${totalAcertos}/${simGeralActive.questoes.length} acertos · +${simGeralXp} XP`,'var(--accent)');
+  toast(`🏁 Simulado geral finalizado! ${totalAcertos}/${simGeralActive.questoes.length} acertos · +${simGeralXp} XP · prova guardada pra refazer.`,'var(--accent)');
 }
 function simGeralResultsHTML(){
   const active=simGeralActive;
@@ -11004,10 +11164,23 @@ function simGeralResultsHTML(){
 
   return`
   <div class="section-card">
-    <div class="sec-title" style="margin-bottom:10px">🏁 Resultado do Simulado Geral</div>
+    <div class="sec-title" style="margin-bottom:10px">${active.refazendo?'🔁 Resultado da refação':'🏁 Resultado do Simulado Geral'}</div>
     <div class="sim-score-banner ${good?'sim-good':'sim-bad'}">${acertos}/${total} acertos (${pct}%) · ⏱ ${fmtHMS(active.tempoGastoSec||0)}</div>
     <div class="sg-formato-linha">${ce?'✔️✖️ Certo/Errado':'🔤 Múltipla escolha'} · ${simNivelLbl(active.nivel)}${
       ce?` · <b title="No certo/errado 50% é o que o chute dá; o corrigido desconta esse acaso (2×${pct}−100)">corrigido: ${efetivo}%</b> · saldo Cebraspe: <b>${saldo>=0?'+':''}${saldo}</b>`:''}</div>
+    ${active.refazendo?(()=>{
+      const ant=provaTentativaAnterior(active);
+      if(!ant)return`<div class="sg-refaz-nota"><i class="fa fa-rotate-left"></i> <b>${active.tentativaNum}ª tentativa desta prova.</b> Refação não entra nas estatísticas por assunto.</div>`;
+      const d=acertos-(ant.acertos||0);
+      const dl=saldo-((ant.acertos||0)-(total-(ant.acertos||0)));
+      const cor=d>0?'var(--green-t)':d<0?'var(--red-t)':'var(--muted)';
+      return`<div class="sg-refaz-nota">
+        <i class="fa fa-rotate-left"></i> <b>${active.tentativaNum}ª tentativa.</b>
+        Antes: ${ant.acertos}/${total}${ce?` · líq. ${((ant.acertos||0)-(total-(ant.acertos||0)))>=0?'+':''}${(ant.acertos||0)-(total-(ant.acertos||0))}`:''}
+        → agora: ${acertos}/${total}
+        <b style="color:${cor}">(${d>0?'+':''}${d} acerto${Math.abs(d)===1?'':'s'}${ce?` · ${dl>0?'+':''}${dl} no líquido`:''})</b>
+        <span style="color:var(--muted)">— refação não entra nas estatísticas por assunto.</span>
+      </div>`;})():''}
     <div class="sg-breakdown">
       ${Object.values(bySub).map(b=>{
         const bp=b.total?Math.round(b.acertos/b.total*100):0;
@@ -11034,7 +11207,7 @@ function simGeralResultsHTML(){
           </div>
           ${q.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${escapeHtml(q.explicacao)}</div>`:''}
           ${q.problematico?'<div class="sim-flagged-banner"><i class="fa fa-flag"></i> Marcada como problemática — não conta nas suas estatísticas.</div>':''}
-          <button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="toggleQuestaoProblematica('${q.subId}','${q._histId}',${q._qIdxInHist})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>
+          ${active.refazendo?'':`<button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="toggleQuestaoProblematica('${q.subId}','${q._histId}',${q._qIdxInHist})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>`}
         </div>
       `).join('')}
     </div>
