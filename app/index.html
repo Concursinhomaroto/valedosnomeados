@@ -8789,6 +8789,7 @@ function marcaSalvarSelecao(subId){
   if(!novas.length)return false;
   sub.resumo.marcas=resumoMarcas(sub).concat(novas);
   sel.removeAllRanges();
+  marcaInvalidar(subId);
   saveDB();
   return true;
 }
@@ -8804,6 +8805,7 @@ function marcaRemover(subId,idx){
   const sub=simFindSub(subId);
   if(!sub||!sub.resumo||!sub.resumo.marcas)return;
   sub.resumo.marcas.splice(idx,1);
+  marcaInvalidar(subId);
   saveDB();
 }
 function marcaLimpar(root){
@@ -8813,17 +8815,49 @@ function marcaLimpar(root){
   });
   root.normalize();
 }
-// Redesenha as marcas de TODO resumo que estiver na tela. Chamado depois de cada
-// render — e tambem depois de marcar/desmarcar, o que dispensa saber em qual tela a
-// pessoa esta (painel do miniboss ou tela de revisao usam o mesmo .resumo-body).
-function marcaAplicarTodas(){
+// Redesenha as marcas de TODO resumo que estiver na tela.
+//
+// Eu estava chamando isso a mao em cada lugar que desenha resumo, e vivia faltando um:
+// renderTopics monta o painel do miniboss JA FECHADO, e toggleResumo so tira a classe
+// que o esconde — nao redesenha nada. Resultado: as marcas existiam no banco e nao
+// apareciam ate a proxima vez que voce marcasse alguma coisa. Em vez de caçar o proximo
+// caminho de render, um observador avisa quando um .resumo-body novo entra na tela.
+//
+// O laco se fecha sozinho porque cada raiz ja processada fica com data-marcado="1": as
+// mutacoes que o proprio envolvimento gera nao criam raiz nova, entao a passada seguinte
+// nao acha trabalho e para.
+function marcaAplicarTodas(forcar){
   document.querySelectorAll('.resumo-body[data-sub]').forEach(root=>{
+    if(!forcar&&root.dataset.marcado==='1')return;
     const sub=simFindSub(root.getAttribute('data-sub'));
     if(!sub)return;
     marcaLimpar(root);
     marcaAplicar(root,sub);
+    root.dataset.marcado='1';
   });
 }
+// Quem MUDA as marcas de um assunto invalida o desenho dele. Sem isto, a marca recem
+// salva so aparecia se quem chamou lembrasse de pedir redesenho forcado — e esquecer
+// o parametro fazia a marca sumir em silencio, que e exatamente o defeito que o
+// data-marcado acabou de consertar noutro lugar.
+function marcaInvalidar(subId){
+  document.querySelectorAll('.resumo-body[data-sub="'+String(subId).replace(/"/g,'')+'"]')
+    .forEach(root=>{delete root.dataset.marcado;});
+}
+function marcaPendente(){
+  return !!document.querySelector('.resumo-body[data-sub]:not([data-marcado="1"])');
+}
+(function marcaObservar(){
+  if(typeof MutationObserver==='undefined')return;
+  let agendado=false;
+  const obs=new MutationObserver(()=>{
+    if(agendado||!marcaPendente())return;
+    agendado=true;
+    requestAnimationFrame(()=>{agendado=false;marcaAplicarTodas();});
+  });
+  const ligar=()=>obs.observe(document.body,{childList:true,subtree:true});
+  if(document.body)ligar(); else document.addEventListener('DOMContentLoaded',ligar);
+})();
 let marcaBotao=null;
 function marcaEsconderBotao(){if(marcaBotao)marcaBotao.style.display='none';}
 function marcaMostrarBotao(subId){
@@ -8859,7 +8893,7 @@ function marcaConfirmar(){
   if(!subId)return;
   const ok=marcaSalvarSelecao(subId);
   marcaEsconderBotao();
-  if(ok){marcaAplicarTodas();toast('🖍️ Marcado.','var(--green)');}
+  if(ok){marcaAplicarTodas(true);toast('🖍️ Marcado.','var(--green)');}
 }
 // Um listener so, no documento, em vez de um por resumo desenhado: o painel e a tela
 // de revisao recriam esse HTML o tempo todo, e listener preso ao elemento morreria
@@ -8887,7 +8921,7 @@ function marcaConfirmar(){
     const root=marcaRaizDe(sel.getRangeAt(0).commonAncestorContainer);
     const subId=root&&root.getAttribute('data-sub');
     if(!subId||String(sel).trim().length<MARCA_MIN)return;
-    if(marcaSalvarSelecao(subId)){marcaEsconderBotao();marcaAplicarTodas();}
+    if(marcaSalvarSelecao(subId)){marcaEsconderBotao();marcaAplicarTodas(true);}
   };
   document.addEventListener('mousedown',naCaneta);
   document.addEventListener('touchstart',naCaneta,{passive:false});
@@ -8902,7 +8936,7 @@ function marcaConfirmar(){
     if(!subId)return;
     e.stopPropagation();
     marcaRemover(subId,parseInt(mk.getAttribute('data-marca'),10));
-    marcaAplicarTodas();
+    marcaAplicarTodas(true);
   },true);
 })();
 function resumoFormatar(txt){
