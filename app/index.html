@@ -1178,42 +1178,46 @@ nav{
 /* A agenda dentro da primeira dobra: 7 dias sempre lado a lado, em versão
    compacta. Fora da dobra ela segue com o auto-fill de 200px, que é o certo
    quando tem a largura da tela inteira. */
-/* minmax(0,1fr) espremia os 7 dias em qualquer largura: no iPad a coluna ficou com 75px
-   e sobraram 31px pro nome — menos que uma palavra. Com um piso de 112px, os 7 dias
-   continuam lado a lado quando ha espaco (viram 1fr) e viram rolagem horizontal quando
-   nao ha, em vez de encolher ate o texto sumir. */
-.dash-fold .week-plan-grid{grid-template-columns:repeat(7,minmax(112px,1fr));gap:6px;
-  height:100%;overflow-x:auto;overflow-y:hidden;padding-bottom:2px}
-.dash-fold .week-plan-grid::-webkit-scrollbar{height:5px}
-.dash-fold .week-plan-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-.dash-fold .day-col{padding:9px 8px;border-radius:9px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
-.dash-fold .day-header{font-size:10px;letter-spacing:.3px;margin-bottom:6px;flex-wrap:wrap;gap:2px}
-.dash-fold .day-today-pill{padding:1px 5px;font-size:7.5px}
-.dash-fold .plan-item{padding:6px 8px;margin-bottom:5px;border-radius:8px;gap:6px}
-.dash-fold .plan-item-dot{width:6px;height:6px;margin-top:3px}
-/* Coluna de ~100px. Aqui o nome e a UNICA coisa que importa, e ele estava disputando a
-   largura com uma bolinha e um botao de remover: no iPad sobrou tao pouco espaco que o
-   cartao apareceu VAZIO, so com o ponto e o X. Entao, no modo apertado, a bolinha some
-   (a borda esquerda colorida ja diz o reino) e o X sai do fluxo pro canto — a largura
-   inteira do cartao passa a ser do texto.
-   Sem -webkit-line-clamp de proposito: e caixa flexivel antiga, so com prefixo, e o
-   recorte tem que funcionar em qualquer motor. max-height em em faz o mesmo e e CSS
-   normal. E break-word no lugar de anywhere: anywhere quebra no meio da palavra mesmo
-   quando dava pra passar pra linha de baixo, e num espaco curto isso vira uma coluna de
-   letras soltas. */
-.dash-fold .plan-item{display:block;position:relative;padding:5px 15px 5px 7px}
+/* Sete colunas neste cartao nao cabem, e a conta e simples: a largura util dividida por
+   7 da ~130px, e "Teorias de Enfermagem - Resumo" precisa de ~190px. Dava pra ler a
+   primeira palavra e adivinhar o resto — que e o mesmo que nao ver a agenda.
+   Empilhado, cada dia e uma linha e o nome fica com a largura INTEIRA do cartao: o
+   mesmo espaco que antes servia pra sete itens agora serve pra um. Os sete dias
+   continuam todos a vista, so que um embaixo do outro. */
+.dash-fold .week-plan-grid{display:flex;flex-direction:column;gap:4px;overflow-x:hidden}
+/* flex:0 0 auto e obrigatorio aqui, nao enfeite. overflow:hidden zera o tamanho minimo
+   automatico de um item flex — com os 7 dias numa coluna de altura limitada, cada linha
+   encolhia abaixo do proprio conteudo e o cartao era CORTADO por dentro (medido: linha
+   de 24px guardando um cartao de 32px). Quem rola e o #weekly-plan, que ja e .dash-scroll. */
+.dash-fold .day-col{flex:0 0 auto;padding:5px 26px 5px 7px;border-radius:8px;min-width:0;
+  display:grid;grid-template-columns:86px minmax(0,1fr);gap:8px;align-items:center}
+.dash-fold .day-header{font-size:9.5px;letter-spacing:.2px;margin:0;padding-right:0;
+  display:flex;flex-wrap:wrap;align-items:center;gap:3px 4px;justify-content:flex-start;
+  align-content:center}
+/* Nome e data lado a lado: empilhados, o cabecalho ficava com 3 linhas (41px) e era ele,
+   nao o conteudo, que definia a altura de cada dia. */
+.dash-fold .day-when{display:flex;align-items:baseline;gap:4px}
+.dash-fold .day-when-date{margin-top:0}
+.dash-fold .day-items{min-width:0;display:flex;flex-direction:column;gap:3px}
+.dash-fold .day-today-pill{padding:1px 4px;font-size:7px}
+.dash-fold .plan-add-btn{width:16px;height:16px;font-size:11px!important;padding:0!important;line-height:1;border-radius:6px;top:50%;right:5px;transform:translateY(-50%)}
+/* Com a linha inteira disponivel, o nome cabe numa linha so — e uma linha so e melhor
+   que tres quebradas, porque a lista de dias continua curta e da pra bater o olho na
+   semana inteira sem rolar. O X sai do fluxo pro canto (nao rouba largura do nome) e a
+   bolinha some: a borda esquerda ja e a cor do reino. */
+.dash-fold .plan-item{display:block;position:relative;padding:3px 16px 3px 7px;margin:0}
 .dash-fold .plan-item-dot{display:none}
 .dash-fold .plan-item-body{display:block}
-.dash-fold .plan-rm{position:absolute;top:0;right:0;font-size:10px;padding:2px 3px;opacity:.65}
-.dash-fold .plan-item-text{font-size:10px;line-height:1.25;white-space:normal;
-  overflow-wrap:break-word;overflow:hidden;max-height:3.75em}
-.dash-fold .plan-item-sub{font-size:8.5px;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dash-fold .plan-add-btn{font-size:11px!important;padding:0!important;width:18px;height:18px;line-height:1}
+.dash-fold .plan-rm{position:absolute;top:50%;right:1px;transform:translateY(-50%);
+  font-size:10px;padding:2px 3px;opacity:.55}
+.dash-fold .plan-item-text{font-size:10.5px;line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-fold .plan-item-sub{font-size:8.5px;margin-top:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* "＋ Adicionar assunto" e "Descanso" não cabem numa coluna de ~100px: viram só
    o sinal e o emoji, com o texto no title pra não perder a informação. */
-.dash-fold .plan-empty-day{font-size:10px;padding:5px 3px;line-height:1.2;overflow:hidden;
+.dash-fold .plan-empty-day{font-size:10px;padding:3px 6px;line-height:1.2;overflow:hidden;text-align:left;margin:0;
   white-space:nowrap;text-align:center;margin-top:auto}
-.dash-fold .plan-lbl{display:none}
+.dash-fold .plan-lbl{display:inline}
 /* So a largura decide: abaixo de 1000px tres colunas viram tiras ilegiveis, entao
    a grade empilha. Altura nao entra mais na conta — a pagina rola. */
 @media(max-width:1000px){
@@ -1879,9 +1883,10 @@ nav{
 
 /* ===== PLANO SEMANAL ===== */
 .week-plan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}
-.day-col{background:var(--bg2);border-radius:14px;padding:14px;border:1.5px solid var(--border);}
+.day-col{background:var(--bg2);border-radius:14px;padding:14px;border:1.5px solid var(--border);position:relative;}
 .day-col.today-col{background:linear-gradient(135deg,rgba(108,71,255,0.06),rgba(79,70,229,0.03));border-color:rgba(108,71,255,0.3);}
-.day-header{font-size:11px;font-weight:900;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.day-header{font-size:11px;font-weight:900;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;padding-right:30px;}
+.day-when-date{font-size:9px;color:var(--muted);font-weight:600;margin-top:1px;}
 .day-today-pill{background:linear-gradient(135deg,var(--accent),#4f46e5);color:#fff;border-radius:20px;padding:2px 8px;font-size:9px;font-weight:900;letter-spacing:0.5px;}
 .plan-item{background:var(--panel);border-radius:10px;padding:9px 11px;margin-bottom:6px;border:1.5px solid var(--border);display:flex;align-items:flex-start;gap:8px;transition:all 0.15s;}
 .plan-item:last-child{margin-bottom:0;}
@@ -1894,7 +1899,10 @@ nav{
 .plan-tag{font-size:9px;font-weight:900;padding:1px 6px;border-radius:20px;flex-shrink:0;}
 .plan-tag-new{background:rgba(220,38,38,0.1);color:var(--red-t);}
 .plan-tag-pend{background:rgba(234,88,12,0.1);color:var(--orange-t);}
-.plan-add-btn{background:rgba(108,71,255,0.08);border:1.5px dashed rgba(108,71,255,0.3);border-radius:8px;width:26px;height:26px;cursor:pointer;font-size:16px;color:var(--accent);display:flex;align-items:center;justify-content:center;transition:all 0.15s;flex-shrink:0;}
+/* Fora do fluxo do cabecalho: dentro dele, o ＋ disputava a largura com o nome do dia e
+   com a data, e era o que jogava a data pra uma segunda linha — o cabecalho passava a
+   mandar na altura de cada dia. */
+.plan-add-btn{position:absolute;top:12px;right:12px;background:rgba(108,71,255,0.08);border:1.5px dashed rgba(108,71,255,0.3);border-radius:8px;width:26px;height:26px;cursor:pointer;font-size:16px;color:var(--accent);display:flex;align-items:center;justify-content:center;transition:all 0.15s;flex-shrink:0;}
 .plan-add-btn:hover{background:rgba(108,71,255,0.15);border-color:var(--accent);}
 
 @media(max-width:640px){
@@ -14272,18 +14280,18 @@ function renderWeeklyPlan(){
       </div>`).join('');
     return`<div class="day-col${day.isToday?' today-col':''}">
       <div class="day-header" style="color:${day.isToday?'var(--accent)':'var(--text2)'}">
-        <div>
+        <div class="day-when">
           <div>${day.full}</div>
-          <div style="font-size:9px;color:var(--muted);font-weight:600;margin-top:1px">${dateLabel}</div>
+          <div class="day-when-date">${dateLabel}</div>
         </div>
         ${day.isToday?'<span class="day-today-pill">HOJE</span>':''}
-        <button class="plan-add-btn" onclick="openAddPlanItem('${day.ds}')" title="Adicionar">＋</button>
       </div>
-      ${itemsHtml}${!itemsHtml
+      <button class="plan-add-btn" onclick="openAddPlanItem('${day.ds}')" title="Adicionar">＋</button>
+      <div class="day-items">${itemsHtml}${!itemsHtml
         ? (isSun
             ?`<div class="plan-empty-day" style="cursor:pointer" title="Domingo é dia de descanso — mas dá pra marcar alguma coisa, se quiser" onclick="openAddPlanItem('${day.ds}')">🌟<span class="plan-lbl"> Descanso</span></div>`
             :`<div class="plan-empty-day" style="cursor:pointer" title="Adicionar" onclick="openAddPlanItem('${day.ds}')">＋<span class="plan-lbl"> Adicionar</span></div>`)
-        :''}
+        :''}</div>
     </div>`;
   }).join('')}</div>`;
 }
