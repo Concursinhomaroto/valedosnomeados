@@ -3034,7 +3034,7 @@ nav{
   <div id="ft-mode-livre">
     <div id="ft-display" style="font-size:36px;font-weight:900;color:#fff;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:2px;margin-bottom:8px">00:00:00</div>
     <div style="margin-bottom:8px">
-      <select id="ft-tipo" style="width:100%;background:#4c1d95;border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700;outline:none">
+      <select id="ft-tipo" onchange="ftLembrarAlvo()" style="width:100%;background:#4c1d95;border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700;outline:none">
         <option value="geral" style="background:#4c1d95;color:#fff">📚 Revisão Geral</option>
         <option value="questoes" style="background:#4c1d95;color:#fff">✏️ Questões</option>
         <option value="leitura" style="background:#4c1d95;color:#fff">📖 Leitura</option>
@@ -3043,10 +3043,10 @@ nav{
       </select>
     </div>
     <div style="margin-bottom:6px">
-      <select id="ft-reino" onchange="ftPreencherChefoes()" style="width:100%;background:#4c1d95;border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700;outline:none"></select>
+      <select id="ft-reino" onchange="ftPreencherChefoes();ftLembrarAlvo()" style="width:100%;background:#4c1d95;border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700;outline:none"></select>
     </div>
     <div style="margin-bottom:10px">
-      <select id="ft-chefao" style="width:100%;background:#4c1d95;border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700;outline:none"></select>
+      <select id="ft-chefao" onchange="ftLembrarAlvo()" style="width:100%;background:#4c1d95;border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700;outline:none"></select>
     </div>
     <div style="display:flex;gap:6px">
       <button id="ft-btn-play" onclick="floatTimerToggle()" style="flex:1;background:rgba(255,255,255,0.9);color:#4c1d95;border:none;border-radius:12px;padding:9px;font-size:13px;font-weight:900;cursor:pointer">▶ Iniciar</button>
@@ -20375,13 +20375,38 @@ function renderFlashcardsScreen(){
 }
 // ===== CRONÔMETRO FLUTUANTE =====
 let ftRunning=false,ftStartedAt=null,ftAccumulated=0,ftRafId=null;
+// floatTimerOpen reconstroi o seletor de reino do zero (sel.innerHTML=...), e isso
+// apagava a escolha toda vez que o painel era minimizado e reaberto — com o cronometro
+// rodando. O alvo voltava pra "Todos os Reinos", e o tempo da sessao ia parar no lugar
+// errado sem ninguem perceber. Entao a escolha vive FORA do DOM, e o DOM e que e
+// reconstruido a partir dela.
+const FT_ALVO_KEY='vdn_ft_alvo';
+let ftAlvo=(()=>{try{const d=JSON.parse(localStorage.getItem(FT_ALVO_KEY)||'null');
+  return (d&&typeof d==='object')?{reino:d.reino||'',chefao:d.chefao||'',tipo:d.tipo||''}
+                                 :{reino:'',chefao:'',tipo:''};}catch(e){return{reino:'',chefao:'',tipo:''};}})();
+function ftLembrarAlvo(){
+  ftAlvo={
+    reino:(document.getElementById('ft-reino')||{}).value||'',
+    chefao:(document.getElementById('ft-chefao')||{}).value||'',
+    tipo:(document.getElementById('ft-tipo')||{}).value||''
+  };
+  try{localStorage.setItem(FT_ALVO_KEY,JSON.stringify(ftAlvo));}catch(e){}
+}
+function ftRestaurarAlvo(){
+  const cai=(id,v)=>{const el=document.getElementById(id);
+    if(el&&v&&[...el.options].some(o=>o.value===v))el.value=v;};
+  cai('ft-tipo',ftAlvo.tipo);
+  cai('ft-reino',ftAlvo.reino);
+  ftPreencherChefoes();
+  cai('ft-chefao',ftAlvo.chefao);
+}
 function ftGetElapsed(){if(!ftRunning||!ftStartedAt)return ftAccumulated;return ftAccumulated+Math.floor((Date.now()-ftStartedAt)/1000);}
 function ftTick(){ftUpdateDisplay();if(ftRunning)ftRafId=requestAnimationFrame(ftTick);}
 function floatTimerOpen(){
   floatTimerHideMini();
   const sel=document.getElementById('ft-reino');
   if(sel){sel.innerHTML='<option value="" style="background:#4c1d95;color:#fff">🏰 Todos os Reinos (Geral)</option>';db.kingdoms.forEach(k=>{sel.innerHTML+='<option value="'+k.id+'" style="background:#4c1d95;color:#fff">'+(k.icon||'🏰')+' '+k.name+'</option>';});}
-  ftPreencherChefoes();
+  ftRestaurarAlvo();
   document.getElementById('float-timer').style.display='block';
   const btn=document.getElementById('float-timer-btn');if(btn)btn.style.display='none';
   ftUpdateDisplay();
@@ -20474,7 +20499,8 @@ function ftPreencherChefoes(){
   }
   sel.innerHTML=html;
   sel.disabled=!kid;
-  if(antes&&[...sel.options].some(o=>o.value===antes))sel.value=antes;
+  const quer=antes||((ftAlvo&&ftAlvo.reino===kid)?ftAlvo.chefao:'');
+  if(quer&&[...sel.options].some(o=>o.value===quer))sel.value=quer;
 }
 function topicSeconds(topicId){return (db.topicSeconds&&db.topicSeconds[topicId])||0;}
 // Tempo lancado NAO e revisao feita. Ratear a sessao entre os assuntos do chefao seria
