@@ -3018,8 +3018,11 @@ nav{
         <option value="simulado" style="background:#4c1d95;color:#fff">🎯 Simulado</option>
       </select>
     </div>
+    <div style="margin-bottom:6px">
+      <select id="ft-reino" onchange="ftPreencherChefoes()" style="width:100%;background:#4c1d95;border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700;outline:none"></select>
+    </div>
     <div style="margin-bottom:10px">
-      <select id="ft-reino" style="width:100%;background:#4c1d95;border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700;outline:none"></select>
+      <select id="ft-chefao" style="width:100%;background:#4c1d95;border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700;outline:none"></select>
     </div>
     <div style="display:flex;gap:6px">
       <button id="ft-btn-play" onclick="floatTimerToggle()" style="flex:1;background:rgba(255,255,255,0.9);color:#4c1d95;border:none;border-radius:12px;padding:9px;font-size:13px;font-weight:900;cursor:pointer">▶ Iniciar</button>
@@ -6892,7 +6895,10 @@ function renderTopics(){
     // copia antes de ordenar: sort() mexeria na lista gravada de minibosses
     const subs=[...(topic.subtopics||[])].sort((a,b)=>b.priority-a.priority);
     const pending=subs.reduce((n,s)=>n+countOverdue(s,todayStr()),0);
-    const studied=subs.reduce((n,s)=>n+(db.times[s.id]||0),0);
+    // db.times so recebe o cronometro POR MINIBOSS. Quem estuda pelo cronometro livre
+    // (que e a maior parte do tempo) nunca via esse numero sair de 0m, mesmo com horas
+    // no chefao. Agora soma os dois.
+    const studied=subs.reduce((n,s)=>n+(db.times[s.id]||0),0)+topicSeconds(topic.id);
     // Abre sozinho quando a busca casou num miniboss DESTE chefão — senão o resultado
     // ficaria escondido atrás de mais um clique, que é o problema que a busca resolve.
     const abreNaBusca=!!buscaReinoTermo&&(topic.subtopics||[])
@@ -20304,6 +20310,7 @@ function floatTimerOpen(){
   floatTimerHideMini();
   const sel=document.getElementById('ft-reino');
   if(sel){sel.innerHTML='<option value="" style="background:#4c1d95;color:#fff">🏰 Todos os Reinos (Geral)</option>';db.kingdoms.forEach(k=>{sel.innerHTML+='<option value="'+k.id+'" style="background:#4c1d95;color:#fff">'+(k.icon||'🏰')+' '+k.name+'</option>';});}
+  ftPreencherChefoes();
   document.getElementById('float-timer').style.display='block';
   const btn=document.getElementById('float-timer-btn');if(btn)btn.style.display='none';
   ftUpdateDisplay();
@@ -20380,23 +20387,104 @@ function ftUpdateDisplay(){
   const total=ftGetElapsed();const el=document.getElementById('ft-display');
   if(el)el.textContent=String(Math.floor(total/3600)).padStart(2,'0')+':'+String(Math.floor((total%3600)/60)).padStart(2,'0')+':'+String(total%60).padStart(2,'0');
 }
+// O chefao e o alvo mais util: "estudei Urgencia e Emergencia" e uma frase que a
+// pessoa diz de verdade, enquanto escolher miniboss no meio de uma sessao livre nao e.
+// Sem isso, o tempo so chegava no reino e o relogio do chefao ficava eternamente em 0m,
+// mesmo com horas estudadas ali.
+function ftPreencherChefoes(){
+  const sel=document.getElementById('ft-chefao');
+  if(!sel)return;
+  const kid=(document.getElementById('ft-reino')||{}).value||'';
+  const antes=sel.value;
+  const op=(v,t)=>'<option value="'+escapeHtml(v)+'" style="background:#4c1d95;color:#fff">'+escapeHtml(t)+'</option>';
+  let html=op('', kid?'⚔️ Reino inteiro (sem chefão)':'⚔️ Escolha um reino primeiro');
+  if(kid){
+    (db.topics[kid]||[]).forEach(t=>{html+=op(t.id,(t.icon||'⚔️')+' '+t.name);});
+  }
+  sel.innerHTML=html;
+  sel.disabled=!kid;
+  if(antes&&[...sel.options].some(o=>o.value===antes))sel.value=antes;
+}
+function topicSeconds(topicId){return (db.topicSeconds&&db.topicSeconds[topicId])||0;}
+// Tempo lancado NAO e revisao feita. Ratear a sessao entre os assuntos do chefao seria
+// pior que nao registrar: tiraria da fila assunto que voce nao abriu, e fila limpa e
+// errada e o pior estado possivel. Entao quem diz o que foi revisado e voce — e a lista
+// ja vem curta (so o chefao, so o que voce estudou) e com os atrasados marcados.
+function ftOferecerRevisao(chefaoId){
+  const {topic}=findTopicAndKingdom(chefaoId);
+  if(!topic)return;
+  const hoje=todayStr();
+  const subs=(topic.subtopics||[]).filter(s=>s.studied&&!s.revDominado);
+  if(!subs.length)return;
+  const atrasado=s=>countOverdue(s,hoje)>0;
+  const naFila=s=>{
+    const pend=(db.revisions[s.id]||[]).filter(r=>!r.completed&&r.date);
+    return pend.some(r=>r.date<=hoje);
+  };
+  const linhas=subs.map(s=>{
+    const marca=atrasado(s)||naFila(s);
+    const dias=revDiasParado(s);
+    return`<label style="display:flex;align-items:center;gap:9px;padding:6px 2px;border-bottom:1px solid var(--border);cursor:pointer">
+      <input type="checkbox" class="ftrev-chk" value="${escapeAttrJs(s.id)}"${marca?' checked':''} style="width:16px;height:16px;flex-shrink:0">
+      <span style="flex:1;min-width:0;font-size:12px;font-weight:700">${escapeHtml(s.name)}</span>
+      <span style="font-size:10px;color:${atrasado(s)?'var(--red-t)':'var(--muted)'};white-space:nowrap">${atrasado(s)?'atrasada':(dias>=365?'nunca revisado':dias+'d sem olhar')}</span>
+    </label>`;}).join('');
+  openModal('🔁 Marcar revisão — '+escapeHtml(topic.name),`
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">
+      O tempo já foi registrado no chefão. Marque só os assuntos que você <b>de fato revisou</b> nessa sessão — esses saem da fila.
+    </div>
+    <div style="max-height:44vh;overflow:auto;margin-bottom:12px">${linhas}</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <label style="font-size:11px;font-weight:800;color:var(--muted)">Como foi:</label>
+      <select id="ftrev-nota" class="inp" style="width:auto;padding:6px 10px;font-size:12px">
+        <option value="4">✓ Revisei</option>
+        <option value="3">😐 Com dificuldade</option>
+        <option value="1">😵 Esqueci tudo</option>
+      </select>
+      <button class="btn btn-xs btn-ghost" onclick="document.querySelectorAll('.ftrev-chk').forEach(c=>c.checked=false)">Desmarcar todos</button>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Só o tempo</button>
+      <button class="btn btn-primary" onclick="ftConfirmarRevisao()"><i class="fa fa-check"></i> Marcar revisão</button>
+    </div>`);
+}
+function ftConfirmarRevisao(){
+  const nota=parseInt((document.getElementById('ftrev-nota')||{}).value,10)||4;
+  const ids=[...document.querySelectorAll('.ftrev-chk')].filter(c=>c.checked).map(c=>c.value);
+  closeModal();
+  if(!ids.length){toast('Só o tempo foi registrado.','var(--accent)');return;}
+  ids.forEach(id=>revConcluirDaFila(id,nota));
+  saveDB();
+  const sc=document.querySelector('.screen.active')?.id;
+  if(sc==='screen-kingdom')renderTopics();
+  if(sc==='screen-revisions')renderRevisions();
+  if(sc==='screen-dashboard')renderDashboard();
+  toast('🔁 '+ids.length+' assunto(s) marcados como revisados.','var(--green)');
+}
 function floatTimerSave(){
   const total=ftGetElapsed();if(total<10){toast('⚠️ Mínimo 10 segundos','var(--orange)');return;}
   const tipo=document.getElementById('ft-tipo')?.value||'geral';
   const reinoId=document.getElementById('ft-reino')?.value||'';
   const reinoName=reinoId?(db.kingdoms.find(k=>k.id===reinoId)?.name||'Geral'):'Geral';
   const tl={geral:'Revisão Geral',questoes:'Questões',leitura:'Leitura',resumo:'Resumos',simulado:'Simulado'};
+  const chefaoId=document.getElementById('ft-chefao')?.value||'';
+  const chefao=chefaoId?((db.topics[reinoId]||[]).find(t=>t.id===chefaoId)||null):null;
   logStudySeconds(total);
   if(reinoId){if(!db.kingdomSeconds)db.kingdomSeconds={};db.kingdomSeconds[reinoId]=(db.kingdomSeconds[reinoId]||0)+total;}
+  // O tempo do chefao SOMA ao do reino, nao substitui: um e recorte do outro.
+  if(chefao){if(!db.topicSeconds)db.topicSeconds={};db.topicSeconds[chefaoId]=topicSeconds(chefaoId)+total;}
   db.lifetimeSeconds=(db.lifetimeSeconds||0)+total;
   if(!db.freeSessions)db.freeSessions=[];
-  db.freeSessions.push({tipo,reinoId,reinoName,segundos:total,data:todayStr(),hora:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})});
+  db.freeSessions.push({tipo,reinoId,reinoName,chefaoId,chefaoName:chefao?chefao.name:'',segundos:total,data:todayStr(),hora:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})});
   if(db.freeSessions.length>50)db.freeSessions=db.freeSessions.slice(-50);
   logSessionEvent('livre',total,reinoId);
   saveDB();gainXP(Math.floor(total/60));
-  toast('✅ '+fmtTime(total)+' de '+(tl[tipo]||tipo)+(reinoId?' ('+reinoName+')':'')+' registrado!','var(--green)');
+  toast('✅ '+fmtTime(total)+' de '+(tl[tipo]||tipo)+(chefao?(' — '+chefao.name):(reinoId?' ('+reinoName+')':''))+' registrado!','var(--green)');
   floatTimerReset();floatTimerClose();
   const sc=document.querySelector('.screen.active')?.id;if(sc==='screen-dashboard')renderDashboard();
+  if(sc==='screen-kingdom')renderTopics();
+  // Tempo lancado nao e revisao feita: quem diz o que foi revisado e voce.
+  if(chefao)ftOferecerRevisao(chefaoId);
 }
 function floatTimerReset(){
   if(ftRafId){cancelAnimationFrame(ftRafId);ftRafId=null;}
