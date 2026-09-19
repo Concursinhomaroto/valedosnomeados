@@ -817,6 +817,13 @@ nav{
    do jeito que sempre foi. O limite de 68ch e a centralização foram iniciativa
    minha, não foram pedidos, e estão revertidos. */
 .resumo-body{font-size:12.5px;color:var(--text2);line-height:1.7;}
+.resumo-marca{background:linear-gradient(transparent 55%,rgba(250,204,21,0.55) 55%);
+  color:inherit;border-radius:2px;cursor:pointer;padding:0 1px;}
+.resumo-marca:hover{background:linear-gradient(transparent 55%,rgba(248,113,113,0.5) 55%);}
+.marca-btn{display:none;position:fixed;z-index:9999;align-items:center;gap:6px;
+  background:var(--accent);color:#fff;border:none;border-radius:999px;
+  padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;
+  box-shadow:0 4px 16px rgba(0,0,0,0.35);}
 /* Era white-space:pre-line, e aí CADA linha em branco do texto virava um vão de ~21px
    (line-height 1.7). Como a IA separa tópicos com linha em branco — às vezes duas — o
    resumo saía esparramado: o conteúdo bom, a organização não. Agora os blocos viram
@@ -7186,7 +7193,7 @@ function resumoPanelHTML(s){
         </div>
       </div>
       ${isSpeaking?`<div style="font-size:9.5px;color:var(--muted);margin:-4px 0 8px;display:flex;align-items:center;gap:5px">${resumoSpeakMode==='audio'?'<i class=\"fa fa-lock-open\"></i> Áudio da IA — continua tocando com a tela travada.':'<i class=\"fa fa-triangle-exclamation\"></i> Voz do navegador — para se a tela travar (configure sua chave de IA pra ouvir com a tela travada).'}</div>`:''}
-      <div class="resumo-body">${resumoFormatar(s.resumo.texto)}</div>
+      <div class="resumo-body" data-sub="${s.id}">${resumoFormatar(s.resumo.texto)}</div>
       ${fontesHTML(s.resumo.fontes,s.resumo.consultas,s.resumo.diag)}
       <div class="resumo-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm}${fonteTxt} — confira sempre a fonte oficial antes de usar na prova.${s.resumo.editadoEm?` <b style="color:var(--green-t)">Corrigido por você em ${new Date(s.resumo.editadoEm).toLocaleDateString('pt-BR')}</b> — gerar de novo apaga a sua correção.`:''}</div>
     `;
@@ -7225,7 +7232,7 @@ function resumoRefreshPanel(subId){
   const sub=simFindSub(subId);
   if(!sub)return;
   const wrap=document.getElementById('resumo-'+subId);
-  if(wrap){wrap.innerHTML=resumoPanelHTML(sub);wrap.classList.add('resumo-open');wrap.style.display='';}
+  if(wrap){wrap.innerHTML=resumoPanelHTML(sub);wrap.classList.add('resumo-open');wrap.style.display='';marcaAplicarTodas();}
   const btn=document.getElementById('resumo-btn-'+subId);
   if(btn){
     const hasResumo=!!(sub.resumo&&sub.resumo.texto);
@@ -8631,6 +8638,198 @@ passagem, pra dar liga, tudo bem; desenvolver o assunto do vizinho, não.`;
 // mexer no texto guardado mudaria as duas coisas de tabela.
 // Três formas: título de seção (linha curta, toda em maiúsculas, terminando em ":"),
 // o "Na prática:" e o parágrafo comum.
+// ===== MARCA-TEXTO NO RESUMO =====
+// A marca NAO pode ser guardada como posicao no HTML: resumoFormatar reescreve o HTML a
+// cada render (painel, tela de revisao, troca de aba) e qualquer indice de no ou de
+// caractere do HTML apontaria pro lugar errado na vez seguinte. Entao a marca guarda o
+// TRECHO em si mais qual ocorrencia dele e ({t, n}), e e reencontrada por busca no texto
+// da tela. Efeito colateral bom: se voce corrigir o resumo a mao, a marca que ainda
+// existir continua valendo, e a que sumiu do texto simplesmente nao aparece — em vez de
+// grudar num pedaco errado.
+const MARCA_MIN=3;
+function resumoMarcas(sub){return (sub&&sub.resumo&&sub.resumo.marcas)||[];}
+function marcaNosDeTexto(root){
+  const out=[];
+  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null);
+  let n;
+  while((n=w.nextNode())){
+    if(n.nodeValue&&n.nodeValue.length)out.push(n);
+  }
+  return out;
+}
+// Mapa de offsets: o texto da tela inteiro, e onde cada no comeca dentro dele.
+function marcaMapa(root){
+  const nos=marcaNosDeTexto(root);
+  let full='',pos=[];
+  nos.forEach(n=>{pos.push({no:n,ini:full.length,len:n.nodeValue.length});full+=n.nodeValue;});
+  return{full,pos};
+}
+function marcaOcorrencia(full,t,n){
+  let de=-1,achou=-1;
+  for(let k=0;k<=n;k++){
+    de=full.indexOf(t,de+1);
+    if(de<0)return -1;
+    achou=de;
+  }
+  return achou;
+}
+function marcaAplicar(root,sub){
+  if(!root)return;
+  const marcas=resumoMarcas(sub);
+  if(!marcas.length)return;
+  const {full,pos}=marcaMapa(root);
+  // Resolve TODAS as posicoes antes de mexer no DOM: envolver um trecho quebra o no de
+  // texto em tres e invalidaria os offsets dos que viessem depois.
+  const faixas=[];
+  marcas.forEach((m,idx)=>{
+    if(!m||!m.t)return;
+    const a=marcaOcorrencia(full,m.t,m.n||0);
+    if(a<0)return;
+    faixas.push({a,b:a+m.t.length,idx});
+  });
+  faixas.sort((x,y)=>y.a-x.a);   // de tras pra frente
+  let ultimoIni=Infinity;
+  faixas.forEach(f=>{
+    if(f.b>ultimoIni)return;     // sobreposta: ignora
+    const p=pos.find(q=>f.a>=q.ini&&f.b<=q.ini+q.len);
+    if(!p)return;                // marca atravessa blocos: nao envolve
+    ultimoIni=f.a;
+    const no=p.no, de=f.a-p.ini, ate=f.b-p.ini;
+    const meio=no.splitText(de);
+    meio.splitText(ate-de);
+    const mk=document.createElement('mark');
+    mk.className='resumo-marca';
+    mk.setAttribute('data-marca',String(f.idx));
+    mk.title='Clique para tirar a marcação';
+    mk.textContent=meio.nodeValue;
+    meio.parentNode.replaceChild(mk,meio);
+  });
+}
+// Guarda a selecao. Uma selecao que atravessa paragrafos vira VARIAS marcas, uma por
+// bloco: assim cada marca cabe inteira num no de texto e o envolvimento e trivial.
+function marcaSalvarSelecao(subId){
+  const sub=simFindSub(subId);
+  const sel=window.getSelection();
+  if(!sub||!sub.resumo||!sel||sel.isCollapsed||!sel.rangeCount)return false;
+  const range=sel.getRangeAt(0);
+  const root=marcaRaizDe(range.commonAncestorContainer);
+  if(!root)return false;
+  const {full,pos}=marcaMapa(root);
+  const novas=[];
+  pos.forEach(p=>{
+    if(!range.intersectsNode(p.no))return;
+    const de=(p.no===range.startContainer)?range.startOffset:0;
+    const ate=(p.no===range.endContainer)?range.endOffset:p.len;
+    const t=p.no.nodeValue.slice(de,ate);
+    if(t.trim().length<MARCA_MIN)return;
+    // trim sem perder a posicao: descobre quanto foi cortado de cada ponta
+    const esq=t.length-t.replace(/^\s+/,'').length;
+    const lim=t.trim();
+    const abs=p.ini+de+esq;
+    const n=full.slice(0,abs).split(lim).length-1;   // quantas vezes ja apareceu antes
+    novas.push({t:lim,n});
+  });
+  if(!novas.length)return false;
+  sub.resumo.marcas=resumoMarcas(sub).concat(novas);
+  sel.removeAllRanges();
+  saveDB();
+  return true;
+}
+function marcaRaizDe(no){
+  let el=(no&&no.nodeType===3)?no.parentNode:no;
+  while(el&&el!==document.body){
+    if(el.classList&&el.classList.contains('resumo-body'))return el;
+    el=el.parentNode;
+  }
+  return null;
+}
+function marcaRemover(subId,idx){
+  const sub=simFindSub(subId);
+  if(!sub||!sub.resumo||!sub.resumo.marcas)return;
+  sub.resumo.marcas.splice(idx,1);
+  saveDB();
+}
+function marcaLimpar(root){
+  root.querySelectorAll('mark.resumo-marca').forEach(mk=>{
+    const t=document.createTextNode(mk.textContent);
+    mk.parentNode.replaceChild(t,mk);
+  });
+  root.normalize();
+}
+// Redesenha as marcas de TODO resumo que estiver na tela. Chamado depois de cada
+// render — e tambem depois de marcar/desmarcar, o que dispensa saber em qual tela a
+// pessoa esta (painel do miniboss ou tela de revisao usam o mesmo .resumo-body).
+function marcaAplicarTodas(){
+  document.querySelectorAll('.resumo-body[data-sub]').forEach(root=>{
+    const sub=simFindSub(root.getAttribute('data-sub'));
+    if(!sub)return;
+    marcaLimpar(root);
+    marcaAplicar(root,sub);
+  });
+}
+let marcaBotao=null;
+function marcaEsconderBotao(){if(marcaBotao)marcaBotao.style.display='none';}
+function marcaMostrarBotao(subId){
+  if(!marcaBotao){
+    marcaBotao=document.createElement('button');
+    marcaBotao.id='marca-btn';
+    marcaBotao.className='marca-btn';
+    marcaBotao.innerHTML='<i class="fa fa-highlighter"></i> Marcar';
+    // mousedown e nao click: o click chega depois que o navegador ja desfez a selecao
+    // em alguns aparelhos, e ai nao havia mais o que marcar.
+    marcaBotao.addEventListener('mousedown',e=>{e.preventDefault();marcaConfirmar();});
+    marcaBotao.addEventListener('touchstart',e=>{e.preventDefault();marcaConfirmar();},{passive:false});
+    document.body.appendChild(marcaBotao);
+  }
+  marcaBotao.dataset.sub=subId;
+  const sel=window.getSelection();
+  if(!sel||!sel.rangeCount)return;
+  const r=sel.getRangeAt(0).getBoundingClientRect();
+  if(!r||(!r.width&&!r.height))return;
+  marcaBotao.style.display='flex';
+  const bw=marcaBotao.offsetWidth||86, bh=marcaBotao.offsetHeight||30;
+  let left=r.left+r.width/2-bw/2;
+  left=Math.max(8,Math.min(left,window.innerWidth-bw-8));
+  let top=r.top-bh-8;
+  if(top<8)top=r.bottom+8;          // selecao colada no topo: botao vai pra baixo
+  marcaBotao.style.left=left+'px';
+  marcaBotao.style.top=top+'px';
+}
+function marcaConfirmar(){
+  const subId=marcaBotao&&marcaBotao.dataset.sub;
+  if(!subId)return;
+  const ok=marcaSalvarSelecao(subId);
+  marcaEsconderBotao();
+  if(ok){marcaAplicarTodas();toast('🖍️ Marcado.','var(--green)');}
+}
+// Um listener so, no documento, em vez de um por resumo desenhado: o painel e a tela
+// de revisao recriam esse HTML o tempo todo, e listener preso ao elemento morreria
+// junto com ele a cada render.
+(function marcaLigar(){
+  const aoSoltar=()=>{
+    setTimeout(()=>{
+      const sel=window.getSelection();
+      if(!sel||sel.isCollapsed||!sel.rangeCount||!String(sel).trim()){marcaEsconderBotao();return;}
+      const root=marcaRaizDe(sel.getRangeAt(0).commonAncestorContainer);
+      const subId=root&&root.getAttribute('data-sub');
+      if(!subId||String(sel).trim().length<MARCA_MIN){marcaEsconderBotao();return;}
+      marcaMostrarBotao(subId);
+    },10);
+  };
+  document.addEventListener('mouseup',aoSoltar);
+  document.addEventListener('touchend',aoSoltar);
+  document.addEventListener('scroll',marcaEsconderBotao,true);
+  document.addEventListener('click',e=>{
+    const mk=e.target&&e.target.closest&&e.target.closest('mark.resumo-marca');
+    if(!mk)return;
+    const root=marcaRaizDe(mk);
+    const subId=root&&root.getAttribute('data-sub');
+    if(!subId)return;
+    e.stopPropagation();
+    marcaRemover(subId,parseInt(mk.getAttribute('data-marca'),10));
+    marcaAplicarTodas();
+  },true);
+})();
 function resumoFormatar(txt){
   const blocos=String(txt||'').split(/\n\s*\n/).map(b=>b.trim()).filter(Boolean);
   if(!blocos.length)return '';
@@ -13857,6 +14056,7 @@ function revAbrirTela(subId){
   revAbertoEm=Date.now();
   revPrazoEscolhido=revEscadaSugerida(ctx.sub);
   openModal(`🔁 Revisão — ${escapeHtml(ctx.sub.name)}`,revTelaHTML(subId));
+  marcaAplicarTodas();
   revTelaDesenhar(subId);
 }
 // closeModal é global e usado por dezenas de telas: em vez de mexer nele, quem abre
@@ -13913,7 +14113,7 @@ function revTelaHTML(subId){
     <span style="color:var(--muted)">Pode fechar esta janela — a geração continua e fica salva.</span></p></div>`;
 
   const colResumo=gerandoR?carregando('Gerando o resumo...')
-    :temResumo?`<div class="revtela-scroll"><div class="resumo-body">${resumoFormatar(sub.resumo.texto)}</div></div>`
+    :temResumo?`<div class="revtela-scroll"><div class="resumo-body" data-sub="${subId}">${resumoFormatar(sub.resumo.texto)}</div></div>`
     :faltando('resumo','resumo','Sem ele a revisão não tem o que mostrar — dá pra gerar aqui mesmo ou revisar direto no miniboss.');
 
   const colFluxo=gerandoF?carregando('Gerando o fluxograma...')
