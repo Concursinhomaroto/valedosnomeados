@@ -2434,7 +2434,10 @@ nav{
     <div class="section-card dash-card dash-x4">
       <div class="dash-head">
         <div class="sec-title dash-sec">📅 Agenda semanal de estudos</div>
-        <div class="dash-foot dash-foot-inline">Clique num dia para adicionar</div>
+        <div class="dash-head-tools">
+          <button class="btn btn-xs btn-ghost" onclick="planoRetaFinal()" title="Preenche os 7 dias com os blocos da reta final. Não apaga nada do que você já marcou."><i class="fa fa-bolt"></i> Reta final</button>
+          <span class="dash-foot dash-foot-inline">Clique num dia para adicionar</span>
+        </div>
       </div>
       <div class="dash-scroll dash-grow" id="weekly-plan"></div>
     </div>
@@ -14836,6 +14839,59 @@ function renderWeeklyPlan(){
   }).join('')}</div>`;
 }
 
+// ===== Semana da reta final =====
+// A agenda e 100% manual de proposito, mas montar 28 cartoes na mao toda segunda e
+// atrito puro — e atrito na hora de planejar e a primeira coisa que a pessoa corta
+// quando o dia aperta. Este botao escreve a semana padrao: quatro blocos por dia util,
+// prova completa no sabado, autopsia e revisao no domingo.
+//
+// A distribuicao dos blocos de questao nao e decorativa: o caderno da banca e 50 itens
+// de conhecimentos gerais e 70 de especificos, entao os gerais sao 42% da prova. Terca
+// e quinta vao inteiras pra eles porque e ali que quase todo mundo subinveste — o
+// candidato de enfermagem trata a especifica como identidade e a geral como detalhe,
+// e a especifica e justamente onde ele ja esta no topo da curva, rendendo menos por
+// hora nova.
+const RETA_COR={fila:'#a78bfa',questoes:'#fb923c',autopsia:'#f87171',conteudo:'#34d399',prova:'#22d3ee'};
+const RETA_FILA={name:'1️⃣ 50min · Fila de revisão (sem tentar zerar)',cor:RETA_COR.fila};
+const RETA_AUTOPSIA={name:'3️⃣ 60min · Autópsia: não sabia / li errado / chutei',cor:RETA_COR.autopsia};
+const RETA_CONTEUDO={name:'4️⃣ 40min · Conteúdo só do que a autópsia apontou',cor:RETA_COR.conteudo};
+const RETA_ESPECIFICA={name:'2️⃣ 90min · Questões da específica, cronometrado',cor:RETA_COR.questoes};
+const RETA_GERAIS={name:'2️⃣ 90min · Questões dos GERAIS (42% da prova)',cor:RETA_COR.questoes};
+const RETA_DIA_ESP=[RETA_FILA,RETA_ESPECIFICA,RETA_AUTOPSIA,RETA_CONTEUDO];
+const RETA_DIA_GER=[RETA_FILA,RETA_GERAIS,RETA_AUTOPSIA,RETA_CONTEUDO];
+// 0=domingo ... 6=sabado
+const RETA_SEMANA=[
+  [{name:'🔬 90min · Autópsia da prova: os três baldes',cor:RETA_COR.autopsia},
+   {name:'🧠 50min · Fila de revisão',cor:RETA_COR.fila},
+   {name:'🔁 60min · Refazer prova guardada de 2–3 semanas',cor:RETA_COR.prova}],
+  RETA_DIA_ESP, RETA_DIA_GER, RETA_DIA_ESP, RETA_DIA_GER, RETA_DIA_ESP,
+  [{name:'🏁 3h30 · Prova de 120 itens, condições reais',cor:RETA_COR.prova},
+   {name:'🏷️ Marcar cada item: sei / acho / não faço ideia',cor:RETA_COR.autopsia},
+   {name:'📊 30min · Corrigir e ler o saldo (branco não pesa)',cor:RETA_COR.prova}]
+];
+// Idempotente: tira os blocos que ele mesmo escreveu (reta:true) antes de reescrever,
+// e nunca encosta no que voce marcou. Dar o botao duas vezes nao duplica nada.
+function planoRetaFinal(){
+  if(!db.weeklyPlan)db.weeklyPlan={};
+  const hoje=todayStr();
+  let postos=0,seus=0;
+  for(let i=0;i<7;i++){
+    const ds=addDays(hoje,i);
+    const dow=new Date(ds+'T00:00:00').getDay();
+    const lista=(db.weeklyPlan[ds]||[]).filter(x=>!x.reta);
+    seus+=lista.length;
+    (RETA_SEMANA[dow]||[]).forEach(b=>{
+      // Se voce ja tinha escrito a mesma coisa na mao, o bloco nao entra por cima.
+      if(lista.some(x=>normalizeForDedup(x.name)===normalizeForDedup(b.name)))return;
+      lista.push({name:b.name,livre:true,reta:true,kColor:b.cor});
+      postos++;
+    });
+    db.weeklyPlan[ds]=lista;
+  }
+  saveDB();renderWeeklyPlan();
+  toast(`⚡ Semana montada — ${postos} blocos nos 7 dias${seus?`, e os seus ${seus} itens continuam onde estavam`:''}.`,'var(--accent)');
+}
+
 // Nem tudo que entra na semana e miniboss: prova simulada, academia, consulta,
 // "terminar a redacao", dia de folga. Exigir um assunto cadastrado pra poder marcar
 // qualquer coisa fazia a agenda so servir pra metade da semana. O campo de texto vem
@@ -23403,6 +23459,7 @@ window.rdDeleteRedacao=rdDeleteRedacao;
 window.rdCalcLive=rdCalcLive;
 window.rdToggleText=rdToggleText;
 window.confirmAddPlanItem=confirmAddPlanItem;
+window.planoRetaFinal=planoRetaFinal;
 window.removePlanItem=removePlanItem;
 window.openAISettingsModal=openAISettingsModal;
 window.saveGeminiApiKey=saveGeminiApiKey;
