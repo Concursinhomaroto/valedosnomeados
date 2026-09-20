@@ -711,6 +711,8 @@ nav{
 .sim-fmt-split{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px;
   font-size:10.5px;font-weight:800;color:var(--text2);}
 .sim-fmt-split i{font-style:normal;color:var(--muted);font-weight:700;}
+.sim-fonte{margin-top:5px;font-size:10px;font-weight:700;color:var(--muted);
+  display:flex;align-items:center;gap:5px;line-height:1.4}
 .sim-ferramentas{display:flex;align-items:center;justify-content:space-between;gap:10px;
   flex-wrap:wrap;margin:14px 0 8px;font-size:10.5px;font-weight:700;color:var(--text2)}
 .sim-nota{margin-top:9px;border-top:1px dashed var(--border);padding-top:8px}
@@ -7771,6 +7773,19 @@ REGRAS DE ATUALIDADE (obrigatórias):
 // Y", "Z e o conjunto de...". Prova de Enfermeiro do Cebraspe nao e questionario de
 // definicoes; a maior parte dos itens parte de uma SITUACAO e pede julgamento sobre o
 // que se faz nela. Item de definicao mede se voce leu; item situado mede se voce sabe.
+// Toda explicacao tem que dizer de onde saiu, com ANO. Nao e formalidade: foi assim
+// que apareceu que o item de rastreamento do colo do utero trazia so o citopatologico
+// e ignorava o teste de DNA-HPV, que passou a ser a recomendacao. A afirmacao estava
+// coerente com a diretriz VELHA — e sem fonte datada nao havia como perceber, porque
+// item desatualizado nao parece errado, parece certo.
+function promptFonteCebraspe(){
+  return`FONTE — toda explicação traz a sua
+- Cada item leva um campo "fonte": de onde a resposta saiu, em UMA linha curta, sempre com o ANO da versão que você usou. Exemplos: "Lei 8.080/1990, art. 7º" · "Cofen 564/2017, art. 45" · "PNI — Calendário Nacional de Vacinação 2026" · "INCA — Diretrizes de rastreamento do câncer do colo do útero, 2024" · "AHA 2020 — SBV adulto".
+- O ano não é enfeite: é por ele que eu descubro sozinho quando você me deu a versão antiga de um protocolo que mudou. Item desatualizado não parece errado — parece certo.
+- Protocolo revisado nos últimos anos: use a versão VIGENTE e diga qual é. Se a nova está substituindo a antiga por etapas e as duas convivem, o item precisa deixar claro de qual delas está falando; sem isso ele fica sem gabarito defensável e não serve pra treino.
+- Não confirmou a fonte? Escreva "fonte": "não confirmada" e NÃO cobre nesse item nenhum número, prazo ou dose. Inventar referência é pior do que admitir que não achou: referência falsa ao lado de afirmação errada é o que faz ela passar despercebida.
+- A fonte é da EXPLICAÇÃO, não do enunciado: ela aponta onde eu confiro se a resposta está certa.`;
+}
 function promptFormatoCebraspe(ce,comApoio){
   const it=ce?'itens':'questões';
   const um=ce?'item':'questão';
@@ -10195,6 +10210,11 @@ function simNivelLbl(nivel){return (SIM_NIVEIS[nivel]||SIM_NIVEIS.dificil).lbl;}
 // ({questao, alternativas:[{letra,texto}], correta, explicacao}).
 // No certo/errado o modelo devolve so a afirmacao e o gabarito: as duas
 // alternativas sao montadas aqui, em vez de confiar que ele emita o array certo.
+const SIM_FONTE_MAX=140;
+function simFonteLimpa(f){
+  const t=String(f||'').trim().replace(/\s+/g,' ').slice(0,SIM_FONTE_MAX);
+  return t&&!/^(n\/?a|-+|nenhuma?)$/i.test(t)?t:'';
+}
 function simNormalizaQuestao(q,formato){
   if(!q)return null;
   if(formato==='certoerrado'){
@@ -10206,6 +10226,7 @@ function simNormalizaQuestao(q,formato){
     if(!texto||!letra)return null;
     return{questao:texto,alternativas:SIM_ALTS_CE.map(a=>({...a})),correta:letra,
            explicacao:String(q.explicacao||'').trim(),formato:'certoerrado',
+           ...(simFonteLimpa(q.fonte)?{fonte:simFonteLimpa(q.fonte)}:{}),
            ...(q.assunto!==undefined?{assunto:q.assunto}:{}),
            ...(q.textoApoio?{textoApoio:String(q.textoApoio).trim()}:{})};
   }
@@ -10232,7 +10253,8 @@ function simNormalizaQuestao(q,formato){
     if(achadas.length===1)correta=achadas[0].letra;
     else return null;
   }
-  return{...q,alternativas:alts,correta,formato:'multipla'};
+  const fonte=simFonteLimpa(q.fonte);
+  return{...q,alternativas:alts,correta,formato:'multipla',fonte:fonte||undefined};
 }
 
 async function generateQuestionsForSubject(apiKey,kingdom,topic,sub,quantidade,opts){
@@ -10248,6 +10270,8 @@ ${promptRegrasAtualidadeCurta()}
 ${promptRecorteCebraspe(ce)}
 
 ${promptFormatoCebraspe(ce,false)}
+
+${promptFonteCebraspe()}
 
 TAREFA: Gere EXATAMENTE ${qtd} ${ce?'itens de julgamento (CERTO ou ERRADO)':'questões de múltipla escolha'} inéditos sobre o assunto abaixo — nem mais, nem menos que ${qtd}.
 
@@ -10270,8 +10294,8 @@ ${ce?`- Cada item é UMA afirmação a ser julgada como CERTA ou ERRADA. Escreva
 - Se for citar lei/norma específica, use apenas referência que você tenha certeza que existe; se não tiver certeza do número exato, formule a questão sem citar número de lei.
 
 RESPONDA APENAS COM UM JSON (array de ${qtd} itens), sem markdown, no formato exato:
-${ce?`[{"afirmacao":"...","gabarito":"C","explicacao":"..."},{"afirmacao":"...","gabarito":"E","explicacao":"..."}]`
-    :`[{"questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"..."}]`}`;
+${ce?`[{"afirmacao":"...","gabarito":"C","explicacao":"...","fonte":"Lei 8.080/1990, art. 7º"},{"afirmacao":"...","gabarito":"E","explicacao":"...","fonte":"Cofen 564/2017, art. 45"}]`
+    :`[{"questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"...","fonte":"PNI — Calendário Nacional de Vacinação 2026"}]`}`;
 
   // Pesquisa uma vez só, antes do laço de tentativas: o assunto é o mesmo em
   // todas elas, e cada busca custa crédito do Tavily. Sem chave, ou com a busca
@@ -10380,6 +10404,8 @@ ${promptRecorteCebraspe(ce)}
 
 ${promptFormatoCebraspe(ce,false)}
 
+${promptFonteCebraspe()}
+
 TAREFA: Gere EXATAMENTE ${qtd} ${ce?'itens de julgamento (CERTO ou ERRADO)':'questões de múltipla escolha'} inéditos sobre o tema abaixo, distribuídos entre os assuntos da lista — nem mais, nem menos que ${qtd}.
 
 ${simNivelDesc(nivel)}
@@ -10406,8 +10432,8 @@ ${ce?`- Cada item é UMA afirmação a ser julgada como CERTA ou ERRADA. Escreva
 - Se for citar lei/norma específica, use apenas referência que você tenha certeza que existe.
 
 RESPONDA APENAS COM UM JSON (array de ${qtd} itens), sem markdown, no formato exato:
-${ce?`[{"assunto":1,"afirmacao":"...","gabarito":"C","explicacao":"..."}]`
-    :`[{"assunto":1,"questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"..."}]`}`;
+${ce?`[{"assunto":1,"afirmacao":"...","gabarito":"C","explicacao":"...","fonte":"Lei 8.080/1990, art. 7º"}]`
+    :`[{"assunto":1,"questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"...","fonte":"PNI — Calendário Nacional de Vacinação 2026"}]`}`;
 
   // Uma pesquisa para o tema inteiro, no lugar de uma por assunto.
   let busca={material:'',fontes:[],via:null,diag:[]};
@@ -10637,8 +10663,8 @@ function simColarExemploJSON(ce){
   const n=c?1:7;
   const nome=c?String(c.sub.name).replace(/"/g,"'"):'Sondagem vesical';
   return ce
-    ?`[{"assunto":${n},"assuntoNome":"${nome}","textoApoio":"","afirmacao":"...","gabarito":"C","explicacao":"..."}]`
-    :`[{"assunto":${n},"assuntoNome":"${nome}","textoApoio":"","questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"..."}]`;
+    ?`[{"assunto":${n},"assuntoNome":"${nome}","textoApoio":"","afirmacao":"...","gabarito":"C","explicacao":"...","fonte":"Lei 8.080/1990, art. 7º"}]`
+    :`[{"assunto":${n},"assuntoNome":"${nome}","textoApoio":"","questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"...","fonte":"PNI — Calendário Nacional de Vacinação 2026"}]`;
 }
 function simColarPromptTexto(){
   const fmt=(document.getElementById('sg-colar-fmt')||{}).value||'certoerrado';
@@ -10657,6 +10683,8 @@ Hoje é ${new Date().toLocaleDateString('pt-BR')}. Use a versão VIGENTE de cada
 ${promptRecorteCebraspe(ce)}
 
 ${promptFormatoCebraspe(ce,true)}
+
+${promptFonteCebraspe()}
 
 ASSUNTOS — LISTA FECHADA${comCota?', COM A COTA DE CADA BLOCO':''}
 Cobre SÓ o que está nesta lista. Ela é o edital desta prova${editalNome?` (${editalNome})`:''}.${comCota?`
@@ -10745,7 +10773,9 @@ ${listaTxt}
 TEXTO DE APOIO
 Quando um bloco de itens depende de um texto base (um texto de português, um caso clínico, um trecho de norma, uma tabela), copie esse texto UMA vez e repita ele INTEIRO no campo "textoApoio" de CADA item do bloco. Item que não depende de texto base leva "textoApoio": "".
 
-EXPLICAÇÃO
+EXPLICAÇÃO E FONTE
+- Cada item leva também um campo "fonte": em UMA linha curta, a norma ou diretriz em que a explicação se apoia, com o ANO da versão que você usou ("Lei 8.080/1990, art. 7º", "INCA — rastreamento do colo do útero, 2024"). Não conseguiu confirmar? "fonte": "não confirmada" — nunca invente referência.
+- Prova antiga cobra o protocolo da época. Quando a diretriz mudou depois da prova, mantenha o gabarito oficial e escreva na nota, embaixo do JSON: "item N — gabarito da época; a diretriz vigente hoje é outra".
 - Se a fonte já traz explicação/comentário, use ela, resumida em até 3 frases.
 - Se não traz, escreva você — mas ela tem que CONCORDAR com o gabarito oficial, e você só afirma o que conseguiu confirmar. Sem certeza, escreva a explicação curta e genérica em vez de citar número de lei, artigo ou resolução que você não checou. Número ao lado de afirmação errada é o que faz ela passar despercebida.
 - Todo número em ALGARISMO, nunca por extenso: "36 graus", "2 mL/kg", "7 dias", "30%", "artigo 5º".
@@ -12019,6 +12049,7 @@ function simGeralResultsHTML(){
             }).join('')}
           </div>
           ${q.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${escapeHtml(q.explicacao)}</div>`:''}
+          ${q.fonte?`<div class="sim-fonte" title="De onde a explicação saiu — confira quando o ponto for número, prazo ou dose"><i class="fa fa-link"></i> ${escapeHtml(q.fonte)}</div>`:''}
           </div>
           ${simNotaHTML(q,i)}
           ${q.problematico?'<div class="sim-flagged-banner"><i class="fa fa-flag"></i> Marcada como problemática — não conta nas suas estatísticas.</div>':''}
