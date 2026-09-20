@@ -711,6 +711,8 @@ nav{
 .sim-fmt-split{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px;
   font-size:10.5px;font-weight:800;color:var(--text2);}
 .sim-fmt-split i{font-style:normal;color:var(--muted);font-weight:700;}
+.prova-selo-nova{font-size:9px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;
+  padding:2px 7px;border-radius:999px;background:var(--orange);color:#fff}
 .sg-cota-box{font-size:10px;margin:0 0 10px;padding:8px 10px;border-radius:9px;
   background:var(--panel2);line-height:1.6;color:var(--text2);font-weight:600}
 .sg-cota-ok{border:1px solid var(--border)}
@@ -10841,16 +10843,18 @@ function simColarEscolher(nome,subId){
   simColarGravarApelido(nome,subId);
   renderSimGeralScreen();
 }
-function simColarIniciar(descartarSobras){
-  if(!simColarLote.length)return;
+// Resolve o lote em questoes prontas (cada uma ja apontando pro miniboss dela). Sai
+// daqui separado de "comecar a prova" porque guardar pra depois precisa exatamente
+// disto e de mais nada.
+function simColarMontar(descartarSobras){
+  if(!simColarLote.length)return null;
   const {grupos,ix}=simColarMapa();
   const semAlvo=grupos.filter(g=>!g.alvo);
   if(semAlvo.length&&!descartarSobras){
-    toast(`⚠️ ${semAlvo.length} assunto(s) ainda sem miniboss — escolha, ou use "Começar sem elas".`,'var(--orange)');
-    return;
+    toast(`⚠️ ${semAlvo.length} assunto(s) ainda sem miniboss — escolha, ou use a opção que descarta essas questões.`,'var(--orange)');
+    return null;
   }
   const cacheNome={};
-  const tempoMin=parseInt((document.getElementById('sg-colar-tempo')||{}).value,10)||0;
   const questoes=[];
   let fora=0;
   simColarLote.forEach(q=>{
@@ -10860,13 +10864,34 @@ function simColarIniciar(descartarSobras){
     questoes.push({...limpa,subId:c.sub.id,subName:c.sub.name,topicName:c.topic.name,
            kingdomId:c.kingdom.id,kingdomName:c.kingdom.name,kingdomIcon:iconeReino(c.kingdom.icon)});
   });
-  if(!questoes.length){toast('❌ Nenhuma questão com assunto resolvido.','var(--red)');return;}
-  const formato=questoes.every(q=>q.formato==='certoerrado')?'certoerrado':'multipla';
-  simGeralActive={questoes,startedAt:Date.now(),limiteSec:tempoMin>0?tempoMin*60:0,
-                  corrected:false,formato,nivel:'dificil',importado:true};
-  simColarLote=[]; simColarEscolhas={}; simColarMeta=0;
+  if(!questoes.length){toast('❌ Nenhuma questão com assunto resolvido.','var(--red)');return null;}
+  const tempoMin=parseInt((document.getElementById('sg-colar-tempo')||{}).value,10)||0;
+  return{questoes,fora,
+         formato:questoes.every(q=>q.formato==='certoerrado')?'certoerrado':'multipla',
+         limiteSec:tempoMin>0?tempoMin*60:0};
+}
+function simColarZerar(){simColarLote=[];simColarEscolhas={};simColarMeta=0;}
+function simColarIniciar(descartarSobras){
+  const m=simColarMontar(descartarSobras);
+  if(!m)return;
+  simGeralActive={questoes:m.questoes,startedAt:Date.now(),limiteSec:m.limiteSec,
+                  corrected:false,formato:m.formato,nivel:'dificil',importado:true};
+  simColarZerar();
   renderSimGeralScreen();
-  toast(`🏛️ Prova importada — ${questoes.length} questões${fora?` · ${fora} deixada(s) de fora por não ter assunto`:''}. Bom jogo.`,'var(--accent)');
+  toast(`🏛️ Prova importada — ${m.questoes.length} questões${m.fora?` · ${m.fora} deixada(s) de fora por não ter assunto`:''}. Bom jogo.`,'var(--accent)');
+}
+// Monta e engaveta. O banco de provas deixa de ser so o historico do que voce ja fez
+// e passa a ser tambem a fila do que voce ainda vai fazer.
+function simColarGuardar(descartarSobras){
+  const m=simColarMontar(descartarSobras);
+  if(!m)return;
+  const id=provaGuardarLote(m.questoes,{formato:m.formato,nivel:'dificil',
+                                        limiteSec:m.limiteSec,importado:true});
+  if(!id){toast('❌ Não consegui guardar essa prova.','var(--red)');return;}
+  simColarZerar();
+  saveDB();
+  renderSimGeralScreen();
+  toast(`🗄️ Prova guardada — ${m.questoes.length} questões esperando em "Provas guardadas"${m.fora?` · ${m.fora} fora por não ter assunto`:''}.`,'var(--green)');
 }
 function simColarHTML(){
   const {grupos,ix}=simColarMapa();
@@ -10961,8 +10986,9 @@ function simColarHTML(){
           <option value="60">1 hora</option><option value="120">2 horas</option>
           <option value="180">3 horas</option><option value="240">4 horas</option>
         </select>
-        <button class="btn btn-sm btn-primary" onclick="simColarIniciar()"><i class="fa fa-play"></i> Iniciar prova</button>
-        ${pend?`<button class="btn btn-sm btn-ghost" title="Começa a prova só com as questões que têm assunto — as outras são descartadas" onclick="simColarIniciar(true)">Começar sem elas (${total-pend})</button>`:''}
+        <button class="btn btn-sm btn-primary" onclick="simColarIniciar(${pend?'true':'false'})"><i class="fa fa-play"></i> Fazer agora${pend?` (${total-pend})`:''}</button>
+        <button class="btn btn-sm btn-gold" onclick="simColarGuardar(${pend?'true':'false'})" title="Engaveta a prova em Provas guardadas. Ela fica esperando e você faz quando quiser — a 1ª vez conta em tudo."><i class="fa fa-box-archive"></i> Guardar pra depois</button>
+        ${pend?`<span style="font-size:10px;color:var(--orange-t);font-weight:700">${pend} sem assunto ${pend>1?'serão descartadas':'será descartada'}</span>`:''}
       </div>
     </div>`:''}
   </div>`;
@@ -11450,7 +11476,7 @@ function sgTickTimer(){
 //
 // Guardar a prova inteira abre o treino que mais rende em certo/errado: refazer semanas
 // depois e comparar. Custo medido: ~600 bytes por questao, ~70 KB numa prova de 120.
-const PROVAS_MAX=10;
+const PROVAS_MAX=20;
 const PROVAS_BYTES_MAX=1600000;   // ~1,6 MB no total; acima disso a mais antiga sai
 function provasLista(){return (db.provas||[]).slice();}
 function provaAchar(id){return (db.provas||[]).find(p=>p.id===id)||null;}
@@ -11461,21 +11487,49 @@ function provaLimparQuestao(q){
   const {userAnswer,_histId,_qIdxInHist,revisado,problematico,...limpa}=q;
   return limpa;
 }
-function provaGuardar(active,assuntosResumo){
-  if(!active||!active.questoes||!active.questoes.length)return null;
-  const acertos=active.questoes.filter(q=>q.userAnswer===q.correta).length;
-  const prova={
+// Uma prova no banco e so o enunciado + o gabarito. A tentativa e um evento separado,
+// e pode nao existir nenhuma: e assim que da pra montar prova hoje e responder no
+// sabado, sem ter que fazer na hora em que ela e importada.
+function provaNova(questoes,meta){
+  return{
     id:genId(),
     criadaEm:new Date().toISOString(),
-    formato:active.formato||'multipla',
-    nivel:active.nivel||'dificil',
-    limiteSec:active.limiteSec||0,
-    origem:active.importado?'colado':'ia',
-    questoes:active.questoes.map(provaLimparQuestao),
-    tentativas:[{data:new Date().toISOString(),
-                 respostas:active.questoes.map(q=>q.userAnswer||''),
-                 acertos,tempoGastoSec:active.tempoGastoSec||0}]
+    formato:(meta&&meta.formato)||'multipla',
+    nivel:(meta&&meta.nivel)||'dificil',
+    limiteSec:(meta&&meta.limiteSec)||0,
+    origem:(meta&&meta.importado)?'colado':'ia',
+    questoes:questoes.map(provaLimparQuestao),
+    tentativas:[]
   };
+}
+function provaTentativaDe(active){
+  return{data:new Date().toISOString(),
+         respostas:active.questoes.map(q=>q.userAnswer||''),
+         acertos:active.questoes.filter(q=>q.userAnswer===q.correta).length,
+         tempoGastoSec:active.tempoGastoSec||0};
+}
+// Guarda a prova SEM responder: vai pro banco e fica esperando.
+function provaGuardarLote(questoes,meta){
+  if(!questoes||!questoes.length)return null;
+  const prova=provaNova(questoes,meta);
+  db.provas=db.provas||[];
+  db.provas.unshift(prova);
+  provasAparar();
+  return prova.id;
+}
+// Fim de uma prova respondida. Se ela veio do banco, a tentativa ENTRA na prova que ja
+// existe — criar uma copia duplicaria o enunciado inteiro e quebraria a comparacao
+// entre as tentativas, que e o que faz refazer valer a pena.
+function provaGuardar(active,assuntosResumo){
+  if(!active||!active.questoes||!active.questoes.length)return null;
+  const jaExiste=active.provaId?provaAchar(active.provaId):null;
+  if(jaExiste){
+    jaExiste.tentativas=jaExiste.tentativas||[];
+    jaExiste.tentativas.push(provaTentativaDe(active));
+    return jaExiste.id;
+  }
+  const prova=provaNova(active.questoes,active);
+  prova.tentativas=[provaTentativaDe(active)];
   db.provas=db.provas||[];
   db.provas.unshift(prova);
   provasAparar();
@@ -11500,17 +11554,23 @@ function provaRefazer(id){
      &&!confirm('Você tem um simulado em andamento. Começar a refazer esta prova descarta o que está na tela. Continuar?'))return;
   const tempoMin=parseInt((document.getElementById('prova-refazer-tempo-'+id)||{}).value,10);
   const limite=isFinite(tempoMin)?tempoMin*60:(prova.limiteSec||0);
+  // Prova que nunca foi feita nao e refacao: a 1a vez conta em tudo — estatistica por
+  // assunto, Banco de Erros, flashcard. So a partir da 2a e que o resultado deixa de
+  // alimentar a fila, porque ai voce ja viu as questoes.
+  const feitas=(prova.tentativas||[]).length;
   simGeralActive={
-    questoes:prova.questoes.map(q=>({...q})),   // copia: refazer nao suja a guardada
+    questoes:prova.questoes.map(q=>({...q})),   // copia: fazer nao suja a guardada
     startedAt:Date.now(),limiteSec:limite,corrected:false,
     formato:prova.formato,nivel:prova.nivel,
     importado:prova.origem==='colado',
-    provaId:prova.id,refazendo:true,
-    tentativaNum:(prova.tentativas||[]).length+1
+    provaId:prova.id,refazendo:feitas>0,
+    tentativaNum:feitas+1
   };
   renderSimGeralScreen();
   window.scrollTo(0,0);
-  toast(`🔁 Refazendo a prova — ${simGeralActive.questoes.length} questões, ${simGeralActive.tentativaNum}ª tentativa.`,'var(--accent)');
+  toast(feitas
+    ?`🔁 Refazendo a prova — ${simGeralActive.questoes.length} questões, ${simGeralActive.tentativaNum}ª tentativa.`
+    :`🏛️ Prova do banco — ${simGeralActive.questoes.length} questões. Esta é a 1ª vez, então ela conta em tudo. Bom jogo.`,'var(--accent)');
 }
 // Refacao NAO entra em simStats, e isso e decisao, nao esquecimento. simStats manda no
 // peso da fila de revisao e em "assuntos que mais erro"; responder de novo item cujo
@@ -11566,15 +11626,18 @@ function provaLiquido(t,total){
 function provasGuardadasHTML(){
   const lista=provasLista();
   if(!lista.length)return'';
+  const esperando=lista.filter(p=>!(p.tentativas||[]).length).length;
   return`<div class="section-card">
     <div class="sec-title" style="margin-bottom:4px">🗄️ Provas guardadas</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600">
-      Refazer semanas depois é o treino que mais rende em certo/errado. A refação não mexe nas suas estatísticas por assunto — ela só compara com a vez anterior.
+      ${esperando?`<b style="color:var(--gold-t,var(--orange-t))">${esperando} prova${esperando>1?'s':''} esperando</b> — a 1ª vez que você faz uma delas conta em tudo (estatística por assunto, Banco de Erros, flashcard). `:''}Refazer semanas depois é o treino que mais rende em certo/errado, e a refação não mexe nas estatísticas: ela só compara com a vez anterior.
+      <span style="color:var(--muted)">Cabem ${PROVAS_MAX} provas (${lista.length} guardada${lista.length>1?'s':''}); passando disso, a mais antiga sai.</span>
     </div>
     ${lista.map(p=>{
       const ce=(p.formato||'multipla')==='certoerrado';
       const total=p.questoes.length;
       const ts=p.tentativas||[];
+      const nova=!ts.length;
       const linhas=ts.map((t,i)=>{
         const pct=total?Math.round(t.acertos/total*100):0;
         const liq=provaLiquido(t,total);
@@ -11583,6 +11646,7 @@ function provasGuardadasHTML(){
       return`<div style="border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px">
           <b style="font-size:12px">${total} questões</b>
+          ${nova?`<span class="prova-selo-nova">esperando</span>`:''}
           <span style="color:var(--muted)">${ce?'✔️✖️ Certo/Errado':'🔤 Múltipla escolha'}</span>
           <span style="color:var(--muted)">${p.origem==='colado'?'📋 colada':'🤖 gerada aqui'}</span>
           <span style="color:var(--muted)">${new Date(p.criadaEm).toLocaleDateString('pt-BR')}</span>
@@ -11594,10 +11658,10 @@ function provasGuardadasHTML(){
             <option value="180"${p.limiteSec===10800?' selected':''}>3 horas</option>
             <option value="240"${p.limiteSec===14400?' selected':''}>4 horas</option>
           </select>
-          <button class="btn btn-xs btn-primary" onclick="provaRefazer('${p.id}')"><i class="fa fa-rotate-left"></i> Refazer</button>
+          <button class="btn btn-xs ${nova?'btn-gold':'btn-primary'}" onclick="provaRefazer('${p.id}')"><i class="fa fa-${nova?'play':'rotate-left'}"></i> ${nova?'Fazer':'Refazer'}</button>
           <button class="btn btn-xs btn-ghost" onclick="provaApagar('${p.id}')" title="Apagar a prova guardada"><i class="fa fa-trash"></i></button>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">${linhas}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">${nova?'<i>Nunca feita — esta prova conta como simulado de verdade na primeira vez.</i>':linhas}</div>
       </div>`;
     }).join('')}
   </div>`;
@@ -23667,6 +23731,7 @@ window.rdCalcLive=rdCalcLive;
 window.rdToggleText=rdToggleText;
 window.confirmAddPlanItem=confirmAddPlanItem;
 window.simColarCopiarConverter=simColarCopiarConverter;
+window.simColarGuardar=simColarGuardar;
 window.planoRetaFinal=planoRetaFinal;
 window.removePlanItem=removePlanItem;
 window.openAISettingsModal=openAISettingsModal;
