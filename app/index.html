@@ -11808,12 +11808,21 @@ const SIM_MOTIVOS=[
   {id:'chute',lbl:'Chutei',icone:'🎲',cor:'var(--purple-t,var(--accent))',
    conserto:'Não é conteúdo nem leitura: é decisão de marcar.'}
 ];
+// O quarto caso nao e diagnostico SEU, e do ITEM: voce sabia, e sabia a versao mais
+// nova do que a que o item cobrava. Aconteceu com as consultas de pre-natal — o item
+// trazia o minimo de 6 do Caderno de Atencao Basica 32, de 2012, sem dizer de onde
+// tirou, e quem estudou a atualizacao marcou pensando no numero vigente. Item datado
+// nao parece errado, parece certo, e punir o aluno por saber a versao nova e o pior
+// sinal que o app pode mandar.
+const SIM_MOTIVO_DATADO={id:'datado',lbl:'Item desatualizado',icone:'🕰️',cor:'var(--cyan-t,var(--accent))',
+   conserto:'Confira a fonte. Se a norma mudou, o item sai das suas estatísticas — o erro foi dele, não seu.'};
 // Acerto por chute nao e acerto: e sorte que a estatistica conta como dominio. Marcar
 // isso e o que separa "eu sei" de "eu adivinhei" na hora de decidir o que revisar.
 const SIM_MOTIVO_SORTE={id:'sorte',lbl:'Acertei no chute',icone:'🍀',cor:'var(--muted)',
    conserto:'Acerto de sorte. Não conte como domínio — reveja como se tivesse errado.'};
 function simMotivoDe(id){
-  return SIM_MOTIVOS.find(m=>m.id===id)||(id===SIM_MOTIVO_SORTE.id?SIM_MOTIVO_SORTE:null);
+  return SIM_MOTIVOS.find(m=>m.id===id)
+      ||[SIM_MOTIVO_SORTE,SIM_MOTIVO_DATADO].find(m=>m.id===id)||null;
 }
 function simMotivoSalvar(i,id){
   const active=simGeralActive;
@@ -11823,6 +11832,13 @@ function simMotivoSalvar(i,id){
   q.motivo=novo;
   const prova=active.provaId?provaAchar(active.provaId):null;
   if(prova&&prova.questoes[i])prova.questoes[i].motivo=novo;
+  // "Item desatualizado" nao e so um rotulo: o item tem que sair da conta. Reusa a
+  // marcacao de questao problematica, que ja sabe desfazer o efeito nas estatisticas.
+  // So alcanca o historico na 1a correcao (refacao e revisao nao tem _histId) — nesses
+  // casos fica o registro, que e o que alimenta o painel.
+  if(q._histId&&!!q.problematico!==(novo===SIM_MOTIVO_DATADO.id)){
+    toggleQuestaoProblematica(q.subId,q._histId,q._qIdxInHist);
+  }
   saveDB();
   const cx=document.getElementById('sim-motivo-'+i);
   if(cx)cx.outerHTML=simMotivoHTML(q,i);
@@ -11832,7 +11848,7 @@ function simMotivoSalvar(i,id){
 }
 function simMotivoHTML(q,i){
   const certa=q.userAnswer===q.correta;
-  const opcoes=certa?[SIM_MOTIVO_SORTE]:SIM_MOTIVOS;
+  const opcoes=(certa?[SIM_MOTIVO_SORTE]:SIM_MOTIVOS).concat(SIM_MOTIVO_DATADO);
   const sel=q.motivo||'';
   const escolhido=simMotivoDe(sel);
   return`<div class="sim-motivo" id="sim-motivo-${i}">
@@ -11845,7 +11861,7 @@ function simMotivoHTML(q,i){
 // Soma os baldes de TODAS as provas guardadas. A tentativa nao importa aqui: o motivo
 // mora na questao e representa o seu diagnostico mais recente dela.
 function motivosAgregado(){
-  const tot={conteudo:0,atencao:0,chute:0,sorte:0};
+  const tot={conteudo:0,atencao:0,chute:0,sorte:0,datado:0};
   const porAssunto={};
   let classificadas=0,erradas=0;
   (db.provas||[]).forEach(p=>{
@@ -11857,7 +11873,7 @@ function motivosAgregado(){
       if(!m||tot[m]===undefined)return;
       tot[m]++; classificadas++;
       const k=q.subName||'—';
-      (porAssunto[k]=porAssunto[k]||{conteudo:0,atencao:0,chute:0,sorte:0,icon:q.kingdomIcon||''})[m]++;
+      (porAssunto[k]=porAssunto[k]||{conteudo:0,atencao:0,chute:0,sorte:0,datado:0,icon:q.kingdomIcon||''})[m]++;
     });
   });
   return{tot,porAssunto,classificadas,erradas};
@@ -15029,11 +15045,14 @@ function renderControleErros(){
     el.innerHTML=`<div class="ce-vazio">
       <b>Nenhum erro classificado ainda.</b>
       <div>Ao corrigir uma prova, cada questão tem os botões <b>Não sabia · Li errado · Chutei</b>.
-      Um clique em cada erro e este painel te diz onde está o seu gargalo — que quase nunca é só conteúdo.</div>
+      Um clique em cada erro e este painel te diz onde está o seu gargalo — que quase nunca é só conteúdo.
+      Tem também <b>Item desatualizado</b>, pra quando o erro foi da questão e não seu.</div>
     </div>`;
     if(foot)foot.textContent=erradas?`${erradas} erro(s) esperando classificação`:'';
     return;
   }
+  // "datado" fica de fora da barra e do veredito de proposito: as tres barras respondem
+  // "o que EU preciso mudar", e item datado nao e uma resposta pra essa pergunta.
   const maior=Math.max(tot.conteudo,tot.atencao,tot.chute)||1;
   const linhas=SIM_MOTIVOS.map(m=>{
     const n=tot[m.id];
@@ -15055,12 +15074,13 @@ function renderControleErros(){
     .filter(x=>x.n>0).sort((a,b)=>b.n-a.n).slice(0,3);
   el.innerHTML=`${linhas}
     ${tot.sorte?`<div class="ce-sorte">🍀 <b>${tot.sorte}</b> acerto(s) de sorte — não contam como domínio.</div>`:''}
+    ${tot.datado?`<div class="ce-sorte">🕰️ <b>${tot.datado}</b> item(ns) marcado(s) como desatualizado(s) — erro do item, não seu.</div>`:''}
     <div class="ce-conselho">${conselho}</div>
     ${topo.length?`<div class="ce-topo-assuntos">
       <div class="ce-topo-lbl">Onde “${escapeHtml(dom.lbl)}” mais aparece</div>
       ${topo.map(x=>`<div class="ce-topo-row"><span>${x.icon} ${escapeHtml(x.nome)}</span><b>${x.n}</b></div>`).join('')}
     </div>`:''}`;
-  const falta=Math.max(0,erradas-(tot.conteudo+tot.atencao+tot.chute));
+  const falta=Math.max(0,erradas-(tot.conteudo+tot.atencao+tot.chute+tot.datado));
   if(foot)foot.textContent=`${classificadas} classificado(s)${falta?` · ${falta} erro(s) ainda sem classificar`:''}`;
 }
 
