@@ -2,7 +2,7 @@
   "name": "Vale dos Nomeados — Concurso Federal Quest",
   "short_name": "Vale dos Nomeados",
   "description": "Dashboard gamificado de estudos para concurso federal: reinos, revisões espaçadas, flashcards, redações e repertório.",
-  "start_url": "./app.html",
+  "start_url": "./app/",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",

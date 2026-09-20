@@ -1,0 +1,110 @@
+{
+  "rules": {
+    "users": {
+      ".read": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'leonardobrunotlc@gmail.com')",
+        "vdn_v1": {
+          "plan": {
+            ".validate": "auth.token.email === 'leonardobrunotlc@gmail.com' || newData.val() === data.val() || (!data.exists() && newData.val() === 'trial')"
+          },
+          "planType": {
+            ".validate": "auth.token.email === 'leonardobrunotlc@gmail.com' || newData.val() === data.val()"
+          },
+          "lastPaymentAt": {
+            ".validate": "auth.token.email === 'leonardobrunotlc@gmail.com' || newData.val() === data.val()"
+          },
+          "trialStartedAt": {
+            ".validate": "auth.token.email === 'leonardobrunotlc@gmail.com' || newData.val() === data.val() || !data.exists()"
+          }
+        }
+      }
+    },
+    "admin_index": {
+      ".read": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'",
+      ".write": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'",
+      "$uid": {
+        ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'leonardobrunotlc@gmail.com')",
+        "email": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
+        },
+        "plan": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 20)"
+        },
+        "planType": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 20)"
+        },
+        "lastPaymentAt": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 10)"
+        },
+        "$outro": {
+          ".validate": "!newData.exists()"
+        }
+      }
+    },
+    "promo": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'"
+    },
+    "vdn_v1": {
+      ".read": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'"
+    },
+    "sala_mapa": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'"
+    },
+    "sala_presence": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        "nickname": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 40)"
+        },
+        "character": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 40)"
+        },
+        "x": {
+          ".validate": "!newData.exists() || (newData.isNumber())"
+        },
+        "y": {
+          ".validate": "!newData.exists() || (newData.isNumber())"
+        },
+        "state": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 20)"
+        },
+        "dir": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 10)"
+        },
+        "fora": {
+          ".validate": "!newData.exists() || (newData.isBoolean())"
+        },
+        "ts": {
+          ".validate": "!newData.exists() || (newData.isNumber())"
+        },
+        "$outro": {
+          ".validate": "!newData.exists()"
+        }
+      }
+    },
+    "sala_chat": {
+      ".read": "auth != null",
+      "$msg": {
+        ".write": "auth != null && ((!data.exists() && newData.exists()) || data.child('uid').val() === auth.uid || (!newData.exists() && data.child('ts').val() < now - 600000))",
+        ".validate": "!newData.exists() || (newData.hasChildren(['uid','nick','txt','ts']) && newData.child('uid').val() === auth.uid && newData.child('txt').isString() && newData.child('txt').val().length <= 300 && newData.child('nick').isString() && newData.child('nick').val().length <= 40)"
+      }
+    },
+    "sala_dm": {
+      "$dono": {
+        ".read": "auth != null && auth.uid === $dono",
+        "$outro": {
+          ".write": "auth != null && auth.uid === $dono",
+          "$msg": {
+            ".validate": "!newData.exists() || (newData.hasChildren(['de','nick','txt','ts']) && newData.child('de').val() === auth.uid && newData.child('txt').isString() && newData.child('txt').val().length <= 300 && newData.child('nick').isString() && newData.child('nick').val().length <= 40)",
+            ".write": "auth != null && (auth.uid === $dono || (auth.uid === $outro && !data.exists() && newData.exists()))"
+          }
+        }
+      }
+    }
+  }
+}

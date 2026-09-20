@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Publicar no TikTok — Vale dos Nomeados</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#170f2b;color:#ede9fe;min-height:100vh;padding:24px 16px 80px;}
+  h1{font-size:22px;margin:0 0 4px;color:#f5a623;}
+  .sub{color:#a89ac9;font-size:13px;margin-bottom:20px;}
+  .card{max-width:480px;margin:0 auto 20px;background:#241a3d;border:1px solid #3d2f63;border-radius:12px;padding:18px;}
+  .card h2{font-size:14px;margin:0 0 12px;color:#f5a623;}
+  input,select,textarea{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #3d2f63;background:#170f2b;color:#fff;font-size:14px;margin-bottom:10px;font-family:inherit}
+  textarea{resize:vertical;min-height:70px}
+  select:invalid{color:#8b7db8}
+  label{display:block;font-size:12px;font-weight:700;color:#c4b5fd;margin:0 0 6px}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13px;color:#c4b5fd;margin-bottom:10px}
+  .chk input{width:auto;margin:0}
+  button{width:100%;padding:11px;border-radius:8px;border:none;font-weight:700;font-size:14px;cursor:pointer;margin-top:4px}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .btn-primary{background:#7c3aed;color:#fff;}
+  .btn-publish{background:#16a34a;color:#fff;}
+  .btn-status{background:#3d2f63;color:#ede9fe;}
+  .creator{display:none;align-items:center;gap:12px;background:#170f2b;border:1px solid #3d2f63;border-radius:10px;padding:12px;margin-bottom:14px;}
+  .creator.show{display:flex}
+  .creator img{width:44px;height:44px;border-radius:50%;background:#332f54}
+  .creator .name{font-weight:800;font-size:14px}
+  .creator .user{font-size:12px;color:#a89ac9}
+  #result{margin-top:16px;padding:12px 14px;border-radius:10px;background:#170f2b;border:1px solid #3d2f63;font-size:12.5px;white-space:pre-wrap;word-break:break-word;display:none;max-width:480px;margin-left:auto;margin-right:auto}
+  #result.show{display:block}
+  #result.ok{border-color:#4ade80}
+  #result.err{border-color:#f87171}
+  .hint{font-size:11px;color:#7c7699;margin:-4px 0 12px;line-height:1.5}
+  .step-off{opacity:.4;pointer-events:none}
+</style>
+</head>
+<body>
+  <h1>🎵 Publicar no TikTok</h1>
+  <div class="sub">Vale dos Nomeados — Content Posting API</div>
+
+  <div class="card">
+    <h2>1) Conexão</h2>
+    <label for="worker-url">URL do Worker</label>
+    <input id="worker-url" value="https://vdn-tiktok.leonardobrunotlc.workers.dev">
+    <label for="admin-key">Sua ADMIN_KEY</label>
+    <input id="admin-key" type="password" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <button class="btn-primary" onclick="salvarConexao()">Salvar</button>
+    <div class="hint">Fica só nesse aparelho (localStorage).</div>
+    <button class="btn-primary" onclick="conectarTikTok()">🔗 Conectar minha conta TikTok</button>
+    <div class="hint">Abre o login oficial da TikTok numa aba nova. Depois de aprovar, volta aqui e clica em "Buscar minha conta".</div>
+  </div>
+
+  <div class="card">
+    <h2>2) Minha conta</h2>
+    <button class="btn-primary" onclick="buscarConta()">🔍 Buscar minha conta</button>
+    <div id="creator" class="creator">
+      <img id="creator-avatar" src="" alt="">
+      <div>
+        <div class="name" id="creator-name">—</div>
+        <div class="user" id="creator-user">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card step-off" id="step3">
+    <h2>3) Vídeo</h2>
+    <label for="video-url">Vídeo</label>
+    <select id="video-url">
+      <option value="https://valedosnomeados.com.br/social/instagram/reel-dica-revisao.mp4">reel-dica-revisao.mp4</option>
+      <option value="https://valedosnomeados.com.br/social/instagram/reel-motivacional-aprovado.mp4">reel-motivacional-aprovado.mp4</option>
+      <option value="https://valedosnomeados.com.br/social/instagram/reel-divulgacao-mapa.mp4">reel-divulgacao-mapa.mp4</option>
+      <option value="https://valedosnomeados.com.br/social/instagram/reel-curiosidade-inss.mp4">reel-curiosidade-inss.mp4</option>
+      <option value="https://valedosnomeados.com.br/social/instagram/reel-divulgacao-flashcards.mp4">reel-divulgacao-flashcards.mp4</option>
+      <option value="https://valedosnomeados.com.br/social/instagram/reel-tour-plataforma.mp4">reel-tour-plataforma.mp4</option>
+      <option value="custom">Outra URL...</option>
+    </select>
+    <input id="video-url-custom" type="url" placeholder="https://..." style="display:none">
+
+    <label for="caption">Legenda</label>
+    <textarea id="caption">Vale dos Nomeados — sua preparação vira um jogo 🐉</textarea>
+
+    <label for="privacy">Quem pode ver</label>
+    <select id="privacy" required>
+      <option value="" selected disabled>Selecione...</option>
+    </select>
+    <div class="hint" id="privacy-hint">Enquanto o app não for aprovado pela TikTok, mesmo escolhendo público aqui, eles forçam a postagem como privada (só você vê) — é regra deles, não nossa.</div>
+
+    <label class="chk"><input type="checkbox" id="allow-duet" checked> Permitir dueto</label>
+    <label class="chk"><input type="checkbox" id="allow-comment" checked> Permitir comentários</label>
+    <label class="chk"><input type="checkbox" id="allow-stitch" checked> Permitir stitch</label>
+
+    <button class="btn-publish" id="btn-publish" onclick="publicar()" disabled>🚀 Publicar</button>
+  </div>
+
+  <div class="card step-off" id="step4">
+    <h2>4) Status</h2>
+    <button class="btn-status" onclick="checarStatus()">🔍 Checar status</button>
+  </div>
+
+  <div id="result"></div>
+
+<script>
+let WORKER='', KEY='', PUBLISH_ID='';
+const $ = (id)=>document.getElementById(id);
+
+function salvarConexao(){
+  WORKER = $('worker-url').value.trim().replace(/\/$/,'');
+  KEY = $('admin-key').value.trim();
+  if(!WORKER||!KEY) return alert('Preenche a URL do Worker e a ADMIN_KEY');
+  localStorage.setItem('vdn_tt_worker', WORKER);
+  localStorage.setItem('vdn_tt_key', KEY);
+  alert('Salvo ✅');
+}
+
+function conectarTikTok(){
+  if(!WORKER||!KEY) return alert('Salva a conexão primeiro (passo 1)');
+  window.open(`${WORKER}/auth?adminKey=${encodeURIComponent(KEY)}`, '_blank');
+}
+
+function showResult(obj, ok){
+  const el = $('result');
+  el.className = 'show ' + (ok ? 'ok' : 'err');
+  el.textContent = JSON.stringify(obj, null, 2);
+}
+
+const PRIVACY_LABELS = {
+  PUBLIC_TO_EVERYONE: '🌎 Todos podem ver',
+  MUTUAL_FOLLOW_FRIENDS: '🤝 Só amigos (seguem um ao outro)',
+  FOLLOWER_OF_CREATOR: '👥 Só seguidores',
+  SELF_ONLY: '🔒 Só eu',
+};
+
+async function buscarConta(){
+  if(!WORKER||!KEY) return alert('Salva a conexão primeiro (passo 1)');
+  const res = await fetch(`${WORKER}/creator-info?adminKey=${encodeURIComponent(KEY)}`);
+  const data = await res.json();
+  if(!res.ok || !data.ok){ showResult(data, false); return; }
+  const c = data.creator;
+  $('creator-avatar').src = c.creator_avatar_url || '';
+  $('creator-name').textContent = c.creator_nickname || c.creator_username || '—';
+  $('creator-user').textContent = '@' + (c.creator_username || '');
+  $('creator').classList.add('show');
+
+  const sel = $('privacy');
+  sel.innerHTML = '<option value="" selected disabled>Selecione...</option>' +
+    (c.privacy_level_options||[]).map(p=>`<option value="${p}">${PRIVACY_LABELS[p]||p}</option>`).join('');
+  sel.addEventListener('change', ()=>{ $('btn-publish').disabled = !sel.value; });
+
+  $('allow-duet').checked = !c.duet_disabled;
+  $('allow-duet').disabled = !!c.duet_disabled;
+  $('allow-comment').checked = !c.comment_disabled;
+  $('allow-comment').disabled = !!c.comment_disabled;
+  $('allow-stitch').checked = !c.stitch_disabled;
+  $('allow-stitch').disabled = !!c.stitch_disabled;
+
+  $('step3').classList.remove('step-off');
+  $('step4').classList.remove('step-off');
+  showResult({ok:true, conta: c.creator_username}, true);
+}
+
+$('video-url')?.addEventListener?.('change', function(){
+  $('video-url-custom').style.display = this.value === 'custom' ? 'block' : 'none';
+});
+
+async function publicar(){
+  const sel = $('video-url').value;
+  const videoUrl = sel === 'custom' ? $('video-url-custom').value.trim() : sel;
+  const privacyLevel = $('privacy').value;
+  if(!videoUrl) return alert('Escolhe ou digita a URL do vídeo');
+  if(!privacyLevel) return alert('Escolhe quem pode ver o vídeo');
+
+  const btn = $('btn-publish');
+  btn.disabled = true; btn.textContent = 'Publicando...';
+  try{
+    const res = await fetch(`${WORKER}/publish-video-test`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        adminKey: KEY, videoUrl, caption: $('caption').value, privacyLevel,
+        disableDuet: !$('allow-duet').checked,
+        disableComment: !$('allow-comment').checked,
+        disableStitch: !$('allow-stitch').checked,
+      })
+    });
+    const data = await res.json();
+    showResult(data, !!data.ok);
+    if(data.ok && data.publishId){ PUBLISH_ID = data.publishId; localStorage.setItem('vdn_tt_lastpublish', PUBLISH_ID); }
+  } finally {
+    btn.disabled = false; btn.textContent = '🚀 Publicar';
+  }
+}
+
+async function checarStatus(){
+  const publishId = PUBLISH_ID || localStorage.getItem('vdn_tt_lastpublish');
+  if(!publishId) return alert('Ainda não publicou nada nessa sessão');
+  const res = await fetch(`${WORKER}/status?adminKey=${encodeURIComponent(KEY)}&publishId=${encodeURIComponent(publishId)}`);
+  const data = await res.json();
+  showResult(data, !data.error);
+}
+
+window.addEventListener('load', ()=>{
+  const w = localStorage.getItem('vdn_tt_worker');
+  const k = localStorage.getItem('vdn_tt_key');
+  if(w){ WORKER = w; $('worker-url').value = w; }
+  if(k){ KEY = k; $('admin-key').value = k; }
+});
+</script>
+</body>
+</html>
