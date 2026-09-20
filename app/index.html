@@ -7731,6 +7731,22 @@ REGRAS DE ATUALIDADE (obrigatórias):
 }
 // Versão curta, pras respostas que precisam sair em JSON puro e não comportam
 // seção extra nem texto solto.
+// O que cobrar DENTRO de um assunto. Sem isso o modelo sorteia o angulo, e sortear
+// angulo produz prova que nao parece com a da banca: a Cebraspe volta sempre nos
+// mesmos pontos de cada assunto, e e neles que o candidato precisa treinar. Vale nos
+// tres lugares onde questao e escrita (miniboss, chefao e prova colada), por isso
+// mora aqui fora.
+function promptRecorteCebraspe(ce){
+  const it=ce?'itens':'questões';
+  const dos=ce?'dos':'das';   // "A MAIORIA dos questões" nao existe
+  return`O QUE COBRAR DENTRO DE CADA ASSUNTO
+Não sorteie o ângulo. Dentro de um assunto, a Cebraspe volta sempre nos mesmos pontos, e é neles que eu preciso treinar. Antes de escrever, levante o que a banca JÁ COBROU desse assunto — pesquisando provas anteriores do próprio Cebraspe (qualquer órgão, qualquer ano, cargos de Enfermeiro e da área da saúde), se você tiver como pesquisar, ou pelo histórico da banca que você conhece.
+- A MAIORIA ${dos} ${it} de cada assunto fica nos pontos que mais se repetem nas provas dela. Ponto periférico entra como minoria, nunca como o grosso.
+- Prefira o recorte que a banca já usou. Se ela cobra choque séptico quase sempre pelo volume inicial, pelo tempo até o antibiótico e pelo lactato, é disso que eu preciso — não de uma classificação rara que nunca caiu.
+- Reaproveite o MODO de errar da banca, não o enunciado dela. Os que mais se repetem: número trocado, duas etapas de uma conduta invertidas, prazo alterado, via de administração trocada, exceção apresentada como regra, "sempre/nunca" indevido, competência atribuída a outro profissional, e dois conceitos vizinhos misturados.
+- Nunca copie item de prova anterior palavra por palavra: o item é inédito, o ALVO é que vem do histórico da banca.
+- Se você não achar nada da Cebraspe sobre um assunto, cobre o núcleo dele — a definição, o número e a conduta que qualquer prova cobraria — e não invente pegadinha exótica pra parecer difícil.`;
+}
 function promptRegrasAtualidadeCurta(){
   const hoje=new Date();
   const dataBR=hoje.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
@@ -10146,6 +10162,8 @@ async function generateQuestionsForSubject(apiKey,kingdom,topic,sub,quantidade,o
 
 ${promptRegrasAtualidadeCurta()}
 
+${promptRecorteCebraspe(ce)}
+
 TAREFA: Gere EXATAMENTE ${qtd} ${ce?'itens de julgamento (CERTO ou ERRADO)':'questões de múltipla escolha'} inéditos sobre o assunto abaixo — nem mais, nem menos que ${qtd}.
 
 ${simNivelDesc(nivel)}
@@ -10272,6 +10290,8 @@ async function generateQuestionsForTopic(apiKey,kingdom,topic,subs,quantidade,op
   const buildPrompt=(qtd,evitar)=>`Você é um elaborador de questões de concurso público brasileiro, especializado em ${ce?'itens de julgamento CERTO/ERRADO no estilo Cebraspe (Cespe)':'questões de múltipla escolha'}.
 
 ${promptRegrasAtualidadeCurta()}
+
+${promptRecorteCebraspe(ce)}
 
 TAREFA: Gere EXATAMENTE ${qtd} ${ce?'itens de julgamento (CERTO ou ERRADO)':'questões de múltipla escolha'} inéditos sobre o tema abaixo, distribuídos entre os assuntos da lista — nem mais, nem menos que ${qtd}.
 
@@ -10521,17 +10541,24 @@ function simColarPreviaCotas(qtd){
   const grupos=f.ordem.filter((g,i)=>estudados[i]&&g.questoes>0);
   return{grupos,cotas:simColarCotas(grupos,qtd)};
 }
+// O exemplo mostrava um par fixo — "assunto":7 com "assuntoNome":"Sondagem vesical" —
+// que quase nunca correspondia: numero de um assunto e nome de outro, bem no trecho que
+// ensina o modelo a preencher os dois campos. Agora sai do 1o item da lista, entao o
+// numero e o nome sempre combinam.
 function simColarExemploJSON(ce){
+  const c=(simColarLista||[])[0];
+  const n=c?1:7;
+  const nome=c?String(c.sub.name).replace(/"/g,"'"):'Sondagem vesical';
   return ce
-    ?`[{"assunto":7,"assuntoNome":"Sondagem vesical","textoApoio":"","afirmacao":"...","gabarito":"C","explicacao":"..."}]`
-    :`[{"assunto":7,"assuntoNome":"Sondagem vesical","textoApoio":"","questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"..."}]`;
+    ?`[{"assunto":${n},"assuntoNome":"${nome}","textoApoio":"","afirmacao":"...","gabarito":"C","explicacao":"..."}]`
+    :`[{"assunto":${n},"assuntoNome":"${nome}","textoApoio":"","questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"..."}]`;
 }
 function simColarPromptTexto(){
   const fmt=(document.getElementById('sg-colar-fmt')||{}).value||'certoerrado';
   const qtd=parseInt((document.getElementById('sg-colar-qtd')||{}).value,10)||120;
   const ce=fmt==='certoerrado';
-  const exemplo=simColarExemploJSON(ce);
   const {listaTxt,distrib,comCota,editalNome,conta}=simColarBlocoLista(qtd,ce);
+  const exemplo=simColarExemploJSON(ce);   // depois da lista: ele copia o 1o assunto dela
   return`Você é um elaborador de questões de concurso público brasileiro, no estilo Cebraspe (Cespe). Sua especialidade é prova para cargo de Enfermeiro.
 
 TAREFA
@@ -10539,6 +10566,8 @@ Gere EXATAMENTE ${qtd} ${ce?'itens de julgamento CERTO/ERRADO':'questões de mú
 
 ANTES DE ESCREVER: PESQUISE NA INTERNET
 Hoje é ${new Date().toLocaleDateString('pt-BR')}. Use a versão VIGENTE de cada lei, resolução, diretriz e protocolo — não a que você lembra do treinamento. Confira especialmente o que mudou nos últimos 3 anos: resoluções do COFEN, portarias do Ministério da Saúde, diretrizes de ressuscitação, RDC da ANVISA e normas de biossegurança. Se a fonte que você achou for uma apostila ou um resumo de terceiros, desconfie: prefira o texto oficial.
+
+${promptRecorteCebraspe(ce)}
 
 ASSUNTOS — LISTA FECHADA${comCota?', COM A COTA DE CADA BLOCO':''}
 Cobre SÓ o que está nesta lista. Ela é o edital desta prova${editalNome?` (${editalNome})`:''}.${comCota?`
@@ -10552,7 +10581,7 @@ ${listaTxt}
 - A COTA DE CADA BLOCO É OBRIGATÓRIA e vem antes de qualquer outra regra de distribuição. Antes de entregar, conte quantos ${ce?'itens':'questões'} você escreveu em cada bloco e confira contra a cota. Bloco com cota de 3 leva 3, não 8 — mesmo que você tenha muito mais assunto listado nele.
 - Dentro de um bloco, reparta a cota entre os assuntos dele. Bloco com cota maior que o número de assuntos repete assunto; bloco com cota menor deixa assunto de fora.`:(distrib?`
 - Distribua na proporção da lista — ${distrib}. (É uma estimativa por número de assuntos: não declarei o número de questões de cada disciplina no meu edital.)`:'')}
-- Dentro de cada assunto, varie o ângulo: conceito, exceção, prazo, sequência de conduta, cálculo, competência. Não faça 4 itens sobre a mesma frase.
+- Não faça 4 itens sobre a mesma frase: varie o ângulo (conceito, número, exceção, prazo, sequência de conduta, cálculo, competência) — mas variando DENTRO dos pontos que a banca mais cobra, não fora deles.
 
 REGRAS DE CONTEÚDO
 - Todo número em ALGARISMO, nunca por extenso: "36 graus", "2 mL/kg", "7 dias", "12 anos", "30%", "artigo 5º".
