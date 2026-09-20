@@ -711,6 +711,10 @@ nav{
 .sim-fmt-split{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px;
   font-size:10.5px;font-weight:800;color:var(--text2);}
 .sim-fmt-split i{font-style:normal;color:var(--muted);font-weight:700;}
+.sg-liquido{background:var(--panel2);border:1px solid var(--border);border-radius:12px;
+  padding:10px 12px;margin:8px 0 0;font-size:12px;line-height:1.6;}
+.sg-liquido-linha{display:flex;gap:7px;flex-wrap:wrap;align-items:center;font-weight:700;}
+.sg-liquido-nota{font-size:11px;color:var(--text2);margin-top:7px;line-height:1.55;}
 .sg-refaz-nota{background:rgba(108,71,255,0.08);border:1px solid rgba(108,71,255,0.25);
   border-radius:10px;padding:8px 11px;margin:8px 0 0;font-size:11.5px;line-height:1.5;color:var(--text2);}
 .sg-formato-linha{text-align:center;font-size:11px;font-weight:800;color:var(--muted);margin-top:8px;}
@@ -9309,7 +9313,8 @@ function simRegistrarExterno(subId){
   sub.simStats.acertosTotal+=ac;
   if(!sub.simStats.porFormato)sub.simStats.porFormato={};
   const pf=sub.simStats.porFormato[fmt]=sub.simStats.porFormato[fmt]||{tentativas:0,questoes:0,acertos:0};
-  pf.tentativas++; pf.questoes+=qtd; pf.acertos+=ac;
+  if(pf.marcadas==null)pf.marcadas=pf.questoes;
+  pf.tentativas++; pf.questoes+=qtd; pf.acertos+=ac; pf.marcadas+=qtd;
 
   sub.simExternos=sub.simExternos||[];
   sub.simExternos.unshift({id:genId(),data,quantidade:qtd,acertos:ac,formato:fmt,fonte,
@@ -9339,9 +9344,11 @@ function simRemoverExterno(subId,extId){
     sub.simStats.acertosTotal=Math.max(0,(sub.simStats.acertosTotal||0)-e.acertos);
     const pf=sub.simStats.porFormato&&sub.simStats.porFormato[e.formato||'multipla'];
     if(pf){
+      if(pf.marcadas==null)pf.marcadas=pf.questoes;
       pf.tentativas=Math.max(0,(pf.tentativas||0)-1);
       pf.questoes=Math.max(0,(pf.questoes||0)-e.quantidade);
       pf.acertos=Math.max(0,(pf.acertos||0)-e.acertos);
+      pf.marcadas=Math.max(0,pf.marcadas-e.quantidade);
     }
   }
   saveDB();
@@ -9422,8 +9429,9 @@ function reinoExtStats(kid){
     st.questoesTotal+=e.quantidade||0;
     st.acertosTotal+=e.acertos||0;
     const f=e.formato||'multipla';
-    const pf=st.porFormato[f]=st.porFormato[f]||{tentativas:0,questoes:0,acertos:0};
+    const pf=st.porFormato[f]=st.porFormato[f]||{tentativas:0,questoes:0,acertos:0,marcadas:0};
     pf.tentativas++; pf.questoes+=e.quantidade||0; pf.acertos+=e.acertos||0;
+    pf.marcadas+=e.quantidade||0;
   });
   return st.questoesTotal?st:null;
 }
@@ -9600,7 +9608,7 @@ function simPanelHTML(s){
         .map(f=>simResumoFormato(f,stats.porFormato[f]));
       return`<div style="text-align:center"><span class="sim-stat-badge"><i class="fa fa-chart-simple"></i> Histórico: ${stats.acertosTotal}/${stats.questoesTotal} acertos (${Math.round(stats.acertosTotal/stats.questoesTotal*100)}%) em ${stats.tentativas} simulado${stats.tentativas>1?'s':''}${ext.questoes?` · ${ext.questoes} de fora`:''}</span></div>
       ${linhas.length>1?`<div class="sim-fmt-split">${linhas.map(f=>
-        `<span><b style="color:${f.cor}">${f.corrigido}%</b> ${f.lbl} <i>(${f.acertos}/${f.questoes}${f.formato==='certoerrado'?` · bruto ${f.pct}% · saldo ${f.saldo>=0?'+':''}${f.saldo}`:''})</i></span>`).join('')}</div>`:''}`;
+        `<span><b style="color:${f.cor}">${f.corrigido}%</b> ${f.lbl} <i>(${f.acertos}/${f.questoes}${f.formato==='certoerrado'?` · bruto ${f.pct}% · saldo ${f.saldo>0?'+':''}${f.saldo}${f.brancos?` · ${f.brancos} em branco`:''}`:''})</i></span>`).join('')}</div>`:''}`;
     })():''}
     <div class="sim-empty">Gere questões pra treinar este assunto.${(s.note||'').trim()?' <b style="color:var(--pink-t)">Vai usar sua anotação como referência.</b>':' <span title="Adicione uma anotação neste miniboss pra deixar as questões mais precisas ao seu recorte de estudo">Sem anotação — a IA vai gerar com base só no nome do assunto.</span>'}${tavilyAtivo()?' <b style="color:var(--accent)">🔎 Vai pesquisar na internet antes de elaborar.</b>':''}</div>
     <div class="sim-config-row">
@@ -9719,9 +9727,11 @@ function simAcumulaStats(sub,questoes){
   Object.keys(grupos).forEach(f=>{
     const qs=grupos[f];
     const pf=sub.simStats.porFormato[f]=sub.simStats.porFormato[f]||{tentativas:0,questoes:0,acertos:0};
+    if(pf.marcadas==null)pf.marcadas=pf.questoes;   // antes de somar: historico antigo = tudo marcado
     pf.tentativas++;
     pf.questoes+=qs.length;
     pf.acertos+=qs.filter(q=>q.userAnswer===q.correta).length;
+    pf.marcadas+=qs.filter(q=>q.userAnswer).length;
   });
   return{total,acertos};
 }
@@ -9746,11 +9756,20 @@ function simPctEfetivo(st){
 }
 // Linha de resumo de um formato: acertos, aproveitamento e — no certo/errado — o
 // saldo no criterio Cebraspe (acertos menos erros) e o aproveitamento corrigido.
+// Quantos itens foram de fato marcados. Historico gravado antes do saldo Cebraspe
+// nao tem esse numero: ali a leitura honesta e "tudo marcado", que e o que o app
+// assumia. Mesma convencao de provaLiquido, pra os dois numeros nunca divergirem.
+function pfMarcadas(pf){
+  return pf&&pf.marcadas!=null?pf.marcadas:((pf&&pf.questoes)||0);
+}
 function simResumoFormato(f,pf){
   const pct=pf.questoes?Math.round(pf.acertos/pf.questoes*100):0;
   const corr=simPctCorrigido(pct,f);
-  const erros=pf.questoes-pf.acertos;
+  // Erro e item marcado e marcado errado. Item em branco nao e apenado — deixar de
+  // marcar nao pode custar o mesmo que chutar errado.
+  const erros=Math.max(0,pfMarcadas(pf)-pf.acertos);
   return{formato:f,lbl:SIM_FMT_LBL[f]||f,questoes:pf.questoes,acertos:pf.acertos,erros,
+         brancos:Math.max(0,pf.questoes-pfMarcadas(pf)),
          pct,corrigido:corr,saldo:pf.acertos-erros,cor:faixaCor(corr)};
 }
 
@@ -11326,7 +11345,14 @@ function provaApagar(id){
   renderSimGeralScreen();
   toast('🗑️ Prova apagada.','var(--accent)');
 }
-function provaLiquido(t,total){return (t.acertos||0)-(total-(t.acertos||0));}
+// Liquido Cebraspe: acertos menos ERROS. Em branco nao conta — quando a tentativa
+// guardou as respostas, da pra saber quantos foram; tentativa antiga sem respostas cai
+// no caso de tudo marcado, que e o que era antes.
+function provaLiquido(t,total){
+  const ac=t.acertos||0;
+  const marc=Array.isArray(t.respostas)?t.respostas.filter(Boolean).length:total;
+  return ac-(marc-ac);
+}
 function provasGuardadasHTML(){
   const lista=provasLista();
   if(!lista.length)return'';
@@ -11461,30 +11487,57 @@ function simGeralResultsHTML(){
   // chute. O banner passa a julgar pelo aproveitamento ja corrigido.
   const efetivo=simPctCorrigido(pct,active.formato);
   const good=efetivo>=60;
-  const saldo=acertos-(total-acertos);
+  // A CAPA DO CADERNO DIZ: "A ausencia de marcacao nao sera apenada". O saldo estava
+  // contando TODO nao-acerto como -1, inclusive o item em branco — ou seja, o app punia
+  // deixar em branco exatamente como punia errar. Num certo/errado isso ensina o
+  // contrario do que a prova cobra: quem chuta perde ponto que ja tinha.
+  const marcadas=active.questoes.filter(q=>q.userAnswer).length;
+  const brancos=total-marcadas;
+  const erros=marcadas-acertos;
+  const saldo=acertos-erros;
+  const saldoAntigo=acertos-(total-acertos);
 
   const bySub={};
   active.questoes.forEach(q=>{
-    if(!bySub[q.subId])bySub[q.subId]={subName:q.subName,kingdomIcon:q.kingdomIcon,acertos:0,total:0};
+    if(!bySub[q.subId])bySub[q.subId]={subName:q.subName,kingdomIcon:q.kingdomIcon,acertos:0,total:0,marcadas:0};
     bySub[q.subId].total++;
+    if(q.userAnswer)bySub[q.subId].marcadas++;
     if(q.userAnswer===q.correta)bySub[q.subId].acertos++;
   });
+  // Onde marcar te custou ponto: assunto em que voce errou mais do que acertou tem
+  // saldo negativo — ali, ter deixado tudo em branco daria MAIS pontos. E o unico
+  // numero da prova que aponta um erro de decisao, nao de conteudo.
+  const caros=Object.values(bySub)
+    .map(b=>({...b,saldo:b.acertos-(b.marcadas-b.acertos)}))
+    .filter(b=>b.marcadas>0&&b.saldo<0)
+    .sort((a,b)=>a.saldo-b.saldo);
+  const perdidos=caros.reduce((n,b)=>n-b.saldo,0);
 
   return`
   <div class="section-card">
     <div class="sec-title" style="margin-bottom:10px">${active.refazendo?'🔁 Resultado da refação':'🏁 Resultado do Simulado Geral'}</div>
     <div class="sim-score-banner ${good?'sim-good':'sim-bad'}">${acertos}/${total} acertos (${pct}%) · ⏱ ${fmtHMS(active.tempoGastoSec||0)}</div>
     <div class="sg-formato-linha">${ce?'✔️✖️ Certo/Errado':'🔤 Múltipla escolha'} · ${simNivelLbl(active.nivel)}${
-      ce?` · <b title="No certo/errado 50% é o que o chute dá; o corrigido desconta esse acaso (2×${pct}−100)">corrigido: ${efetivo}%</b> · saldo Cebraspe: <b>${saldo>=0?'+':''}${saldo}</b>`:''}</div>
+      ce?` · <b title="No certo/errado 50% é o que o chute dá; o corrigido desconta esse acaso (2×${pct}−100)">corrigido: ${efetivo}%</b> · <b title="Acertos menos erros. Item em branco não conta contra — é o que diz a capa do caderno.">saldo Cebraspe: ${saldo>0?'+':''}${saldo}</b>${brancos?` · ${brancos} em branco`:''}`:''}</div>
+    ${ce?`<div class="sg-liquido">
+      <div class="sg-liquido-linha"><span>${acertos} acertos</span><span>−</span><span>${erros} erros</span>${brancos?`<span>·</span><span>${brancos} em branco (não pesam)</span>`:''}<span>=</span><b style="color:${saldo>=0?'var(--green-t)':'var(--red-t)'}">${saldo>0?'+':''}${saldo} líquidos</b></div>
+      ${brancos?`<div class="sg-liquido-nota">Pela conta antiga do app, esses ${brancos} em branco valiam <b>${saldoAntigo}</b>. A prova não faz isso — em branco é zero, não é menos um.</div>`:''}
+      ${caros.length?`<div class="sg-liquido-nota">
+        <b style="color:var(--red-t)">Marcar custou ${perdidos} ponto${perdidos>1?'s':''} nestes assuntos</b> — neles você errou mais do que acertou, então deixar em branco teria rendido mais:
+        <div style="margin-top:5px">${caros.slice(0,5).map(b=>`<div style="display:flex;gap:8px;justify-content:space-between"><span>${b.kingdomIcon} ${escapeHtml(b.subName)}</span><span style="white-space:nowrap"><b style="color:var(--red-t)">${b.saldo}</b> · ${b.acertos}/${b.marcadas} marcadas</span></div>`).join('')}</div>
+        <div style="margin-top:5px;color:var(--muted)">Não é falta de conteúdo: é decisão. Nesses assuntos, o seu "acho que é" está errando mais do que acertando.</div>
+      </div>`:(brancos?'':`<div class="sg-liquido-nota">Você marcou todos os itens. Numa prova de verdade, item que você não sabe e marca mesmo assim apaga um que você acertou.</div>`)}
+    </div>`:''}
     ${active.refazendo?(()=>{
       const ant=provaTentativaAnterior(active);
       if(!ant)return`<div class="sg-refaz-nota"><i class="fa fa-rotate-left"></i> <b>${active.tentativaNum}ª tentativa desta prova.</b> Refação não entra nas estatísticas por assunto.</div>`;
       const d=acertos-(ant.acertos||0);
-      const dl=saldo-((ant.acertos||0)-(total-(ant.acertos||0)));
+      const antSaldo=provaLiquido(ant,total);
+      const dl=saldo-antSaldo;
       const cor=d>0?'var(--green-t)':d<0?'var(--red-t)':'var(--muted)';
       return`<div class="sg-refaz-nota">
         <i class="fa fa-rotate-left"></i> <b>${active.tentativaNum}ª tentativa.</b>
-        Antes: ${ant.acertos}/${total}${ce?` · líq. ${((ant.acertos||0)-(total-(ant.acertos||0)))>=0?'+':''}${(ant.acertos||0)-(total-(ant.acertos||0))}`:''}
+        Antes: ${ant.acertos}/${total}${ce?` · líq. ${antSaldo>0?'+':''}${antSaldo}`:''}
         → agora: ${acertos}/${total}
         <b style="color:${cor}">(${d>0?'+':''}${d} acerto${Math.abs(d)===1?'':'s'}${ce?` · ${dl>0?'+':''}${dl} no líquido`:''})</b>
         <span style="color:var(--muted)">— refação não entra nas estatísticas por assunto.</span>
@@ -13084,8 +13137,10 @@ function toggleQuestaoProblematica(subId,histId,qIdx){
   const fmt=q.formato||'multipla';
   const pf=sub.simStats.porFormato&&sub.simStats.porFormato[fmt];
   if(pf){
+    if(pf.marcadas==null)pf.marcadas=pf.questoes;
     pf.questoes=Math.max(0,(pf.questoes||0)+sign);
     if(wasCorrect)pf.acertos=Math.max(0,(pf.acertos||0)+sign);
+    if(q.userAnswer)pf.marcadas=Math.max(0,pf.marcadas+sign);
   }
 
   saveDB();
@@ -13264,10 +13319,11 @@ function computeSimuladoStats(){
           acertos+=s.simStats.acertosTotal||0;
           const pf=s.simStats.porFormato||{};
           Object.keys(pf).forEach(f=>{
-            const acc=porFormato[f]=porFormato[f]||{tentativas:0,questoes:0,acertos:0};
+            const acc=porFormato[f]=porFormato[f]||{tentativas:0,questoes:0,acertos:0,marcadas:0};
             acc.tentativas+=pf[f].tentativas||0;
             acc.questoes+=pf[f].questoes||0;
             acc.acertos+=pf[f].acertos||0;
+            acc.marcadas+=pfMarcadas(pf[f]);
           });
         }
       });
@@ -13309,7 +13365,7 @@ function renderSimGlobalStats(){
         <span class="sim-fmt-qtd">${f.acertos}/${f.questoes}</span>
         <div class="faixa-trilho"><i style="width:${f.corrigido}%;background:${f.cor}"></i></div>
         <span class="sim-fmt-pct" style="color:${f.cor}">${f.corrigido}%</span>
-        ${f.formato==='certoerrado'?`<span class="sim-fmt-extra">bruto ${f.pct}% · saldo ${f.saldo>=0?'+':''}${f.saldo}</span>`:''}
+        ${f.formato==='certoerrado'?`<span class="sim-fmt-extra">bruto ${f.pct}% · saldo ${f.saldo>0?'+':''}${f.saldo}${f.brancos?` · ${f.brancos} em branco`:''}</span>`:''}
       </div>`).join(''):'';
   }
   renderSimKingdomBreakdown();
