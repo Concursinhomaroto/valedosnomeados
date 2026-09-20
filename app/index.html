@@ -719,6 +719,10 @@ nav{
 .sim-nota-selo{font-size:9.5px;font-weight:800;color:var(--green-t);white-space:nowrap}
 .sim-nota-txt{width:100%;min-height:58px;font-size:12px;line-height:1.5;resize:vertical;
   margin-bottom:6px}
+.prova-tent{background:var(--panel2);border:1px solid var(--border);border-radius:8px;
+  padding:3px 9px;font-size:11px;font-weight:700;color:var(--text2);cursor:pointer;
+  white-space:nowrap;font-family:inherit}
+.prova-tent:hover{border-color:var(--accent);color:var(--text)}
 .prova-selo-nova{font-size:9px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;
   padding:2px 7px;border-radius:999px;background:var(--orange);color:#fff}
 .sg-cota-box{font-size:10px;margin:0 0 10px;padding:8px 10px;border-radius:9px;
@@ -2309,6 +2313,7 @@ nav{
 <div class="screen" id="screen-erros">
   <div class="rd-conectivos-tabs" style="margin-bottom:14px">
     <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
+    <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button class="active"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div class="sec-title">📕 Banco de Erros</div>
@@ -2325,9 +2330,23 @@ nav{
 <div class="screen" id="screen-simgeral">
   <div class="rd-conectivos-tabs" style="margin-bottom:14px">
     <button class="active"><i class="fa fa-landmark"></i> Simulado Geral</button>
+    <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="simgeral-content"></div>
+</div>
+
+<!-- ===== MINHAS PROVAS ===== -->
+<!-- Colar prova e o banco de provas saíram de dentro do Simulado Geral: lá eles eram um
+     preâmbulo que você rolava pra passar, e o que mais importa (a prova inteira da banca)
+     ficava escondido embaixo da configuração de um simulado gerado. -->
+<div class="screen" id="screen-provas">
+  <div class="rd-conectivos-tabs" style="margin-bottom:14px">
+    <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
+    <button class="active"><i class="fa fa-file-lines"></i> Minhas Provas</button>
+    <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
+  </div>
+  <div id="provas-content"></div>
 </div>
 
 <!-- ===== DASHBOARD ===== -->
@@ -5317,7 +5336,7 @@ function isAfterExam(dateStr){return db.examDate&&dateStr>db.examDate;}
 // Depois de expirar, tudo trava (ver LOCKED_SCREENS) exceto o Painel do Herói
 // (dashboard), que continua visível pra pessoa lembrar do progresso e ser convidada a
 // assinar. Ver applyDefaults() pra como db.plan/db.trialStartedAt são definidos.
-const LOCKED_SCREENS=['map','revisions','erros','simgeral','editais','flashcards','redacoes','repertorio','conquistas'];
+const LOCKED_SCREENS=['map','revisions','erros','simgeral','provas','editais','flashcards','redacoes','repertorio','conquistas'];
 const LOCKED_SCREEN_INFO={
   map:{icon:'🗺️',title:'Mapa dos Reinos é um recurso do plano completo',desc:'O mapa de progresso por reino/chefão libera junto com o plano completo.'},
   revisions:{icon:'🔔',title:'Revisões é um recurso do plano completo',desc:'A fila de revisões espaçadas (SM-2) — atrasadas, de hoje e dos próximos dias — libera junto com o plano completo.'},
@@ -5895,7 +5914,7 @@ function showScreen(name){
   // Repertório e Banco de Erros não têm botão próprio no menu — viraram abas dentro de
   // Redação e Simulado Geral, respectivamente, desde a fusão das telas relacionadas, então
   // o destaque do menu segue apontando pro botão "pai" de cada uma.
-  const navName=name==='repertorio'?'redacoes':(name==='erros'?'simgeral':name);
+  const navName=name==='repertorio'?'redacoes':((name==='erros'||name==='provas')?'simgeral':name);
   if(LOCKED_SCREENS.includes(name)&&!hasFullAccess()){
     document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -5909,6 +5928,7 @@ function showScreen(name){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('screen-'+name).classList.add('active');
   const nb=document.getElementById('nav-'+navName);if(nb)nb.classList.add('active');
+  if(name==='provas')renderProvasScreen();
   if(name==='revisions')renderRevisions();
   if(name==='dashboard')renderDashboard();
   if(name==='editais'){renderEditais();updateEditaisBadge();}
@@ -10945,6 +10965,7 @@ function simColarIniciar(descartarSobras){
   simGeralActive={questoes:m.questoes,startedAt:Date.now(),limiteSec:m.limiteSec,
                   corrected:false,formato:m.formato,nivel:'dificil',importado:true};
   simColarZerar();
+  showScreen('simgeral');
   renderSimGeralScreen();
   toast(`🏛️ Prova importada — ${m.questoes.length} questões${m.fora?` · ${m.fora} deixada(s) de fora por não ter assunto`:''}. Bom jogo.`,'var(--accent)');
 }
@@ -11062,6 +11083,7 @@ function simColarHTML(){
   </div>`;
 }
 function renderSimGeralScreen(){
+  renderProvasScreen();
   const container=document.getElementById('simgeral-content');
   if(!container)return;
   if(simGeralActive){
@@ -11070,10 +11092,18 @@ function renderSimGeralScreen(){
     return;
   }
   sgStopTimerTick();
-  container.innerHTML=simColarHTML()+provasGuardadasHTML()+simGeralConfigHTML();
+  container.innerHTML=simGeralConfigHTML();
   // sem isto, os contadores por chefao/reino e o custo do Tavily nasceriam
   // zerados mesmo com assuntos ja selecionados de uma visita anterior
   sgUpdateSummary();
+}
+// A aba Minhas Provas. Todo mundo que mexe em lote ou em prova guardada continua
+// chamando renderSimGeralScreen, que repassa pra ca — assim nao existe caminho que
+// atualize uma tela e esqueca a outra.
+function renderProvasScreen(){
+  const el=document.getElementById('provas-content');
+  if(!el)return;
+  el.innerHTML=simColarHTML()+provasGuardadasHTML();
 }
 function simGeralConfigHTML(){
   const kingdoms=db.kingdoms.filter(k=>(db.topics[k.id]||[]).some(t=>(t.subtopics||[]).some(s=>s.studied)));
@@ -11634,6 +11664,7 @@ function provaRefazer(id){
     provaId:prova.id,refazendo:feitas>0,
     tentativaNum:feitas+1
   };
+  showScreen('simgeral');
   renderSimGeralScreen();
   window.scrollTo(0,0);
   toast(feitas
@@ -11647,6 +11678,33 @@ function provaRefazer(id){
 // mesmo motivo nao cria flashcard nem entra no Banco de Erros de novo: a questao ja
 // esta la desde a primeira vez. O que a refacao registra e a comparacao, e o tempo,
 // que e estudo de verdade.
+// Depois de fechar a prova nao havia como voltar nela: "Refazer" era a unica porta, e
+// refazer apaga o que voce quer ver — as SUAS respostas daquela vez. Aqui a tentativa e
+// remontada na tela de resultado, so pra leitura: o que voce marcou, o gabarito, a
+// explicacao, a sua nota escrita e os grifos.
+function provaRevisar(id,tIdx){
+  const prova=provaAchar(id);
+  if(!prova)return;
+  const ts=prova.tentativas||[];
+  const i=(tIdx==null||tIdx<0)?ts.length-1:tIdx;
+  const t=ts[i];
+  if(!t){toast('Essa prova ainda não foi feita — não há o que rever.','var(--orange)');return;}
+  if(simGeralActive&&!simGeralActive.corrected
+     &&!confirm('Você tem um simulado em andamento. Abrir a revisão descarta o que está na tela. Continuar?'))return;
+  const resp=t.respostas||[];
+  simGeralActive={
+    questoes:prova.questoes.map((q,k)=>({...q,userAnswer:resp[k]||undefined})),
+    startedAt:Date.now(),limiteSec:0,corrected:true,
+    formato:prova.formato,nivel:prova.nivel,
+    importado:prova.origem==='colado',
+    provaId:prova.id,revisando:true,tentativaNum:i+1,
+    tempoGastoSec:t.tempoGastoSec||0
+  };
+  showScreen('simgeral');
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+  toast(`🔎 Revisando a ${i+1}ª tentativa — nada aqui conta nas estatísticas.`,'var(--accent)');
+}
 function provaCorrigirRefacao(){
   const active=simGeralActive;
   const prova=provaAchar(active.provaId);
@@ -11747,7 +11805,7 @@ function provasGuardadasHTML(){
       const linhas=ts.map((t,i)=>{
         const pct=total?Math.round(t.acertos/total*100):0;
         const liq=provaLiquido(t,total);
-        return`<span style="white-space:nowrap">${i+1}ª: <b style="color:${faixaCorTexto(simPctCorrigido(pct,p.formato))}">${t.acertos}/${total}</b>${ce?` · líq. ${liq>=0?'+':''}${liq}`:` · ${pct}%`}</span>`;
+        return`<button class="prova-tent" onclick="provaRevisar('${p.id}',${i})" title="Abrir esta tentativa e ver o que você marcou">${i+1}ª: <b style="color:${faixaCorTexto(simPctCorrigido(pct,p.formato))}">${t.acertos}/${total}</b>${ce?` · líq. ${liq>=0?'+':''}${liq}`:` · ${pct}%`} <i class="fa fa-magnifying-glass"></i></button>`;
       }).join('<span style="color:var(--border)"> → </span>');
       return`<div style="border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px">
@@ -11764,6 +11822,7 @@ function provasGuardadasHTML(){
             <option value="180"${p.limiteSec===10800?' selected':''}>3 horas</option>
             <option value="240"${p.limiteSec===14400?' selected':''}>4 horas</option>
           </select>
+          ${nova?'':`<button class="btn btn-xs btn-ghost" onclick="provaRevisar('${p.id}')" title="Abrir a última tentativa e ver os seus erros, sem responder de novo"><i class="fa fa-magnifying-glass"></i> Ver erros</button>`}
           <button class="btn btn-xs ${nova?'btn-gold':'btn-primary'}" onclick="provaRefazer('${p.id}')"><i class="fa fa-${nova?'play':'rotate-left'}"></i> ${nova?'Fazer':'Refazer'}</button>
           <button class="btn btn-xs btn-ghost" onclick="provaApagar('${p.id}')" title="Apagar a prova guardada"><i class="fa fa-trash"></i></button>
         </div>
@@ -11897,7 +11956,8 @@ function simGeralResultsHTML(){
 
   return`
   <div class="section-card">
-    <div class="sec-title" style="margin-bottom:10px">${active.refazendo?'🔁 Resultado da refação':'🏁 Resultado do Simulado Geral'}</div>
+    <div class="sec-title" style="margin-bottom:10px">${active.revisando?`🔎 Revisão da ${active.tentativaNum}ª tentativa`:(active.refazendo?'🔁 Resultado da refação':'🏁 Resultado do Simulado Geral')}</div>
+    ${active.revisando?`<div class="sg-refaz-nota"><i class="fa fa-eye"></i> <b>Só leitura.</b> Estas são as respostas que você deu nesta tentativa. Nada aqui conta de novo — para responder outra vez, use <b>Refazer</b> em Minhas Provas.</div>`:''}
     <div class="sim-score-banner ${good?'sim-good':'sim-bad'}">${acertos}/${total} acertos (${pct}%) · ⏱ ${fmtHMS(active.tempoGastoSec||0)}</div>
     <div class="sg-formato-linha">${ce?'✔️✖️ Certo/Errado':'🔤 Múltipla escolha'} · ${simNivelLbl(active.nivel)}${
       ce?` · <b title="No certo/errado 50% é o que o chute dá; o corrigido desconta esse acaso (2×${pct}−100)">corrigido: ${efetivo}%</b> · <b title="Acertos menos erros. Item em branco não conta contra — é o que diz a capa do caderno.">saldo Cebraspe: ${saldo>0?'+':''}${saldo}</b>${brancos?` · ${brancos} em branco`:''}`:''}</div>
@@ -11933,7 +11993,12 @@ function simGeralResultsHTML(){
         </div>`;
       }).join('')}
     </div>
-    <button class="btn btn-sm btn-primary" style="width:100%;justify-content:center;margin:14px 0" onclick="simGeralReset()"><i class="fa fa-rotate"></i> Novo Simulado Geral</button>
+    ${active.revisando
+      ? `<div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap">
+          <button class="btn btn-sm btn-ghost" style="flex:1;justify-content:center" onclick="simGeralReset();showScreen('provas')"><i class="fa fa-arrow-left"></i> Voltar pras provas</button>
+          <button class="btn btn-sm btn-primary" style="flex:1;justify-content:center" onclick="provaRefazer('${active.provaId}')"><i class="fa fa-rotate-left"></i> Refazer esta prova</button>
+        </div>`
+      : `<button class="btn btn-sm btn-primary" style="width:100%;justify-content:center;margin:14px 0" onclick="simGeralReset()"><i class="fa fa-rotate"></i> Novo Simulado Geral</button>`}
     <div class="sim-ferramentas">
       <span><i class="fa fa-highlighter"></i> Selecione um trecho de qualquer questão pra grifar</span>
       ${marcaPaletaHTML()}
@@ -11957,7 +12022,7 @@ function simGeralResultsHTML(){
           </div>
           ${simNotaHTML(q,i)}
           ${q.problematico?'<div class="sim-flagged-banner"><i class="fa fa-flag"></i> Marcada como problemática — não conta nas suas estatísticas.</div>':''}
-          ${active.refazendo?'':`<button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="toggleQuestaoProblematica('${q.subId}','${q._histId}',${q._qIdxInHist})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>`}
+          ${(active.refazendo||active.revisando)?'':`<button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="toggleQuestaoProblematica('${q.subId}','${q._histId}',${q._qIdxInHist})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>`}
         </div>
       `).join('')}
     </div>
@@ -23848,6 +23913,8 @@ window.confirmAddPlanItem=confirmAddPlanItem;
 window.simColarCopiarConverter=simColarCopiarConverter;
 window.simColarGuardar=simColarGuardar;
 window.simNotaSalvar=simNotaSalvar;
+window.provaRevisar=provaRevisar;
+window.renderProvasScreen=renderProvasScreen;
 window.planoRetaFinal=planoRetaFinal;
 window.removePlanItem=removePlanItem;
 window.openAISettingsModal=openAISettingsModal;
