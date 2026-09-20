@@ -7746,6 +7746,33 @@ REGRAS DE ATUALIDADE (obrigatórias):
 // mesmos pontos de cada assunto, e e neles que o candidato precisa treinar. Vale nos
 // tres lugares onde questao e escrita (miniboss, chefao e prova colada), por isso
 // mora aqui fora.
+// COMO a banca molda o item — distinto de O QUE ela cobra (promptRecorteCebraspe).
+// Sem isto o modelo escreve 120 proposicoes gerais em sequencia: "A Lei X dispoe sobre
+// Y", "Z e o conjunto de...". Prova de Enfermeiro do Cebraspe nao e questionario de
+// definicoes; a maior parte dos itens parte de uma SITUACAO e pede julgamento sobre o
+// que se faz nela. Item de definicao mede se voce leu; item situado mede se voce sabe.
+function promptFormatoCebraspe(ce,comApoio){
+  const it=ce?'itens':'questões';
+  const um=ce?'item':'questão';
+  return`FORMATO DO ${ce?'ITEM':'ENUNCIADO'} — situação antes de definição
+- Pelo menos 40% ${ce?'dos itens':'das questões'} nascem de uma SITUAÇÃO HIPOTÉTICA BREVE, de 2 a 4 linhas: um paciente com idade e quadro, uma gestante numa semana específica, uma criança numa idade, uma sala de vacina, um pós-operatório, um servidor numa situação funcional. Isso vale para TODO assunto, não só para os clínicos — câncer de mama, vacinação, urgência, ética e legislação estadual também se cobram por caso.
+${comApoio?`- A situação vai no campo "textoApoio", copiada INTEIRA em cada ${um} do bloco, e o mesmo bloco leva de 2 a 4 ${it} diferentes sobre ela. Uma situação para um ${um} só é situação desperdiçada.
+- No ${um} situado NÃO repita o texto da situação: ele julga uma conduta, um número ou uma consequência daquele caso.`
+  :`- A situação abre o próprio ${um}, em 1 ou 2 frases, e o julgamento vem depois: "Paciente de 62 anos, internado há 5 dias, apresenta ... Nessa situação, a conduta correta é ...".`}
+- ${ce?'Item':'Questão'} de definição pura ("X é o conjunto de...", "A Lei Y dispõe sobre...") não passa de 1 em cada 3.
+- Em legislação, a versão difícil não é citar o artigo: é aplicar a norma a um caso concreto. Guarde o ${um} que abre nomeando a norma para quando o ponto cobrado for de fato o número, a data ou a revogação — no resto, descreva a situação e faça julgar a consequência.
+- Nada de par mecânico: um ${um} CERTO e um ERRADO sobre o mesmo assunto, um logo depois do outro, é padrão de apostila. O gabarito não pode ser adivinhável pela posição.
+
+NÍVEL DE DIFICULDADE — onde a prova de verdade vive
+Antes de escrever cada ${um}, decida em qual destes quatro ele entra, e respeite a distribuição:
+- no máximo 20% — LEMBRAR: definição, conceito direto, quem pode o quê. É o que sai sozinho, e é o que menos mede.
+- pelo menos 40% — APLICAR: a situação concreta está dada e você decide a conduta, a dose, a ordem, o prazo.
+- pelo menos 30% — QUASE-CERTO: ${um} 90% correto, com UM desvio — um número, uma etapa fora de ordem, uma via, um prazo, uma exceção virada regra.
+- pelo menos 10% — VERDADEIRO QUE PARECE FALSO: ${um} CERTO, escrito de um jeito que dá vontade de marcar ${ce?'E':'a alternativa vizinha'}. É o que separa quem sabe de quem reconhece.
+${ce?`- Conte o gabarito antes de entregar: entre 45% e 55% de CERTO. Prova com 60% de CERTO ensina a marcar C na dúvida, que é o contrário do que a prova cobra.`:''}
+- O ${um} ERRADO erra por motivo que um candidato de verdade acreditaria. Trocar 30 mL/kg por 47 qualquer um pega; trocar por 20 é difícil, porque 20 é o do esquema pediátrico e é o erro que se comete na prática.
+- A explicação não pode conter número que você não confirmou. Quando o ${um} errado troca um número, a explicação tem que trazer o número certo: é ele que eu vou decorar, e explicação com número errado ensina o erro no lugar da correção.`;
+}
 function promptRecorteCebraspe(ce){
   const it=ce?'itens':'questões';
   const dos=ce?'dos':'das';   // "A MAIORIA dos questões" nao existe
@@ -10200,6 +10227,8 @@ ${promptRegrasAtualidadeCurta()}
 
 ${promptRecorteCebraspe(ce)}
 
+${promptFormatoCebraspe(ce,false)}
+
 TAREFA: Gere EXATAMENTE ${qtd} ${ce?'itens de julgamento (CERTO ou ERRADO)':'questões de múltipla escolha'} inéditos sobre o assunto abaixo — nem mais, nem menos que ${qtd}.
 
 ${simNivelDesc(nivel)}
@@ -10328,6 +10357,8 @@ async function generateQuestionsForTopic(apiKey,kingdom,topic,subs,quantidade,op
 ${promptRegrasAtualidadeCurta()}
 
 ${promptRecorteCebraspe(ce)}
+
+${promptFormatoCebraspe(ce,false)}
 
 TAREFA: Gere EXATAMENTE ${qtd} ${ce?'itens de julgamento (CERTO ou ERRADO)':'questões de múltipla escolha'} inéditos sobre o tema abaixo, distribuídos entre os assuntos da lista — nem mais, nem menos que ${qtd}.
 
@@ -10605,6 +10636,8 @@ Hoje é ${new Date().toLocaleDateString('pt-BR')}. Use a versão VIGENTE de cada
 
 ${promptRecorteCebraspe(ce)}
 
+${promptFormatoCebraspe(ce,true)}
+
 ASSUNTOS — LISTA FECHADA${comCota?', COM A COTA DE CADA BLOCO':''}
 Cobre SÓ o que está nesta lista. Ela é o edital desta prova${editalNome?` (${editalNome})`:''}.${comCota?`
 A prova é dividida em blocos e CADA BLOCO TEM UMA COTA FIXA de ${ce?'itens':'questões'} — é assim que a banca monta a prova, e é a coisa mais importante deste prompt. ${conta}`:''}
@@ -10638,9 +10671,10 @@ REGRAS DA MÚLTIPLA ESCOLHA
 - A letra correta deve variar entre A, B, C, D e E ao longo das ${qtd} questões, em proporção parecida — não concentre em B e C.
 - A explicação tem de 1 a 3 frases e diz por que a correta está certa.`}
 
-TEXTO DE APOIO
-- Se um grupo de itens depender de um texto base (um texto de português a interpretar, um caso clínico, um trecho de norma), escreva esse texto UMA vez e repita ele INTEIRO no campo "textoApoio" de CADA item que o usa.
-- Itens que não dependem de texto base levam "textoApoio": "".
+TEXTO DE APOIO — é aqui que a situação hipotética mora
+- Todo bloco situado tem um texto base: a situação clínica, o caso funcional, o texto de português a interpretar, o trecho de norma. Escreva esse texto UMA vez e copie ele INTEIRO no campo "textoApoio" de CADA item do bloco.
+- Uma prova de ${qtd} itens sem NENHUM "textoApoio" preenchido está errada de formato — quer dizer que nenhum item foi situado, e a banca não escreve assim.
+- Itens que realmente não dependem de texto base levam "textoApoio": "".
 
 ENTREGA
 - Responda com os ${qtd} itens de uma vez, se couber.
