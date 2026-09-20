@@ -711,6 +711,14 @@ nav{
 .sim-fmt-split{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px;
   font-size:10.5px;font-weight:800;color:var(--text2);}
 .sim-fmt-split i{font-style:normal;color:var(--muted);font-weight:700;}
+.sim-ferramentas{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  flex-wrap:wrap;margin:14px 0 8px;font-size:10.5px;font-weight:700;color:var(--text2)}
+.sim-nota{margin-top:9px;border-top:1px dashed var(--border);padding-top:8px}
+.sim-nota-cab{display:flex;justify-content:space-between;align-items:center;gap:8px;
+  font-size:10.5px;font-weight:800;color:var(--text2);margin-bottom:5px}
+.sim-nota-selo{font-size:9.5px;font-weight:800;color:var(--green-t);white-space:nowrap}
+.sim-nota-txt{width:100%;min-height:58px;font-size:12px;line-height:1.5;resize:vertical;
+  margin-bottom:6px}
 .prova-selo-nova{font-size:9px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;
   padding:2px 7px;border-radius:999px;background:var(--orange);color:#fff}
 .sg-cota-box{font-size:10px;margin:0 0 10px;padding:8px 10px;border-radius:9px;
@@ -8733,6 +8741,27 @@ function marcaPaletaHTML(){
   </span>`;
 }
 function resumoMarcas(sub){return (sub&&sub.resumo&&sub.resumo.marcas)||[];}
+// Toda zona marcavel da tela, resumo ou questao. O data-sub deixou de ser "o id do
+// miniboss" e virou "a chave de onde estas marcas moram" — assim o mecanismo inteiro
+// (observador, botao flutuante, desenho, remocao) serve pros dois sem saber a
+// diferenca.
+const MARCA_SEL='.resumo-body[data-sub],.marca-zona[data-sub]';
+function marcaChaveQuestao(provaId,i){return 'q:'+provaId+':'+i;}
+// Onde as marcas de uma chave moram. Resumo guarda em sub.resumo.marcas; questao
+// guarda na propria questao, dentro da prova — que e o que sobrevive a refacao.
+function marcaAlvo(chave){
+  const s=String(chave||'');
+  if(s.indexOf('q:')===0){
+    const partes=s.split(':');
+    const prova=provaAchar(partes[1]);
+    const q=prova&&prova.questoes[parseInt(partes[2],10)];
+    if(!q)return null;
+    return{get:()=>q.marcas||[],set:a=>{q.marcas=a;}};
+  }
+  const sub=simFindSub(s);
+  if(!sub||!sub.resumo)return null;
+  return{get:()=>resumoMarcas(sub),set:a=>{sub.resumo.marcas=a;}};
+}
 function marcaNosDeTexto(root){
   const out=[];
   const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null);
@@ -8758,9 +8787,9 @@ function marcaOcorrencia(full,t,n){
   }
   return achou;
 }
-function marcaAplicar(root,sub){
-  if(!root)return;
-  const marcas=resumoMarcas(sub);
+function marcaAplicar(root,alvo){
+  if(!root||!alvo)return;
+  const marcas=alvo.get();
   if(!marcas.length)return;
   const {full,pos}=marcaMapa(root);
   // Resolve TODAS as posicoes antes de mexer no DOM: envolver um trecho quebra o no de
@@ -8793,10 +8822,10 @@ function marcaAplicar(root,sub){
 }
 // Guarda a selecao. Uma selecao que atravessa paragrafos vira VARIAS marcas, uma por
 // bloco: assim cada marca cabe inteira num no de texto e o envolvimento e trivial.
-function marcaSalvarSelecao(subId){
-  const sub=simFindSub(subId);
+function marcaSalvarSelecao(chave){
+  const alvo=marcaAlvo(chave);
   const sel=window.getSelection();
-  if(!sub||!sub.resumo||!sel||sel.isCollapsed||!sel.rangeCount)return false;
+  if(!alvo||!sel||sel.isCollapsed||!sel.rangeCount)return false;
   const range=sel.getRangeAt(0);
   const root=marcaRaizDe(range.commonAncestorContainer);
   if(!root)return false;
@@ -8816,25 +8845,29 @@ function marcaSalvarSelecao(subId){
     novas.push({t:lim,n,c:marcaCor});
   });
   if(!novas.length)return false;
-  sub.resumo.marcas=resumoMarcas(sub).concat(novas);
+  alvo.set(alvo.get().concat(novas));
   sel.removeAllRanges();
-  marcaInvalidar(subId);
+  marcaInvalidar(chave);
   saveDB();
   return true;
 }
 function marcaRaizDe(no){
   let el=(no&&no.nodeType===3)?no.parentNode:no;
   while(el&&el!==document.body){
-    if(el.classList&&el.classList.contains('resumo-body'))return el;
+    if(el.classList&&(el.classList.contains('resumo-body')||el.classList.contains('marca-zona'))
+       &&el.hasAttribute('data-sub'))return el;
     el=el.parentNode;
   }
   return null;
 }
-function marcaRemover(subId,idx){
-  const sub=simFindSub(subId);
-  if(!sub||!sub.resumo||!sub.resumo.marcas)return;
-  sub.resumo.marcas.splice(idx,1);
-  marcaInvalidar(subId);
+function marcaRemover(chave,idx){
+  const alvo=marcaAlvo(chave);
+  if(!alvo)return;
+  const arr=alvo.get().slice();
+  if(idx<0||idx>=arr.length)return;
+  arr.splice(idx,1);
+  alvo.set(arr);
+  marcaInvalidar(chave);
   saveDB();
 }
 function marcaLimpar(root){
@@ -8856,12 +8889,12 @@ function marcaLimpar(root){
 // mutacoes que o proprio envolvimento gera nao criam raiz nova, entao a passada seguinte
 // nao acha trabalho e para.
 function marcaAplicarTodas(forcar){
-  document.querySelectorAll('.resumo-body[data-sub]').forEach(root=>{
+  document.querySelectorAll(MARCA_SEL).forEach(root=>{
     if(!forcar&&root.dataset.marcado==='1')return;
-    const sub=simFindSub(root.getAttribute('data-sub'));
-    if(!sub)return;
+    const alvo=marcaAlvo(root.getAttribute('data-sub'));
+    if(!alvo)return;
     marcaLimpar(root);
-    marcaAplicar(root,sub);
+    marcaAplicar(root,alvo);
     root.dataset.marcado='1';
   });
 }
@@ -8869,12 +8902,13 @@ function marcaAplicarTodas(forcar){
 // salva so aparecia se quem chamou lembrasse de pedir redesenho forcado — e esquecer
 // o parametro fazia a marca sumir em silencio, que e exatamente o defeito que o
 // data-marcado acabou de consertar noutro lugar.
-function marcaInvalidar(subId){
-  document.querySelectorAll('.resumo-body[data-sub="'+String(subId).replace(/"/g,'')+'"]')
+function marcaInvalidar(chave){
+  const k=String(chave).replace(/"/g,'');
+  document.querySelectorAll('.resumo-body[data-sub="'+k+'"],.marca-zona[data-sub="'+k+'"]')
     .forEach(root=>{delete root.dataset.marcado;});
 }
 function marcaPendente(){
-  return !!document.querySelector('.resumo-body[data-sub]:not([data-marcado="1"])');
+  return !!document.querySelector('.resumo-body[data-sub]:not([data-marcado="1"]),.marca-zona[data-sub]:not([data-marcado="1"])');
 }
 (function marcaObservar(){
   if(typeof MutationObserver==='undefined')return;
@@ -11623,6 +11657,44 @@ function provaLiquido(t,total){
   const marc=Array.isArray(t.respostas)?t.respostas.filter(Boolean).length:total;
   return ac-(marc-ac);
 }
+const NOTA_MAX=600;
+// Escrever com as proprias palavras por que o item esta certo ou errado e o passo que
+// transforma "li a explicacao e concordei" em "eu sei". A nota mora na QUESTAO dentro
+// da prova, nao na tentativa: e o seu entendimento do item, e ele tem que estar la na
+// proxima vez que voce refizer.
+function simNotaSalvar(i){
+  const active=simGeralActive;
+  const el=document.getElementById('sim-nota-'+i);
+  if(!active||!el)return;
+  const txt=String(el.value||'').trim().slice(0,NOTA_MAX);
+  const q=active.questoes[i];
+  if(q)q.minhaNota=txt;                       // a live: o histórico do miniboss usa a mesma referência
+  const prova=active.provaId?provaAchar(active.provaId):null;
+  if(prova&&prova.questoes[i])prova.questoes[i].minhaNota=txt;
+  saveDB();
+  const selo=document.getElementById('sim-nota-selo-'+i);
+  if(selo)selo.textContent=txt?'✅ guardada':'';
+  toast(txt?'✍️ Nota guardada — ela volta quando você refizer esta prova.':'Nota apagada.',
+        txt?'var(--green)':'var(--muted)');
+}
+function simNotaHTML(q,i){
+  const txt=q.minhaNota||'';
+  const ce=q.formato==='certoerrado';
+  // No certo/errado o que se explica e o julgamento do item; na multipla, por que a
+  // alternativa certa ganha das outras quatro.
+  const titulo=ce
+    ? `Por que este item está <b>${q.correta==='C'?'CERTO':'ERRADO'}</b>, nas suas palavras`
+    : `Por que a <b>${q.correta}</b> é a certa, nas suas palavras`;
+  return`<div class="sim-nota">
+    <div class="sim-nota-cab">
+      <span><i class="fa fa-pen"></i> ${titulo}</span>
+      <span class="sim-nota-selo" id="sim-nota-selo-${i}">${txt?'✅ guardada':''}</span>
+    </div>
+    <textarea id="sim-nota-${i}" class="inp sim-nota-txt" maxlength="${NOTA_MAX}" spellcheck="true"
+      placeholder="Escreva com as suas palavras. Copiar a explicação acima não adianta — o que fixa é reescrever.">${escapeHtml(txt)}</textarea>
+    <button class="btn btn-xs btn-ghost" onclick="simNotaSalvar(${i})"><i class="fa fa-floppy-disk"></i> Guardar nota</button>
+  </div>`;
+}
 function provasGuardadasHTML(){
   const lista=provasLista();
   if(!lista.length)return'';
@@ -11744,7 +11816,9 @@ function simGeralCorrigir(){
   const simGeralXp=totalQuestoes+totalAcertos*2+20;
   gainXP(simGeralXp);
 
-  provaGuardar(simGeralActive,assuntosResumo);
+  // Guarda o id: e nele que a marca e a nota escrita se penduram, e e o que faz
+  // as duas sobreviverem a sessao.
+  simGeralActive.provaId=provaGuardar(simGeralActive,assuntosResumo)||simGeralActive.provaId;
 
   saveDB();
   updateErrosBadge();
@@ -11826,10 +11900,15 @@ function simGeralResultsHTML(){
       }).join('')}
     </div>
     <button class="btn btn-sm btn-primary" style="width:100%;justify-content:center;margin:14px 0" onclick="simGeralReset()"><i class="fa fa-rotate"></i> Novo Simulado Geral</button>
+    <div class="sim-ferramentas">
+      <span><i class="fa fa-highlighter"></i> Selecione um trecho de qualquer questão pra grifar</span>
+      ${marcaPaletaHTML()}
+    </div>
     <div style="display:flex;flex-direction:column;gap:8px">
       ${active.questoes.map((q,i)=>`
         <div class="sim-q${q.problematico?' sim-q-flagged':''}">
           <div class="sg-q-tag">${q.kingdomIcon} ${q.kingdomName} · ${q.topicName} · ${q.subName}</div>
+          <div class="marca-zona"${active.provaId?` data-sub="${marcaChaveQuestao(active.provaId,i)}"`:''}>
           ${textoApoioHTML(q)}
           <div class="sim-q-text">${i+1}. ${escapeHtml(q.questao)}</div>
           <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
@@ -11841,6 +11920,8 @@ function simGeralResultsHTML(){
             }).join('')}
           </div>
           ${q.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${escapeHtml(q.explicacao)}</div>`:''}
+          </div>
+          ${simNotaHTML(q,i)}
           ${q.problematico?'<div class="sim-flagged-banner"><i class="fa fa-flag"></i> Marcada como problemática — não conta nas suas estatísticas.</div>':''}
           ${active.refazendo?'':`<button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="toggleQuestaoProblematica('${q.subId}','${q._histId}',${q._qIdxInHist})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>`}
         </div>
@@ -23732,6 +23813,7 @@ window.rdToggleText=rdToggleText;
 window.confirmAddPlanItem=confirmAddPlanItem;
 window.simColarCopiarConverter=simColarCopiarConverter;
 window.simColarGuardar=simColarGuardar;
+window.simNotaSalvar=simNotaSalvar;
 window.planoRetaFinal=planoRetaFinal;
 window.removePlanItem=removePlanItem;
 window.openAISettingsModal=openAISettingsModal;
