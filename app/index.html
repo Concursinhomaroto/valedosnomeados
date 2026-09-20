@@ -711,6 +711,30 @@ nav{
 .sim-fmt-split{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px;
   font-size:10.5px;font-weight:800;color:var(--text2);}
 .sim-fmt-split i{font-style:normal;color:var(--muted);font-weight:700;}
+.sim-motivo{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:9px;
+  border-top:1px dashed var(--border);padding-top:8px}
+.sim-motivo-lbl{font-size:10.5px;font-weight:800;color:var(--text2)}
+.sim-motivo-btn{font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;
+  border:1px solid var(--border);background:var(--panel2);color:var(--text2);
+  cursor:pointer;font-family:inherit;white-space:nowrap}
+.sim-motivo-btn:hover{border-color:var(--accent);color:var(--text)}
+.sim-motivo-btn.ativo{background:var(--accent);border-color:var(--accent);color:#fff}
+.sim-motivo-nota{flex:1 0 100%;font-size:10px;color:var(--muted);font-weight:600;line-height:1.5}
+.ce-linha{margin-bottom:6px}
+.ce-topo{display:flex;justify-content:space-between;align-items:center;gap:8px;
+  font-size:11px;font-weight:800;color:var(--text2);margin-bottom:4px}
+.ce-barra{height:7px;border-radius:4px;background:var(--border);overflow:hidden}
+.ce-barra>div{height:100%;border-radius:4px;min-width:2px}
+.ce-sorte{font-size:10px;font-weight:700;color:var(--text2);margin:8px 0 0}
+.ce-conselho{font-size:10.5px;line-height:1.5;color:var(--text2);font-weight:600;
+  margin-top:8px;padding-top:7px;border-top:1px solid var(--border)}
+.ce-topo-assuntos{margin-top:7px}
+.ce-topo-lbl{font-size:9.5px;font-weight:800;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.3px;margin-bottom:4px}
+.ce-topo-row{display:flex;justify-content:space-between;gap:8px;font-size:11px;
+  font-weight:700;color:var(--text2);padding:2px 0}
+.ce-vazio{font-size:10.5px;line-height:1.6;color:var(--text2);font-weight:600}
+.ce-vazio>div{margin-top:5px;color:var(--muted);font-weight:600}
 .sim-fonte{margin-top:5px;font-size:10px;font-weight:700;color:var(--muted);
   display:flex;align-items:center;gap:5px;line-height:1.4}
 .sim-ferramentas{display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -1038,7 +1062,7 @@ nav{
 .dash-fold{display:grid;gap:16px;margin-bottom:18px;
   grid-template-columns:repeat(6,1fr);
   /* Mínimo explícito por faixa, medido pelo que cada uma precisa mostrar:
-     5 itens em "estudar agora" e em "revisões", 4 em "assuntos da semana", e o
+     5 itens em "estudar agora" e em "revisões", 3 barras no "controle de erros", e o
      gráfico de tempo nos seus 130px. Com proporção pura, apertar uma faixa
      sempre roubava da outra e o quinto item vivia caindo fora. */
   /* Alturas fixas, de proposito: amarrar a grade a 100vh fazia o painel depender
@@ -1163,13 +1187,6 @@ nav{
 .dash-fold .rank-row{padding:7px 9px;gap:9px;margin-bottom:6px}
 .dash-fold .rank-row span{font-size:15px!important}
 .dash-fold .rank-pos{font-size:11px}
-/* "Assuntos da semana" é montado com style inline no JS, então aqui o alvo é a
-   estrutura: o container flex e cada item dentro dele. */
-.dash-fold #week-study-chart>div{gap:5px!important}
-.dash-fold #week-study-chart>div>div{padding:7px 10px!important;border-radius:10px!important;gap:9px!important}
-.dash-fold #week-study-chart>div>div>span:first-child{font-size:16px!important}
-.dash-fold #week-study-chart>div>div>div>div:first-child{font-size:12px!important}
-.dash-fold #week-study-chart>div>div>div>div:last-child{font-size:9.5px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Mesmo aperto da Fila de hoje: o chip de raridade e a data nao encolhem, entao quem
    encolhia era o nome do assunto — 50px pra 209 que precisava, virando "Vacin…". Aqui
    a linha quebra e o nome mantem um piso. */
@@ -2432,9 +2449,9 @@ nav{
     </div>
 
     <div class="section-card dash-card">
-      <div class="sec-title dash-sec">📚 Assuntos da semana</div>
-      <div class="dash-scroll" id="week-study-chart"></div>
-      <div id="week-study-total" class="dash-foot"></div>
+      <div class="sec-title dash-sec">🔬 Controle de erros</div>
+      <div class="dash-scroll" id="controle-erros"></div>
+      <div id="controle-erros-foot" class="dash-foot"></div>
     </div>
 
     <div class="section-card dash-card">
@@ -11779,6 +11796,72 @@ function provaLiquido(t,total){
   const marc=Array.isArray(t.respostas)?t.respostas.filter(Boolean).length:total;
   return ac-(marc-ac);
 }
+// Por que o item caiu. Errar por nao saber, por ler errado e por chutar sao tres
+// problemas diferentes, com tres consertos diferentes — e tratar os tres como "falta
+// de conteudo" e o motivo de gente estudar 4h por dia e nao sair do lugar: volta pro
+// PDF quando o problema era leitura ou decisao.
+const SIM_MOTIVOS=[
+  {id:'conteudo',lbl:'Não sabia',icone:'📕',cor:'var(--red-t)',
+   conserto:'É conteúdo. Vira resumo e flashcard.'},
+  {id:'atencao',lbl:'Li errado',icone:'👓',cor:'var(--orange-t)',
+   conserto:'Você sabia. A banca trocou alguma coisa e passou batido — anote o que ela trocou.'},
+  {id:'chute',lbl:'Chutei',icone:'🎲',cor:'var(--purple-t,var(--accent))',
+   conserto:'Não é conteúdo nem leitura: é decisão de marcar.'}
+];
+// Acerto por chute nao e acerto: e sorte que a estatistica conta como dominio. Marcar
+// isso e o que separa "eu sei" de "eu adivinhei" na hora de decidir o que revisar.
+const SIM_MOTIVO_SORTE={id:'sorte',lbl:'Acertei no chute',icone:'🍀',cor:'var(--muted)',
+   conserto:'Acerto de sorte. Não conte como domínio — reveja como se tivesse errado.'};
+function simMotivoDe(id){
+  return SIM_MOTIVOS.find(m=>m.id===id)||(id===SIM_MOTIVO_SORTE.id?SIM_MOTIVO_SORTE:null);
+}
+function simMotivoSalvar(i,id){
+  const active=simGeralActive;
+  if(!active||!active.questoes[i])return;
+  const q=active.questoes[i];
+  const novo=q.motivo===id?'':id;          // clicar de novo desmarca
+  q.motivo=novo;
+  const prova=active.provaId?provaAchar(active.provaId):null;
+  if(prova&&prova.questoes[i])prova.questoes[i].motivo=novo;
+  saveDB();
+  const cx=document.getElementById('sim-motivo-'+i);
+  if(cx)cx.outerHTML=simMotivoHTML(q,i);
+  const m=simMotivoDe(novo);
+  toast(m?`${m.icone} ${m.lbl} — ${m.conserto}`:'Classificação removida.',
+        m?'var(--accent)':'var(--muted)');
+}
+function simMotivoHTML(q,i){
+  const certa=q.userAnswer===q.correta;
+  const opcoes=certa?[SIM_MOTIVO_SORTE]:SIM_MOTIVOS;
+  const sel=q.motivo||'';
+  const escolhido=simMotivoDe(sel);
+  return`<div class="sim-motivo" id="sim-motivo-${i}">
+    <span class="sim-motivo-lbl">${certa?'Acertou por sorte?':'Por que errou?'}</span>
+    ${opcoes.map(m=>`<button class="sim-motivo-btn${sel===m.id?' ativo':''}"
+      onclick="simMotivoSalvar(${i},'${m.id}')" title="${escapeHtml(m.conserto)}">${m.icone} ${m.lbl}</button>`).join('')}
+    ${escolhido?`<span class="sim-motivo-nota">${escapeHtml(escolhido.conserto)}</span>`:''}
+  </div>`;
+}
+// Soma os baldes de TODAS as provas guardadas. A tentativa nao importa aqui: o motivo
+// mora na questao e representa o seu diagnostico mais recente dela.
+function motivosAgregado(){
+  const tot={conteudo:0,atencao:0,chute:0,sorte:0};
+  const porAssunto={};
+  let classificadas=0,erradas=0;
+  (db.provas||[]).forEach(p=>{
+    const ult=(p.tentativas||[])[(p.tentativas||[]).length-1];
+    const resp=(ult&&ult.respostas)||[];
+    (p.questoes||[]).forEach((q,i)=>{
+      if(resp.length&&resp[i]&&resp[i]!==q.correta)erradas++;
+      const m=q.motivo;
+      if(!m||tot[m]===undefined)return;
+      tot[m]++; classificadas++;
+      const k=q.subName||'—';
+      (porAssunto[k]=porAssunto[k]||{conteudo:0,atencao:0,chute:0,sorte:0,icon:q.kingdomIcon||''})[m]++;
+    });
+  });
+  return{tot,porAssunto,classificadas,erradas};
+}
 const NOTA_MAX=600;
 // Escrever com as proprias palavras por que o item esta certo ou errado e o passo que
 // transforma "li a explicacao e concordei" em "eu sei". A nota mora na QUESTAO dentro
@@ -12051,6 +12134,7 @@ function simGeralResultsHTML(){
           ${q.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${escapeHtml(q.explicacao)}</div>`:''}
           ${q.fonte?`<div class="sim-fonte" title="De onde a explicação saiu — confira quando o ponto for número, prazo ou dose"><i class="fa fa-link"></i> ${escapeHtml(q.fonte)}</div>`:''}
           </div>
+          ${simMotivoHTML(q,i)}
           ${simNotaHTML(q,i)}
           ${q.problematico?'<div class="sim-flagged-banner"><i class="fa fa-flag"></i> Marcada como problemática — não conta nas suas estatísticas.</div>':''}
           ${(active.refazendo||active.revisando)?'':`<button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="toggleQuestaoProblematica('${q.subId}','${q._histId}',${q._qIdxInHist})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>`}
@@ -14931,96 +15015,53 @@ function updateRevBadge(){
 }
 
 // ===== DASHBOARD =====
-function renderWeekStudyChart(){
-  const el=document.getElementById('week-study-chart');
-  const tot=document.getElementById('week-study-total');
+// Substituiu "Assuntos da semana", que so repetia o que a agenda ja mostra. Este
+// responde a pergunta que muda o que voce faz amanha: dos itens que voce errou,
+// quantos foram falta de conteudo, quantos foram leitura e quantos foram decisao de
+// marcar? Cada balde tem um conserto diferente, e quem trata os tres como conteudo
+// volta pro PDF quando o problema era outro.
+function renderControleErros(){
+  const el=document.getElementById('controle-erros');
+  const foot=document.getElementById('controle-erros-foot');
   if(!el)return;
-
-  const today=getBrasiliaDate();today.setHours(0,0,0,0);
-  // Pegar os últimos 7 dias
-  const last7=[];
-  for(let i=6;i>=0;i--){
-    const d=new Date(today);d.setDate(d.getDate()-i);
-    last7.push(localDateStrFromDate(d));
-  }
-
-  // Coletar minibosses estudados nos últimos 7 dias
-  // Usa lastStudiedAt (atualizado a cada save) OU studiedAt (primeiro estudo)
-  const todayBsb=todayStr();
-  const studied=[];
-  const addedIds=new Set();
-  db.kingdoms.forEach(k=>{
-    (db.topics[k.id]||[]).forEach(t=>{
-      (t.subtopics||[]).forEach(s=>{
-        if(addedIds.has(s.id))return;
-        const dateRef=s.lastStudiedAt||s.studiedAt;
-        if(s.studied&&dateRef&&last7.includes(dateRef.slice(0,10))){
-          addedIds.add(s.id);
-          studied.push({
-            name:s.name,
-            topic:t.name,
-            kingdom:k.name,
-            kColor:k.color,
-            kIcon:k.icon||'🏰',
-            prio:s.priority,
-            date:dateRef.slice(0,10)
-          });
-        }
-      });
-    });
-  });
-
-  // Também incluir minibosses que tiveram tempo salvo HOJE pelo cronômetro
-  // verificando via db.sessions se o dia de hoje tem tempo > 0
-  const tempoHoje=db.sessions?.[todayBsb]||0;
-  if(tempoHoje>0){
-    // Percorrer e marcar como estudado hoje quem tem studied=true mas lastStudiedAt não é hoje
-    db.kingdoms.forEach(k=>{
-      (db.topics[k.id]||[]).forEach(t=>{
-        (t.subtopics||[]).forEach(s=>{
-          if(addedIds.has(s.id))return;
-          // Se foi estudado e o studiedAt é hoje (pode ter sido salvo antes do fix)
-          const dateRef=s.lastStudiedAt||s.studiedAt;
-          if(s.studied&&dateRef&&dateRef.slice(0,10)===todayBsb){
-            addedIds.add(s.id);
-            studied.push({
-              name:s.name,topic:t.name,kingdom:k.name,
-              kColor:k.color,kIcon:k.icon||'🏰',
-              prio:s.priority,date:todayBsb
-            });
-          }
-        });
-      });
-    });
-  }
-
-  // Ordenar por data mais recente
-  studied.sort((a,b)=>b.date.localeCompare(a.date));
-
-  if(!studied.length){
-    el.innerHTML=`<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px;font-weight:600">
-      📚 Nenhum assunto estudado nos últimos 7 dias.<br>
-      <span style="font-size:11px">Salve o cronômetro de um miniboss para registrar!</span>
+  const {tot,porAssunto,classificadas,erradas}=motivosAgregado();
+  if(!classificadas){
+    el.innerHTML=`<div class="ce-vazio">
+      <b>Nenhum erro classificado ainda.</b>
+      <div>Ao corrigir uma prova, cada questão tem os botões <b>Não sabia · Li errado · Chutei</b>.
+      Um clique em cada erro e este painel te diz onde está o seu gargalo — que quase nunca é só conteúdo.</div>
     </div>`;
-    if(tot)tot.textContent='';
+    if(foot)foot.textContent=erradas?`${erradas} erro(s) esperando classificação`:'';
     return;
   }
-
-
-  el.innerHTML=`<div style="display:flex;flex-direction:column;gap:6px">
-    ${studied.map(s=>`
-      <div class="sem-item" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border-radius:10px;border-left:3px solid ${s.kColor}">
-        <span style="font-size:18px;flex-shrink:0">${s.kIcon}</span>
-        <div class="sem-info" style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div>
-          <div style="font-size:10px;color:var(--muted);font-weight:600">${s.topic} · ${s.kingdom}</div>
-        </div>
-        ${raridadeChip(s.prio)}
-        <span style="font-size:9px;color:var(--muted);flex-shrink:0">${s.date.slice(5).replace('-','/')}</span>
-      </div>`).join('')}
-  </div>`;
-
-  if(tot)tot.textContent=`${studied.length} assunto${studied.length!==1?'s':''} estudado${studied.length!==1?'s':''} nos últimos 7 dias`;
+  const maior=Math.max(tot.conteudo,tot.atencao,tot.chute)||1;
+  const linhas=SIM_MOTIVOS.map(m=>{
+    const n=tot[m.id];
+    return`<div class="ce-linha">
+      <div class="ce-topo"><span>${m.icone} ${m.lbl}</span><b style="color:${m.cor}">${n}</b></div>
+      <div class="ce-barra"><div style="width:${Math.round(n/maior*100)}%;background:${m.cor}"></div></div>
+    </div>`;
+  }).join('');
+  // O balde maior decide o conselho. Nao e enfeite: e a unica leitura que muda o que
+  // voce faz no bloco de estudo de amanha.
+  const dom=SIM_MOTIVOS.reduce((a,b)=>tot[b.id]>tot[a.id]?b:a);
+  const conselho={
+    conteudo:'Gargalo: <b>conteúdo</b>. Esses assuntos voltam pro resumo e viram flashcard.',
+    atencao:'Gargalo: <b>leitura</b>, não conteúdo. Voltar pro PDF não resolve — anote o que a banca trocou.',
+    chute:'Gargalo: <b>decisão</b>. Branco não é apenado; marcar o que não sabe apaga um acerto seu.'
+  }[dom.id];
+  const topo=Object.entries(porAssunto)
+    .map(([nome,v])=>({nome,icon:v.icon,n:v[dom.id]}))
+    .filter(x=>x.n>0).sort((a,b)=>b.n-a.n).slice(0,3);
+  el.innerHTML=`${linhas}
+    ${tot.sorte?`<div class="ce-sorte">🍀 <b>${tot.sorte}</b> acerto(s) de sorte — não contam como domínio.</div>`:''}
+    <div class="ce-conselho">${conselho}</div>
+    ${topo.length?`<div class="ce-topo-assuntos">
+      <div class="ce-topo-lbl">Onde “${escapeHtml(dom.lbl)}” mais aparece</div>
+      ${topo.map(x=>`<div class="ce-topo-row"><span>${x.icon} ${escapeHtml(x.nome)}</span><b>${x.n}</b></div>`).join('')}
+    </div>`:''}`;
+  const falta=Math.max(0,erradas-(tot.conteudo+tot.atencao+tot.chute));
+  if(foot)foot.textContent=`${classificadas} classificado(s)${falta?` · ${falta} erro(s) ainda sem classificar`:''}`;
 }
 
 // Mostra, no Painel do Herói, o aviso do status do plano — e é a ÚNICA forma de chegar
@@ -15244,7 +15285,7 @@ function renderDashboard(){
     </div>`).join('');
   initPhrase();
   renderStudyChart();
-  renderWeekStudyChart();
+  renderControleErros();
   renderBadges();
   renderFCAccuracyTrend();
   renderKingdomsNeedingAttention();
@@ -23944,6 +23985,7 @@ window.confirmAddPlanItem=confirmAddPlanItem;
 window.simColarCopiarConverter=simColarCopiarConverter;
 window.simColarGuardar=simColarGuardar;
 window.simNotaSalvar=simNotaSalvar;
+window.simMotivoSalvar=simMotivoSalvar;
 window.provaRevisar=provaRevisar;
 window.renderProvasScreen=renderProvasScreen;
 window.planoRetaFinal=planoRetaFinal;
