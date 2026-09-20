@@ -711,6 +711,10 @@ nav{
 .sim-fmt-split{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px;
   font-size:10.5px;font-weight:800;color:var(--text2);}
 .sim-fmt-split i{font-style:normal;color:var(--muted);font-weight:700;}
+.sg-cota-box{font-size:10px;margin:0 0 10px;padding:8px 10px;border-radius:9px;
+  background:var(--panel2);line-height:1.6;color:var(--text2);font-weight:600}
+.sg-cota-ok{border:1px solid var(--border)}
+.sg-cota-falta{border:1px solid var(--orange)}
 .sg-liquido{background:var(--panel2);border:1px solid var(--border);border-radius:12px;
   padding:10px 12px;margin:8px 0 0;font-size:12px;line-height:1.6;}
 .sg-liquido-linha{display:flex;gap:7px;flex-wrap:wrap;align-items:center;font-weight:700;}
@@ -10412,26 +10416,110 @@ let simColarLote=[];
 let simColarEscolhas={};   // nome do assunto nao reconhecido -> subId escolhido a mao
 let simColarMeta=0;        // quantos itens foram pedidos, pra tela saber quanto falta
 let simColarLista=[];      // a lista numerada que foi pro prompt — o "assunto":N aponta pra ela
+// Quantas questoes cada bloco da prova leva. Sai do edital em foco, que e o unico
+// lugar do app onde esse numero e DECLARADO pela banca — contar assunto nao serve:
+// uma disciplina de 30 questoes diluida em 40 assuntos ganharia de uma de 10
+// questoes em 5, quando e a segunda que vale mais por assunto.
+// Null quando nao ha edital em foco ou quando nenhuma disciplina tem o numero
+// preenchido: ai nao da pra inventar cota, e a prova volta pra estimativa.
+function simColarFocoDisciplinas(){
+  const e=db.editalFoco?edFind(db.editalFoco):null;
+  if(!e||!Array.isArray(e.disciplinas)||!e.disciplinas.length)return null;
+  if(!e.disciplinas.some(d=>d.questoes>0))return null;
+  edVincular(e);   // recasa por nome, pra valer mesmo sem ter aberto a tela de Editais
+  const porSub={},ordem=[];
+  e.disciplinas.forEach((d,i)=>{
+    ordem.push({nome:d.nome,questoes:d.questoes>0?d.questoes:0,itens:[]});
+    (d.assuntos||[]).forEach(a=>edSubsDe(a).forEach(sub=>{
+      if(porSub[sub.id]==null)porSub[sub.id]=i;   // a primeira disciplina que reivindica fica com ele
+    }));
+  });
+  return{edital:e,ordem,porSub};
+}
+// Reparte qtd entre os blocos na proporcao declarada. Arredondar bloco a bloco quase
+// nunca fecha a conta; a sobra (pra mais ou pra menos) vai pro maior bloco, que e onde
+// um item a mais ou a menos pesa menos.
+function simColarCotas(grupos,qtd){
+  const somaDecl=grupos.reduce((n,g)=>n+g.questoes,0);
+  if(!somaDecl||!qtd)return null;
+  const cotas=grupos.map(g=>Math.max(1,Math.round(qtd*g.questoes/somaDecl)));
+  const maior=cotas.indexOf(Math.max(...cotas));
+  cotas[maior]+=qtd-cotas.reduce((a,b)=>a+b,0);
+  return cotas[maior]>0?cotas:null;
+}
 // A lista fechada e o que impede a IA de devolver 120 assuntos diferentes, um por
 // questao — que foi o que aconteceu pedindo "o nome mais especifico possivel": nada
 // casava com o cadastro e sobravam 120 seletores pra resolver a mao. Vale tanto pra
 // gerar quanto pra converter prova pronta, por isso mora aqui fora.
 // Reino pausado fica de fora: e o mesmo sinal de "isso nao esta no meu edital" que ja
 // tira o reino da fila de revisao — nao faz sentido cair numa prova de treino.
+// A NUMERACAO IMPRESSA E A ORDEM DE simColarLista: simColarMapa resolve o campo
+// "assunto" por indice, entao agrupar por bloco so pode acontecer aqui, junto.
 function simColarBlocoLista(qtd,ce){
-  simColarLista=simIndiceAssuntos().filter(c=>c.sub.studied&&!revReinoFora(c.kingdom.id));
+  const todos=simIndiceAssuntos().filter(c=>c.sub.studied&&!revReinoFora(c.kingdom.id));
+  const foco=simColarFocoDisciplinas();
+  if(foco){
+    const grupos=foco.ordem.map(g=>({...g,itens:[]}));
+    const fora=[];
+    todos.forEach(c=>{
+      const i=foco.porSub[c.sub.id];
+      if(i==null)fora.push(c); else grupos[i].itens.push(c);
+    });
+    // Bloco sem nenhum assunto estudado nao pode receber cota: pedir 25 itens de uma
+    // disciplina vazia so faria a IA inventar assunto fora da lista.
+    const vivos=grupos.filter(g=>g.itens.length&&g.questoes>0);
+    const semNumero=grupos.filter(g=>g.itens.length&&!g.questoes>0);
+    if(vivos.length){
+      simColarLista=[...vivos.flatMap(g=>g.itens),...semNumero.flatMap(g=>g.itens),...fora];
+      const cotas=simColarCotas(vivos,qtd);
+      let n=0;
+      const bloco=(g,cota)=>{
+        const linhas=g.itens.map(c=>`${++n}. ${c.sub.name} (${c.kingdom.name} / ${c.topic.name})`).join('\n');
+        const cab=cota!=null
+          ? `■ ${g.nome.toUpperCase()} — ${cota} ${ce?'itens':'questões'} (o edital cobra ${g.questoes})`
+          : g.questoes>0
+            ? `■ ${g.nome.toUpperCase()} — o edital cobra ${g.questoes} na prova`
+            : `■ ${g.nome.toUpperCase()} — o edital não declara o número`;
+        return `${cab}\n${linhas}`;
+      };
+      const partes=vivos.map((g,i)=>bloco(g,cotas?cotas[i]:null));
+      semNumero.forEach(g=>partes.push(bloco(g,null)));
+      if(fora.length){
+        const linhas=fora.map(c=>`${++n}. ${c.sub.name} (${c.kingdom.name} / ${c.topic.name})`).join('\n');
+        partes.push(`■ FORA DOS BLOCOS ACIMA — sem cota (use só se faltar assunto pra fechar a cota de algum bloco)\n${linhas}`);
+      }
+      const conta=cotas
+        ? `Conferência: ${cotas.join(' + ')} = ${cotas.reduce((a,b)=>a+b,0)} ${ce?'itens':'questões'}. Some antes de entregar.`
+        : '';
+      return{listaTxt:partes.join('\n\n'),distrib:'',comCota:!!cotas,
+             editalNome:foco.edital.nome||'',conta};
+    }
+  }
+  simColarLista=todos;
   const listaTxt=simColarLista.length
     ? simColarLista.map((c,i)=>`${i+1}. ${c.sub.name} (${c.kingdom.name} / ${c.topic.name})`).join('\n')
     : '(nenhum assunto estudado cadastrado)';
-  // Proporcao real por reino: e o que faz a prova parecer com a de verdade, em vez de
-  // dar o mesmo peso a um reino de 200 assuntos e a um de 10.
+  // Sem edital em foco nao ha numero declarado: o melhor palpite e a proporcao de
+  // assuntos por reino. E palpite, e o prompt diz que e.
   const porReino={};
   simColarLista.forEach(c=>{porReino[c.kingdom.name]=(porReino[c.kingdom.name]||0)+1;});
   const nomes=Object.keys(porReino);
   const distrib=(nomes.length>1&&qtd)
     ? nomes.map(n=>`${n}: cerca de ${Math.max(1,Math.round(qtd*porReino[n]/simColarLista.length))} ${ce?'itens':'questões'}`).join(' · ')
     : '';
-  return{listaTxt,distrib};
+  return{listaTxt,distrib,comCota:false,editalNome:'',conta:''};
+}
+// A tela mostra a mesma reparticao que o prompt vai levar. Reusa o mesmo calculo:
+// dois lugares contando diferente e a forma mais facil de o usuario perder a confianca
+// no numero.
+function simColarPreviaCotas(qtd){
+  const f=simColarFocoDisciplinas();
+  if(!f)return{grupos:[],cotas:null};
+  const estudados={};
+  simIndiceAssuntos().filter(c=>c.sub.studied&&!revReinoFora(c.kingdom.id))
+    .forEach(c=>{const i=f.porSub[c.sub.id];if(i!=null)estudados[i]=(estudados[i]||0)+1;});
+  const grupos=f.ordem.filter((g,i)=>estudados[i]&&g.questoes>0);
+  return{grupos,cotas:simColarCotas(grupos,qtd)};
 }
 function simColarExemploJSON(ce){
   return ce
@@ -10443,7 +10531,7 @@ function simColarPromptTexto(){
   const qtd=parseInt((document.getElementById('sg-colar-qtd')||{}).value,10)||120;
   const ce=fmt==='certoerrado';
   const exemplo=simColarExemploJSON(ce);
-  const {listaTxt,distrib}=simColarBlocoLista(qtd,ce);
+  const {listaTxt,distrib,comCota,editalNome,conta}=simColarBlocoLista(qtd,ce);
   return`Você é um elaborador de questões de concurso público brasileiro, no estilo Cebraspe (Cespe). Sua especialidade é prova para cargo de Enfermeiro.
 
 TAREFA
@@ -10452,15 +10540,18 @@ Gere EXATAMENTE ${qtd} ${ce?'itens de julgamento CERTO/ERRADO':'questões de mú
 ANTES DE ESCREVER: PESQUISE NA INTERNET
 Hoje é ${new Date().toLocaleDateString('pt-BR')}. Use a versão VIGENTE de cada lei, resolução, diretriz e protocolo — não a que você lembra do treinamento. Confira especialmente o que mudou nos últimos 3 anos: resoluções do COFEN, portarias do Ministério da Saúde, diretrizes de ressuscitação, RDC da ANVISA e normas de biossegurança. Se a fonte que você achou for uma apostila ou um resumo de terceiros, desconfie: prefira o texto oficial.
 
-ASSUNTOS — LISTA FECHADA
-Cobre SÓ o que está nesta lista. Ela é o edital desta prova.
+ASSUNTOS — LISTA FECHADA${comCota?', COM A COTA DE CADA BLOCO':''}
+Cobre SÓ o que está nesta lista. Ela é o edital desta prova${editalNome?` (${editalNome})`:''}.${comCota?`
+A prova é dividida em blocos e CADA BLOCO TEM UMA COTA FIXA de ${ce?'itens':'questões'} — é assim que a banca monta a prova, e é a coisa mais importante deste prompt. ${conta}`:''}
 
 ${listaTxt}
 
 - Cada item cobra UM assunto da lista, e traz dois campos: "assunto" com o NÚMERO do assunto na lista e "assuntoNome" com o nome dele copiado exatamente como está escrito acima.
 - NÃO invente assunto fora da lista. NÃO crie um nome mais específico que o da lista: se o ponto que você quer cobrar é um detalhe dentro de um assunto listado, use o número do assunto que o contém.
-- Não precisa cobrir todos os assuntos, e pode repetir o mesmo assunto em vários itens.${distrib?`
-- Distribua na proporção da lista — ${distrib}.`:''}
+- Não precisa cobrir todos os assuntos, e pode repetir o mesmo assunto em vários itens.${comCota?`
+- A COTA DE CADA BLOCO É OBRIGATÓRIA e vem antes de qualquer outra regra de distribuição. Antes de entregar, conte quantos ${ce?'itens':'questões'} você escreveu em cada bloco e confira contra a cota. Bloco com cota de 3 leva 3, não 8 — mesmo que você tenha muito mais assunto listado nele.
+- Dentro de um bloco, reparta a cota entre os assuntos dele. Bloco com cota maior que o número de assuntos repete assunto; bloco com cota menor deixa assunto de fora.`:(distrib?`
+- Distribua na proporção da lista — ${distrib}. (É uma estimativa por número de assuntos: não declarei o número de questões de cada disciplina no meu edital.)`:'')}
 - Dentro de cada assunto, varie o ângulo: conceito, exceção, prazo, sequência de conduta, cálculo, competência. Não faça 4 itens sobre a mesma frase.
 
 REGRAS DE CONTEÚDO
@@ -10506,7 +10597,7 @@ ${exemplo}`;
 // contra gabarito inventado e pior do que nao importar nada, porque o erro entra no
 // Banco de Erros e vira flashcard.
 function simColarPromptConverter(){
-  const {listaTxt}=simColarBlocoLista(0,true);
+  const {listaTxt,editalNome}=simColarBlocoLista(0,true);
   return`Você converte prova pronta para o formato de importação da minha plataforma de estudos. Você NÃO elabora questão nova aqui, NÃO corrige e NÃO melhora o que eu mandar.
 
 O QUE EU VOU TE MANDAR
@@ -10525,7 +10616,7 @@ SE VOCÊ ACHAR QUE O GABARITO ESTÁ ERRADO
 Mantenha o gabarito oficial no JSON assim mesmo, e escreva embaixo do JSON uma nota: "item N — o gabarito diz C, mas <motivo>". Item anulado pela banca (o X no gabarito) fica de FORA do JSON: você conta quantos foram e diz quais.
 
 ASSUNTOS — LISTA FECHADA
-Cada item recebe dois campos: "assunto" com o NÚMERO do assunto nesta lista e "assuntoNome" com o nome copiado exatamente como está escrito aqui.
+Cada item recebe dois campos: "assunto" com o NÚMERO do assunto nesta lista e "assuntoNome" com o nome copiado exatamente como está escrito aqui. A lista vem agrupada pelos blocos do meu edital${editalNome?` (${editalNome})`:''} — o bloco ajuda você a achar o assunto certo, mas o que vai no JSON é o NÚMERO.
 
 ${listaTxt}
 
@@ -10780,12 +10871,29 @@ function simColarHTML(){
       Os dois prompts levam a lista dos seus <b>${ix.filter(c=>c.sub.studied).length} assuntos estudados</b> e pedem que a IA
       escolha dentro dela — é isso que faz a questão pousar no miniboss certo em vez de voltar
       com um nome inventado. O de <b>converter</b> é feito pra um chat do Claude Code, que lê PDF e
-      pesquisa: ele copia o enunciado da banca palavra por palavra e nunca deduz gabarito que não veio na fonte. Uma prova de 120 raramente sai numa resposta só: ele fecha o JSON
+      pesquisa: ele copia o enunciado da banca palavra por palavra e nunca deduz gabarito que não veio na fonte.
+      Uma prova de 120 raramente sai numa resposta só: ele fecha o JSON
       e avisa quanto falta, aí você clica em <b>Pedir o resto</b> e cola de novo.${(()=>{
         const n=Object.keys(db.simColarApelidos||{}).length;
         return n?` Já aprendi <b>${n} nome(s)</b> de provas anteriores — esses resolvem sozinhos.`:'';
       })()}
     </div>
+    ${(()=>{
+      // A cota por bloco e o que faz a prova gerada parecer com a de verdade. Ela so
+      // existe se o edital em foco declarar o numero de questoes de cada disciplina —
+      // sem isso a distribuicao e chute, e a tela diz que e, em vez de fingir.
+      const f=simColarFocoDisciplinas();
+      const q=parseInt((document.getElementById('sg-colar-qtd')||{}).value,10)||simColarMeta||120;
+      const {grupos,cotas}=simColarPreviaCotas(q);
+      if(f&&cotas)return`<div class="sg-cota-box sg-cota-ok">
+        <b style="color:var(--green-t)">✅ Cotas do edital ${escapeHtml(f.edital.nome||'')}</b> — a prova de ${q} sai repartida assim:
+        <div style="margin-top:4px;font-weight:800;color:var(--text)">${grupos.map((g,i)=>`${escapeHtml(g.nome)}: ${cotas[i]}`).join(' · ')}</div>
+      </div>`;
+      return`<div class="sg-cota-box sg-cota-falta">
+        <b style="color:var(--orange-t)">⚠️ Sem cota por bloco.</b> A prova vai sair distribuída por <i>estimativa</i> — na proporção de quantos assuntos você tem em cada reino, que não é como a banca monta a prova.
+        Pra usar os números reais: em <b>Editais</b>, preencha o <b>nº de questões</b> de cada disciplina (Português, Legislação de Alagoas, Saúde Pública, Conhecimentos Específicos…) e marque esse edital como <b>foco</b>.
+      </div>`;
+    })()}
     ${simColarMeta?`<div style="margin:0 0 10px">
       <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px">
         <span>${simColarLote.length} de ${simColarMeta} itens</span>
