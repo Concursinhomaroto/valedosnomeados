@@ -10412,18 +10412,13 @@ let simColarLote=[];
 let simColarEscolhas={};   // nome do assunto nao reconhecido -> subId escolhido a mao
 let simColarMeta=0;        // quantos itens foram pedidos, pra tela saber quanto falta
 let simColarLista=[];      // a lista numerada que foi pro prompt — o "assunto":N aponta pra ela
-function simColarPromptTexto(){
-  const fmt=(document.getElementById('sg-colar-fmt')||{}).value||'certoerrado';
-  const qtd=parseInt((document.getElementById('sg-colar-qtd')||{}).value,10)||120;
-  const ce=fmt==='certoerrado';
-  const exemplo=ce
-    ?`[{"assunto":7,"assuntoNome":"Sondagem vesical","textoApoio":"","afirmacao":"...","gabarito":"C","explicacao":"..."}]`
-    :`[{"assunto":7,"assuntoNome":"Sondagem vesical","textoApoio":"","questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"..."}]`;
-  // A lista fechada e o que impede a IA de devolver 120 assuntos diferentes, um por
-  // questao — que foi o que aconteceu pedindo "o nome mais especifico possivel": nada
-  // casava com o cadastro e sobravam 120 seletores pra resolver a mao.
-  // Reino pausado fica de fora: e o mesmo sinal de "isso nao esta no meu edital" que ja
-  // tira o reino da fila de revisao — nao faz sentido cair numa prova de treino.
+// A lista fechada e o que impede a IA de devolver 120 assuntos diferentes, um por
+// questao — que foi o que aconteceu pedindo "o nome mais especifico possivel": nada
+// casava com o cadastro e sobravam 120 seletores pra resolver a mao. Vale tanto pra
+// gerar quanto pra converter prova pronta, por isso mora aqui fora.
+// Reino pausado fica de fora: e o mesmo sinal de "isso nao esta no meu edital" que ja
+// tira o reino da fila de revisao — nao faz sentido cair numa prova de treino.
+function simColarBlocoLista(qtd,ce){
   simColarLista=simIndiceAssuntos().filter(c=>c.sub.studied&&!revReinoFora(c.kingdom.id));
   const listaTxt=simColarLista.length
     ? simColarLista.map((c,i)=>`${i+1}. ${c.sub.name} (${c.kingdom.name} / ${c.topic.name})`).join('\n')
@@ -10433,9 +10428,22 @@ function simColarPromptTexto(){
   const porReino={};
   simColarLista.forEach(c=>{porReino[c.kingdom.name]=(porReino[c.kingdom.name]||0)+1;});
   const nomes=Object.keys(porReino);
-  const distrib=nomes.length>1
+  const distrib=(nomes.length>1&&qtd)
     ? nomes.map(n=>`${n}: cerca de ${Math.max(1,Math.round(qtd*porReino[n]/simColarLista.length))} ${ce?'itens':'questões'}`).join(' · ')
     : '';
+  return{listaTxt,distrib};
+}
+function simColarExemploJSON(ce){
+  return ce
+    ?`[{"assunto":7,"assuntoNome":"Sondagem vesical","textoApoio":"","afirmacao":"...","gabarito":"C","explicacao":"..."}]`
+    :`[{"assunto":7,"assuntoNome":"Sondagem vesical","textoApoio":"","questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"..."}]`;
+}
+function simColarPromptTexto(){
+  const fmt=(document.getElementById('sg-colar-fmt')||{}).value||'certoerrado';
+  const qtd=parseInt((document.getElementById('sg-colar-qtd')||{}).value,10)||120;
+  const ce=fmt==='certoerrado';
+  const exemplo=simColarExemploJSON(ce);
+  const {listaTxt,distrib}=simColarBlocoLista(qtd,ce);
   return`Você é um elaborador de questões de concurso público brasileiro, no estilo Cebraspe (Cespe). Sua especialidade é prova para cargo de Enfermeiro.
 
 TAREFA
@@ -10492,6 +10500,61 @@ ${exemplo}`;
 }
 // Pedido de continuacao. O Gemini ja tem a conversa inteira como contexto, entao aqui
 // basta lembrar o que falta e o que nao pode repetir.
+// Converter prova pronta e um trabalho diferente de elaborar prova: aqui o texto da
+// banca E o produto — reescrever "pra ficar melhor" destroi exatamente o que faz a
+// questao valer. E o gabarito nao pode ser deduzido em nenhuma hipotese: treinar
+// contra gabarito inventado e pior do que nao importar nada, porque o erro entra no
+// Banco de Erros e vira flashcard.
+function simColarPromptConverter(){
+  const {listaTxt}=simColarBlocoLista(0,true);
+  return`Você converte prova pronta para o formato de importação da minha plataforma de estudos. Você NÃO elabora questão nova aqui, NÃO corrige e NÃO melhora o que eu mandar.
+
+O QUE EU VOU TE MANDAR
+Pode ser qualquer um destes, e às vezes mais de um na mesma conversa:
+- o PDF do caderno de uma banca (o Cebraspe costuma quebrar em dois: conhecimentos gerais e conhecimentos específicos — a numeração dos itens CONTINUA do primeiro para o segundo, não recomeça);
+- o gabarito, separado, como uma lista de C / E / X;
+- uma bateria de questões gerada por outra IA;
+- texto copiado de um site, ou foto/print de uma página.
+Leia TUDO antes de começar a escrever. Se eu anexar arquivo, leia o arquivo inteiro — não trabalhe só pelo começo.
+
+AS DUAS REGRAS QUE NÃO TÊM EXCEÇÃO
+1. NÃO INVENTE GABARITO. O gabarito sai do que eu te mandei: da folha de gabarito, ou do que vem marcado junto da questão. Se um item não tem gabarito em lugar nenhum, ele NÃO entra no JSON — você o lista no fim, por número, e eu decido. Deduzir a resposta "porque é obviamente certo" é o pior erro possível aqui: ela vai virar flashcard e eu vou decorar errado.
+2. NÃO REESCREVA O ENUNCIADO. Copie a redação original palavra por palavra, inclusive o que parecer mal escrito, ambíguo ou datado — a linguagem da banca é justamente o que eu preciso treinar. Você só conserta o que o PDF quebrou: hífen de fim de linha, quebra no meio da palavra, número de página e cabeçalho que entraram no meio do texto.
+
+SE VOCÊ ACHAR QUE O GABARITO ESTÁ ERRADO
+Mantenha o gabarito oficial no JSON assim mesmo, e escreva embaixo do JSON uma nota: "item N — o gabarito diz C, mas <motivo>". Item anulado pela banca (o X no gabarito) fica de FORA do JSON: você conta quantos foram e diz quais.
+
+ASSUNTOS — LISTA FECHADA
+Cada item recebe dois campos: "assunto" com o NÚMERO do assunto nesta lista e "assuntoNome" com o nome copiado exatamente como está escrito aqui.
+
+${listaTxt}
+
+- Não invente assunto fora da lista e não crie nome mais específico: se o item cobra um detalhe dentro de um assunto listado, use o número do assunto que o contém.
+- Se um item não couber em NENHUM da lista, use "assunto": 0 e escreva em "assuntoNome" o nome que você daria. Eu resolvo na mão depois — é melhor do que você forçar ele num assunto errado, porque assunto errado contamina a minha estatística.
+
+TEXTO DE APOIO
+Quando um bloco de itens depende de um texto base (um texto de português, um caso clínico, um trecho de norma, uma tabela), copie esse texto UMA vez e repita ele INTEIRO no campo "textoApoio" de CADA item do bloco. Item que não depende de texto base leva "textoApoio": "".
+
+EXPLICAÇÃO
+- Se a fonte já traz explicação/comentário, use ela, resumida em até 3 frases.
+- Se não traz, escreva você — mas ela tem que CONCORDAR com o gabarito oficial, e você só afirma o que conseguiu confirmar. Sem certeza, escreva a explicação curta e genérica em vez de citar número de lei, artigo ou resolução que você não checou. Número ao lado de afirmação errada é o que faz ela passar despercebida.
+- Todo número em ALGARISMO, nunca por extenso: "36 graus", "2 mL/kg", "7 dias", "30%", "artigo 5º".
+
+ENTREGA
+- Converta TODOS os itens que encontrar, na ordem original. Não selecione os melhores, não resuma, não pule os difíceis.
+- Se não couber tudo numa resposta, PARE num item completo, feche o array com ] e escreva na linha seguinte: CONTINUA — faltam N itens. Nunca corte no meio de um item: JSON cortado se perde inteiro, não só a última linha.
+- Quando eu pedir a continuação, siga de onde parou, sem repetir nenhum item.
+- Depois do JSON (nunca antes), você pode escrever: quantos itens converteu, quantos ficaram de fora e por quê, e as notas de gabarito duvidoso.
+
+FORMATO DA RESPOSTA — é o que mais dá errado
+- O JSON vem PRIMEIRO na resposta, como um array. Sem markdown, sem cerca de código, sem texto antes dele.
+- Siga o formato da fonte: item de julgar (certo/errado) usa "afirmacao" + "gabarito" ("C" ou "E"); questão de A a E usa "questao" + "alternativas" + "correta". Se o caderno tiver os dois tipos, cada item sai no seu formato, no mesmo array.
+- Dentro dos textos use aspas simples. Aspas duplas sem escape quebram o JSON inteiro.
+- Sem vírgula sobrando antes de ] ou }. Sem comentários. Sem quebra de linha dentro de um valor.
+- Formato exato:
+${simColarExemploJSON(true)}
+${simColarExemploJSON(false)}`;
+}
 function simColarPromptContinuar(){
   const falta=Math.max(0,simColarMeta-simColarLote.length);
   const jaVistos=simColarLote.slice(-8).map(q=>'- '+String(q.questao||'').slice(0,90)).join('\n');
@@ -10512,6 +10575,11 @@ function simColarCopiaTexto(txt,msg){
   if(navigator.clipboard&&navigator.clipboard.writeText){
     navigator.clipboard.writeText(txt).then(ok,()=>simColarFallbackCopia(txt,ok));
   }else simColarFallbackCopia(txt,ok);
+}
+function simColarCopiarConverter(){
+  simColarCopiaTexto(simColarPromptConverter(),
+    '📋 Prompt copiado — abra um chat do Claude Code, cole, e mande o PDF ou as questões.');
+  renderSimGeralScreen();
 }
 function simColarCopiarPrompt(){
   simColarMeta=parseInt((document.getElementById('sg-colar-qtd')||{}).value,10)||0;
@@ -10689,7 +10757,7 @@ function simColarHTML(){
   return`<div class="section-card">
     <div class="sec-title" style="margin-bottom:4px">📋 Colar prova pronta</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600">
-      Gere no Gemini (ou em qualquer IA), cole a resposta aqui e responda por aqui — sem gastar cota da sua chave. Correção, Banco de Erros e estatísticas por assunto funcionam igual.
+      Dois caminhos, o mesmo destino: <b>gerar</b> questões novas numa IA, ou <b>converter</b> prova que você já tem (PDF do caderno da banca, bateria de outra IA, texto de site). Cole o JSON aqui e responda por aqui — sem gastar cota da sua chave. Correção, Banco de Erros e estatísticas por assunto funcionam igual.
     </div>
     <div class="sim-config-row" style="flex-wrap:wrap">
       <label style="font-size:11px;color:var(--muted);font-weight:700">Formato:</label>
@@ -10703,14 +10771,16 @@ function simColarHTML(){
         <option value="120"${(simColarMeta||120)===120?' selected':''}>120 (prova cheia)</option>
         <option value="180">180</option>
       </select>
-      <button class="btn btn-sm btn-primary" onclick="simColarCopiarPrompt()"><i class="fa fa-copy"></i> Copiar prompt</button>
+      <button class="btn btn-sm btn-primary" onclick="simColarCopiarPrompt()"><i class="fa fa-copy"></i> Prompt pra gerar</button>
+      <button class="btn btn-sm btn-ghost" onclick="simColarCopiarConverter()" title="Pra quando você JÁ tem as questões: PDF do caderno da banca, bateria de outra IA, texto de site. Ele converte sem inventar gabarito."><i class="fa fa-file-import"></i> Prompt pra converter</button>
       ${simColarMeta&&simColarLote.length&&simColarLote.length<simColarMeta
         ?`<button class="btn btn-sm btn-gold" onclick="simColarCopiarContinuar()"><i class="fa fa-forward"></i> Pedir o resto (${simColarMeta-simColarLote.length})</button>`:''}
     </div>
     <div style="font-size:10px;color:var(--muted);margin:8px 0 10px;line-height:1.5">
-      O prompt leva a lista dos seus <b>${ix.filter(c=>c.sub.studied).length} assuntos estudados</b> e pede que a IA
+      Os dois prompts levam a lista dos seus <b>${ix.filter(c=>c.sub.studied).length} assuntos estudados</b> e pedem que a IA
       escolha dentro dela — é isso que faz a questão pousar no miniboss certo em vez de voltar
-      com um nome inventado. Uma prova de 120 raramente sai numa resposta só: ele fecha o JSON
+      com um nome inventado. O de <b>converter</b> é feito pra um chat do Claude Code, que lê PDF e
+      pesquisa: ele copia o enunciado da banca palavra por palavra e nunca deduz gabarito que não veio na fonte. Uma prova de 120 raramente sai numa resposta só: ele fecha o JSON
       e avisa quanto falta, aí você clica em <b>Pedir o resto</b> e cola de novo.${(()=>{
         const n=Object.keys(db.simColarApelidos||{}).length;
         return n?` Já aprendi <b>${n} nome(s)</b> de provas anteriores — esses resolvem sozinhos.`:'';
@@ -23459,6 +23529,7 @@ window.rdDeleteRedacao=rdDeleteRedacao;
 window.rdCalcLive=rdCalcLive;
 window.rdToggleText=rdToggleText;
 window.confirmAddPlanItem=confirmAddPlanItem;
+window.simColarCopiarConverter=simColarCopiarConverter;
 window.planoRetaFinal=planoRetaFinal;
 window.removePlanItem=removePlanItem;
 window.openAISettingsModal=openAISettingsModal;
