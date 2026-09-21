@@ -754,6 +754,10 @@ nav{
 .sg-cota-box{font-size:10px;margin:0 0 10px;padding:8px 10px;border-radius:9px;
   background:var(--panel2);line-height:1.6;color:var(--text2);font-weight:600}
 .sg-cota-ok{border:1px solid var(--border)}
+.sg-fora{display:flex;gap:7px;align-items:flex-start;margin-top:8px;padding-top:7px;
+  border-top:1px solid var(--border);font-size:10px;line-height:1.5;
+  color:var(--muted);font-weight:600;cursor:pointer}
+.sg-fora input{margin-top:2px;flex-shrink:0}
 .sg-cota-falta{border:1px solid var(--orange)}
 .sg-liquido{background:var(--panel2);border:1px solid var(--border);border-radius:12px;
   padding:10px 12px;margin:8px 0 0;font-size:12px;line-height:1.6;}
@@ -8825,6 +8829,19 @@ function resumoMarcas(sub){return (sub&&sub.resumo&&sub.resumo.marcas)||[];}
 // (observador, botao flutuante, desenho, remocao) serve pros dois sem saber a
 // diferenca.
 const MARCA_SEL='.resumo-body[data-sub],.marca-zona[data-sub]';
+// Assunto estudado que nenhuma disciplina do edital reivindica. Eu escolhi mante-lo na
+// lista pra nao sumir com o que voce estudou — mas com centenas de assuntos cadastrados
+// isso inflava o prompt e enchia a lista fechada de coisa que a prova nao cobra. Agora
+// e escolha sua, e o padrao e ficar SO no edital: prova de treino tem que parecer com a
+// que voce vai fazer.
+const COLAR_FORA_KEY='vdn_colar_fora_edital';
+function colarIncluiFora(){
+  try{return localStorage.getItem(COLAR_FORA_KEY)==='1';}catch(e){return false;}
+}
+function colarAlternarFora(el){
+  try{localStorage.setItem(COLAR_FORA_KEY,el&&el.checked?'1':'0');}catch(e){}
+  renderSimGeralScreen();
+}
 function marcaChaveQuestao(provaId,i){return 'q:'+provaId+':'+i;}
 // Onde as marcas de uma chave moram. Resumo guarda em sub.resumo.marcas; questao
 // guarda na propria questao, dentro da prova — que e o que sobrevive a refacao.
@@ -10620,7 +10637,9 @@ function simColarBlocoLista(qtd,ce){
     const vivos=grupos.filter(g=>g.itens.length&&g.questoes>0);
     const semNumero=grupos.filter(g=>g.itens.length&&!g.questoes>0);
     if(vivos.length){
-      simColarLista=[...vivos.flatMap(g=>g.itens),...semNumero.flatMap(g=>g.itens),...fora];
+      const levaFora=colarIncluiFora();
+      simColarLista=[...vivos.flatMap(g=>g.itens),...semNumero.flatMap(g=>g.itens),
+                     ...(levaFora?fora:[])];
       const cotas=simColarCotas(vivos,qtd);
       let n=0;
       const bloco=(g,cota)=>{
@@ -10634,7 +10653,7 @@ function simColarBlocoLista(qtd,ce){
       };
       const partes=vivos.map((g,i)=>bloco(g,cotas?cotas[i]:null));
       semNumero.forEach(g=>partes.push(bloco(g,null)));
-      if(fora.length){
+      if(fora.length&&levaFora){
         const linhas=fora.map(c=>`${++n}. ${c.sub.name} (${c.kingdom.name} / ${c.topic.name})`).join('\n');
         partes.push(`■ FORA DOS BLOCOS ACIMA — sem cota (use só se faltar assunto pra fechar a cota de algum bloco)\n${linhas}`);
       }
@@ -10642,7 +10661,8 @@ function simColarBlocoLista(qtd,ce){
         ? `Conferência: ${cotas.join(' + ')} = ${cotas.reduce((a,b)=>a+b,0)} ${ce?'itens':'questões'}. Some antes de entregar.`
         : '';
       return{listaTxt:partes.join('\n\n'),distrib:'',comCota:!!cotas,
-             editalNome:foco.edital.nome||'',conta};
+             editalNome:foco.edital.nome||'',conta,
+             fora:fora.length,foraDentro:levaFora};
     }
   }
   simColarLista=todos;
@@ -10657,19 +10677,21 @@ function simColarBlocoLista(qtd,ce){
   const distrib=(nomes.length>1&&qtd)
     ? nomes.map(n=>`${n}: cerca de ${Math.max(1,Math.round(qtd*porReino[n]/simColarLista.length))} ${ce?'itens':'questões'}`).join(' · ')
     : '';
-  return{listaTxt,distrib,comCota:false,editalNome:'',conta:''};
+  return{listaTxt,distrib,comCota:false,editalNome:'',conta:'',fora:0,foraDentro:true};
 }
 // A tela mostra a mesma reparticao que o prompt vai levar. Reusa o mesmo calculo:
 // dois lugares contando diferente e a forma mais facil de o usuario perder a confianca
 // no numero.
 function simColarPreviaCotas(qtd){
   const f=simColarFocoDisciplinas();
-  if(!f)return{grupos:[],cotas:null};
+  if(!f)return{grupos:[],cotas:null,fora:0,dentro:0};
   const estudados={};
+  let fora=0,dentro=0;
   simIndiceAssuntos().filter(c=>c.sub.studied&&!revReinoFora(c.kingdom.id))
-    .forEach(c=>{const i=f.porSub[c.sub.id];if(i!=null)estudados[i]=(estudados[i]||0)+1;});
+    .forEach(c=>{const i=f.porSub[c.sub.id];
+      if(i!=null){estudados[i]=(estudados[i]||0)+1;dentro++;}else fora++;});
   const grupos=f.ordem.filter((g,i)=>estudados[i]&&g.questoes>0);
-  return{grupos,cotas:simColarCotas(grupos,qtd)};
+  return{grupos,cotas:simColarCotas(grupos,qtd),fora,dentro};
 }
 // O exemplo mostrava um par fixo — "assunto":7 com "assuntoNome":"Sondagem vesical" —
 // que quase nunca correspondia: numero de um assunto e nome de outro, bem no trecho que
@@ -11075,10 +11097,18 @@ function simColarHTML(){
       const f=simColarFocoDisciplinas();
       const q=parseInt((document.getElementById('sg-colar-qtd')||{}).value,10)||simColarMeta||120;
       const {grupos,cotas}=simColarPreviaCotas(q);
-      if(f&&cotas)return`<div class="sg-cota-box sg-cota-ok">
+      if(f&&cotas){
+        const {fora,dentro}=simColarPreviaCotas(q);
+        return`<div class="sg-cota-box sg-cota-ok">
         <b style="color:var(--green-t)">✅ Cotas do edital ${escapeHtml(f.edital.nome||'')}</b> — a prova de ${q} sai repartida assim:
         <div style="margin-top:4px;font-weight:800;color:var(--text)">${grupos.map((g,i)=>`${escapeHtml(g.nome)}: ${cotas[i]}`).join(' · ')}</div>
-      </div>`;
+        ${fora?`<label class="sg-fora">
+          <input type="checkbox" onchange="colarAlternarFora(this)"${colarIncluiFora()?' checked':''}>
+          <span>Incluir também os <b>${fora} assunto(s) que o edital não alcança</b> (${dentro} estão em alguma disciplina).
+          Desmarcado, a prova sai só do que cai — marcado, eles entram no fim da lista, sem cota.
+          Se são muitos, vale vincular no <b>Editais</b> em vez de ligar aqui.</span>
+        </label>`:''}
+      </div>`;}
       return`<div class="sg-cota-box sg-cota-falta">
         <b style="color:var(--orange-t)">⚠️ Sem cota por bloco.</b> A prova vai sair distribuída por <i>estimativa</i> — na proporção de quantos assuntos você tem em cada reino, que não é como a banca monta a prova.
         Pra usar os números reais: em <b>Editais</b>, preencha o <b>nº de questões</b> de cada disciplina (Português, Legislação de Alagoas, Saúde Pública, Conhecimentos Específicos…) e marque esse edital como <b>foco</b>.
@@ -24004,6 +24034,7 @@ window.rdToggleText=rdToggleText;
 window.confirmAddPlanItem=confirmAddPlanItem;
 window.simColarCopiarConverter=simColarCopiarConverter;
 window.simColarGuardar=simColarGuardar;
+window.colarAlternarFora=colarAlternarFora;
 window.simNotaSalvar=simNotaSalvar;
 window.simMotivoSalvar=simMotivoSalvar;
 window.provaRevisar=provaRevisar;
