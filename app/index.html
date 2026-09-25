@@ -8875,10 +8875,24 @@ function colarAlternarFora(el){
   renderSimGeralScreen();
 }
 function marcaChaveQuestao(provaId,i){return 'q:'+provaId+':'+i;}
+// Durante a prova ainda nao existe prova guardada pra pendurar a marca (ela so nasce
+// na correcao), entao a chave aponta pro item VIVO. Quem escreve guarda nos dois
+// lugares quando ja ha prova — e o que faz o grifo feito durante a prova continuar la
+// no resultado e na refacao seguinte.
+function marcaChaveAtiva(i){return 'a:'+i;}
 // Onde as marcas de uma chave moram. Resumo guarda em sub.resumo.marcas; questao
 // guarda na propria questao, dentro da prova — que e o que sobrevive a refacao.
 function marcaAlvo(chave){
   const s=String(chave||'');
+  if(s.indexOf('a:')===0){
+    const i=parseInt(s.slice(2),10);
+    const q=simGeralActive&&simGeralActive.questoes[i];
+    if(!q)return null;
+    const prova=simGeralActive.provaId?provaAchar(simGeralActive.provaId):null;
+    const pq=prova&&prova.questoes[i];
+    return{get:()=>q.marcas||[],
+           set:a=>{q.marcas=a; if(pq)pq.marcas=a.map(m=>({...m}));}};
+  }
   if(s.indexOf('q:')===0){
     const partes=s.split(':');
     const prova=provaAchar(partes[1]);
@@ -11927,11 +11941,17 @@ function simGeralExamHTML(){
       <button class="btn btn-sm btn-pink" onclick="simGeralCorrigir()"><i class="fa fa-flag-checkered"></i> Finalizar Simulado</button>
     </div>
     <div class="section-card" style="margin-top:12px">
+      <div class="sim-ferramentas">
+        <span><i class="fa fa-highlighter"></i> Selecione um trecho pra grifar — o grifo fica guardado</span>
+        ${marcaPaletaHTML()}
+      </div>
       ${active.questoes.map((q,i)=>`
         <div class="sim-q sg-q">
           <div class="sg-q-tag">${q.kingdomIcon} ${q.kingdomName} · ${q.topicName} · ${q.subName}</div>
+          <div class="marca-zona" data-sub="${marcaChaveAtiva(i)}">
           ${textoApoioHTML(q)}
           <div class="sim-q-text">${i+1}. ${escapeHtml(q.questao)}</div>
+          </div>
           <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
             ${(q.alternativas||[]).map(alt=>`<div class="sim-alt${q.userAnswer===alt.letra?' sim-selected':''}" onclick="sgSelectAnswer(${i},'${escapeAttrJs(alt.letra)}')"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`).join('')}
           </div>
