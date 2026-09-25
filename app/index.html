@@ -2347,6 +2347,7 @@ nav{
   <div class="rd-conectivos-tabs" style="margin-bottom:14px">
     <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
+    <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
     <button class="active"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div class="sec-title">📕 Banco de Erros</div>
@@ -2364,6 +2365,7 @@ nav{
   <div class="rd-conectivos-tabs" style="margin-bottom:14px">
     <button class="active"><i class="fa fa-landmark"></i> Simulado Geral</button>
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
+    <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
     <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="simgeral-content"></div>
@@ -2377,9 +2379,23 @@ nav{
   <div class="rd-conectivos-tabs" style="margin-bottom:14px">
     <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
     <button class="active"><i class="fa fa-file-lines"></i> Minhas Provas</button>
+    <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
     <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="provas-content"></div>
+</div>
+
+<!-- ===== CADERNO DA BANCA ===== -->
+<!-- Aba propria porque e a fonte de prova mais confiavel do app, e dentro de Minhas
+     Provas ela virava so a primeira secao de uma tela que ja tinha outras duas. -->
+<div class="screen" id="screen-caderno">
+  <div class="rd-conectivos-tabs" style="margin-bottom:14px">
+    <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
+    <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
+    <button class="active"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
+    <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
+  </div>
+  <div id="caderno-content"></div>
 </div>
 
 <!-- ===== DASHBOARD ===== -->
@@ -5369,7 +5385,7 @@ function isAfterExam(dateStr){return db.examDate&&dateStr>db.examDate;}
 // Depois de expirar, tudo trava (ver LOCKED_SCREENS) exceto o Painel do Herói
 // (dashboard), que continua visível pra pessoa lembrar do progresso e ser convidada a
 // assinar. Ver applyDefaults() pra como db.plan/db.trialStartedAt são definidos.
-const LOCKED_SCREENS=['map','revisions','erros','simgeral','provas','editais','flashcards','redacoes','repertorio','conquistas'];
+const LOCKED_SCREENS=['map','revisions','erros','simgeral','provas','caderno','editais','flashcards','redacoes','repertorio','conquistas'];
 const LOCKED_SCREEN_INFO={
   map:{icon:'🗺️',title:'Mapa dos Reinos é um recurso do plano completo',desc:'O mapa de progresso por reino/chefão libera junto com o plano completo.'},
   revisions:{icon:'🔔',title:'Revisões é um recurso do plano completo',desc:'A fila de revisões espaçadas (SM-2) — atrasadas, de hoje e dos próximos dias — libera junto com o plano completo.'},
@@ -5947,7 +5963,8 @@ function showScreen(name){
   // Repertório e Banco de Erros não têm botão próprio no menu — viraram abas dentro de
   // Redação e Simulado Geral, respectivamente, desde a fusão das telas relacionadas, então
   // o destaque do menu segue apontando pro botão "pai" de cada uma.
-  const navName=name==='repertorio'?'redacoes':((name==='erros'||name==='provas')?'simgeral':name);
+  const navName=name==='repertorio'?'redacoes'
+    :((name==='erros'||name==='provas'||name==='caderno')?'simgeral':name);
   if(LOCKED_SCREENS.includes(name)&&!hasFullAccess()){
     document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -5962,6 +5979,7 @@ function showScreen(name){
   document.getElementById('screen-'+name).classList.add('active');
   const nb=document.getElementById('nav-'+navName);if(nb)nb.classList.add('active');
   if(name==='provas')renderProvasScreen();
+  if(name==='caderno')renderCadernoScreen();
   if(name==='revisions')renderRevisions();
   if(name==='dashboard')renderDashboard();
   if(name==='editais'){renderEditais();updateEditaisBadge();}
@@ -10869,7 +10887,9 @@ function cadGuardar(){
                                       limiteSec:0,importado:true});
   if(!id){toast('❌ Não consegui guardar.','var(--red)');return;}
   const n=questoes.length;
-  cadDescartar(); saveDB(); renderSimGeralScreen();
+  cadDescartar(); saveDB();
+  showScreen('provas');            // a prova foi pro banco: e la que ela aparece
+  renderSimGeralScreen();
   toast(`🗄️ Caderno guardado — ${n} itens esperando em "Provas guardadas"${anulados?` · ${anulados} anulado(s) fora`:''}${semAssunto?` · ${semAssunto} sem assunto`:''}.`,'var(--green)');
 }
 function cadImportarHTML(){
@@ -11474,6 +11494,7 @@ function simColarHTML(){
 }
 function renderSimGeralScreen(){
   renderProvasScreen();
+  renderCadernoScreen();
   const container=document.getElementById('simgeral-content');
   if(!container)return;
   if(simGeralActive){
@@ -11493,8 +11514,12 @@ function renderSimGeralScreen(){
 function renderProvasScreen(){
   const el=document.getElementById('provas-content');
   if(!el)return;
-  // O caderno da banca vem primeiro de proposito: e a melhor fonte das tres.
-  el.innerHTML=cadImportarHTML()+simColarHTML()+provasGuardadasHTML();
+  el.innerHTML=simColarHTML()+provasGuardadasHTML();
+}
+function renderCadernoScreen(){
+  const el=document.getElementById('caderno-content');
+  if(!el)return;
+  el.innerHTML=cadImportarHTML();
 }
 function simGeralConfigHTML(){
   const kingdoms=db.kingdoms.filter(k=>(db.topics[k.id]||[]).some(t=>(t.subtopics||[]).some(s=>s.studied)));
@@ -24353,6 +24378,7 @@ window.cadConferir=cadConferir;
 window.cadEscolher=cadEscolher;
 window.cadGuardar=cadGuardar;
 window.cadDescartar=cadDescartar;
+window.renderCadernoScreen=renderCadernoScreen;
 window.simNotaSalvar=simNotaSalvar;
 window.simMotivoSalvar=simMotivoSalvar;
 window.provaRevisar=provaRevisar;
