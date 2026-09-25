@@ -751,6 +751,16 @@ nav{
 .prova-tent:hover{border-color:var(--accent);color:var(--text)}
 .prova-selo-nova{font-size:9px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;
   padding:2px 7px;border-radius:999px;background:var(--orange);color:#fff}
+.cad-resumo{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;font-weight:700;
+  color:var(--text2);padding:9px 11px;border-radius:10px;background:var(--panel2);
+  border:1px solid var(--border)}
+.cad-grupo{border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:7px}
+.cad-grupo-top{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2)}
+.cad-grupo-n{font-size:10px;color:var(--muted);font-weight:700}
+.cad-apoio-tag{font-size:9px;font-weight:800;padding:1px 6px;border-radius:999px;
+  background:var(--panel2);color:var(--muted)}
+.cad-comando{font-size:10.5px;color:var(--muted);line-height:1.5;margin:4px 0 6px;font-weight:600}
+.cad-sel{width:100%;padding:5px 8px;font-size:11px}
 .sg-cota-box{font-size:10px;margin:0 0 10px;padding:8px 10px;border-radius:9px;
   background:var(--panel2);line-height:1.6;color:var(--text2);font-weight:600}
 .sg-cota-ok{border:1px solid var(--border)}
@@ -10614,6 +10624,309 @@ function simColarCotas(grupos,qtd){
   cotas[maior]+=qtd-cotas.reduce((a,b)=>a+b,0);
   return cotas[maior]>0?cotas:null;
 }
+// ===== IMPORTAR CADERNO DA BANCA =====
+// Colar prova pronta depende de uma IA ter lido o caderno e devolvido JSON. Aqui nao
+// tem IA nenhuma: o texto do caderno entra cru, o gabarito entra como letras, e o que
+// sai e a redacao da banca palavra por palavra com o gabarito oficial. Nenhum modelo
+// no caminho significa nenhuma chance de alucinacao — e e por isso que esta e a fonte
+// de prova mais confiavel que o app tem.
+//
+// Validado ponta a ponta contra o caderno da SESAU/AL (Enfermeiro, 2021): 120 itens,
+// numeracao 1 a 120 sem buraco, 25 grupos de comando, os 2 textos de apoio de
+// portugues capturados, e os 5 anulados (24, 25, 71, 94, 98) reconhecidos.
+// ---- parser de caderno de prova (Cebraspe certo/errado) ----
+const CAD_LIXO=[
+  /CEBRASPE\s*\|/i,            // cabecalho de pagina
+  /^\d{6}_\d\w*$/,             // codigo do caderno
+  /^--\s*CONHECIMENTOS/i,      // divisor de secao
+  /^Espa[çc]o livre$/i,
+  /^\s*$/
+];
+function cadLimpar(texto){
+  return String(texto||'').replace(/\r\n?/g,'\n').split('\n')
+    .map(l=>l.replace(/ /g,' ').trim())
+    .filter(l=>!CAD_LIXO.some(re=>re.test(l)));
+}
+// O numero em inicio de linha SO vale se for o proximo esperado. E isso que impede
+// "1900", "8.080/1990" e ate "30 anos" (que abre linha no item 11) de virarem item.
+function cadAcharItens(linhas,primeiro){
+  const marcas=[];
+  let esperado=primeiro;
+  for(let i=0;i<linhas.length;i++){
+    const m=linhas[i].match(/^(\d{1,3})\s+(\S.*)$/);
+    if(m&&parseInt(m[1],10)===esperado){
+      marcas.push({num:esperado,linha:i,resto:m[2]});
+      esperado++;
+    }
+  }
+  return marcas;
+}
+// A banca SEMPRE quebra o caderno em dois arquivos (gerais e especificos), e a
+// numeracao continua entre eles: o segundo abre no 51, ou em qualquer outro numero.
+// Entao o inicio nao pode ser chutado — e o numero que abre a sequencia mais longa.
+function cadPrimeiroNumero(linhas){
+  const cands=[];
+  for(let i=0;i<Math.min(linhas.length,80);i++){
+    const m=linhas[i].match(/^(\d{1,3})\s+\S/);
+    if(m){const n=parseInt(m[1],10); if(n>=1&&n<=300&&cands.indexOf(n)<0)cands.push(n);}
+  }
+  let melhor=null;
+  cands.forEach(c=>{
+    const n=cadAcharItens(linhas,c).length;
+    if(n>=3&&(!melhor||n>melhor.n||(n===melhor.n&&c<melhor.cand)))melhor={cand:c,n};
+  });
+  return melhor?melhor.cand:(cands[0]||1);
+}
+// O comando e o bloco que antecede um grupo de itens e sempre contem "julgue".
+// Corta o rabo do item anterior no ponto final que precede o inicio desse bloco.
+const CAD_RE_JULGUE=/\bjulgue\b|\bjulgada\b|\bjulgar\b/i;
+// "Lei n.º 8.080/1990" tem tres pontos que NAO terminam frase. Sem proteger isso, o
+// corte de frases picava o comando no meio e o grupo saia errado — foi o que juntou
+// 31-38 num grupo so e cortou o comando da Lei 8.080 em "080/1990".
+const CAD_MASCARA='\u0001';
+function cadProtegerPontos(t){
+  return t
+    .replace(/(\d)\.(?=\d)/g,'$1'+CAD_MASCARA)                 // 8.080  5.247  2.500
+    .replace(/\bn\.(?=[ºo°\s])/gi,'n'+CAD_MASCARA)              // n.º  n.o
+    .replace(/\b(art|arts|inc|al|par|pag|fl|Dr|Dra|Sr|Sra|Prof)\./gi,'$1'+CAD_MASCARA)
+    .replace(/(\d)\.(ª|º|a\b|o\b)/gi,'$1'+CAD_MASCARA+'$2');   // 1.ª dose  3.º dia
+}
+function cadDesprotegerPontos(t){return t.split(CAD_MASCARA).join('.');}
+function cadSepararComando(bloco){
+  // bloco = texto do item anterior + (talvez) o comando do proximo grupo
+  if(!CAD_RE_JULGUE.test(bloco))return{item:bloco,comando:''};
+  // frases, mantendo o terminador
+  const prot=cadProtegerPontos(bloco);
+  const frases=(prot.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g)||[prot]).map(cadDesprotegerPontos);
+  let iJulgue=-1;
+  for(let i=frases.length-1;i>=0;i--){ if(CAD_RE_JULGUE.test(frases[i])){iJulgue=i;break;} }
+  if(iJulgue<0)return{item:bloco,comando:''};
+  // o comando pode ter frases de contexto antes da que diz "julgue"; elas vao junto
+  // ate encontrar o fim do item anterior. Sem marca de paragrafo no texto extraido,
+  // o corte fica na frase do "julgue" e nas anteriores que ainda cabem no bloco do
+  // comando (ate 3), desde que o item anterior nao fique vazio.
+  // A frase de contexto so vem junto quando a frase do "julgue" APONTA PRA TRAS
+  // ("A respeito desse tema...", "Com base nesses protocolos...", "Acerca dessas
+  // infracoes..."). Sem esse gatilho, puxar a frase anterior rouba a ultima frase do
+  // item anterior — foi o que aconteceu com o item 18, que ficava vazio porque o texto
+  // dele inteiro virava comando do grupo seguinte.
+  const APONTA=/\b(dess[ea]s?|ness[ea]s?|desse tema|tais|referid[oa]s?|tal tema)\b/i;
+  let ini=iJulgue;
+  if(APONTA.test(frases[iJulgue])&&iJulgue>0
+     &&frases.slice(iJulgue-1).join('').trim().length<=900)ini=iJulgue-1;
+  return{item:frases.slice(0,ini).join('').trim(),comando:frases.slice(ini).join('').trim()};
+}
+// Um bloco "Texto CG1A1-I ..." e material de apoio de um grupo inteiro de itens — sem
+// ele os itens de portugues nao podem ser respondidos.
+const CAD_RE_TEXTO=/^Texto\s+[A-Z0-9][\w.\-]*$/;
+function cadSepararApoio(linhas){
+  for(let i=0;i<linhas.length;i++){
+    if(CAD_RE_TEXTO.test(linhas[i].trim())){
+      return{antes:linhas.slice(0,i),apoio:linhas.slice(i)};
+    }
+  }
+  return{antes:linhas,apoio:[]};
+}
+function cadernoParse(texto){
+  const linhas=cadLimpar(texto);
+  const primeiro=cadPrimeiroNumero(linhas);
+  const marcas=cadAcharItens(linhas,primeiro);
+  if(!marcas.length)return{itens:[],grupos:[],faltando:[],primeiro,aviso:'Nenhum item encontrado.'};
+  const preambulo=linhas.slice(0,marcas[0].linha).join('\n');
+  const itens=[];
+  for(let k=0;k<marcas.length;k++){
+    const m=marcas[k];
+    const fim=(k+1<marcas.length)?marcas[k+1].linha:linhas.length;
+    const cru=[m.resto].concat(linhas.slice(m.linha+1,fim));
+    const {antes,apoio}=cadSepararApoio(cru);
+    const bruto=antes.join(' ').replace(/\s+/g,' ').trim();
+    const {item,comando}=cadSepararComando(bruto);
+    let apoioTxt='',comandoFinal=comando;
+    if(apoio.length){
+      const sep=cadSepararComando(apoio.join(' ').replace(/\s+/g,' ').trim());
+      apoioTxt=sep.item; comandoFinal=sep.comando||comando;
+    }
+    itens.push({num:m.num,texto:item,comandoDepois:comandoFinal,apoioDepois:apoioTxt});
+  }
+  // o comando que veio ANTES do item 1 esta no preambulo
+  const preLinhas=linhas.slice(0,marcas[0].linha);
+  const preSep=cadSepararApoio(preLinhas);
+  const preBloco=(preSep.apoio.length?preSep.apoio:preLinhas).join(' ').replace(/\s+/g,' ');
+  const preFull=cadSepararComando(preBloco);
+  const preComando=preFull.comando;
+  const preApoio=preSep.apoio.length?preFull.item:'';
+  // monta os grupos: um comando abre um grupo, que vai ate o proximo comando
+  const grupos=[];
+  let atual={comando:preComando,apoio:preApoio,itens:[]};
+  itens.forEach(it=>{
+    atual.itens.push(it.num);
+    if(it.comandoDepois){grupos.push(atual);atual={comando:it.comandoDepois,apoio:it.apoioDepois||'',itens:[]};}
+  });
+  if(atual.itens.length)grupos.push(atual);
+  const faltando=[];
+  for(let n=primeiro;n<primeiro+marcas.length;n++){
+    if(!itens.some(i=>i.num===n))faltando.push(n);
+  }
+  return{itens,grupos,faltando,primeiro};
+}
+// ---- gabarito ----
+function gabaritoParse(txt,letras){
+  const perm=new Set((letras||'CEX').split(''));
+  const soLetras=String(txt||'').toUpperCase().replace(/[^A-Z]/g,'');
+  if(soLetras.length&&[...soLetras].every(c=>perm.has(c)))return soLetras.split('');
+  // tem palavra no meio: fica so com as letras isoladas
+  return String(txt||'').toUpperCase().split(/[^A-Z]+/)
+    .filter(t=>t.length===1&&perm.has(t));
+}
+
+// ---- a tela ----
+let cadLote=null;        // {itens,grupos,faltando,primeiro}
+let cadGabLidas=null;    // letras do gabarito, ja na ordem dos itens
+let cadEscolhas={};      // indice do grupo -> subId
+
+// O comando do Cebraspe quase sempre nomeia o assunto ("de acordo com a Lei n.o
+// 7.498/1986", "quanto ao processo de enfermagem"). Pontuar palavra em comum poupa 25
+// escolhas na mao. E sugestao: nasce escolhida, mas da pra trocar — e um palpite errado
+// que voce nao percebe e pior do que nenhum, entao so sugere com 2 palavras em comum.
+// normalizeForDedup APAGA a pontuacao, e isso cola numero de lei com ano: "8.080/1990"
+// virava o token "80801990", que nao casa com o assunto "Lei 8080". Aqui o ponto some
+// so quando esta ENTRE digitos (8.080 -> 8080) e o resto da pontuacao vira espaco.
+function cadChave(t){
+  return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/(\d)\.(\d)/g,'$1$2')
+    .replace(/[^\w\s]/g,' ')
+    .replace(/\s+/g,' ').trim();
+}
+function cadSugerir(texto,ix){
+  const alvo=new Set(cadChave(texto).split(' ').filter(w=>w.length>3));
+  if(!alvo.size)return '';
+  // Numero de lei vale dobrado. "Lei 8.080" contra um comando que diz "Lei n.o
+  // 8.080/1990" so tem UMA palavra em comum depois de tirar as curtas — e mesmo assim
+  // e um casamento muito mais seguro do que duas palavras genericas em comum, porque
+  // numero de norma nao se repete por acaso.
+  const peso=w=>/\d/.test(w)?2:1;
+  let melhor=null,melhorN=0;
+  ix.forEach(c=>{
+    const pal=cadChave(c.sub.name).split(' ').filter(w=>w.length>3);
+    if(!pal.length)return;
+    const n=pal.filter(w=>alvo.has(w)).reduce((a,w)=>a+peso(w),0);
+    if(n>melhorN){melhorN=n;melhor=c;}
+  });
+  return melhorN>=2?melhor.sub.id:'';
+}
+function cadConferir(){
+  const tx=(document.getElementById('cad-texto')||{}).value||'';
+  const tg=(document.getElementById('cad-gab')||{}).value||'';
+  if(!tx.trim()){toast('⚠️ Cole o texto do caderno primeiro.','var(--red)');return;}
+  const r=cadernoParse(tx);
+  if(!r.itens.length){
+    toast('❌ Não achei item nenhum. O texto precisa ter os itens numerados, um número por linha.','var(--red)');
+    return;
+  }
+  const gab=gabaritoParse(tg,'CEX');
+  // A trava de contagem existe porque o caderno do Cebraspe vem partido em dois PDFs e
+  // e facil colar o caderno inteiro contra o gabarito de so uma das partes. Casar 120
+  // itens com 50 letras nao erra 70 itens: desalinha TODOS a partir do primeiro.
+  if(gab.length&&gab.length!==r.itens.length){
+    toast(`⚠️ ${r.itens.length} itens no caderno e ${gab.length} letras no gabarito. Tem que bater — cole a parte do gabarito que corresponde ao que você colou do caderno.`,'var(--red)');
+    return;
+  }
+  cadLote=r; cadGabLidas=gab.length?gab:null; cadEscolhas={};
+  const {ix}=simColarMapa();
+  const estudados=ix.filter(c=>c.sub.studied);
+  r.grupos.forEach((g,i)=>{cadEscolhas[i]=cadSugerir((g.comando||'')+' '+(g.apoio||''),estudados);});
+  renderSimGeralScreen();
+  const anul=cadGabLidas?cadGabLidas.filter(x=>x==='X').length:0;
+  toast(`📄 ${r.itens.length} itens · ${r.grupos.length} grupos${anul?` · ${anul} anulado(s)`:''}. Confira os assuntos e guarde.`,'var(--green)');
+}
+function cadEscolher(i,subId){cadEscolhas[i]=subId;}
+function cadDescartar(){cadLote=null;cadGabLidas=null;cadEscolhas={};renderSimGeralScreen();}
+function cadGuardar(){
+  if(!cadLote)return;
+  if(!cadGabLidas){toast('⚠️ Sem gabarito eu não sei a resposta de nenhum item. Cole o gabarito.','var(--red)');return;}
+  const {ix}=simColarMapa();
+  const porId={}; ix.forEach(c=>porId[c.sub.id]=c);
+  const questoes=[]; let anulados=0,semAssunto=0;
+  cadLote.grupos.forEach((g,gi)=>{
+    const c=porId[cadEscolhas[gi]];
+    const apoio=[g.apoio,g.comando].filter(Boolean).join('\n\n');
+    g.itens.forEach(num=>{
+      const it=cadLote.itens.find(x=>x.num===num);
+      if(!it)return;
+      const letra=cadGabLidas[num-cadLote.primeiro];
+      if(letra==='X'){anulados++;return;}      // anulado nao tem resposta certa
+      if(letra!=='C'&&letra!=='E')return;
+      if(!c){semAssunto++;return;}
+      questoes.push({questao:it.texto,alternativas:SIM_ALTS_CE.map(a=>({...a})),
+        correta:letra,explicacao:'',formato:'certoerrado',textoApoio:apoio,
+        fonte:'Caderno da banca — gabarito oficial',
+        subId:c.sub.id,subName:c.sub.name,topicName:c.topic.name,
+        kingdomId:c.kingdom.id,kingdomName:c.kingdom.name,kingdomIcon:iconeReino(c.kingdom.icon)});
+    });
+  });
+  if(!questoes.length){toast('❌ Nenhum item aproveitável — escolha o assunto de pelo menos um grupo.','var(--red)');return;}
+  const id=provaGuardarLote(questoes,{formato:'certoerrado',nivel:'dificil',
+                                      limiteSec:0,importado:true});
+  if(!id){toast('❌ Não consegui guardar.','var(--red)');return;}
+  const n=questoes.length;
+  cadDescartar(); saveDB(); renderSimGeralScreen();
+  toast(`🗄️ Caderno guardado — ${n} itens esperando em "Provas guardadas"${anulados?` · ${anulados} anulado(s) fora`:''}${semAssunto?` · ${semAssunto} sem assunto`:''}.`,'var(--green)');
+}
+function cadImportarHTML(){
+  const {ix}=simColarMapa();
+  const estudados=ix.filter(c=>c.sub.studied);
+  const opcoes=(sel)=>estudados.map(c=>`<option value="${c.sub.id}"${sel===c.sub.id?' selected':''}>${escapeHtml(c.kingdom.name)} · ${escapeHtml(c.sub.name)}</option>`).join('');
+  if(!cadLote){
+    return`<div class="section-card">
+      <div class="sec-title" style="margin-bottom:4px">📄 Importar caderno da banca</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600">
+        Sem IA nenhuma no caminho: o texto do caderno entra cru e sai a redação da banca palavra por palavra, com o gabarito oficial.
+        É a prova mais confiável que dá pra ter aqui — nada foi escrito por um modelo.
+        O Cebraspe parte o caderno em dois PDFs (gerais e específicos); pode colar os dois juntos, que a numeração continua.
+      </div>
+      <textarea id="cad-texto" class="inp" spellcheck="false" placeholder="Cole aqui o texto do caderno — os itens numerados, um número por linha..."
+        style="width:100%;min-height:110px;font-family:ui-monospace,monospace;font-size:11px;line-height:1.5;resize:vertical"></textarea>
+      <textarea id="cad-gab" class="inp" spellcheck="false" placeholder="Cole aqui o gabarito — as letras C, E e X (anulado). Pode vir com os números junto."
+        style="width:100%;min-height:54px;margin-top:8px;font-family:ui-monospace,monospace;font-size:11px;line-height:1.5;resize:vertical"></textarea>
+      <button class="btn btn-sm btn-primary" style="margin-top:8px" onclick="cadConferir()"><i class="fa fa-magnifying-glass"></i> Conferir o que veio</button>
+    </div>`;
+  }
+  const anul=cadGabLidas?cadGabLidas.filter(x=>x==='X').length:0;
+  const semAlvo=cadLote.grupos.filter((g,i)=>!cadEscolhas[i]).length;
+  return`<div class="section-card">
+    <div class="sec-title" style="margin-bottom:4px">📄 Caderno conferido</div>
+    <div class="cad-resumo">
+      <span><b>${cadLote.itens.length}</b> itens</span>
+      <span>numeração <b>${cadLote.primeiro}</b> a <b>${cadLote.primeiro+cadLote.itens.length-1}</b></span>
+      <span><b>${cadLote.grupos.length}</b> grupos</span>
+      ${cadGabLidas?`<span><b>${cadGabLidas.length}</b> no gabarito</span>`:`<span style="color:var(--red-t)">sem gabarito</span>`}
+      ${anul?`<span style="color:var(--orange-t)"><b>${anul}</b> anulado(s), ficam de fora</span>`:''}
+      ${cadLote.faltando.length?`<span style="color:var(--red-t)">faltando: ${cadLote.faltando.join(', ')}</span>`:''}
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin:10px 0;line-height:1.55;font-weight:600">
+      Cada grupo é um comando com os itens que dependem dele — o comando vai junto como texto de apoio, senão o item fica sem contexto.
+      ${semAlvo?`<b style="color:var(--orange-t)">${semAlvo} grupo(s) sem assunto</b> — esses itens ficam de fora. O que eu sugeri é palpite por palavra em comum: confira.`:'Todos os grupos têm assunto. Confira as sugestões antes de guardar.'}
+    </div>
+    ${cadLote.grupos.map((g,i)=>`
+      <div class="cad-grupo">
+        <div class="cad-grupo-top">
+          <b>${g.itens[0]}–${g.itens[g.itens.length-1]}</b>
+          <span class="cad-grupo-n">${g.itens.length} ${g.itens.length===1?'item':'itens'}</span>
+          ${g.apoio?'<span class="cad-apoio-tag">📎 texto de apoio</span>':''}
+        </div>
+        <div class="cad-comando" title="${escapeHtml(g.comando||'')}">${escapeHtml((g.comando||'(sem comando)').slice(0,150))}${(g.comando||'').length>150?'…':''}</div>
+        <select class="inp cad-sel" onchange="cadEscolher(${i},this.value)">
+          <option value="">— escolha o assunto —</option>
+          ${opcoes(cadEscolhas[i])}
+        </select>
+      </div>`).join('')}
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn btn-sm btn-gold" onclick="cadGuardar()"><i class="fa fa-box-archive"></i> Guardar no banco de provas</button>
+      <button class="btn btn-sm btn-ghost" onclick="cadDescartar()"><i class="fa fa-trash"></i> Descartar</button>
+    </div>
+  </div>`;
+}
+
 // A lista fechada e o que impede a IA de devolver 120 assuntos diferentes, um por
 // questao — que foi o que aconteceu pedindo "o nome mais especifico possivel": nada
 // casava com o cadastro e sobravam 120 seletores pra resolver a mao. Vale tanto pra
@@ -11180,7 +11493,8 @@ function renderSimGeralScreen(){
 function renderProvasScreen(){
   const el=document.getElementById('provas-content');
   if(!el)return;
-  el.innerHTML=simColarHTML()+provasGuardadasHTML();
+  // O caderno da banca vem primeiro de proposito: e a melhor fonte das tres.
+  el.innerHTML=cadImportarHTML()+simColarHTML()+provasGuardadasHTML();
 }
 function simGeralConfigHTML(){
   const kingdoms=db.kingdoms.filter(k=>(db.topics[k.id]||[]).some(t=>(t.subtopics||[]).some(s=>s.studied)));
@@ -24035,6 +24349,10 @@ window.confirmAddPlanItem=confirmAddPlanItem;
 window.simColarCopiarConverter=simColarCopiarConverter;
 window.simColarGuardar=simColarGuardar;
 window.colarAlternarFora=colarAlternarFora;
+window.cadConferir=cadConferir;
+window.cadEscolher=cadEscolher;
+window.cadGuardar=cadGuardar;
+window.cadDescartar=cadDescartar;
 window.simNotaSalvar=simNotaSalvar;
 window.simMotivoSalvar=simMotivoSalvar;
 window.provaRevisar=provaRevisar;
