@@ -747,6 +747,14 @@ nav{
 .sim-nota-selo{font-size:9.5px;font-weight:800;color:var(--green-t);white-space:nowrap}
 .sim-nota-txt{width:100%;min-height:58px;font-size:12px;line-height:1.5;resize:vertical;
   margin-bottom:6px}
+.montar-assuntos{display:flex;flex-direction:column;gap:3px;margin-top:10px;
+  max-height:190px;overflow:auto;border-top:1px solid var(--border);padding-top:8px}
+.montar-ass{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;
+  color:var(--text2);padding:3px 2px;cursor:pointer}
+.montar-ass span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.montar-ass b{color:var(--muted);font-size:10px}
+.prova-treino{font-size:9px;font-weight:800;letter-spacing:.3px;padding:2px 7px;
+  border-radius:999px;background:var(--accent);color:#fff;white-space:nowrap}
 .prova-fora{font-size:9px;font-weight:800;padding:2px 7px;border-radius:999px;
   background:var(--panel2);border:1px solid var(--border);color:var(--muted);white-space:nowrap}
 .prova-tent{background:var(--panel2);border:1px solid var(--border);border-radius:8px;
@@ -11532,7 +11540,7 @@ function renderSimGeralScreen(){
 function renderProvasScreen(){
   const el=document.getElementById('provas-content');
   if(!el)return;
-  el.innerHTML=simColarHTML()+provasGuardadasHTML();
+  el.innerHTML=simColarHTML()+montarHTML()+provasGuardadasHTML();
 }
 function renderCadernoScreen(){
   const el=document.getElementById('caderno-content');
@@ -12096,12 +12104,16 @@ function provaRefazer(id){
   // assunto, Banco de Erros, flashcard. So a partir da 2a e que o resultado deixa de
   // alimentar a fila, porque ai voce ja viu as questoes.
   const feitas=(prova.tentativas||[]).length;
+  // Prova montada e feita de questoes que voce JA respondeu, entao ela nunca conta —
+  // nem na primeira vez. Contar de novo o que voce ja viu infla o aproveitamento
+  // exatamente como a refacao inflaria, e e o mesmo motivo.
+  const soTreino=!!prova.treino;
   simGeralActive={
     questoes:prova.questoes.map(q=>({...q})),   // copia: fazer nao suja a guardada
     startedAt:Date.now(),limiteSec:limite,corrected:false,
     formato:prova.formato,nivel:prova.nivel,
     importado:prova.origem==='colado',
-    provaId:prova.id,refazendo:feitas>0,
+    provaId:prova.id,refazendo:feitas>0||soTreino,
     tentativaNum:feitas+1
   };
   showScreen('simgeral');
@@ -12109,7 +12121,9 @@ function provaRefazer(id){
   window.scrollTo(0,0);
   toast(feitas
     ?`🔁 Refazendo a prova — ${simGeralActive.questoes.length} questões, ${simGeralActive.tentativaNum}ª tentativa.`
-    :`🏛️ Prova do banco — ${simGeralActive.questoes.length} questões. Esta é a 1ª vez, então ela conta em tudo. Bom jogo.`,'var(--accent)');
+    :(soTreino
+      ?`🎯 Prova montada — ${simGeralActive.questoes.length} itens de treino. Não mexe nas suas estatísticas.`
+      :`🏛️ Prova do banco — ${simGeralActive.questoes.length} questões. Esta é a 1ª vez, então ela conta em tudo. Bom jogo.`),'var(--accent)');
 }
 // Refacao NAO entra em simStats, e isso e decisao, nao esquecimento. simStats manda no
 // peso da fila de revisao e em "assuntos que mais erro"; responder de novo item cujo
@@ -12350,6 +12364,154 @@ function simNotaHTML(q,i){
     <button class="btn btn-xs btn-ghost" onclick="simNotaSalvar(${i})"><i class="fa fa-floppy-disk"></i> Guardar nota</button>
   </div>`;
 }
+// ===== MONTAR PROVA SOB MEDIDA =====
+// O painel de erros diagnostica e para ali: voce ve que o gargalo e "Nao sabia" em tres
+// assuntos e nao tem o que fazer com isso. Aqui o diagnostico vira caderno — sacando das
+// provas que ja estao no banco, sem guardar questao nova em lugar nenhum.
+const MONTAR_MODOS=[
+  {id:'errei',  lbl:'Só o que eu errei',   nota:'As que você marcou errado na última tentativa de cada prova.'},
+  {id:'gargalo',lbl:'Pelo meu gargalo',    nota:'Assuntos onde o motivo escolhido domina — é o painel de erros virando prova.'},
+  {id:'assunto',lbl:'Por assunto',         nota:'Você escolhe os minibosses.'}
+];
+let montarSel=new Set();     // subIds escolhidos no modo "por assunto"
+
+// Toda questao das provas guardadas, com o que aconteceu na ULTIMA tentativa dela.
+// Item fora da conta nao entra: questao datada ou com problema nao merece ser reservida.
+function montarChaveQ(q){return normalizeForDedup(q.questao).slice(0,120);}
+function montarAcervo(){
+  // Duas passadas. A primeira levanta quais questoes estao queimadas: se QUALQUER copia
+  // dela foi marcada como desatualizada ou com problema, a questao esta quebrada e nao
+  // volta — nem pela copia limpa que ficou numa prova montada antes da marcacao.
+  const queimadas=new Set();
+  (db.provas||[]).forEach(p=>(p.questoes||[]).forEach(q=>{
+    if(questaoForaDaConta(q))queimadas.add(montarChaveQ(q));
+  }));
+  const out=[];
+  const vistos=new Set();
+  (db.provas||[]).forEach(p=>{
+    const ts=p.tentativas||[];
+    const resp=(ts[ts.length-1]||{}).respostas||[];
+    (p.questoes||[]).forEach((q,i)=>{
+      // A mesma questao pode estar em duas provas (caderno importado duas vezes, prova
+      // montada a partir de outra). Sem isto o caderno sob medida vinha com repetida.
+      const chave=montarChaveQ(q);
+      if(queimadas.has(chave)||vistos.has(chave))return;
+      vistos.add(chave);
+      const dada=resp[i]||'';
+      out.push({q,subId:q.subId,respondida:!!dada,errou:!!dada&&dada!==q.correta});
+    });
+  });
+  return out;
+}
+// Assuntos em que o balde escolhido e o mais frequente. Empate nao conta: se voce errou
+// um por conteudo e um por atencao naquele assunto, ele nao e gargalo de nenhum dos dois.
+function montarAssuntosDoGargalo(motivo){
+  const {porAssunto}=motivosAgregado();
+  const nomes=new Set();
+  Object.entries(porAssunto).forEach(([nome,v])=>{
+    const meu=v[motivo]||0;
+    if(!meu)return;
+    const outros=['conteudo','atencao','chute'].filter(m=>m!==motivo).map(m=>v[m]||0);
+    if(meu>Math.max(...outros,0))nomes.add(nome);
+  });
+  return nomes;
+}
+function montarPool(modo,motivo){
+  const acervo=montarAcervo();
+  if(modo==='errei')return acervo.filter(x=>x.errou);
+  if(modo==='gargalo'){
+    const nomes=montarAssuntosDoGargalo(motivo||'conteudo');
+    return acervo.filter(x=>nomes.has(x.q.subName));
+  }
+  if(modo==='assunto')return acervo.filter(x=>montarSel.has(x.subId));
+  return acervo;
+}
+function montarAgora(){
+  const modo=(document.getElementById('montar-modo')||{}).value||'errei';
+  const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
+  const qtd=parseInt((document.getElementById('montar-qtd')||{}).value,10)||30;
+  const pool=montarPool(modo,motivo);
+  if(!pool.length){
+    toast('⚠️ Não achei questão nenhuma com esse filtro. Faça uma prova e classifique os erros primeiro.','var(--orange)');
+    return;
+  }
+  // embaralha pra a ordem nao ser a mesma das provas de origem
+  const arr=pool.slice();
+  for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
+  const escolhidas=arr.slice(0,qtd);
+  const questoes=escolhidas.map(x=>{
+    const {userAnswer,motivo,minhaNota,marcas,...limpa}=x.q;   // caderno limpo: sem a sua marca da vez passada
+    return limpa;
+  });
+  const formato=questoes.every(q=>q.formato==='certoerrado')?'certoerrado':'multipla';
+  const id=provaGuardarLote(questoes,{formato,nivel:'dificil',limiteSec:0,importado:true});
+  if(!id){toast('❌ Não consegui montar.','var(--red)');return;}
+  // Prova montada e TREINO: as questoes voce ja viu, entao ela nao pode alimentar
+  // estatistica por assunto nem Banco de Erros — pelo mesmo motivo que a refacao nao
+  // alimenta. Contar de novo o que voce ja respondeu infla o seu aproveitamento.
+  const prova=provaAchar(id);
+  if(prova){prova.treino=true;prova.origem='montada';}
+  saveDB();
+  showScreen('provas');
+  renderSimGeralScreen();
+  const lbl=(MONTAR_MODOS.find(m=>m.id===modo)||{}).lbl||'';
+  toast(`🎯 Prova montada — ${questoes.length} ${questoes.length===1?'item':'itens'} (${lbl})${pool.length>questoes.length?`, sorteados de ${pool.length}`:''}. Está em Provas guardadas.`,'var(--green)');
+}
+function montarTrocarModo(){renderSimGeralScreen();}
+function montarAlternarAssunto(subId,el){
+  if(el&&el.checked)montarSel.add(subId); else montarSel.delete(subId);
+  const c=document.getElementById('montar-conta');
+  if(c)c.textContent=montarResumoPool();
+}
+function montarResumoPool(){
+  const modo=(document.getElementById('montar-modo')||{}).value||'errei';
+  const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
+  const n=montarPool(modo,motivo).length;
+  return n?`${n} ${n===1?'questão disponível':'questões disponíveis'} com esse filtro`
+          :'nenhuma questão com esse filtro ainda';
+}
+function montarHTML(){
+  const acervo=montarAcervo();
+  if(!acervo.length)return'';
+  const modo=(document.getElementById('montar-modo')||{}).value||'errei';
+  const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
+  const {ix}=simColarMapa();
+  const comQuestao={};
+  acervo.forEach(x=>{comQuestao[x.subId]=(comQuestao[x.subId]||0)+1;});
+  const nota=(MONTAR_MODOS.find(m=>m.id===modo)||{}).nota||'';
+  return`<div class="section-card">
+    <div class="sec-title" style="margin-bottom:4px">🎯 Montar prova sob medida</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600">
+      Saca das <b>${acervo.length} questões</b> que já estão nas suas provas guardadas e monta um caderno novo — sem guardar questão repetida em lugar nenhum.
+      Como você já viu essas questões, a prova montada é <b>treino</b>: ela não mexe nas estatísticas por assunto nem no Banco de Erros.
+    </div>
+    <div class="sim-config-row" style="flex-wrap:wrap">
+      <select id="montar-modo" class="inp" style="width:auto;padding:6px 10px" onchange="montarTrocarModo()">
+        ${MONTAR_MODOS.map(m=>`<option value="${m.id}"${modo===m.id?' selected':''}>${m.lbl}</option>`).join('')}
+      </select>
+      ${modo==='gargalo'?`<select id="montar-motivo" class="inp" style="width:auto;padding:6px 10px" onchange="montarTrocarModo()">
+        ${SIM_MOTIVOS.map(m=>`<option value="${m.id}"${motivo===m.id?' selected':''}>${m.icone} ${m.lbl}</option>`).join('')}
+      </select>`:''}
+      <label style="font-size:11px;color:var(--muted);font-weight:700">Itens:</label>
+      <select id="montar-qtd" class="inp" style="width:auto;padding:6px 10px">
+        <option value="20">20</option><option value="30" selected>30</option>
+        <option value="40">40</option><option value="60">60</option>
+      </select>
+      <button class="btn btn-sm btn-primary" onclick="montarAgora()"><i class="fa fa-wand-magic-sparkles"></i> Montar</button>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.55;font-weight:600">
+      ${escapeHtml(nota)} <b id="montar-conta">${escapeHtml(montarResumoPool())}</b>
+    </div>
+    ${modo==='assunto'?`<div class="montar-assuntos">
+      ${ix.filter(c=>comQuestao[c.sub.id]).map(c=>`
+        <label class="montar-ass">
+          <input type="checkbox" onchange="montarAlternarAssunto('${c.sub.id}',this)"${montarSel.has(c.sub.id)?' checked':''}>
+          <span>${iconeReino(c.kingdom.icon)} ${escapeHtml(c.sub.name)}</span>
+          <b>${comQuestao[c.sub.id]}</b>
+        </label>`).join('')}
+    </div>`:''}
+  </div>`;
+}
 function provasGuardadasHTML(){
   const lista=provasLista();
   if(!lista.length)return'';
@@ -12375,9 +12537,10 @@ function provasGuardadasHTML(){
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px">
           <b style="font-size:12px">${total} questões</b>
           ${nova?`<span class="prova-selo-nova">esperando</span>`:''}
+          ${p.treino?`<span class="prova-treino" title="Montada a partir de questões que você já respondeu — não mexe nas estatísticas por assunto nem no Banco de Erros">🎯 treino</span>`:''}
           ${foraP?`<span class="prova-fora" title="Itens marcados como desatualizados ou com problema — não entram no placar">🕰️ ${foraP} fora da conta</span>`:''}
           <span style="color:var(--muted)">${ce?'✔️✖️ Certo/Errado':'🔤 Múltipla escolha'}</span>
-          <span style="color:var(--muted)">${p.origem==='colado'?'📋 colada':'🤖 gerada aqui'}</span>
+          <span style="color:var(--muted)">${p.origem==='montada'?'🎯 montada':(p.origem==='colado'?'📋 colada':'🤖 gerada aqui')}</span>
           <span style="color:var(--muted)">${new Date(p.criadaEm).toLocaleDateString('pt-BR')}</span>
           <span style="flex:1"></span>
           <select id="prova-refazer-tempo-${p.id}" class="inp" style="width:auto;padding:4px 8px;font-size:11px">
@@ -12391,7 +12554,9 @@ function provasGuardadasHTML(){
           <button class="btn btn-xs ${nova?'btn-gold':'btn-primary'}" onclick="provaRefazer('${p.id}')"><i class="fa fa-${nova?'play':'rotate-left'}"></i> ${nova?'Fazer':'Refazer'}</button>
           <button class="btn btn-xs btn-ghost" onclick="provaApagar('${p.id}')" title="Apagar a prova guardada"><i class="fa fa-trash"></i></button>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">${nova?'<i>Nunca feita — esta prova conta como simulado de verdade na primeira vez.</i>':linhas}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">${nova?(p.treino
+      ?'<i>Nunca feita — é treino: não conta nas estatísticas, serve pra bater de novo no que você errou.</i>'
+      :'<i>Nunca feita — esta prova conta como simulado de verdade na primeira vez.</i>'):linhas}</div>
       </div>`;
     }).join('')}
   </div>`;
@@ -24458,6 +24623,9 @@ window.cadEscolher=cadEscolher;
 window.cadGuardar=cadGuardar;
 window.cadDescartar=cadDescartar;
 window.renderCadernoScreen=renderCadernoScreen;
+window.montarAgora=montarAgora;
+window.montarTrocarModo=montarTrocarModo;
+window.montarAlternarAssunto=montarAlternarAssunto;
 window.simNotaSalvar=simNotaSalvar;
 window.simMotivoSalvar=simMotivoSalvar;
 window.provaRevisar=provaRevisar;
