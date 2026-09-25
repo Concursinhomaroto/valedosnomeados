@@ -747,6 +747,7 @@ nav{
 .sim-nota-selo{font-size:9.5px;font-weight:800;color:var(--green-t);white-space:nowrap}
 .sim-nota-txt{width:100%;min-height:58px;font-size:12px;line-height:1.5;resize:vertical;
   margin-bottom:6px}
+.montar-qtd{width:74px;padding:6px 8px;text-align:center;font-weight:800}
 .montar-assuntos{display:flex;flex-direction:column;gap:3px;margin-top:10px;
   max-height:190px;overflow:auto;border-top:1px solid var(--border);padding-top:8px}
 .montar-ass{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;
@@ -12374,6 +12375,25 @@ const MONTAR_MODOS=[
   {id:'assunto',lbl:'Por assunto',         nota:'Você escolhe os minibosses.'}
 ];
 let montarSel=new Set();     // subIds escolhidos no modo "por assunto"
+// A lista fixa de 20/30/40/60 era chute meu. Com 245 questoes no acervo, prova de 100
+// e o tamanho normal — entao o numero e digitado, e fica lembrado pra nao ter que
+// reescrever a cada montagem.
+const MONTAR_QTD_KEY='vdn_montar_qtd';
+const MONTAR_QTD_MAX=250;
+function montarQtdLembrada(){
+  try{const n=parseInt(localStorage.getItem(MONTAR_QTD_KEY),10);
+      if(isFinite(n)&&n>0)return Math.min(n,MONTAR_QTD_MAX);}catch(e){}
+  return 100;
+}
+function montarQtdGravar(el){
+  let n=parseInt(el&&el.value,10);
+  if(!isFinite(n)||n<1)n=1;
+  if(n>MONTAR_QTD_MAX)n=MONTAR_QTD_MAX;
+  if(el)el.value=n;
+  try{localStorage.setItem(MONTAR_QTD_KEY,String(n));}catch(e){}
+  const c=document.getElementById('montar-conta');
+  if(c)c.textContent=montarResumoPool();
+}
 
 // Toda questao das provas guardadas, com o que aconteceu na ULTIMA tentativa dela.
 // Item fora da conta nao entra: questao datada ou com problema nao merece ser reservida.
@@ -12386,22 +12406,26 @@ function montarAcervo(){
   (db.provas||[]).forEach(p=>(p.questoes||[]).forEach(q=>{
     if(questaoForaDaConta(q))queimadas.add(montarChaveQ(q));
   }));
-  const out=[];
-  const vistos=new Set();
+  // A mesma questao pode estar em varias provas (caderno importado duas vezes, e sempre
+  // que ela entra num caderno montado). O historico dela e a SOMA das copias: errou se
+  // errou em alguma. Ficar so com a primeira copia encontrada quebrava o filtro "so o
+  // que eu errei" — a copia sem resposta, dentro da prova montada, tapava a original
+  // respondida, e o filtro esvaziava depois da primeira montagem.
+  const porChave=new Map();
   (db.provas||[]).forEach(p=>{
     const ts=p.tentativas||[];
     const resp=(ts[ts.length-1]||{}).respostas||[];
     (p.questoes||[]).forEach((q,i)=>{
-      // A mesma questao pode estar em duas provas (caderno importado duas vezes, prova
-      // montada a partir de outra). Sem isto o caderno sob medida vinha com repetida.
       const chave=montarChaveQ(q);
-      if(queimadas.has(chave)||vistos.has(chave))return;
-      vistos.add(chave);
+      if(queimadas.has(chave))return;
       const dada=resp[i]||'';
-      out.push({q,subId:q.subId,respondida:!!dada,errou:!!dada&&dada!==q.correta});
+      const reg=porChave.get(chave)||{q,subId:q.subId,respondida:false,errou:false};
+      reg.respondida=reg.respondida||!!dada;
+      reg.errou=reg.errou||(!!dada&&dada!==q.correta);
+      porChave.set(chave,reg);
     });
   });
-  return out;
+  return [...porChave.values()];
 }
 // Assuntos em que o balde escolhido e o mais frequente. Empate nao conta: se voce errou
 // um por conteudo e um por atencao naquele assunto, ele nao e gargalo de nenhum dos dois.
@@ -12429,7 +12453,8 @@ function montarPool(modo,motivo){
 function montarAgora(){
   const modo=(document.getElementById('montar-modo')||{}).value||'errei';
   const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
-  const qtd=parseInt((document.getElementById('montar-qtd')||{}).value,10)||30;
+  const qtd=Math.max(1,Math.min(MONTAR_QTD_MAX,
+    parseInt((document.getElementById('montar-qtd')||{}).value,10)||montarQtdLembrada()));
   const pool=montarPool(modo,motivo);
   if(!pool.length){
     toast('⚠️ Não achei questão nenhuma com esse filtro. Faça uma prova e classifique os erros primeiro.','var(--orange)');
@@ -12467,8 +12492,12 @@ function montarResumoPool(){
   const modo=(document.getElementById('montar-modo')||{}).value||'errei';
   const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
   const n=montarPool(modo,motivo).length;
-  return n?`${n} ${n===1?'questão disponível':'questões disponíveis'} com esse filtro`
-          :'nenhuma questão com esse filtro ainda';
+  if(!n)return 'nenhuma questão com esse filtro ainda';
+  const el=document.getElementById('montar-qtd');
+  const pedido=parseInt(el&&el.value,10)||montarQtdLembrada();
+  const sai=Math.min(pedido,n);
+  return `${n} ${n===1?'questão disponível':'questões disponíveis'} com esse filtro`
+        +(pedido>n?` — o caderno vai sair com ${sai}, que é tudo que há`:'');
 }
 function montarHTML(){
   const acervo=montarAcervo();
@@ -12493,10 +12522,10 @@ function montarHTML(){
         ${SIM_MOTIVOS.map(m=>`<option value="${m.id}"${motivo===m.id?' selected':''}>${m.icone} ${m.lbl}</option>`).join('')}
       </select>`:''}
       <label style="font-size:11px;color:var(--muted);font-weight:700">Itens:</label>
-      <select id="montar-qtd" class="inp" style="width:auto;padding:6px 10px">
-        <option value="20">20</option><option value="30" selected>30</option>
-        <option value="40">40</option><option value="60">60</option>
-      </select>
+      <input id="montar-qtd" class="inp montar-qtd" type="number" inputmode="numeric"
+        min="1" max="${MONTAR_QTD_MAX}" value="${montarQtdLembrada()}"
+        onchange="montarQtdGravar(this)" onblur="montarQtdGravar(this)"
+        title="Quantos itens o caderno vai ter. Se o filtro tiver menos que isso, ele monta com o que houver.">
       <button class="btn btn-sm btn-primary" onclick="montarAgora()"><i class="fa fa-wand-magic-sparkles"></i> Montar</button>
     </div>
     <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.55;font-weight:600">
@@ -24626,6 +24655,7 @@ window.renderCadernoScreen=renderCadernoScreen;
 window.montarAgora=montarAgora;
 window.montarTrocarModo=montarTrocarModo;
 window.montarAlternarAssunto=montarAlternarAssunto;
+window.montarQtdGravar=montarQtdGravar;
 window.simNotaSalvar=simNotaSalvar;
 window.simMotivoSalvar=simMotivoSalvar;
 window.provaRevisar=provaRevisar;
