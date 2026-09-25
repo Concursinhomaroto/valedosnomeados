@@ -711,6 +711,8 @@ nav{
 .sim-fmt-split{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px;
   font-size:10.5px;font-weight:800;color:var(--text2);}
 .sim-fmt-split i{font-style:normal;color:var(--muted);font-weight:700;}
+.sg-fora-conta{font-size:10.5px;font-weight:700;color:var(--text2);background:var(--panel2);
+  border:1px solid var(--border);border-radius:10px;padding:7px 10px;margin-top:8px;line-height:1.5}
 .sim-motivo{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:9px;
   border-top:1px dashed var(--border);padding-top:8px}
 .sim-motivo-lbl{font-size:10.5px;font-weight:800;color:var(--text2)}
@@ -745,6 +747,8 @@ nav{
 .sim-nota-selo{font-size:9.5px;font-weight:800;color:var(--green-t);white-space:nowrap}
 .sim-nota-txt{width:100%;min-height:58px;font-size:12px;line-height:1.5;resize:vertical;
   margin-bottom:6px}
+.prova-fora{font-size:9px;font-weight:800;padding:2px 7px;border-radius:999px;
+  background:var(--panel2);border:1px solid var(--border);color:var(--muted);white-space:nowrap}
 .prova-tent{background:var(--panel2);border:1px solid var(--border);border-radius:8px;
   padding:3px 9px;font-size:11px;font-weight:700;color:var(--text2);cursor:pointer;
   white-space:nowrap;font-family:inherit}
@@ -12160,6 +12164,22 @@ function provaApagar(id){
 // Liquido Cebraspe: acertos menos ERROS. Em branco nao conta — quando a tentativa
 // guardou as respostas, da pra saber quantos foram; tentativa antiga sem respostas cai
 // no caso de tudo marcado, que e o que era antes.
+// Placar de uma tentativa calculado a partir das respostas guardadas, pulando os itens
+// fora da conta. Sem isto o banco mostrava 101/120 enquanto a tela de resultado, ja
+// consertada, mostrava 100/119 — dois numeros pra mesma prova.
+function provaPlacar(prova,t){
+  const qs=(prova&&prova.questoes)||[];
+  const resp=(t&&t.respostas)||[];
+  let total=0,acertos=0,marcadas=0;
+  qs.forEach((q,i)=>{
+    if(questaoForaDaConta(q))return;
+    total++;
+    const r=resp[i]||'';
+    if(r)marcadas++;
+    if(r===q.correta)acertos++;
+  });
+  return{total,acertos,marcadas,liquido:acertos-(marcadas-acertos),fora:qs.length-total};
+}
 function provaLiquido(t,total){
   const ac=t.acertos||0;
   const marc=Array.isArray(t.respostas)?t.respostas.filter(Boolean).length:total;
@@ -12211,9 +12231,34 @@ function simMotivoSalvar(i,id){
   saveDB();
   const cx=document.getElementById('sim-motivo-'+i);
   if(cx)cx.outerHTML=simMotivoHTML(q,i);
+  // Refaz SO o resumo. Redesenhar a tela inteira apagaria a nota que voce esta
+  // digitando e ainda nao guardou — e a nota e justamente o que voce escreve logo
+  // depois de classificar o erro.
+  simResumoRefrescar();
+  simCartaoForaDaConta(i,questaoForaDaConta(q));
   const m=simMotivoDe(novo);
   toast(m?`${m.icone} ${m.lbl} — ${m.conserto}`:'Classificação removida.',
         m?'var(--accent)':'var(--muted)');
+}
+// O resumo (placar, saldo, quebra por assunto) mora num container proprio justamente
+// pra poder ser recalculado sem tocar no resto da tela.
+function simResumoRefrescar(){
+  const alvo=document.getElementById('sg-resumo');
+  if(!alvo||!simGeralActive)return;
+  const inteiro=document.createElement('div');
+  inteiro.innerHTML=simGeralResultsHTML();
+  const novo=inteiro.querySelector('#sg-resumo');
+  if(novo)alvo.innerHTML=novo.innerHTML;
+  const bd=document.querySelector('#simgeral-content .sg-breakdown');
+  const nbd=inteiro.querySelector('.sg-breakdown');
+  if(bd&&nbd)bd.innerHTML=nbd.innerHTML;
+}
+function simCartaoForaDaConta(i,fora){
+  const cartao=document.querySelectorAll('#simgeral-content .sim-q')[i];
+  if(!cartao)return;
+  cartao.classList.toggle('sim-q-flagged',!!fora);
+  const banner=cartao.querySelector('.sim-flagged-banner');
+  if(banner)banner.style.display=fora?'':'none';
 }
 function simMotivoHTML(q,i){
   const certa=q.userAnswer===q.correta;
@@ -12300,15 +12345,17 @@ function provasGuardadasHTML(){
       const total=p.questoes.length;
       const ts=p.tentativas||[];
       const nova=!ts.length;
+      const foraP=(p.questoes||[]).filter(questaoForaDaConta).length;
       const linhas=ts.map((t,i)=>{
-        const pct=total?Math.round(t.acertos/total*100):0;
-        const liq=provaLiquido(t,total);
-        return`<button class="prova-tent" onclick="provaRevisar('${p.id}',${i})" title="Abrir esta tentativa e ver o que você marcou">${i+1}ª: <b style="color:${faixaCorTexto(simPctCorrigido(pct,p.formato))}">${t.acertos}/${total}</b>${ce?` · líq. ${liq>=0?'+':''}${liq}`:` · ${pct}%`} <i class="fa fa-magnifying-glass"></i></button>`;
+        const pl=provaPlacar(p,t);
+        const pct=pl.total?Math.round(pl.acertos/pl.total*100):0;
+        return`<button class="prova-tent" onclick="provaRevisar('${p.id}',${i})" title="Abrir esta tentativa e ver o que você marcou">${i+1}ª: <b style="color:${faixaCorTexto(simPctCorrigido(pct,p.formato))}">${pl.acertos}/${pl.total}</b>${ce?` · líq. ${pl.liquido>0?'+':''}${pl.liquido}`:` · ${pct}%`} <i class="fa fa-magnifying-glass"></i></button>`;
       }).join('<span style="color:var(--border)"> → </span>');
       return`<div style="border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px">
           <b style="font-size:12px">${total} questões</b>
           ${nova?`<span class="prova-selo-nova">esperando</span>`:''}
+          ${foraP?`<span class="prova-fora" title="Itens marcados como desatualizados ou com problema — não entram no placar">🕰️ ${foraP} fora da conta</span>`:''}
           <span style="color:var(--muted)">${ce?'✔️✖️ Certo/Errado':'🔤 Múltipla escolha'}</span>
           <span style="color:var(--muted)">${p.origem==='colado'?'📋 colada':'🤖 gerada aqui'}</span>
           <span style="color:var(--muted)">${new Date(p.criadaEm).toLocaleDateString('pt-BR')}</span>
@@ -12416,10 +12463,19 @@ function simGeralCorrigir(){
   renderSimGeralScreen();
   toast(`🏁 Simulado geral finalizado! ${totalAcertos}/${simGeralActive.questoes.length} acertos · +${simGeralXp} XP · prova guardada pra refazer.`,'var(--accent)');
 }
+// Item marcado como desatualizado, ou reportado com problema, nao mede o seu
+// conhecimento — mede o defeito da questao. Ele ja saia das estatisticas do assunto,
+// mas continuava dentro do placar DESTA tela, que e justamente o numero que voce olha:
+// voce tirava o item da conta e continuava vendo 101/120 com ele contado como erro.
+function questaoForaDaConta(q){
+  return !!(q&&(q.problematico||q.motivo==='datado'));
+}
 function simGeralResultsHTML(){
   const active=simGeralActive;
-  const total=active.questoes.length;
-  const acertos=active.questoes.filter(q=>q.userAnswer===q.correta).length;
+  const vale=active.questoes.filter(q=>!questaoForaDaConta(q));
+  const fora=active.questoes.length-vale.length;
+  const total=vale.length;
+  const acertos=vale.filter(q=>q.userAnswer===q.correta).length;
   const pct=total?Math.round(acertos/total*100):0;
   const ce=(active.formato||'multipla')==='certoerrado';
   // Numa prova de duas alternativas o 60% de sempre nao serve de corte: 50% e o
@@ -12430,14 +12486,14 @@ function simGeralResultsHTML(){
   // contando TODO nao-acerto como -1, inclusive o item em branco — ou seja, o app punia
   // deixar em branco exatamente como punia errar. Num certo/errado isso ensina o
   // contrario do que a prova cobra: quem chuta perde ponto que ja tinha.
-  const marcadas=active.questoes.filter(q=>q.userAnswer).length;
+  const marcadas=vale.filter(q=>q.userAnswer).length;
   const brancos=total-marcadas;
   const erros=marcadas-acertos;
   const saldo=acertos-erros;
   const saldoAntigo=acertos-(total-acertos);
 
   const bySub={};
-  active.questoes.forEach(q=>{
+  vale.forEach(q=>{
     if(!bySub[q.subId])bySub[q.subId]={subName:q.subName,kingdomIcon:q.kingdomIcon,acertos:0,total:0,marcadas:0};
     bySub[q.subId].total++;
     if(q.userAnswer)bySub[q.subId].marcadas++;
@@ -12456,7 +12512,9 @@ function simGeralResultsHTML(){
   <div class="section-card">
     <div class="sec-title" style="margin-bottom:10px">${active.revisando?`🔎 Revisão da ${active.tentativaNum}ª tentativa`:(active.refazendo?'🔁 Resultado da refação':'🏁 Resultado do Simulado Geral')}</div>
     ${active.revisando?`<div class="sg-refaz-nota"><i class="fa fa-eye"></i> <b>Só leitura.</b> Estas são as respostas que você deu nesta tentativa. Nada aqui conta de novo — para responder outra vez, use <b>Refazer</b> em Minhas Provas.</div>`:''}
+    <div id="sg-resumo">
     <div class="sim-score-banner ${good?'sim-good':'sim-bad'}">${acertos}/${total} acertos (${pct}%) · ⏱ ${fmtHMS(active.tempoGastoSec||0)}</div>
+    ${fora?`<div class="sg-fora-conta">🕰️ <b>${fora}</b> ${fora>1?'itens saíram':'item saiu'} da conta (desatualizado ou com problema). O placar acima já é sem ${fora>1?'eles':'ele'}.</div>`:''}
     <div class="sg-formato-linha">${ce?'✔️✖️ Certo/Errado':'🔤 Múltipla escolha'} · ${simNivelLbl(active.nivel)}${
       ce?` · <b title="No certo/errado 50% é o que o chute dá; o corrigido desconta esse acaso (2×${pct}−100)">corrigido: ${efetivo}%</b> · <b title="Acertos menos erros. Item em branco não conta contra — é o que diz a capa do caderno.">saldo Cebraspe: ${saldo>0?'+':''}${saldo}</b>${brancos?` · ${brancos} em branco`:''}`:''}</div>
     ${ce?`<div class="sg-liquido">
@@ -12472,7 +12530,7 @@ function simGeralResultsHTML(){
       const ant=provaTentativaAnterior(active);
       if(!ant)return`<div class="sg-refaz-nota"><i class="fa fa-rotate-left"></i> <b>${active.tentativaNum}ª tentativa desta prova.</b> Refação não entra nas estatísticas por assunto.</div>`;
       const d=acertos-(ant.acertos||0);
-      const antSaldo=provaLiquido(ant,total);
+      const antSaldo=provaPlacar(provaAchar(active.provaId),ant).liquido;
       const dl=saldo-antSaldo;
       const cor=d>0?'var(--green-t)':d<0?'var(--red-t)':'var(--muted)';
       return`<div class="sg-refaz-nota">
@@ -12482,6 +12540,7 @@ function simGeralResultsHTML(){
         <b style="color:${cor}">(${d>0?'+':''}${d} acerto${Math.abs(d)===1?'':'s'}${ce?` · ${dl>0?'+':''}${dl} no líquido`:''})</b>
         <span style="color:var(--muted)">— refação não entra nas estatísticas por assunto.</span>
       </div>`;})():''}
+    </div>
     <div class="sg-breakdown">
       ${Object.values(bySub).map(b=>{
         const bp=b.total?Math.round(b.acertos/b.total*100):0;
@@ -12521,7 +12580,7 @@ function simGeralResultsHTML(){
           </div>
           ${simMotivoHTML(q,i)}
           ${simNotaHTML(q,i)}
-          ${q.problematico?'<div class="sim-flagged-banner"><i class="fa fa-flag"></i> Marcada como problemática — não conta nas suas estatísticas.</div>':''}
+          <div class="sim-flagged-banner" style="display:${questaoForaDaConta(q)?'':'none'}"><i class="fa fa-flag"></i> Fora da conta — não pesa no placar nem nas suas estatísticas.</div>
           ${(active.refazendo||active.revisando)?'':`<button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="toggleQuestaoProblematica('${q.subId}','${q._histId}',${q._qIdxInHist})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>`}
         </div>
       `).join('')}
