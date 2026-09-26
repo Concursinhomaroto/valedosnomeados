@@ -823,7 +823,29 @@ nav{
 .sg-progress{font-size:11px;font-weight:700;color:var(--muted);}
 .sg-q-tag{font-size:9.5px;font-weight:800;color:var(--pink-t);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;}
 .sg-breakdown{display:flex;flex-direction:column;gap:6px;margin-bottom:4px;}
-.sg-breakdown-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);font-size:11.5px;color:var(--text2);}
+.sg-bloco{display:grid;grid-template-columns:1fr 84px auto;align-items:center;gap:10px;
+  padding:8px 12px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);
+  font-size:11.5px;font-weight:800;color:var(--text2)}
+.sg-bloco-barra{height:6px;border-radius:99px;background:var(--border);overflow:hidden}
+.sg-bloco-barra>i{display:block;height:100%;border-radius:99px}
+.sg-bloco-num{font-weight:900;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sg-piores{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:var(--panel2)}
+.sg-piores-cab{font-size:10px;font-weight:800;color:var(--muted);margin-bottom:6px;line-height:1.4}
+.sg-chips{display:flex;flex-wrap:wrap;gap:5px}
+.sg-chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:3px 8px;
+  border-radius:99px;border:1px solid var(--border);background:var(--panel);
+  font-size:10.5px;font-weight:700;color:var(--text2);line-height:1.5}
+.sg-chip>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px}
+.sg-chip>b{color:var(--red-t);font-variant-numeric:tabular-nums}
+.sg-mais{background:none;border:0;padding:4px 2px;cursor:pointer;font-family:inherit;
+  font-size:10.5px;font-weight:800;color:var(--muted);text-align:left}
+.sg-mais:hover{color:var(--accent)}
+.sg-todos{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.sg-todos-linha{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:5px 10px;font-size:10.5px;color:var(--text2);border-top:1px solid var(--border)}
+.sg-todos-linha:first-child{border-top:0}
+.sg-todos-linha>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sg-todos-linha>b{font-variant-numeric:tabular-nums;white-space:nowrap}
 @media(max-width:600px){
   .sg-config-row{grid-template-columns:1fr;}
   .sg-timer-bar{flex-direction:column;align-items:stretch;text-align:center;}
@@ -13035,6 +13057,51 @@ function simGeralCorrigir(){
 function questaoForaDaConta(q){
   return !!(q&&(q.problematico||q.motivo==='datado'));
 }
+// Uma prova de 120 itens toca uns 40 assuntos, e a quebra listava os 40, um por linha
+// gorda. Vira uma parede: o que voce precisa ver — em que BLOCO do edital perdeu e
+// quais assuntos doeram — fica enterrado entre trinta linhas de 100%. Agora a quebra
+// abre no bloco (e o bloco que a prova cobra por cota), lista so o que sangrou, e
+// guarda o assunto-a-assunto atras de um clique pra quem quiser conferir.
+let sgVerTodos=false;
+function sgVerTodosToggle(){ sgVerTodos=!sgVerTodos; simResumoRefrescar(); }
+function sgCor(pct){ return pct>=70?'var(--green-t)':pct>=50?'var(--orange-t)':'var(--red-t)'; }
+function sgQuebraHTML(bySub){
+  const subs=Object.values(bySub);
+  if(!subs.length)return'';
+  const reinos={};
+  subs.forEach(b=>{
+    const k=b.kingdomId||b.kingdomName||'—';
+    const r=reinos[k]=reinos[k]||{nome:b.kingdomName||'Outros',icone:b.kingdomIcon||'📘',acertos:0,total:0};
+    r.acertos+=b.acertos; r.total+=b.total;
+  });
+  // Pior bloco primeiro: e nele que a proxima hora de estudo rende mais.
+  const blocos=Object.values(reinos).sort((a,b)=>(a.acertos/a.total)-(b.acertos/b.total));
+  const doeram=subs.filter(b=>b.acertos<b.total)
+    .sort((a,b)=>(a.acertos/a.total)-(b.acertos/b.total)||(b.total-b.acertos)-(a.total-a.acertos));
+  return`<div class="sg-breakdown">
+    ${blocos.map(r=>{
+      const pct=Math.round(r.acertos/r.total*100);
+      return`<div class="sg-bloco">
+        <span>${r.icone} ${escapeHtml(r.nome)}</span>
+        <span class="sg-bloco-barra"><i style="width:${pct}%;background:${sgCor(pct)}"></i></span>
+        <span class="sg-bloco-num" style="color:${sgCor(pct)}">${r.acertos}/${r.total} (${pct}%)</span>
+      </div>`;}).join('')}
+    ${doeram.length?`<div class="sg-piores">
+      <div class="sg-piores-cab">🩸 Onde você perdeu ponto — ${doeram.length} de ${subs.length} assuntos</div>
+      <div class="sg-chips">${doeram.slice(0,10).map(b=>
+        `<div class="sg-chip"><span>${b.kingdomIcon} ${escapeHtml(b.subName)}</span><b>${b.acertos}/${b.total}</b></div>`).join('')}
+        ${doeram.length>10?`<div class="sg-chip"><span>+${doeram.length-10}</span></div>`:''}</div>
+    </div>`:`<div class="sg-piores"><div class="sg-piores-cab" style="color:var(--green-t)">✅ Nenhum assunto ficou com erro nesta prova.</div></div>`}
+    <button class="sg-mais" onclick="sgVerTodosToggle()">${sgVerTodos
+      ?'▴ esconder os assuntos um a um'
+      :`▾ ver os ${subs.length} assuntos um a um`}</button>
+    ${sgVerTodos?`<div class="sg-todos">${subs
+      .slice().sort((a,b)=>(a.acertos/a.total)-(b.acertos/b.total))
+      .map(b=>{const bp=Math.round(b.acertos/b.total*100);
+        return`<div class="sg-todos-linha"><span>${b.kingdomIcon} ${escapeHtml(b.subName)}</span>
+          <b style="color:${sgCor(bp)}">${b.acertos}/${b.total} (${bp}%)</b></div>`;}).join('')}</div>`:''}
+  </div>`;
+}
 function simGeralResultsHTML(){
   const active=simGeralActive;
   const vale=active.questoes.filter(q=>!questaoForaDaConta(q));
@@ -13059,7 +13126,8 @@ function simGeralResultsHTML(){
 
   const bySub={};
   vale.forEach(q=>{
-    if(!bySub[q.subId])bySub[q.subId]={subName:q.subName,kingdomIcon:q.kingdomIcon,acertos:0,total:0,marcadas:0};
+    if(!bySub[q.subId])bySub[q.subId]={subName:q.subName,kingdomIcon:q.kingdomIcon,
+      kingdomId:q.kingdomId,kingdomName:q.kingdomName,acertos:0,total:0,marcadas:0};
     bySub[q.subId].total++;
     if(q.userAnswer)bySub[q.subId].marcadas++;
     if(q.userAnswer===q.correta)bySub[q.subId].acertos++;
@@ -13106,15 +13174,7 @@ function simGeralResultsHTML(){
         <span style="color:var(--muted)">— refação não entra nas estatísticas por assunto.</span>
       </div>`;})():''}
     </div>
-    <div class="sg-breakdown">
-      ${Object.values(bySub).map(b=>{
-        const bp=b.total?Math.round(b.acertos/b.total*100):0;
-        return`<div class="sg-breakdown-row">
-          <span>${b.kingdomIcon} ${b.subName}</span>
-          <span style="color:${bp>=60?'var(--green-t)':'var(--red-t)'};font-weight:800">${b.acertos}/${b.total} (${bp}%)</span>
-        </div>`;
-      }).join('')}
-    </div>
+    ${sgQuebraHTML(bySub)}
     ${active.revisando
       ? `<div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap">
           <button class="btn btn-sm btn-ghost" style="flex:1;justify-content:center" onclick="simGeralReset();showScreen('provas')"><i class="fa fa-arrow-left"></i> Voltar pras provas</button>
@@ -25015,6 +25075,7 @@ window.montarAlternarAssunto=montarAlternarAssunto;
 window.montarQtdGravar=montarQtdGravar;
 window.comentarProva=comentarProva;
 window.comentarUma=comentarUma;
+window.sgVerTodosToggle=sgVerTodosToggle;
 window.fonteBuscar=fonteBuscar;
 window.fonteBuscarErradas=fonteBuscarErradas;
 window.fonteLimpar=fonteLimpar;
