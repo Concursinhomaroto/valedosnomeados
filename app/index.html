@@ -737,6 +737,7 @@ nav{
   font-weight:700;color:var(--text2);padding:2px 0}
 .ce-vazio{font-size:10.5px;line-height:1.6;color:var(--text2);font-weight:600}
 .ce-vazio>div{margin-top:5px;color:var(--muted);font-weight:600}
+.sim-comentar{margin-top:6px}
 .sim-fonte{margin-top:5px;font-size:10px;font-weight:700;color:var(--muted);
   display:flex;align-items:center;gap:5px;line-height:1.4}
 .sim-ferramentas{display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -12327,6 +12328,124 @@ function motivosAgregado(){
   });
   return{tot,porAssunto,classificadas,erradas};
 }
+// ===== COMENTAR QUESTOES =====
+// O caderno da banca entra sem comentario nenhum — o gabarito oficial e uma letra, nao
+// uma explicacao. E questao gerada por IA as vezes vem com um comentario que so repete
+// a afirmacao. Aqui a explicacao e escrita depois, com pesquisa por tras.
+//
+// O gabarito e inegociavel: ele e da banca. A explicacao EXPLICA a letra que esta la,
+// nunca discute com ela. Se o modelo nao conseguir justificar, ele diz isso — porque
+// comentario inventado e pior do que campo vazio: o vazio voce percebe.
+const COMENTAR_LOTE=8;          // questoes por chamada ao modelo
+let comentarRodando=false;
+
+function comentarPendentes(prova,modo){
+  const qs=(prova&&prova.questoes)||[];
+  const ts=(prova&&prova.tentativas)||[];
+  const resp=(ts[ts.length-1]||{}).respostas||[];
+  return qs.map((q,i)=>({q,i,resp:resp[i]||''}))
+    .filter(x=>!questaoForaDaConta(x.q))
+    .filter(x=>modo==='erradas'
+      ? (x.resp&&x.resp!==x.q.correta)
+      : !String(x.q.explicacao||'').trim());
+}
+function comentarPrompt(itens){
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  return`Você comenta questões de concurso para um candidato a Enfermeiro (banca Cebraspe). Hoje é ${hoje}.
+
+Para cada item abaixo, escreva a explicação que falta. O gabarito veio da banca e é INEGOCIÁVEL: a sua explicação justifica a letra que está ali, nunca discute com ela.
+
+REGRAS
+- De 1 a 3 frases. Sem introdução, sem "vamos analisar".
+- Item CERTO: diga por que está certo, apontando o que o sustenta.
+- Item ERRADO: aponte exatamente QUAL parte da afirmação está incorreta e qual seria a redação correta. É a parte que mais ensina, e é a que não pode faltar.
+- Todo número em ALGARISMO, nunca por extenso.
+- Não repita a afirmação com outras palavras. Se a sua explicação puder ser lida sem saber o gabarito, ela não explicou nada.
+- Campo "fonte": em uma linha curta, a norma ou diretriz em que você se apoiou, COM O ANO da versão ("Lei 8.080/1990, art. 7º", "PNI — Calendário 2026"). Não conseguiu confirmar? Escreva "não confirmada" e NÃO cite número, prazo ou dose nessa explicação.
+- Se você não conseguir justificar o gabarito, escreva na explicação: "Não consegui confirmar por que a banca considerou ${'${letra}'}" e ponha "fonte": "não confirmada". Comentário inventado é pior do que campo vazio.
+
+ITENS
+${itens.map((x,k)=>`[${k}] gabarito: ${x.q.correta}
+${x.q.textoApoio?`(contexto: ${String(x.q.textoApoio).slice(0,600)})\n`:''}${x.q.questao}`).join('\n\n')}
+
+RESPOSTA
+Só um array JSON, sem markdown, com um objeto por item, na mesma ordem:
+[{"i":0,"explicacao":"...","fonte":"Lei 8.080/1990, art. 7º"}]`;
+}
+async function comentarProva(provaId,modo){
+  if(comentarRodando){toast('Já estou comentando — espera essa terminar.','var(--orange)');return;}
+  const prova=provaAchar(provaId);
+  if(!prova)return;
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey){toast('⚠️ Sem chave do Gemini — configure em Ajustes pra gerar comentário.','var(--red)');return;}
+  const alvo=comentarPendentes(prova,modo);
+  if(!alvo.length){toast(modo==='erradas'?'Nenhuma questão errada sem tratar.':'Todas já têm comentário.','var(--muted)');return;}
+  const lotes=Math.ceil(alvo.length/COMENTAR_LOTE);
+  if(!confirm(`Comentar ${alvo.length} ${alvo.length===1?'questão':'questões'}?\n\nSão ${lotes} ${lotes===1?'chamada':'chamadas'} ao Gemini${tavilyAtivo()?` e até ${lotes} buscas no Tavily`:''}. A cota diária é limitada — vale conferir quanto você já gastou hoje.`))return;
+
+  comentarRodando=true;
+  let feitas=0,falhas=0;
+  try{
+    for(let k=0;k<alvo.length;k+=COMENTAR_LOTE){
+      const bloco=alvo.slice(k,k+COMENTAR_LOTE);
+      toast(`💬 Comentando ${k+1}–${Math.min(k+COMENTAR_LOTE,alvo.length)} de ${alvo.length}...`,'var(--accent)');
+      let prompt=comentarPrompt(bloco);
+      // Uma busca por lote, usando os assuntos que aparecem nele. Buscar por questao
+      // estouraria a cota do Tavily sem melhorar nada: questoes do mesmo assunto se
+      // apoiam no mesmo material.
+      if(tavilyAtivo()){
+        const assuntos=[...new Set(bloco.map(x=>x.q.subName).filter(Boolean))].join(', ');
+        try{
+          const b=await buscarMaterial(assuntos,'enfermagem concurso norma vigente',30000);
+          if(b.material)prompt=tavilyPromptComFontes(prompt,b.material);
+        }catch(e){/* sem material a gente segue com a busca do proprio modelo */}
+      }
+      try{
+        const r=await callGeminiJSON(apiKey,prompt,!tavilyAtivo(),8192);
+        const arr=Array.isArray(r&&r.json)?r.json:(Array.isArray(r)?r:null);
+        if(!arr)throw new Error('resposta fora do formato');
+        arr.forEach(o=>{
+          const k2=parseInt(o&&o.i,10);
+          const x=bloco[k2];
+          if(!x)return;
+          const exp=String((o&&o.explicacao)||'').trim();
+          if(!exp)return;
+          x.q.explicacao=exp;
+          const f=simFonteLimpa(o&&o.fonte);
+          if(f)x.q.fonte=f;
+          feitas++;
+        });
+      }catch(e){
+        falhas+=bloco.length;
+        toast(`⚠️ Um lote falhou: ${e.message}`,'var(--orange)');
+      }
+    }
+  }finally{
+    comentarRodando=false;
+    saveDB();
+    renderSimGeralScreen();
+  }
+  toast(feitas
+    ?`💬 ${feitas} comentário(s) gerado(s)${falhas?` · ${falhas} não deram certo`:''}. Confira a fonte antes de decorar.`
+    :'❌ Não consegui gerar comentário nenhum.',feitas?'var(--green)':'var(--red)');
+}
+// Uma questao so, da tela de resultado. Mesmo caminho, lote de um.
+async function comentarUma(i){
+  const active=simGeralActive;
+  if(!active||!active.provaId){toast('⚠️ Essa prova ainda não está guardada.','var(--orange)');return;}
+  const prova=provaAchar(active.provaId);
+  const q=prova&&prova.questoes[i];
+  if(!q)return;
+  const antes=q.explicacao;
+  q.explicacao='';                       // faz ela entrar como pendente
+  await comentarProva(active.provaId,'sem');
+  if(!q.explicacao)q.explicacao=antes;   // falhou: devolve o que havia
+  if(active.questoes[i]){
+    active.questoes[i].explicacao=q.explicacao;
+    active.questoes[i].fonte=q.fonte;
+  }
+  renderSimGeralScreen();
+}
 const NOTA_MAX=600;
 // Escrever com as proprias palavras por que o item esta certo ou errado e o passo que
 // transforma "li a explicacao e concordei" em "eu sei". A nota mora na QUESTAO dentro
@@ -12579,6 +12698,8 @@ function provasGuardadasHTML(){
             <option value="180"${p.limiteSec===10800?' selected':''}>3 horas</option>
             <option value="240"${p.limiteSec===14400?' selected':''}>4 horas</option>
           </select>
+          ${(()=>{const sem=comentarPendentes(p,'sem').length;
+            return sem?`<button class="btn btn-xs btn-ghost" onclick="comentarProva('${p.id}','sem')" title="Gera a explicação que falta, com pesquisa por trás. Gasta cota diária do Gemini."><i class="fa fa-comment-dots"></i> Comentar (${sem})</button>`:'';})()}
           ${nova?'':`<button class="btn btn-xs btn-ghost" onclick="provaRevisar('${p.id}')" title="Abrir a última tentativa e ver os seus erros, sem responder de novo"><i class="fa fa-magnifying-glass"></i> Ver erros</button>`}
           <button class="btn btn-xs ${nova?'btn-gold':'btn-primary'}" onclick="provaRefazer('${p.id}')"><i class="fa fa-${nova?'play':'rotate-left'}"></i> ${nova?'Fazer':'Refazer'}</button>
           <button class="btn btn-xs btn-ghost" onclick="provaApagar('${p.id}')" title="Apagar a prova guardada"><i class="fa fa-trash"></i></button>
@@ -12791,6 +12912,7 @@ function simGeralResultsHTML(){
           </div>
           ${q.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${escapeHtml(q.explicacao)}</div>`:''}
           ${q.fonte?`<div class="sim-fonte" title="De onde a explicação saiu — confira quando o ponto for número, prazo ou dose"><i class="fa fa-link"></i> ${escapeHtml(q.fonte)}</div>`:''}
+          ${active.provaId?`<button class="btn btn-xs btn-ghost sim-comentar" onclick="comentarUma(${i})"><i class="fa fa-comment-dots"></i> ${q.explicacao?'Refazer o comentário':'Gerar comentário'}</button>`:''}
           </div>
           ${simMotivoHTML(q,i)}
           ${simNotaHTML(q,i)}
@@ -24656,6 +24778,8 @@ window.montarAgora=montarAgora;
 window.montarTrocarModo=montarTrocarModo;
 window.montarAlternarAssunto=montarAlternarAssunto;
 window.montarQtdGravar=montarQtdGravar;
+window.comentarProva=comentarProva;
+window.comentarUma=comentarUma;
 window.simNotaSalvar=simNotaSalvar;
 window.simMotivoSalvar=simMotivoSalvar;
 window.provaRevisar=provaRevisar;
