@@ -12387,7 +12387,7 @@ function provarqSalvar(agora){
   if(provarqTimer){clearTimeout(provarqTimer);provarqTimer=null;}
   const grava=()=>{
     provarqTimer=null;
-    const lista=sanitizeForFirebase(db.provasArquivo||[]);
+    const lista=sanitizeForFirebase((db.provasArquivo||[]).map(({_mapa,...a})=>a));
     try{if(cacheIdbOk)idbGravar(provarqChaveCache(),lista);}catch(e){}
     if(!PROVARQ_REF)return;
     try{
@@ -12422,6 +12422,27 @@ async function provarqCarregar(){
   if(noRegistro||db.provasArquivo.length!==((Array.isArray(nuvem)?nuvem:[]).length))provarqSalvar(true);
   return db.provasArquivo.length;
 }
+// Grava uma marcacao sua direto no esqueleto arquivado, na posicao ORIGINAL do item —
+// que nao e o indice na tela, porque item quebrado sai da remontagem.
+function arqMarcar(id,iTela,q){
+  const a=(db.provasArquivo||[]).find(x=>x.id===id);
+  if(!a)return;
+  const orig=(a._mapa||[])[iTela];
+  if(orig==null)return;
+  a.marcacoes=a.marcacoes||{};
+  if(!q.motivo&&!q.problematico)delete a.marcacoes[orig];
+  else a.marcacoes[orig]={m:q.motivo||'',p:q.problematico?1:0,
+                          s:q.subName||'',k:q.kingdomIcon||''};
+  provarqSalvar();
+}
+function provaMarcacoes(prova){
+  const m={};
+  (prova.questoes||[]).forEach((q,i)=>{
+    if(!q.motivo&&!q.problematico)return;
+    m[i]={m:q.motivo||'',p:q.problematico?1:0,s:q.subName||'',k:q.kingdomIcon||''};
+  });
+  return m;
+}
 function provaArquivar(prova){
   if(!prova||!(prova.questoes||[]).length)return false;
   db.provasArquivo=db.provasArquivo||[];
@@ -12434,6 +12455,12 @@ function provaArquivar(prova){
     // O que identifica cada questao dentro do banco. Mesma chave usada pelo dedup, entao
     // uma questao que entrou por outra prova serve pra remontar esta aqui tambem.
     chaves:(prova.questoes||[]).map(q=>montarChaveQ(q)),
+    // O que VOCE marcou na questao: por que errou, e se reportou problema. Nao vai pro
+    // banco (la a questao e so o enunciado, sem tentativa) e sem isto ia embora com a
+    // prova — o painel Controle de Erros zerava sozinho conforme as provas envelheciam.
+    // Esparso de proposito: numa prova de 120 em que voce classificou 12 erros, sao 12
+    // entradas, nao 120.
+    marcacoes:provaMarcacoes(prova),
     tentativas:(prova.tentativas||[]).map(t=>({
       data:t.data,respostas:(t.respostas||[]).slice(),
       acertos:t.acertos||0,tempoGastoSec:t.tempoGastoSec||0}))
@@ -12451,15 +12478,19 @@ function provaDoArquivo(id){
   const mapa=new Map();
   (db.acervo||[]).forEach(q=>{const k=montarChaveQ(q);if(k&&!mapa.has(k))mapa.set(k,q);});
   const questoes=[];
+  const origem=[];              // indice na tela -> indice original no esqueleto
   const tent=(a.tentativas||[]).map(t=>({...t,respostas:[]}));
   (a.chaves||[]).forEach((k,i)=>{
     const q=mapa.get(k);
     if(!q)return;
-    questoes.push({...q});
+    origem.push(i);
+    const mk=(a.marcacoes||{})[i]||(a.marcacoes||{})[String(i)];
+    questoes.push(mk?{...q,motivo:mk.m||undefined,problematico:!!mk.p}:{...q});
     tent.forEach((t,ti)=>t.respostas.push(((a.tentativas[ti]||{}).respostas||[])[i]||''));
   });
   if(!questoes.length)return null;
   tent.forEach(t=>{t.acertos=t.respostas.filter((r,i)=>r&&r===questoes[i].correta).length;});
+  a._mapa=origem;
   return{...a,questoes,tentativas:tent,arquivada:true,
          faltando:(a.chaves||[]).length-questoes.length};
 }
@@ -12478,7 +12509,7 @@ function provaRevisarArquivada(id,tIdx){
     startedAt:Date.now(),limiteSec:0,corrected:true,
     formato:prova.formato,nivel:prova.nivel,
     importado:prova.origem==='colado',
-    provaId:null,revisando:true,arquivada:true,tentativaNum:i+1,
+    provaId:null,revisando:true,arquivada:true,arquivadaId:id,tentativaNum:i+1,
     tempoGastoSec:t.tempoGastoSec||0
   };
   showScreen('simgeral');
@@ -12765,6 +12796,10 @@ function simMotivoSalvar(i,id){
   q.motivo=novo;
   const prova=active.provaId?provaAchar(active.provaId):null;
   if(prova&&prova.questoes[i])prova.questoes[i].motivo=novo;
+  // Revisando uma prova ARQUIVADA nao ha prova viva pra escrever: a marcacao vai direto
+  // pro esqueleto no arquivo. Sem isto, classificar um erro olhando uma prova antiga era
+  // um clique que sumia ao trocar de tela.
+  if(active.arquivada&&active.arquivadaId)arqMarcar(active.arquivadaId,i,q);
   // "Item desatualizado" nao e so um rotulo: o item tem que sair da conta. Reusa a
   // marcacao de questao problematica, que ja sabe desfazer o efeito nas estatisticas.
   // So alcanca o historico na 1a correcao (refacao e revisao nao tem _histId) — nesses
@@ -12863,20 +12898,34 @@ function simMotivoHTML(q,i){
 }
 // Soma os baldes de TODAS as provas guardadas. A tentativa nao importa aqui: o motivo
 // mora na questao e representa o seu diagnostico mais recente dela.
+// Le a lista VIVA e o ARQUIVO. Ler so a viva fazia o painel encolher sozinho: cada
+// prova que envelhecia levava as suas classificacoes junto, e um dia ele amanhecia
+// dizendo "nenhum erro classificado ainda" com centenas de cliques seus atras.
 function motivosAgregado(){
   const tot={conteudo:0,atencao:0,chute:0,sorte:0,datado:0};
   const porAssunto={};
   let classificadas=0,erradas=0;
+  const conta=(m,nome,icone)=>{
+    if(!m||tot[m]===undefined)return;
+    tot[m]++; classificadas++;
+    (porAssunto[nome||'—']=porAssunto[nome||'—']
+      ||{conteudo:0,atencao:0,chute:0,sorte:0,datado:0,icon:icone||''})[m]++;
+  };
+  (db.provasArquivo||[]).forEach(a=>{
+    const ts=a.tentativas||[];
+    const ult=ts[ts.length-1];
+    if(ult){
+      const marcadas=(ult.respostas||[]).filter(Boolean).length;
+      erradas+=Math.max(0,marcadas-(ult.acertos||0));
+    }
+    Object.values(a.marcacoes||{}).forEach(mk=>conta(mk.m,mk.s,mk.k));
+  });
   (db.provas||[]).forEach(p=>{
     const ult=(p.tentativas||[])[(p.tentativas||[]).length-1];
     const resp=(ult&&ult.respostas)||[];
     (p.questoes||[]).forEach((q,i)=>{
       if(resp.length&&resp[i]&&resp[i]!==q.correta)erradas++;
-      const m=q.motivo;
-      if(!m||tot[m]===undefined)return;
-      tot[m]++; classificadas++;
-      const k=q.subName||'—';
-      (porAssunto[k]=porAssunto[k]||{conteudo:0,atencao:0,chute:0,sorte:0,datado:0,icon:q.kingdomIcon||''})[m]++;
+      conta(q.motivo,q.subName,q.kingdomIcon);
     });
   });
   return{tot,porAssunto,classificadas,erradas};
