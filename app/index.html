@@ -821,6 +821,8 @@ nav{
 .sg-timer-display.sg-timer-warn{color:var(--red-t);animation:pulse 1s infinite;}
 .sg-progress{font-size:11px;font-weight:700;color:var(--muted);}
 .sg-q-tag{font-size:9.5px;font-weight:800;color:var(--pink-t);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;}
+.prova-editar{padding:2px 6px!important;color:var(--muted)}
+.prova-editar:hover{color:var(--accent)}
 .sim-pausado{border:1.5px solid var(--accent);border-radius:14px;padding:12px 14px;
   margin-bottom:12px;background:var(--panel);box-shadow:var(--shadow2)}
 .sim-pausado-cab{font-size:12.5px;font-weight:900;color:var(--accent);margin-bottom:3px}
@@ -3994,6 +3996,20 @@ function applyDefaults(){
   if(!db.erroAssuntos)db.erroAssuntos=[];
   if(typeof db.erroAssuntosResolvidos!=='number')db.erroAssuntosResolvidos=0;
   if(typeof db.fcGroupStudySessions!=='number')db.fcGroupStudySessions=0;
+
+  // ===== Banco de questoes e numeracao das provas =====
+  if(!Array.isArray(db.acervo))db.acervo=[];
+  if(typeof db.provaSeq!=='number')db.provaSeq=0;
+  if(Array.isArray(db.provas)){
+    // O maior numero ja usado manda: numero de prova nao pode se repetir, senao o
+    // rotulo deixa de identificar — que e a unica coisa que ele faz.
+    db.provas.forEach(p=>{if((p.num||0)>db.provaSeq)db.provaSeq=p.num;});
+    // Provas de antes da numeracao: da mais antiga pra mais nova, pra "Simulado 01"
+    // ser de fato a primeira que a pessoa fez.
+    db.provas.filter(p=>!p.num)
+      .sort((x,y)=>new Date(x.criadaEm||0)-new Date(y.criadaEm||0))
+      .forEach(p=>{p.num=++db.provaSeq;});
+  }
 
   // ===== Contadores para o sistema de conquistas (v2) =====
   if(!db.createdAt)db.createdAt=todayStr();
@@ -12152,8 +12168,84 @@ function sgTickTimer(){
 //
 // Guardar a prova inteira abre o treino que mais rende em certo/errado: refazer semanas
 // depois e comparar. Custo medido: ~600 bytes por questao, ~70 KB numa prova de 120.
-const PROVAS_MAX=20;
+const PROVAS_MAX=30;
 const PROVAS_BYTES_MAX=1600000;   // ~1,6 MB no total; acima disso a mais antiga sai
+// O teto existe porque o registro inteiro do usuario e reescrito a cada saveDB. Mas
+// apagar a prova antiga apagava junto as QUESTOES dela — e questao nao envelhece: e
+// justamente o material que voce quer manter. Agora, antes de a prova sair, as questoes
+// sao despejadas no ACERVO: unicas por enunciado, sem tentativa, sem grifo e sem nota.
+// O que se perde e o agrupamento e o historico daquela prova; o material fica, e volta
+// pelo "Montar prova sob medida". Como o acervo e unico por enunciado, o mesmo caderno
+// importado duas vezes ocupa uma vez so — e por isso ele cabe num orcamento menor.
+const ACERVO_MAX=2000;
+const ACERVO_BYTES_MAX=1100000;
+function acervoLimparQuestao(q){
+  const {userAnswer,motivo,minhaNota,marcas,apoioWeb,_histId,_qIdxInHist,
+         revisado,problematico,_resp,...limpa}=q;
+  return limpa;
+}
+// Guarda as questoes de UMA prova que esta saindo. Carimba o que voce fez nelas
+// (_resp: C acertou, X errou) pra o filtro "so o que eu errei" continuar valendo
+// depois que a prova de origem ja nao existe.
+function acervoGuardarProva(prova){
+  db.acervo=db.acervo||[];
+  const ts=prova.tentativas||[];
+  const resp=(ts[ts.length-1]||{}).respostas||[];
+  const jaTem=new Set(db.acervo.map(q=>montarChaveQ(q)));
+  let novas=0;
+  (prova.questoes||[]).forEach((q,i)=>{
+    if(questaoForaDaConta(q))return;              // item quebrado nao volta pro banco
+    const chave=montarChaveQ(q);
+    if(!chave||jaTem.has(chave))return;
+    jaTem.add(chave);
+    const limpa=acervoLimparQuestao(q);
+    const dada=resp[i]||'';
+    if(dada)limpa._resp=(dada===q.correta)?'C':'X';
+    db.acervo.unshift(limpa);
+    novas++;
+  });
+  acervoAparar();
+  return novas;
+}
+function acervoAparar(){
+  if(!db.acervo)return;
+  if(db.acervo.length>ACERVO_MAX)db.acervo=db.acervo.slice(0,ACERVO_MAX);
+  let bytes=JSON.stringify(db.acervo).length;
+  while(db.acervo.length>1&&bytes>ACERVO_BYTES_MAX){
+    db.acervo.pop();
+    bytes=JSON.stringify(db.acervo).length;
+  }
+}
+// "Estou enviando prova e nao sei qual e qual": sete linhas dizendo "120 questoes" nao
+// identificam nada. Cada prova ganha um numero que nunca se repete e um rotulo que voce
+// pode reescrever. O automatico ja adianta a materia dominante, que e o que voce usaria
+// pra nomear de qualquer jeito.
+function provaMateria(p){
+  const por={};
+  (p.questoes||[]).forEach(q=>{
+    const n=q.kingdomName||'';
+    if(n)por[n]=(por[n]||0)+1;
+  });
+  const total=(p.questoes||[]).length;
+  const top=Object.entries(por).sort((a,b)=>b[1]-a[1])[0];
+  if(!top||!total)return'Geral';
+  return (top[1]/total)>=0.7?top[0]:'Geral';
+}
+function provaNumero(p){return String(p.num||0).padStart(2,'0');}
+function provaRotulo(p){
+  return (p.nome||'').trim()||`Simulado ${provaNumero(p)} — ${provaMateria(p)}`;
+}
+function provaRenomear(id){
+  const p=provaAchar(id);
+  if(!p)return;
+  const atual=(p.nome||'').trim()||provaRotulo(p);
+  const novo=prompt('Como você quer chamar esta prova?\n\nDeixe em branco pra voltar ao nome automático.',atual);
+  if(novo===null)return;
+  p.nome=novo.trim().slice(0,60);
+  saveDB();
+  renderSimGeralScreen();
+  toast(p.nome?`✏️ Agora é "${p.nome}".`:'✏️ Voltou pro nome automático.','var(--accent)');
+}
 function provasLista(){return (db.provas||[]).slice();}
 function provaAchar(id){return (db.provas||[]).find(p=>p.id===id)||null;}
 // Guarda a questao INTEIRA (com alternativas e explicacao), sem a resposta dada: a
@@ -12167,8 +12259,11 @@ function provaLimparQuestao(q){
 // e pode nao existir nenhuma: e assim que da pra montar prova hoje e responder no
 // sabado, sem ter que fazer na hora em que ela e importada.
 function provaNova(questoes,meta){
+  db.provaSeq=(db.provaSeq||0)+1;
   return{
     id:genId(),
+    num:db.provaSeq,
+    nome:'',
     criadaEm:new Date().toISOString(),
     formato:(meta&&meta.formato)||'multipla',
     nivel:(meta&&meta.nivel)||'dificil',
@@ -12216,12 +12311,21 @@ function provaGuardar(active,assuntosResumo){
 // reescrito a cada saveDB.
 function provasAparar(){
   if(!db.provas)return;
-  if(db.provas.length>PROVAS_MAX)db.provas=db.provas.slice(0,PROVAS_MAX);
+  const saindo=[];
+  if(db.provas.length>PROVAS_MAX){
+    saindo.push(...db.provas.slice(PROVAS_MAX));
+    db.provas=db.provas.slice(0,PROVAS_MAX);
+  }
   let bytes=JSON.stringify(db.provas).length;
   while(db.provas.length>1&&bytes>PROVAS_BYTES_MAX){
-    db.provas.pop();
+    saindo.push(db.provas.pop());
     bytes=JSON.stringify(db.provas).length;
   }
+  // Sai da lista, mas nao some: as questoes vao pro acervo antes.
+  let guardadas=0;
+  saindo.forEach(p=>{guardadas+=acervoGuardarProva(p);});
+  if(guardadas)toast(`🗄️ ${saindo.length} prova${saindo.length>1?'s antigas saíram':' antiga saiu'} da lista — ${guardadas} ${guardadas===1?'questão foi':'questões foram'} pro banco de questões.`,'var(--accent)');
+  return guardadas;
 }
 function provaRefazer(id){
   const prova=provaAchar(id);
@@ -12321,11 +12425,13 @@ function provaTentativaAnterior(active){
 function provaApagar(id){
   const prova=provaAchar(id);
   if(!prova)return;
-  if(!confirm(`Apagar esta prova de ${prova.questoes.length} questões? As estatísticas que ela já gerou continuam — some só a prova guardada, e não dá pra refazer depois.`))return;
+  if(!confirm(`Apagar "${provaRotulo(prova)}" (${prova.questoes.length} questões)?\n\nAs questões vão pro banco de questões e continuam disponíveis pra montar caderno. O que some é a prova em si: o agrupamento, as tentativas e a comparação entre elas.`))return;
+  const guardadas=acervoGuardarProva(prova);
   db.provas=(db.provas||[]).filter(p=>p.id!==id);
   saveDB();
   renderSimGeralScreen();
-  toast('🗑️ Prova apagada.','var(--accent)');
+  toast(guardadas?`🗑️ Prova apagada · ${guardadas} ${guardadas===1?'questão foi':'questões foram'} pro banco.`
+                 :'🗑️ Prova apagada (as questões dela já estavam no banco).','var(--accent)');
 }
 // Liquido Cebraspe: acertos menos ERROS. Em branco nao conta — quando a tentativa
 // guardou as respostas, da pra saber quantos foram; tentativa antiga sem respostas cai
@@ -12840,9 +12946,11 @@ function simNotaHTML(q,i){
 const MONTAR_MODOS=[
   {id:'errei',  lbl:'Só o que eu errei',   nota:'As que você marcou errado na última tentativa de cada prova.'},
   {id:'gargalo',lbl:'Pelo meu gargalo',    nota:'Assuntos onde o motivo escolhido domina — é o painel de erros virando prova.'},
-  {id:'assunto',lbl:'Por assunto',         nota:'Você escolhe os minibosses.'}
+  {id:'assunto',lbl:'Por assunto',         nota:'Você escolhe os minibosses.'},
+  {id:'materia',lbl:'Por matéria',         nota:'O bloco inteiro do edital: enfermagem, SUS, português, Alagoas.'}
 ];
 let montarSel=new Set();     // subIds escolhidos no modo "por assunto"
+let montarSelMat=new Set();  // kingdomIds escolhidos no modo "por materia"
 // A lista fixa de 20/30/40/60 era chute meu. Com 245 questoes no acervo, prova de 100
 // e o tamanho normal — entao o numero e digitado, e fica lembrado pra nao ter que
 // reescrever a cada montagem.
@@ -12893,6 +13001,14 @@ function montarAcervo(){
       porChave.set(chave,reg);
     });
   });
+  // E o banco: questoes de provas que ja sairam da lista. Elas nao tem mais prova de
+  // origem, mas carregam o carimbo do que voce fez nelas — entao "so o que eu errei"
+  // continua valendo pra uma prova que voce fez em agosto e nao existe mais.
+  (db.acervo||[]).forEach(q=>{
+    const chave=montarChaveQ(q);
+    if(!chave||queimadas.has(chave)||porChave.has(chave))return;
+    porChave.set(chave,{q,subId:q.subId,respondida:!!q._resp,errou:q._resp==='X',doBanco:true});
+  });
   return [...porChave.values()];
 }
 // Assuntos em que o balde escolhido e o mais frequente. Empate nao conta: se voce errou
@@ -12916,6 +13032,7 @@ function montarPool(modo,motivo){
     return acervo.filter(x=>nomes.has(x.q.subName));
   }
   if(modo==='assunto')return acervo.filter(x=>montarSel.has(x.subId));
+  if(modo==='materia')return acervo.filter(x=>montarSelMat.has(x.q.kingdomId));
   return acervo;
 }
 function montarAgora(){
@@ -12933,7 +13050,7 @@ function montarAgora(){
   for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
   const escolhidas=arr.slice(0,qtd);
   const questoes=escolhidas.map(x=>{
-    const {userAnswer,motivo,minhaNota,marcas,...limpa}=x.q;   // caderno limpo: sem a sua marca da vez passada
+    const {userAnswer,motivo,minhaNota,marcas,_resp,...limpa}=x.q;   // caderno limpo: sem a sua marca da vez passada
     return limpa;
   });
   const formato=questoes.every(q=>q.formato==='certoerrado')?'certoerrado':'multipla';
@@ -12956,6 +13073,11 @@ function montarAlternarAssunto(subId,el){
   const c=document.getElementById('montar-conta');
   if(c)c.textContent=montarResumoPool();
 }
+function montarAlternarMateria(kId,el){
+  if(el&&el.checked)montarSelMat.add(kId); else montarSelMat.delete(kId);
+  const c=document.getElementById('montar-conta');
+  if(c)c.textContent=montarResumoPool();
+}
 function montarResumoPool(){
   const modo=(document.getElementById('montar-modo')||{}).value||'errei';
   const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
@@ -12974,12 +13096,21 @@ function montarHTML(){
   const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
   const {ix}=simColarMapa();
   const comQuestao={};
-  acervo.forEach(x=>{comQuestao[x.subId]=(comQuestao[x.subId]||0)+1;});
+  const porMateria={};
+  acervo.forEach(x=>{
+    comQuestao[x.subId]=(comQuestao[x.subId]||0)+1;
+    const k=x.q.kingdomId;
+    if(k){
+      porMateria[k]=porMateria[k]||{nome:x.q.kingdomName||'Sem matéria',icone:x.q.kingdomIcon||'📘',n:0};
+      porMateria[k].n++;
+    }
+  });
+  const noBanco=acervo.filter(x=>x.doBanco).length;
   const nota=(MONTAR_MODOS.find(m=>m.id===modo)||{}).nota||'';
   return`<div class="section-card">
     <div class="sec-title" style="margin-bottom:4px">🎯 Montar prova sob medida</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600">
-      Saca das <b>${acervo.length} questões</b> que já estão nas suas provas guardadas e monta um caderno novo — sem guardar questão repetida em lugar nenhum.
+      Saca das <b>${acervo.length} questões</b> que você já tem${noBanco?` (${acervo.length-noBanco} nas provas guardadas + <b>${noBanco} no banco</b>, de provas que já saíram da lista)`:' nas provas guardadas'} e monta um caderno novo — sem guardar questão repetida em lugar nenhum.
       Como você já viu essas questões, a prova montada é <b>treino</b>: ela não mexe nas estatísticas por assunto nem no Banco de Erros.
     </div>
     <div class="sim-config-row" style="flex-wrap:wrap">
@@ -12999,6 +13130,14 @@ function montarHTML(){
     <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.55;font-weight:600">
       ${escapeHtml(nota)} <b id="montar-conta">${escapeHtml(montarResumoPool())}</b>
     </div>
+    ${modo==='materia'?`<div class="montar-assuntos">
+      ${Object.entries(porMateria).sort((a,b)=>b[1].n-a[1].n).map(([kId,m])=>`
+        <label class="montar-ass">
+          <input type="checkbox" onchange="montarAlternarMateria('${kId}',this)"${montarSelMat.has(kId)?' checked':''}>
+          <span>${iconeReino(m.icone)} ${escapeHtml(m.nome)}</span>
+          <b>${m.n}</b>
+        </label>`).join('')}
+    </div>`:''}
     ${modo==='assunto'?`<div class="montar-assuntos">
       ${ix.filter(c=>comQuestao[c.sub.id]).map(c=>`
         <label class="montar-ass">
@@ -13017,7 +13156,7 @@ function provasGuardadasHTML(){
     <div class="sec-title" style="margin-bottom:4px">🗄️ Provas guardadas</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600">
       ${esperando?`<b style="color:var(--gold-t,var(--orange-t))">${esperando} prova${esperando>1?'s':''} esperando</b> — a 1ª vez que você faz uma delas conta em tudo (estatística por assunto, Banco de Erros, flashcard). `:''}Refazer semanas depois é o treino que mais rende em certo/errado, e a refação não mexe nas estatísticas: ela só compara com a vez anterior.
-      <span style="color:var(--muted)">Cabem ${PROVAS_MAX} provas (${lista.length} guardada${lista.length>1?'s':''}); passando disso, a mais antiga sai.</span>
+      <span style="color:var(--muted)">Cabem ${PROVAS_MAX} provas (${lista.length} guardada${lista.length>1?'s':''}). Passando disso a mais antiga sai da lista, mas as <b>questões</b> dela vão pro banco${(db.acervo||[]).length?` — que hoje tem <b>${db.acervo.length}</b>`:''} e voltam em "Montar prova sob medida".</span>
     </div>
     ${lista.map(p=>{
       const ce=(p.formato||'multipla')==='certoerrado';
@@ -13032,7 +13171,9 @@ function provasGuardadasHTML(){
       }).join('<span style="color:var(--border)"> → </span>');
       return`<div style="border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px">
-          <b style="font-size:12px">${total} questões</b>
+          <b style="font-size:12.5px">${escapeHtml(provaRotulo(p))}</b>
+          <button class="btn btn-xs btn-ghost prova-editar" onclick="provaRenomear('${p.id}')" title="Dar um nome a esta prova"><i class="fa fa-pen"></i></button>
+          <span style="color:var(--muted)">${total} questões</span>
           ${nova?`<span class="prova-selo-nova">esperando</span>`:''}
           ${p.treino?`<span class="prova-treino" title="Montada a partir de questões que você já respondeu — não mexe nas estatísticas por assunto nem no Banco de Erros">🎯 treino</span>`:''}
           ${foraP?`<span class="prova-fora" title="Itens marcados como desatualizados ou com problema — não entram no placar">🕰️ ${foraP} fora da conta</span>`:''}
@@ -25169,6 +25310,8 @@ window.renderCadernoScreen=renderCadernoScreen;
 window.montarAgora=montarAgora;
 window.montarTrocarModo=montarTrocarModo;
 window.montarAlternarAssunto=montarAlternarAssunto;
+window.montarAlternarMateria=montarAlternarMateria;
+window.provaRenomear=provaRenomear;
 window.montarQtdGravar=montarQtdGravar;
 window.comentarProva=comentarProva;
 window.comentarUma=comentarUma;
