@@ -3668,7 +3668,10 @@ function cacheLocalOutrasChaves(){
   return fora;
 }
 function gravarCacheLocal(){
-  const copia=sanitizeForFirebase(db);   // já é uma cópia profunda; não mexe no db
+  // Mesmo motivo do payload: o banco tem a sua propria chave de cache, gravada so
+  // quando ele muda. Sem isto, cada saveDB copiaria o banco inteiro de novo.
+  const {acervo,...semAcervo}=db;
+  const copia=sanitizeForFirebase(semAcervo);   // já é uma cópia profunda; não mexe no db
   if(currentUser&&currentUser.uid)copia._uid=currentUser.uid;
   const chave=lsKey();
   // Caminho normal: IndexedDB. Guarda o objeto direto (sem serializar), não trava a
@@ -5393,6 +5396,9 @@ function bootApp(){
   // localStorage — mesmo caminho que usam quando o Firebase inteiro está fora do ar.
   DB_REF=userRef('vdn_v1');
   loadDB(()=>{
+    // Depois do registro principal, e em paralelo com o resto da tela: o banco de
+    // questoes so e preciso quando a pessoa abre Provas, nao no primeiro frame.
+    acervoCarregar().catch(e=>console.warn('Falha ao carregar o banco de questões:',e));
     renderHeader();
     renderMap();
     updateRevBadge();
@@ -5537,7 +5543,10 @@ function guardarPlanoDoServidor(data){
 // save legítimo não é recusado por causa de divergência. Enquanto o servidor não tem
 // nada (conta recém-criada), mantém o que o app montou: o trial.
 function payloadParaFirebase(){
-  const copia=sanitizeForFirebase(db);
+  // O banco de questoes tem no proprio (vdn_acervo) e nao entra aqui: e o que mantem o
+  // registro principal pequeno, e o registro principal e o que sobe a cada saveDB.
+  const {acervo,...semAcervo}=db;
+  const copia=sanitizeForFirebase(semAcervo);
   CAMPOS_PLANO.forEach(k=>{
     if(planoDoServidor[k]!==undefined)copia[k]=planoDoServidor[k];
     else if(planoLidoDoServidor)delete copia[k];
@@ -12193,8 +12202,18 @@ const PROVAS_BYTES_MAX=1600000;   // ~1,6 MB no total; acima disso a mais antiga
 // O que se perde e o agrupamento e o historico daquela prova; o material fica, e volta
 // pelo "Montar prova sob medida". Como o acervo e unico por enunciado, o mesmo caderno
 // importado duas vezes ocupa uma vez so — e por isso ele cabe num orcamento menor.
-const ACERVO_MAX=2000;
-const ACERVO_BYTES_MAX=1100000;
+// "Meu banco de questoes precisa ser eterno." Pra isso ele nao pode morar DENTRO do
+// registro principal: saveDB reescreve o registro inteiro a cada resposta marcada, e um
+// banco de 5 mil itens viraria alguns MB subindo por clique — o app ficaria lento na
+// razao direta do tamanho do banco, que e o contrario do que "eterno" quer dizer.
+// Entao o banco tem no proprio no Firebase (vdn_acervo) e a sua propria chave no cache
+// local, gravados so quando ele muda. db.acervo continua existindo em memoria, entao o
+// resto do codigo nao mudou.
+//
+// O numero abaixo nao e politica de descarte: e limite de seguranca contra defeito (um
+// laco que insira sem parar). Em ritmo de 120 itens por dia, sao mais de 4 anos pra
+// encostar nele — e, se encostar, o app avisa em vez de descartar calado.
+const ACERVO_MAX=20000;
 function acervoLimparQuestao(q){
   const {userAnswer,motivo,minhaNota,marcas,apoioWeb,_histId,_qIdxInHist,
          revisado,problematico,_resp,...limpa}=q;
@@ -12221,16 +12240,81 @@ function acervoGuardarProva(prova){
     novas++;
   });
   acervoAparar();
+  if(novas)acervoSalvar();
   return novas;
 }
 function acervoAparar(){
-  if(!db.acervo)return;
-  if(db.acervo.length>ACERVO_MAX)db.acervo=db.acervo.slice(0,ACERVO_MAX);
-  let bytes=JSON.stringify(db.acervo).length;
-  while(db.acervo.length>1&&bytes>ACERVO_BYTES_MAX){
-    db.acervo.pop();
-    bytes=JSON.stringify(db.acervo).length;
+  if(!db.acervo)return 0;
+  if(db.acervo.length<=ACERVO_MAX)return 0;
+  const sobra=db.acervo.length-ACERVO_MAX;
+  db.acervo=db.acervo.slice(0,ACERVO_MAX);
+  // Nunca em silencio: se um dia chegar aqui, e porque algo esta errado — e a pessoa
+  // precisa saber que perdeu material, nao descobrir sozinha meses depois.
+  toast(`⚠️ O banco bateu o limite de ${ACERVO_MAX} questões e ${sobra} ${sobra===1?'saiu':'saíram'}. Me avise: isso não era pra acontecer.`,'var(--red)');
+  return sobra;
+}
+// ===== O BANCO NO SEU PROPRIO NO =====
+let ACERVO_REF=null;
+let acervoSalvarTimer=null;
+const ACERVO_SALVA_MS=1500;
+function acervoChaveCache(){return lsKey()+'_acervo';}
+function acervoSalvar(agora){
+  if(acervoSalvarTimer){clearTimeout(acervoSalvarTimer);acervoSalvarTimer=null;}
+  const grava=()=>{
+    acervoSalvarTimer=null;
+    const lista=sanitizeForFirebase(db.acervo||[]);
+    // Copia local primeiro: e a que funciona sem internet, e a que nunca falha por cota
+    // de rede. O IndexedDB tem espaco de sobra pra isso.
+    try{if(cacheIdbOk)idbGravar(acervoChaveCache(),lista);}catch(e){}
+    if(!ACERVO_REF)return;
+    try{
+      const r=ACERVO_REF.set(lista);
+      if(r&&r.catch)r.catch(e=>{
+        console.warn('Falha ao salvar o banco de questões:',e);
+        warnSyncIssue('⚠️ Não consegui salvar o banco de questões na nuvem agora. Ele continua guardado neste aparelho.');
+      });
+    }catch(e){console.warn('Falha síncrona ao salvar o banco de questões:',e);}
+  };
+  if(agora)grava(); else acervoSalvarTimer=setTimeout(grava,ACERVO_SALVA_MS);
+}
+// Uniao das tres origens. O banco so CRESCE — questao nao e editada nem apagada por
+// fora —, entao nao existe conflito de verdade: juntar tudo e a resposta certa pra
+// "estudei no celular sem internet e tambem no computador".
+function acervoUnir(...listas){
+  const vistos=new Set(); const junto=[];
+  listas.forEach(l=>(Array.isArray(l)?l:[]).forEach(q=>{
+    if(!q||!q.questao)return;
+    const k=montarChaveQ(q);
+    if(!k||vistos.has(k))return;
+    vistos.add(k); junto.push(q);
+  }));
+  return junto;
+}
+async function acervoCarregar(){
+  ACERVO_REF=userRef('vdn_acervo');
+  let local=null;
+  try{local=await idbLer(acervoChaveCache());}catch(e){}
+  let nuvem=null;
+  if(ACERVO_REF){
+    try{
+      nuvem=await new Promise(res=>{
+        const t=setTimeout(()=>res(null),8000);   // banco grande em rede ruim nao trava o boot
+        ACERVO_REF.once('value').then(snap=>{clearTimeout(t);res(snap.val());},
+                                       ()=>{clearTimeout(t);res(null);});
+      });
+    }catch(e){}
   }
+  // db.acervo aqui e o que veio DENTRO do registro principal — ou seja, o banco de quem
+  // ja usava a versao anterior. Ele entra na uniao e depois sai do registro.
+  const noRegistro=(db.acervo||[]).length;
+  db.acervo=acervoUnir(nuvem,local,db.acervo);
+  acervoAparar();
+  if(noRegistro||db.acervo.length!==((Array.isArray(nuvem)?nuvem:[]).length)){
+    acervoSalvar(true);
+    if(noRegistro)saveDB();   // o registro principal encolhe na mesma hora
+  }
+  renderSimGeralScreen();
+  return db.acervo.length;
 }
 // "Estou enviando prova e nao sei qual e qual": sete linhas dizendo "120 questoes" nao
 // identificam nada. Cada prova ganha um numero que nunca se repete e um rotulo que voce
@@ -13219,7 +13303,7 @@ function provasGuardadasHTML(){
     <div class="sec-title" style="margin-bottom:4px">🗄️ Provas guardadas</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600">
       ${esperando?`<b style="color:var(--gold-t,var(--orange-t))">${esperando} prova${esperando>1?'s':''} esperando</b> — a 1ª vez que você faz uma delas conta em tudo (estatística por assunto, Banco de Erros, flashcard). `:''}Refazer semanas depois é o treino que mais rende em certo/errado, e a refação não mexe nas estatísticas: ela só compara com a vez anterior.
-      <span style="color:var(--muted)">Cabem ${PROVAS_MAX} provas (${lista.length} guardada${lista.length>1?'s':''}). Passando disso a mais antiga sai da lista, mas as <b>questões</b> dela vão pro banco${(db.acervo||[]).length?` — que hoje tem <b>${db.acervo.length}</b>`:''} e voltam em "Montar prova sob medida".</span>
+      <span style="color:var(--muted)">Cabem ${PROVAS_MAX} provas (${lista.length} guardada${lista.length>1?'s':''}). Passando disso a mais antiga sai da lista, mas as <b>questões</b> dela vão pro banco${(db.acervo||[]).length?` — que hoje tem <b>${db.acervo.length}</b> e não tem validade: nada sai de lá`:''}, e voltam em "Montar prova sob medida".</span>
     </div>
     ${lista.map(p=>{
       const ce=(p.formato||'multipla')==='certoerrado';
