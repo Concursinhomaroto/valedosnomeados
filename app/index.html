@@ -737,7 +737,6 @@ nav{
   font-weight:700;color:var(--text2);padding:2px 0}
 .ce-vazio{font-size:10.5px;line-height:1.6;color:var(--text2);font-weight:600}
 .ce-vazio>div{margin-top:5px;color:var(--muted);font-weight:600}
-.sim-acoes{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .fonte-web{margin-top:8px;border:1px solid var(--border);border-radius:10px;
   background:var(--panel2);padding:8px 10px}
 .fonte-web-cab{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;
@@ -822,6 +821,11 @@ nav{
 .sg-timer-display.sg-timer-warn{color:var(--red-t);animation:pulse 1s infinite;}
 .sg-progress{font-size:11px;font-weight:700;color:var(--muted);}
 .sg-q-tag{font-size:9.5px;font-weight:800;color:var(--pink-t);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;}
+.sim-pausado{border:1.5px solid var(--accent);border-radius:14px;padding:12px 14px;
+  margin-bottom:12px;background:var(--panel);box-shadow:var(--shadow2)}
+.sim-pausado-cab{font-size:12.5px;font-weight:900;color:var(--accent);margin-bottom:3px}
+.sim-pausado-num{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:9px;line-height:1.5}
+.sim-pausado-acoes{display:flex;gap:8px;flex-wrap:wrap}
 .sg-breakdown{display:flex;flex-direction:column;gap:6px;margin-bottom:4px;}
 .sg-bloco{display:grid;grid-template-columns:1fr 84px auto;align-items:center;gap:10px;
   padding:8px 12px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);
@@ -11425,6 +11429,8 @@ function simColarZerar(){simColarLote=[];simColarEscolhas={};simColarMeta=0;}
 function simColarIniciar(descartarSobras){
   const m=simColarMontar(descartarSobras);
   if(!m)return;
+  if(simPausadoAtrapalha('Começar esta prova'))return;
+  db.simGeralEmAndamento=null;
   simGeralActive={questoes:m.questoes,startedAt:Date.now(),limiteSec:m.limiteSec,
                   corrected:false,formato:m.formato,nivel:'dificil',importado:true};
   simColarZerar();
@@ -11564,7 +11570,7 @@ function renderSimGeralScreen(){
     return;
   }
   sgStopTimerTick();
-  container.innerHTML=simGeralConfigHTML();
+  container.innerHTML=simAndamentoCardHTML()+simGeralConfigHTML();
   // sem isto, os contadores por chefao/reino e o custo do Tavily nasceriam
   // zerados mesmo com assuntos ja selecionados de uma visita anterior
   sgUpdateSummary();
@@ -11874,6 +11880,8 @@ function sgMarcarTodos(marcar){
 }
 
 async function generateSimuladoGeral(){
+  if(simPausadoAtrapalha('Gerar um simulado novo'))return;
+  db.simGeralEmAndamento=null;
   const apiKey=(db.geminiApiKey||'').trim();
   if(!apiKey){toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');openAISettingsModal();return;}
   const subIds=[...simGeralConfig.selectedSubIds];
@@ -11981,7 +11989,10 @@ function simGeralExamHTML(){
     <div class="sg-timer-bar">
       <div id="sg-timer-display" class="sg-timer-display">⏱ --:--</div>
       <div class="sg-progress">${answered}/${active.questoes.length} respondidas</div>
-      <button class="btn btn-sm btn-pink" onclick="simGeralCorrigir()"><i class="fa fa-flag-checkered"></i> Finalizar Simulado</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-ghost" onclick="simGeralPausar()" title="Guarda as respostas, o grifo e o tempo. O relógio para até você voltar."><i class="fa fa-pause"></i> Pausar</button>
+        <button class="btn btn-sm btn-pink" onclick="simGeralCorrigir()"><i class="fa fa-flag-checkered"></i> Finalizar Simulado</button>
+      </div>
     </div>
     <div class="section-card" style="margin-top:12px">
       <div class="sim-ferramentas">
@@ -12020,6 +12031,7 @@ function sgSelectAnswer(qIdx,letra){
   const answered=simGeralActive.questoes.filter(q=>q.userAnswer).length;
   const progEl=document.querySelector('.sg-progress');
   if(progEl)progEl.textContent=`${answered}/${simGeralActive.questoes.length} respondidas`;
+  simGeralSalvarAndamento();
 }
 function sgStartTimerTick(){
   if(sgTimerInterval)clearInterval(sgTimerInterval);
@@ -12029,11 +12041,94 @@ function sgStartTimerTick(){
 function sgStopTimerTick(){
   if(sgTimerInterval){clearInterval(sgTimerInterval);sgTimerInterval=null;}
 }
+// ===== PAUSAR E CONTINUAR =====
+// O simulado morava so na memoria: fechou a aba, perdeu as 120 respostas. Prova de 4
+// horas nao se faz de um folego — e a unica saida era comecar sabendo que nao ia dar
+// pra terminar. Agora o que esta em andamento e gravado a cada resposta.
+// O relogio conta so o tempo em que a prova esteve ABERTA: acumuladoSec guarda o que ja
+// correu, startedAt marca o inicio do trecho atual. Sem essa separacao, pausar de noite
+// e voltar de manha somaria a madrugada inteira ao tempo de prova.
+const SIM_ANDAMENTO_SALVA_MS=1200;
+let simAndamentoTimer=null;
+function sgDecorrido(a){
+  return (a.acumuladoSec||0)+Math.max(0,Math.floor((Date.now()-a.startedAt)/1000));
+}
+function simGeralSalvarAndamento(agora){
+  if(simAndamentoTimer){clearTimeout(simAndamentoTimer);simAndamentoTimer=null;}
+  const grava=()=>{
+    simAndamentoTimer=null;
+    const a=simGeralActive;
+    // Revisao e refacao ja corrigida nao sao "em andamento": nao ha o que retomar.
+    if(!a||a.corrected||a.revisando)return;
+    db.simGeralEmAndamento={...a,acumuladoSec:sgDecorrido(a),startedAt:Date.now(),salvoEm:Date.now()};
+    saveDB();
+  };
+  if(agora)grava(); else simAndamentoTimer=setTimeout(grava,SIM_ANDAMENTO_SALVA_MS);
+}
+function simGeralPausar(){
+  const a=simGeralActive;
+  if(!a||a.corrected)return;
+  simGeralSalvarAndamento(true);
+  sgStopTimerTick();
+  simGeralActive=null;
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+  const p=db.simGeralEmAndamento||{};
+  const qs=p.questoes||[];
+  toast(`⏸️ Pausado em ${qs.filter(q=>q.userAnswer).length}/${qs.length} · ⏱ ${fmtHMS(p.acumuladoSec||0)}. O relógio parou aqui.`,'var(--accent)');
+}
+function simGeralRetomar(){
+  const p=db.simGeralEmAndamento;
+  if(!p||!(p.questoes||[]).length){toast('Não há simulado pausado.','var(--muted)');return;}
+  if(simGeralActive&&!simGeralActive.corrected
+     &&!confirm('Você tem um simulado aberto na tela. Continuar o pausado descarta este. Continuar?'))return;
+  simGeralActive={...p,startedAt:Date.now()};
+  delete simGeralActive.salvoEm;
+  showScreen('simgeral');
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+  toast(`▶️ De onde você parou — ⏱ ${fmtHMS(p.acumuladoSec||0)} já corridos.`,'var(--accent)');
+}
+function simGeralDescartarPausado(){
+  const p=db.simGeralEmAndamento;
+  if(!p)return;
+  const qs=p.questoes||[];
+  const resp=qs.filter(q=>q.userAnswer).length;
+  if(!confirm(`Jogar fora o simulado pausado?\n\n${resp} ${resp===1?'resposta':'respostas'} e ⏱ ${fmtHMS(p.acumuladoSec||0)} vão embora, e isso não tem volta.`))return;
+  db.simGeralEmAndamento=null;
+  saveDB();
+  renderSimGeralScreen();
+  toast('Simulado pausado descartado.','var(--muted)');
+}
+// Todo caminho que ABRE uma prova nova passa por aqui: comecar outra em cima de uma
+// pausada apagaria a pausada sem aviso, e e justamente ela que voce quer terminar.
+function simPausadoAtrapalha(oQue){
+  const p=db.simGeralEmAndamento;
+  if(!p||!(p.questoes||[]).length)return false;
+  const resp=p.questoes.filter(q=>q.userAnswer).length;
+  return !confirm(`Você tem um simulado pausado (${resp}/${p.questoes.length} respondidas).\n\n${oQue} apaga ele. Continuar?`);
+}
+function simAndamentoCardHTML(){
+  const p=db.simGeralEmAndamento;
+  if(!p||!(p.questoes||[]).length)return'';
+  const tot=p.questoes.length;
+  const resp=p.questoes.filter(q=>q.userAnswer).length;
+  const quando=p.salvoEm?new Date(p.salvoEm).toLocaleString('pt-BR',
+    {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+  return`<div class="sim-pausado">
+    <div class="sim-pausado-cab">⏸️ Você tem um simulado pausado</div>
+    <div class="sim-pausado-num">${resp}/${tot} respondidas · ⏱ ${fmtHMS(p.acumuladoSec||0)}${quando?` · parou em ${quando}`:''}</div>
+    <div class="sim-pausado-acoes">
+      <button class="btn btn-sm btn-primary" onclick="simGeralRetomar()"><i class="fa fa-play"></i> Continuar de onde parei</button>
+      <button class="btn btn-sm btn-ghost" onclick="simGeralDescartarPausado()"><i class="fa fa-trash"></i> Descartar</button>
+    </div>
+  </div>`;
+}
 function sgTickTimer(){
   if(!simGeralActive||simGeralActive.corrected){sgStopTimerTick();return;}
   const el=document.getElementById('sg-timer-display');
   if(!el){sgStopTimerTick();return;}
-  const elapsedSec=Math.floor((Date.now()-simGeralActive.startedAt)/1000);
+  const elapsedSec=sgDecorrido(simGeralActive);
   if(simGeralActive.limiteSec>0){
     const remain=simGeralActive.limiteSec-elapsedSec;
     if(remain<=0){
@@ -12133,6 +12228,8 @@ function provaRefazer(id){
   if(!prova)return;
   if(simGeralActive&&!simGeralActive.corrected
      &&!confirm('Você tem um simulado em andamento. Começar a refazer esta prova descarta o que está na tela. Continuar?'))return;
+  if(simPausadoAtrapalha('Abrir esta prova'))return;
+  db.simGeralEmAndamento=null;
   const tempoMin=parseInt((document.getElementById('prova-refazer-tempo-'+id)||{}).value,10);
   const limite=isFinite(tempoMin)?tempoMin*60:(prova.limiteSec||0);
   // Prova que nunca foi feita nao e refacao: a 1a vez conta em tudo — estatistica por
@@ -12968,7 +13065,11 @@ function simGeralCorrigir(){
   sgStopTimerTick();
   simGeralActive.corrected=true;
   simGeralActive.finishedAt=Date.now();
-  simGeralActive.tempoGastoSec=Math.floor((simGeralActive.finishedAt-simGeralActive.startedAt)/1000);
+  simGeralActive.tempoGastoSec=sgDecorrido(simGeralActive);
+  // Acabou: nao ha mais o que retomar, e deixar o rascunho la faria a tela de config
+  // oferecer "continuar" uma prova que ja foi corrigida.
+  db.simGeralEmAndamento=null;
+  if(simAndamentoTimer){clearTimeout(simAndamentoTimer);simAndamentoTimer=null;}
   // Refacao tem caminho proprio: nada de simStats, simHistorico, Banco de Erros ou
   // flashcard. Sai daqui antes de tudo isso.
   if(simGeralActive.refazendo)return provaCorrigirRefacao();
@@ -13204,10 +13305,6 @@ function simGeralResultsHTML(){
           ${q.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${escapeHtml(q.explicacao)}</div>`:''}
           ${q.fonte?`<div class="sim-fonte" title="De onde a explicação saiu — confira quando o ponto for número, prazo ou dose"><i class="fa fa-link"></i> ${escapeHtml(q.fonte)}</div>`:''}
           ${fonteApoioHTML(q,i)}
-          <div class="sim-acoes">
-            ${tavilyAtivo()?`<button class="btn btn-xs btn-ghost" onclick="fonteBuscar(${i})" title="Busca o trecho da fonte e guarda com o link. O modelo só escolhe qual trecho serve — escrever, ele não escreve."><i class="fa fa-book-open"></i> ${(q.apoioWeb||[]).length?'Buscar de novo':'Buscar a fonte'}</button>`:''}
-            ${active.provaId?`<button class="btn btn-xs btn-ghost" onclick="comentarUma(${i})"><i class="fa fa-comment-dots"></i> ${q.explicacao?'Refazer o comentário':'Gerar comentário'}</button>`:''}
-          </div>
           </div>
           ${simMotivoHTML(q,i)}
           ${simNotaHTML(q,i)}
@@ -25075,6 +25172,9 @@ window.montarAlternarAssunto=montarAlternarAssunto;
 window.montarQtdGravar=montarQtdGravar;
 window.comentarProva=comentarProva;
 window.comentarUma=comentarUma;
+window.simGeralPausar=simGeralPausar;
+window.simGeralRetomar=simGeralRetomar;
+window.simGeralDescartarPausado=simGeralDescartarPausado;
 window.sgVerTodosToggle=sgVerTodosToggle;
 window.fonteBuscar=fonteBuscar;
 window.fonteBuscarErradas=fonteBuscarErradas;
