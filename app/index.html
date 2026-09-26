@@ -2417,6 +2417,7 @@ nav{
     <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
+    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Banco de Questões</button>
     <button class="active"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div class="sec-title">📕 Banco de Erros</div>
@@ -2435,6 +2436,7 @@ nav{
     <button class="active"><i class="fa fa-landmark"></i> Simulado Geral</button>
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
+    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Banco de Questões</button>
     <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="simgeral-content"></div>
@@ -2449,6 +2451,7 @@ nav{
     <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
     <button class="active"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
+    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Banco de Questões</button>
     <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="provas-content"></div>
@@ -2462,9 +2465,26 @@ nav{
     <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button class="active"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
+    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Banco de Questões</button>
     <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="caderno-content"></div>
+</div>
+
+<!-- ===== BANCO DE QUESTÕES ===== -->
+<!-- "Montar prova sob medida" era a seção do meio de Minhas Provas, prensada entre colar
+     e as provas guardadas. Mas ela deixou de ser um utilitário daquela tela: ela lê o
+     acervo inteiro, que é permanente e sobrevive às provas — então é um lugar, não um
+     acessório de outro lugar. -->
+<div class="screen" id="screen-banco">
+  <div class="rd-conectivos-tabs" style="margin-bottom:14px">
+    <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
+    <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
+    <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
+    <button class="active"><i class="fa fa-layer-group"></i> Banco de Questões</button>
+    <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
+  </div>
+  <div id="banco-content"></div>
 </div>
 
 <!-- ===== DASHBOARD ===== -->
@@ -5474,7 +5494,7 @@ function isAfterExam(dateStr){return db.examDate&&dateStr>db.examDate;}
 // Depois de expirar, tudo trava (ver LOCKED_SCREENS) exceto o Painel do Herói
 // (dashboard), que continua visível pra pessoa lembrar do progresso e ser convidada a
 // assinar. Ver applyDefaults() pra como db.plan/db.trialStartedAt são definidos.
-const LOCKED_SCREENS=['map','revisions','erros','simgeral','provas','caderno','editais','flashcards','redacoes','repertorio','conquistas'];
+const LOCKED_SCREENS=['map','revisions','erros','simgeral','provas','caderno','banco','editais','flashcards','redacoes','repertorio','conquistas'];
 const LOCKED_SCREEN_INFO={
   map:{icon:'🗺️',title:'Mapa dos Reinos é um recurso do plano completo',desc:'O mapa de progresso por reino/chefão libera junto com o plano completo.'},
   revisions:{icon:'🔔',title:'Revisões é um recurso do plano completo',desc:'A fila de revisões espaçadas (SM-2) — atrasadas, de hoje e dos próximos dias — libera junto com o plano completo.'},
@@ -6056,7 +6076,7 @@ function showScreen(name){
   // Redação e Simulado Geral, respectivamente, desde a fusão das telas relacionadas, então
   // o destaque do menu segue apontando pro botão "pai" de cada uma.
   const navName=name==='repertorio'?'redacoes'
-    :((name==='erros'||name==='provas'||name==='caderno')?'simgeral':name);
+    :((name==='erros'||name==='provas'||name==='caderno'||name==='banco')?'simgeral':name);
   if(LOCKED_SCREENS.includes(name)&&!hasFullAccess()){
     document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -6072,6 +6092,7 @@ function showScreen(name){
   const nb=document.getElementById('nav-'+navName);if(nb)nb.classList.add('active');
   if(name==='provas')renderProvasScreen();
   if(name==='caderno')renderCadernoScreen();
+  if(name==='banco')renderBancoScreen();
   if(name==='revisions')renderRevisions();
   if(name==='dashboard')renderDashboard();
   if(name==='editais'){renderEditais();updateEditaisBadge();}
@@ -11603,6 +11624,7 @@ function simColarHTML(){
 function renderSimGeralScreen(){
   renderProvasScreen();
   renderCadernoScreen();
+  renderBancoScreen();
   const container=document.getElementById('simgeral-content');
   if(!container)return;
   if(simGeralActive){
@@ -11622,12 +11644,17 @@ function renderSimGeralScreen(){
 function renderProvasScreen(){
   const el=document.getElementById('provas-content');
   if(!el)return;
-  el.innerHTML=simColarHTML()+montarHTML()+provasGuardadasHTML();
+  el.innerHTML=simColarHTML()+provasGuardadasHTML();
 }
 function renderCadernoScreen(){
   const el=document.getElementById('caderno-content');
   if(!el)return;
   el.innerHTML=cadImportarHTML();
+}
+function renderBancoScreen(){
+  const el=document.getElementById('banco-content');
+  if(!el)return;
+  el.innerHTML=bancoHTML();
 }
 function simGeralConfigHTML(){
   const kingdoms=db.kingdoms.filter(k=>(db.topics[k.id]||[]).some(t=>(t.subtopics||[]).some(s=>s.studied)));
@@ -13265,6 +13292,25 @@ function montarResumoPool(){
   return `${n} ${n===1?'questão disponível':'questões disponíveis'} com esse filtro`
         +(pedido>n?` — o caderno vai sair com ${sai}, que é tudo que há`:'');
 }
+// A aba inteira. montarHTML continua devolvendo '' quando nao ha questao nenhuma — o
+// que servia quando ele era uma secao no meio de outra tela. Numa aba propria, tela em
+// branco nao explica nada: aqui ela diz o que falta fazer pra ter banco.
+function bancoHTML(){
+  const m=montarHTML();
+  if(m)return m;
+  return`<div class="section-card">
+    <div class="sec-title" style="margin-bottom:4px">📚 Banco de Questões</div>
+    <div class="empty"><i class="fa fa-layer-group"></i>
+      <p>Seu banco ainda está vazio.</p>
+      <p style="font-size:11px;color:var(--muted);font-weight:600;line-height:1.6;max-width:420px;margin:8px auto 0">
+        Ele enche sozinho: toda questão de prova que você faz entra aqui e <b>fica</b> —
+        não sai mais, nem quando a prova sai da lista de Minhas Provas.
+        Importe um caderno em <b>Caderno da Banca</b> ou cole uma prova em
+        <b>Minhas Provas</b> pra começar.
+      </p>
+    </div>
+  </div>`;
+}
 function montarHTML(){
   const acervo=montarAcervo();
   if(!acervo.length)return'';
@@ -13284,7 +13330,7 @@ function montarHTML(){
   const noBanco=acervo.filter(x=>x.doBanco).length;
   const nota=(MONTAR_MODOS.find(m=>m.id===modo)||{}).nota||'';
   return`<div class="section-card">
-    <div class="sec-title" style="margin-bottom:4px">🎯 Montar prova sob medida</div>
+    <div class="sec-title" style="margin-bottom:4px">📚 Banco de Questões</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600">
       Saca das <b>${acervo.length} questões</b> que você já tem${noBanco?` (${acervo.length-noBanco} nas provas guardadas + <b>${noBanco} no banco</b>, de provas que já saíram da lista)`:' nas provas guardadas'} e monta um caderno novo — sem guardar questão repetida em lugar nenhum.
       Como você já viu essas questões, a prova montada é <b>treino</b>: ela não mexe nas estatísticas por assunto nem no Banco de Erros.
