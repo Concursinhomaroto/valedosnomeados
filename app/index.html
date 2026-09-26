@@ -7329,6 +7329,9 @@ function textoComoArquivo(txt){
   return {name:'Texto colado',type:'text/plain',__colado:true,text:async()=>txt};
 }
 let resumoColando=new Set();
+// Rascunho do que foi colado, so na sessao: e o valor inicial do campo, entao ele
+// sobrevive a qualquer redesenho do painel — inclusive o que acontece depois de um erro.
+const resumoRascunho=new Map();
 function resumoAbrirColar(subId){
   resumoColando.delete(subId);
   resumoEditando.delete(subId);
@@ -7339,6 +7342,7 @@ function resumoAbrirColar(subId){
 }
 function resumoCancelarColar(subId){
   resumoColando.delete(subId);
+  resumoRascunho.delete(subId);
   resumoRefreshPanel(subId);
 }
 function resumoColarContou(subId){
@@ -7346,11 +7350,69 @@ function resumoColarContou(subId){
   const el=document.getElementById('resumo-colar-n-'+subId);
   if(ta&&el)el.textContent=ta.value.trim().length.toLocaleString('pt-BR')+' caracteres';
 }
+// "Um sofrimento pra colocar resumo mesmo que escrito, pra a IA so organizar."
+// Organizar nao precisa de modelo: a forma que o app espera e um contrato fechado
+// (TITULO EM MAIUSCULAS terminado em dois-pontos sozinho na linha, uma linha em branco
+// entre blocos, "Na pratica:" pro bloco verde, sem markdown). Isso e regra, nao
+// julgamento — entao da pra fazer aqui, de graca, sem depender de servidor nenhum e
+// sem risco de alguem reescrever o que voce ja escreveu.
+function resumoEhTitulo(s){
+  const letras=s.replace(/[^A-Za-zÀ-ÿ]/g,'');
+  if(letras.length<3||s.length>70)return false;
+  if(/[.!?;]$/.test(s))return false;
+  const minusculas=s.replace(/[^a-zà-ÿ]/g,'').length;
+  return minusculas<=letras.length*0.2;      // "LEI 8.080/1990:" passa, frase nao
+}
+function resumoArrumar(txt){
+  const bruto=String(txt||'').replace(/\r\n?/g,'\n').replace(/\u00a0/g,' ');
+  const passo1=[];
+  bruto.split('\n').forEach(l=>{
+    let x=l.trim();
+    if(!x){passo1.push({t:'',titulo:false});return;}
+    x=x.replace(/^#{1,6}\s*/,'');            // ### Titulo
+    x=x.replace(/^\s*>\s?/,'');              // > citacao
+    x=x.replace(/^[-*•·–—]\s+/,'');           // - bullet
+    x=x.replace(/^\d+[.)]\s+/,'');           // 1. item
+    x=x.replace(/\*\*(.+?)\*\*/g,'$1').replace(/__(.+?)__/g,'$1');
+    x=x.replace(/^\*(.+?)\*$/,'$1');
+    x=x.replace(/[ \t]{2,}/g,' ').trim();
+    if(!x){passo1.push({t:'',titulo:false});return;}
+    const titulo=resumoEhTitulo(x);
+    if(titulo&&!/:$/.test(x))x+=':';
+    passo1.push({t:x,titulo});
+  });
+  // Uma linha em branco entre blocos, nunca duas. E titulo sempre com respiro em cima.
+  const out=[];
+  passo1.forEach(l=>{
+    if(l.t===''){ if(out.length&&out[out.length-1]!=='')out.push(''); return; }
+    if(l.titulo&&out.length&&out[out.length-1]!=='')out.push('');
+    out.push(l.t);
+  });
+  return out.join('\n').trim();
+}
+// Guarda o que voce escreveu, do jeito que voce escreveu. Nenhum modelo e chamado.
+function resumoUsarComoEsta(subId){
+  const ta=document.getElementById('resumo-colar-'+subId);
+  const sub=simFindSub(subId);
+  if(!ta||!sub)return;
+  const txt=resumoArrumar(ta.value);
+  if(txt.length<50){toast('⚠️ Cole um pouco mais de texto — o mínimo é 50 caracteres.','var(--red)');return;}
+  sub.resumo={texto:txt,geradoEm:new Date().toISOString(),origem:'meu'};
+  resumoColando.delete(subId);
+  resumoRascunho.delete(subId);
+  saveDB();
+  resumoRefreshPanel(subId);
+  toast('✅ Resumo guardado como está — nenhum modelo foi chamado.','var(--green)');
+}
 function resumoGerarDoTexto(subId){
   const ta=document.getElementById('resumo-colar-'+subId);
   if(!ta)return;
   const txt=ta.value.trim();
   if(txt.length<50){toast('⚠️ Cole um pouco mais de texto — o mínimo é 50 caracteres.','var(--red)');return;}
+  // O texto fica guardado ANTES de sair da tela. Sem isso, um 503 da Google levava
+  // junto tudo o que voce tinha acabado de colar — e voce colava de novo pra tomar
+  // outro 503.
+  resumoRascunho.set(subId,txt);
   resumoColando.delete(subId);
   resumoRefreshPanel(subId);
   generateResumo(subId,textoComoArquivo(txt));
@@ -7361,18 +7423,23 @@ function resumoColarHTML(s){
     <div class="resumo-header">
       <div class="resumo-title"><i class="fa fa-clipboard"></i> Colar o texto</div>
       <div class="resumo-actions">
-        <button class="btn btn-xs btn-primary" onclick="resumoGerarDoTexto('${s.id}')"><i class="fa fa-wand-magic-sparkles"></i> Gerar resumo</button>
+        <button class="btn btn-xs btn-primary" onclick="resumoUsarComoEsta('${s.id}')" title="Guarda o texto do jeito que está, só arrumando a formatação aqui mesmo. Não chama modelo nenhum."><i class="fa fa-check"></i> Usar como está</button>
+        <button class="btn btn-xs btn-ghost" onclick="resumoGerarDoTexto('${s.id}')" title="Manda o texto pro Gemini reescrever em forma de resumo. Precisa de chave e da API no ar."><i class="fa fa-wand-magic-sparkles"></i> Resumir com IA</button>
         <button class="btn btn-xs btn-ghost" onclick="resumoCancelarColar('${s.id}')">Cancelar</button>
       </div>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
-      Cole aqui o material — o artigo da lei, o trecho da apostila, o que for. A IA lê
-      só isso e monta o resumo a partir dele, sem pesquisar na internet.${tem?' <b>O resumo atual vai ser substituído.</b>':''}
+      <b>Usar como está</b> — se o texto JÁ é o seu resumo. Ele é guardado como você
+      escreveu; o app só arruma a forma (título em maiúsculas vira cabeçalho, tira
+      markdown, acerta as linhas em branco). Não chama modelo, então funciona com a API
+      fora do ar.<br>
+      <b>Resumir com IA</b> — se é material bruto (artigo de lei, trecho de apostila) e
+      você quer que ele seja transformado em resumo.${tem?'<br><b>O resumo atual vai ser substituído nos dois casos.</b>':''}
     </div>
     <textarea id="resumo-colar-${s.id}" class="inp" spellcheck="false" oninput="resumoColarContou('${s.id}')"
       placeholder="Cole o texto aqui (Ctrl+V)..."
-      style="width:100%;min-height:300px;font-family:inherit;font-size:12.5px;line-height:1.6;resize:vertical"></textarea>
-    <div style="font-size:10px;color:var(--muted);margin-top:6px;text-align:right" id="resumo-colar-n-${s.id}">0 caracteres</div>`;
+      style="width:100%;min-height:300px;font-family:inherit;font-size:12.5px;line-height:1.6;resize:vertical">${escapeHtml(resumoRascunho.get(s.id)||'')}</textarea>
+    <div style="font-size:10px;color:var(--muted);margin-top:6px;text-align:right" id="resumo-colar-n-${s.id}">${(resumoRascunho.get(s.id)||'').trim().length.toLocaleString('pt-BR')} caracteres</div>`;
 }
 function resumoEditorHTML(s){
   return`
@@ -7434,7 +7501,9 @@ function resumoPanelHTML(s){
       ${isSpeaking?`<div style="font-size:9.5px;color:var(--muted);margin:-4px 0 8px;display:flex;align-items:center;gap:5px">${resumoSpeakMode==='audio'?'<i class=\"fa fa-lock-open\"></i> Áudio da IA — continua tocando com a tela travada.':'<i class=\"fa fa-triangle-exclamation\"></i> Voz do navegador — para se a tela travar (configure sua chave de IA pra ouvir com a tela travada).'}</div>`:''}
       <div class="resumo-body" data-sub="${s.id}">${resumoFormatar(s.resumo.texto)}</div>
       ${fontesHTML(s.resumo.fontes,s.resumo.consultas,s.resumo.diag)}
-      <div class="resumo-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm}${fonteTxt} — confira sempre a fonte oficial antes de usar na prova.${s.resumo.editadoEm?` <b style="color:var(--green-t)">Corrigido por você em ${new Date(s.resumo.editadoEm).toLocaleDateString('pt-BR')}</b> — gerar de novo apaga a sua correção.`:''}</div>
+      ${s.resumo.origem==='meu'
+        ? `<div class="resumo-disclaimer" style="color:var(--green-t)"><i class="fa fa-user-pen"></i> Escrito por você e guardado em ${geradoEm} — nenhum modelo leu nem reescreveu este texto.${s.resumo.editadoEm?` Corrigido em ${new Date(s.resumo.editadoEm).toLocaleDateString('pt-BR')}.`:''}</div>`
+        : `<div class="resumo-disclaimer"><i class="fa fa-triangle-exclamation"></i> Gerado por IA em ${geradoEm}${fonteTxt} — confira sempre a fonte oficial antes de usar na prova.${s.resumo.editadoEm?` <b style="color:var(--green-t)">Corrigido por você em ${new Date(s.resumo.editadoEm).toLocaleDateString('pt-BR')}</b> — gerar de novo apaga a sua correção.`:''}</div>`}
     `;
   }
   return`
@@ -7678,8 +7747,12 @@ async function generateResumo(subId,file){
     sub.resumo={texto:resumoFinal,geradoEm:new Date().toISOString(),fileName:file.name,origem:file.__colado?'colado':'arquivo'};
     saveDB();
     toast('📄 Resumo gerado!','var(--green)');
+    resumoRascunho.delete(subId);
   }catch(e){
-    toast('❌ '+(e.message||'Erro ao gerar resumo'),'var(--red)');
+    toast('❌ '+(e.message||'Erro ao gerar resumo')+(resumoRascunho.has(subId)?' — o seu texto está de volta na tela.':''),'var(--red)');
+    // Deu erro e o texto era SEU (colado): devolve ele na tela, com "Usar como está"
+    // do lado. Numa sequencia de 503 e o unico caminho que funciona.
+    if(resumoRascunho.has(subId))resumoColando.add(subId);
   }finally{
     resumoGenerating.delete(subId);
     resumoRefreshPanel(subId);
@@ -25861,6 +25934,7 @@ window.provaRenomear=provaRenomear;
 window.provaRevisarArquivada=provaRevisarArquivada;
 window.provarqToggle=provarqToggle;
 window.sgHistTudoToggle=sgHistTudoToggle;
+window.resumoUsarComoEsta=resumoUsarComoEsta;
 window.montarQtdGravar=montarQtdGravar;
 window.comentarProva=comentarProva;
 window.comentarUma=comentarUma;
