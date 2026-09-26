@@ -12466,29 +12466,147 @@ const FONTE_TRECHO_CHARS=420;   // teto curto de proposito: isto vai pra dentro 
                                 // e prova que engorda demais empurra as outras pra fora
 let fonteRodando=false;
 
+// Palavra que nao diz nada sobre o assunto. Enunciado da Cebraspe e cheio delas:
+// "De acordo com", "Considerando que", "julgue o item seguinte" — se elas entram na
+// busca, a busca vira ruido.
+const FONTE_STOP=new Set(('acordo acerca ainda algum alguma apenas apesar aquela aquele aquilo '
+ +'assertiva assim atraves cada caso como conforme considerando contudo daquele dessa desse '
+ +'deste desta dever devera devem entao entre essa esse esta este exceto foram forma item itens '
+ +'julgue mesma mesmo muito nessa nesse nesta neste nenhum nenhuma outra outro outras outros '
+ +'para pela pelas pelo pelos pode podem porem porque portanto pouco proxima proximo qual quais '
+ +'qualquer quando quanto seguinte seguintes sempre sendo sobre somente sua suas todas todos '
+ +'anterior posterior situacao hipotetica texto julgamento correto incorreto certo errado').split(' '));
+// Raiz curta pra "negociacao" bater com "negociacoes" e "vacinal" com "vacinacao".
+// Sem isso, comparar palavra inteira perde quase toda flexao do portugues.
+function fonteRaiz(w){return w.length>7?w.slice(0,7):w;}
+function fonteNorm(t){return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+// Os termos que de fato identificam o item — e a regua pra saber se um trecho da web
+// fala do mesmo assunto ou e outra coisa qualquer.
+function fonteTermos(q){
+  const norm=fonteNorm(String(q.questao||'')+' '+String(q.subName||''));
+  const out=[];
+  norm.replace(/[^\w\s\/.-]/g,' ').split(/\s+/).forEach(w=>{
+    const limpo=w.replace(/^[.\-\/]+|[.\-\/]+$/g,'');
+    if(!limpo)return;
+    // Numero solto de 1 ou 2 digitos ("Item 1", "3 horas") nao identifica nada e casa
+    // com qualquer pagina. So entra numero que parece referencia: 8.080/1990, 2436, 564.
+    const numero=/\d/.test(limpo);
+    if(numero?limpo.length<3:(limpo.length<5||FONTE_STOP.has(limpo)))return;
+    if(out.indexOf(limpo)<0)out.push(limpo);
+  });
+  return out;
+}
+function fonteNota(txt,termos){
+  if(!termos.length)return 0;
+  const n=fonteNorm(txt);
+  let acertos=0;
+  termos.forEach(t=>{ if(n.indexOf(/\d/.test(t)?t:fonteRaiz(t))>=0)acertos++; });
+  return acertos;
+}
+// Regua proporcional: item curto tem poucos termos, e exigir 3 dele seria exigir tudo.
+function fonteNotaMinima(termos){
+  return Math.min(3,Math.max(2,Math.ceil(termos.length*0.15)));
+}
 // A consulta sai do proprio item. Referencia de norma no enunciado ("Lei n.o 8.080",
-// "Resolucao Cofen 564") e o termo de maior sinal que existe — vai na frente.
+// "Resolucao Cofen 564") e o termo de maior sinal que existe — vai na frente. Depois
+// vao as palavras CHEIAS do item, nao as primeiras: enunciado de banca abre com rodeio.
 function fonteConsulta(q){
   const txt=String(q.questao||'');
   const normas=(txt.match(/(lei|decreto|resolu[çc][ãa]o|portaria|rdc|s[úu]mula)[^.,;]{0,40}?n?[.\s º°]*\d[\d.\/-]*/gi)||[])
     .slice(0,2).map(x=>x.replace(/\s+/g,' ').trim());
-  const palavras=txt.replace(/\s+/g,' ').split(' ').slice(0,22).join(' ');
-  return [q.subName||'',normas.join(' '),palavras].filter(Boolean).join(' ').slice(0,380);
+  const chave=fonteTermos(q).filter(t=>!/^\d/.test(t)).slice(0,10).join(' ');
+  return [q.subName||'',normas.join(' '),chave].filter(Boolean).join(' ').slice(0,300);
+}
+
+// O Tavily entrega a pagina inteira em markdown: menu, breadcrumb, "pular para o
+// conteudo", logo, rodape. Se isso vai pra tela, e o que voce ve — e foi o que
+// aconteceu. Aqui sobra so o que parece paragrafo de texto de verdade.
+const FONTE_LIXO=/(aceitar cookies|pular para|menu principal|ir para o conte|compartilhar|newsletter|todos os direitos reservados|voc[eê] est[aá] aqui|mapa do site|fale conosco|acessibilidade|alto contraste|localizar descritor|portal regional|open-access|propor novo artigo)/i;
+function fonteLimparCorpo(txt){
+  return String(txt||'').split('\n').map(l=>l.trim()).filter(l=>{
+    if(!l)return false;
+    const artigo=/^art\.?\s*\d/i.test(l);
+    if(l.length<(artigo?30:60))return false;      // menu, breadcrumb, titulo solto
+    if(/^title:/i.test(l))return false;
+    if(!artigo&&/^[!#>*|=]/.test(l))return false; // imagem, titulo, tabela, citacao
+    if((l.match(/\]\(/g)||[]).length>1)return false;             // linha feita de links
+    if((l.match(/[|*#\[\]()]/g)||[]).length>l.length*0.06)return false;
+    if(FONTE_LIXO.test(l))return false;
+    const letras=(l.match(/[a-zA-ZÀ-ÿ]/g)||[]).length;
+    return letras>=l.length*0.6;                  // mais simbolo que letra: nao e texto
+  });
+}
+// Uma passada de busca: limpa cada pagina, fica com o paragrafo que mais fala do item,
+// e joga fora a pagina inteira se nem o melhor paragrafo dela trata do assunto.
+async function fonteCandidatos(q,termos,oficial){
+  const r=await tavilyBuscar(fonteConsulta(q),{oficial,profundo:true,max:5});
+  const blocos=String(r.texto||'').split(/\n\n---\n\n/);
+  const minimo=fonteNotaMinima(termos);
+  const vistos=new Set(); const out=[];
+  r.fontes.forEach((f,i)=>{
+    if(vistos.has(f.url))return; vistos.add(f.url);
+    const corpo=String(blocos[i]||'').replace(/^\[FONTE \d+\][^\n]*\n(URL:[^\n]*\n)?/,'');
+    const paras=fonteLimparCorpo(corpo);
+    let melhor=null;
+    paras.forEach((p,k)=>{
+      const nota=fonteNota(p,termos);
+      // Paragrafo curto costuma ser a abertura do assunto: leva o seguinte junto.
+      const txt=(p.length<220&&paras[k+1])?p+' '+paras[k+1]:p;
+      if(!melhor||nota>melhor.nota)melhor={nota,txt};
+    });
+    if(!melhor||melhor.nota<minimo)return;
+    out.push({titulo:String(f.titulo||f.url).slice(0,120),url:f.url,
+              trecho:cortarNoPonto(melhor.txt,FONTE_TRECHO_CHARS),nota:melhor.nota});
+  });
+  return out.sort((a,b)=>b.nota-a.nota);
+}
+// O modelo entra aqui, e SO aqui: pra escolher qual trecho serve. Ele nao escreve, nao
+// reescreve e nao resume — devolve indice. Por isso e barato: os candidatos ja chegam
+// cortados em 380 caracteres, entao a chamada inteira fica na casa de 1 mil tokens, em
+// vez dos 10 mil do gerador de comentario. E o que ele erra e a escolha, nao o texto:
+// o que aparece na tela continua sendo o da pagina, com o link do lado.
+const FONTE_PENEIRA_CHARS=380;
+async function fontePeneirar(q,cands){
+  const chave=(db.geminiApiKey||'').trim();
+  if(!chave||cands.length<2)return{lista:cands,viaModelo:false};
+  const lista=cands.map((c,i)=>`[${i}] ${c.trecho.slice(0,FONTE_PENEIRA_CHARS)}`).join('\n\n');
+  const prompt=`Item de prova:\n"${String(q.questao||'').slice(0,400)}"\n\n`
+    +`Trechos de páginas que a busca trouxe:\n${lista}\n\n`
+    +`Sua tarefa é ESCOLHER, não escrever. Devolva os índices dos trechos que realmente `
+    +`tratam do assunto deste item e servem pra conferir se ele está certo ou errado — `
+    +`do mais útil pro menos útil, no máximo 3.\n`
+    +`Fica de fora: menu de site, título solto, lista de links, resumo de artigo sobre `
+    +`outro assunto, e trecho que só cita a palavra sem falar do que o item afirma.\n`
+    +`Se NENHUM servir, devolva [] — vazio é melhor do que trecho errado.\n`
+    +`Não escreva explicação, não reescreva nem resuma trecho nenhum.\n`
+    +`Responda só com JSON: [{"i":0},{"i":2}]`;
+  try{
+    const r=await callGeminiJSON(chave,prompt,false,240);
+    const arr=Array.isArray(r.json)?r.json:[];
+    const esc=[];
+    arr.forEach(x=>{
+      const c=cands[Number(x&&x.i)];
+      if(c&&esc.indexOf(c)<0)esc.push(c);
+    });
+    return{lista:esc,viaModelo:true};
+  }catch(e){
+    return{lista:cands,viaModelo:false};   // peneira e bonus: falhou, vale o ranking mecanico
+  }
 }
 async function fonteDaQuestao(q){
-  const r=await tavilyBuscar(fonteConsulta(q),{oficial:db.tavilySoOficial!==false,profundo:true,max:5});
-  const vistos=new Set();
-  const blocos=String(r.texto||'').split(/\n\n---\n\n/);
-  const out=[];
-  r.fontes.forEach((f,i)=>{
-    if(out.length>=FONTE_MAX_TRECHOS||vistos.has(f.url))return;
-    vistos.add(f.url);
-    const corpo=String(blocos[i]||'').replace(/^\[FONTE \d+\][^\n]*\n(URL:[^\n]*\n)?/,'').trim();
-    if(!corpo)return;
-    out.push({titulo:String(f.titulo||f.url).slice(0,120),url:f.url,
-              trecho:cortarNoPonto(corpo,FONTE_TRECHO_CHARS)});
-  });
-  return out;
+  const termos=fonteTermos(q);
+  let cands=await fonteCandidatos(q,termos,db.tavilySoOficial!==false);
+  let ampliou=false;
+  // Item que nao cita norma (tema de livro, nao de lei) nao mora em site .gov, e a busca
+  // restrita volta com o menu do portal. Se a 1a passada nao trouxe nada que fale do
+  // item, vale UMA segunda, aberta — e so nesse caso, pra nao dobrar o custo a toa.
+  if(!cands.length&&db.tavilySoOficial!==false){
+    ampliou=true;
+    cands=await fonteCandidatos(q,termos,false);
+  }
+  if(!cands.length)return{achados:[],ampliou,viaModelo:false};
+  const p=await fontePeneirar(q,cands);
+  return{achados:p.lista.slice(0,FONTE_MAX_TRECHOS),ampliou,viaModelo:p.viaModelo};
 }
 function fonteGravar(i,achados){
   const active=simGeralActive;
@@ -12504,12 +12622,15 @@ async function fonteBuscar(i){
   fonteRodando=true;
   toast('🔎 Procurando a fonte oficial...','var(--accent)');
   try{
-    const achados=await fonteDaQuestao(q);
-    if(!achados.length){toast('Não achei nada em fonte oficial pra esse item.','var(--orange)');return;}
-    fonteGravar(i,achados);
+    const r=await fonteDaQuestao(q);
+    if(!r.achados.length){
+      toast(r.ampliou?'Não achei nada que trate deste item — nem em site oficial, nem fora dele.'
+                     :'Não achei nada em site oficial que trate deste item.','var(--orange)');
+      return;}
+    fonteGravar(i,r.achados);
     saveDB();
     renderSimGeralScreen();
-    toast(`🔎 ${achados.length} trecho(s) de fonte oficial. Leia e julgue — ninguém reescreveu nada.`,'var(--green)');
+    toast(`🔎 ${r.achados.length} trecho(s)${r.ampliou?', fora de site oficial':''}. Leia e julgue — ninguém reescreveu nada.`,'var(--green)');
   }catch(e){
     toast(`⚠️ A busca falhou: ${e.message}`,'var(--orange)');
   }finally{fonteRodando=false;}
@@ -12532,8 +12653,8 @@ async function fonteBuscarErradas(){
     for(let k=0;k<alvo.length;k++){
       toast(`🔎 ${k+1} de ${alvo.length}...`,'var(--accent)');
       try{
-        const achados=await fonteDaQuestao(alvo[k].q);
-        if(achados.length){fonteGravar(alvo[k].i,achados);ok++;}else falhas++;
+        const r=await fonteDaQuestao(alvo[k].q);
+        if(r.achados.length){fonteGravar(alvo[k].i,r.achados);ok++;}else falhas++;
       }catch(e){falhas++;}
     }
   }finally{
@@ -12546,7 +12667,7 @@ function fonteApoioHTML(q,i){
   const a=q.apoioWeb||[];
   if(!a.length)return'';
   return`<div class="fonte-web">
-    <div class="fonte-web-cab"><i class="fa fa-book-open"></i> Trecho da fonte oficial — ninguém reescreveu, é o texto como está lá
+    <div class="fonte-web-cab"><i class="fa fa-book-open"></i> Trecho copiado da fonte — ninguém reescreveu, é o texto como está lá
       <button class="fonte-web-x" onclick="fonteLimpar(${i})" title="Tirar estes trechos">✕</button></div>
     ${a.map(f=>`<div class="fonte-web-item">
       <a href="${escapeHtml(f.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(f.titulo)}</a>
@@ -13024,7 +13145,7 @@ function simGeralResultsHTML(){
           ${q.fonte?`<div class="sim-fonte" title="De onde a explicação saiu — confira quando o ponto for número, prazo ou dose"><i class="fa fa-link"></i> ${escapeHtml(q.fonte)}</div>`:''}
           ${fonteApoioHTML(q,i)}
           <div class="sim-acoes">
-            ${tavilyAtivo()?`<button class="btn btn-xs btn-ghost" onclick="fonteBuscar(${i})" title="Busca o trecho da norma em fonte oficial e guarda com o link. Nenhum modelo escreve nada."><i class="fa fa-book-open"></i> ${(q.apoioWeb||[]).length?'Buscar de novo':'Buscar a fonte'}</button>`:''}
+            ${tavilyAtivo()?`<button class="btn btn-xs btn-ghost" onclick="fonteBuscar(${i})" title="Busca o trecho da fonte e guarda com o link. O modelo só escolhe qual trecho serve — escrever, ele não escreve."><i class="fa fa-book-open"></i> ${(q.apoioWeb||[]).length?'Buscar de novo':'Buscar a fonte'}</button>`:''}
             ${active.provaId?`<button class="btn btn-xs btn-ghost" onclick="comentarUma(${i})"><i class="fa fa-comment-dots"></i> ${q.explicacao?'Refazer o comentário':'Gerar comentário'}</button>`:''}
           </div>
           </div>
