@@ -3690,7 +3690,7 @@ function cacheLocalOutrasChaves(){
 function gravarCacheLocal(){
   // Mesmo motivo do payload: o banco tem a sua propria chave de cache, gravada so
   // quando ele muda. Sem isto, cada saveDB copiaria o banco inteiro de novo.
-  const {acervo,...semAcervo}=db;
+  const {acervo,provasArquivo,...semAcervo}=db;
   const copia=sanitizeForFirebase(semAcervo);   // já é uma cópia profunda; não mexe no db
   if(currentUser&&currentUser.uid)copia._uid=currentUser.uid;
   const chave=lsKey();
@@ -4038,6 +4038,7 @@ function applyDefaults(){
 
   // ===== Banco de questoes e numeracao das provas =====
   if(!Array.isArray(db.acervo))db.acervo=[];
+  if(!Array.isArray(db.provasArquivo))db.provasArquivo=[];
   if(typeof db.provaSeq!=='number')db.provaSeq=0;
   if(Array.isArray(db.provas)){
     // O maior numero ja usado manda: numero de prova nao pode se repetir, senao o
@@ -5565,7 +5566,7 @@ function guardarPlanoDoServidor(data){
 function payloadParaFirebase(){
   // O banco de questoes tem no proprio (vdn_acervo) e nao entra aqui: e o que mantem o
   // registro principal pequeno, e o registro principal e o que sobe a cada saveDB.
-  const {acervo,...semAcervo}=db;
+  const {acervo,provasArquivo,...semAcervo}=db;
   const copia=sanitizeForFirebase(semAcervo);
   CAMPOS_PLANO.forEach(k=>{
     if(planoDoServidor[k]!==undefined)copia[k]=planoDoServidor[k];
@@ -11644,7 +11645,7 @@ function renderSimGeralScreen(){
 function renderProvasScreen(){
   const el=document.getElementById('provas-content');
   if(!el)return;
-  el.innerHTML=simColarHTML()+provasGuardadasHTML();
+  el.innerHTML=simColarHTML()+provasGuardadasHTML()+provasArquivadasHTML();
 }
 function renderCadernoScreen(){
   const el=document.getElementById('caderno-content');
@@ -12366,8 +12367,124 @@ async function acervoCarregar(){
     acervoSalvar(true);
     if(noRegistro)saveDB();   // o registro principal encolhe na mesma hora
   }
+  await provarqCarregar();
   renderSimGeralScreen();
   return db.acervo.length;
+}
+
+// ===== ARQUIVO DE PROVAS =====
+// O banco guarda as QUESTOES da prova que sai da lista, mas nao a prova: o agrupamento,
+// as suas respostas daquele dia e o placar iam embora. Ou seja, "revisar prova por
+// prova" acabava junto com a prova — que e exatamente o que se quer olhar depois.
+// Aqui fica so o ESQUELETO: nome, data, tentativas e as CHAVES das questoes. O enunciado
+// nao e duplicado — ele ja esta no banco, e a prova e remontada na hora de abrir. Uma
+// prova de 120 itens custa ~5 KB assim, contra ~70 KB inteira.
+const PROVARQ_MAX=500;
+let PROVARQ_REF=null;
+let provarqTimer=null;
+function provarqChaveCache(){return lsKey()+'_provarq';}
+function provarqSalvar(agora){
+  if(provarqTimer){clearTimeout(provarqTimer);provarqTimer=null;}
+  const grava=()=>{
+    provarqTimer=null;
+    const lista=sanitizeForFirebase(db.provasArquivo||[]);
+    try{if(cacheIdbOk)idbGravar(provarqChaveCache(),lista);}catch(e){}
+    if(!PROVARQ_REF)return;
+    try{
+      const r=PROVARQ_REF.set(lista);
+      if(r&&r.catch)r.catch(e=>console.warn('Falha ao salvar o arquivo de provas:',e));
+    }catch(e){console.warn('Falha síncrona ao salvar o arquivo de provas:',e);}
+  };
+  if(agora)grava(); else provarqTimer=setTimeout(grava,1500);
+}
+async function provarqCarregar(){
+  PROVARQ_REF=userRef('vdn_provas_arq');
+  let local=null,nuvem=null;
+  try{local=await idbLer(provarqChaveCache());}catch(e){}
+  if(PROVARQ_REF){
+    try{
+      nuvem=await new Promise(res=>{
+        const t=setTimeout(()=>res(null),8000);
+        PROVARQ_REF.once('value').then(snap=>{clearTimeout(t);res(snap.val());},
+                                       ()=>{clearTimeout(t);res(null);});
+      });
+    }catch(e){}
+  }
+  const vistos=new Set(); const junto=[];
+  [].concat(Array.isArray(nuvem)?nuvem:[],Array.isArray(local)?local:[],db.provasArquivo||[])
+    .forEach(a=>{
+      if(!a||!a.id||vistos.has(a.id))return;
+      vistos.add(a.id); junto.push(a);
+    });
+  junto.sort((x,y)=>new Date(y.criadaEm||0)-new Date(x.criadaEm||0));
+  const noRegistro=(db.provasArquivo||[]).length;
+  db.provasArquivo=junto.slice(0,PROVARQ_MAX);
+  if(noRegistro||db.provasArquivo.length!==((Array.isArray(nuvem)?nuvem:[]).length))provarqSalvar(true);
+  return db.provasArquivo.length;
+}
+function provaArquivar(prova){
+  if(!prova||!(prova.questoes||[]).length)return false;
+  db.provasArquivo=db.provasArquivo||[];
+  if(db.provasArquivo.some(a=>a.id===prova.id))return false;
+  db.provasArquivo.unshift({
+    id:prova.id,num:prova.num||0,nome:prova.nome||'',
+    criadaEm:prova.criadaEm,arquivadaEm:new Date().toISOString(),
+    formato:prova.formato||'multipla',nivel:prova.nivel||'dificil',
+    origem:prova.origem||'ia',treino:!!prova.treino,limiteSec:prova.limiteSec||0,
+    // O que identifica cada questao dentro do banco. Mesma chave usada pelo dedup, entao
+    // uma questao que entrou por outra prova serve pra remontar esta aqui tambem.
+    chaves:(prova.questoes||[]).map(q=>montarChaveQ(q)),
+    tentativas:(prova.tentativas||[]).map(t=>({
+      data:t.data,respostas:(t.respostas||[]).slice(),
+      acertos:t.acertos||0,tempoGastoSec:t.tempoGastoSec||0}))
+  });
+  if(db.provasArquivo.length>PROVARQ_MAX)db.provasArquivo=db.provasArquivo.slice(0,PROVARQ_MAX);
+  provarqSalvar();
+  return true;
+}
+// Remonta a prova a partir do banco. Se alguma questao nao estiver la (item que voce
+// marcou como quebrado nunca entrou no banco), ela sai da prova E das respostas, juntas
+// — senao o gabarito da tentativa sairia deslocado de uma casa pra frente.
+function provaDoArquivo(id){
+  const a=(db.provasArquivo||[]).find(x=>x.id===id);
+  if(!a)return null;
+  const mapa=new Map();
+  (db.acervo||[]).forEach(q=>{const k=montarChaveQ(q);if(k&&!mapa.has(k))mapa.set(k,q);});
+  const questoes=[];
+  const tent=(a.tentativas||[]).map(t=>({...t,respostas:[]}));
+  (a.chaves||[]).forEach((k,i)=>{
+    const q=mapa.get(k);
+    if(!q)return;
+    questoes.push({...q});
+    tent.forEach((t,ti)=>t.respostas.push(((a.tentativas[ti]||{}).respostas||[])[i]||''));
+  });
+  if(!questoes.length)return null;
+  tent.forEach(t=>{t.acertos=t.respostas.filter((r,i)=>r&&r===questoes[i].correta).length;});
+  return{...a,questoes,tentativas:tent,arquivada:true,
+         faltando:(a.chaves||[]).length-questoes.length};
+}
+function provaRevisarArquivada(id,tIdx){
+  const prova=provaDoArquivo(id);
+  if(!prova){toast('Não consegui remontar esta prova — as questões dela não estão mais no banco.','var(--orange)');return;}
+  const ts=prova.tentativas||[];
+  const i=(tIdx==null||tIdx<0)?ts.length-1:tIdx;
+  const t=ts[i];
+  if(!t){toast('Essa prova foi arquivada sem nenhuma tentativa.','var(--orange)');return;}
+  if(simGeralActive&&!simGeralActive.corrected
+     &&!confirm('Você tem um simulado em andamento. Abrir a revisão descarta o que está na tela. Continuar?'))return;
+  const resp=t.respostas||[];
+  simGeralActive={
+    questoes:prova.questoes.map((q,k)=>({...q,userAnswer:resp[k]||undefined})),
+    startedAt:Date.now(),limiteSec:0,corrected:true,
+    formato:prova.formato,nivel:prova.nivel,
+    importado:prova.origem==='colado',
+    provaId:null,revisando:true,arquivada:true,tentativaNum:i+1,
+    tempoGastoSec:t.tempoGastoSec||0
+  };
+  showScreen('simgeral');
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+  toast(`🗄️ ${provaRotulo(prova)} — ${prova.questoes.length} itens remontados do banco${prova.faltando?` (${prova.faltando} fora: saíram por estarem marcados como quebrados)`:''}.`,'var(--accent)');
 }
 // "Estou enviando prova e nao sei qual e qual": sete linhas dizendo "120 questoes" nao
 // identificam nada. Cada prova ganha um numero que nunca se repete e um rotulo que voce
@@ -12474,9 +12591,10 @@ function provasAparar(){
     saindo.push(db.provas.pop());
     bytes=JSON.stringify(db.provas).length;
   }
-  // Sai da lista, mas nao some: as questoes vao pro acervo antes.
+  // Sai da lista, mas nao some: as questoes vao pro acervo e o esqueleto da prova
+  // (nome, data, as suas respostas) vai pro arquivo, pra dar pra revisar depois.
   let guardadas=0;
-  saindo.forEach(p=>{guardadas+=acervoGuardarProva(p);});
+  saindo.forEach(p=>{guardadas+=acervoGuardarProva(p);provaArquivar(p);});
   if(guardadas)toast(`🗄️ ${saindo.length} prova${saindo.length>1?'s antigas saíram':' antiga saiu'} da lista — ${guardadas} ${guardadas===1?'questão foi':'questões foram'} pro banco de questões.`,'var(--accent)');
   return guardadas;
 }
@@ -12580,6 +12698,7 @@ function provaApagar(id){
   if(!prova)return;
   if(!confirm(`Apagar "${provaRotulo(prova)}" (${prova.questoes.length} questões)?\n\nAs questões vão pro banco de questões e continuam disponíveis pra montar caderno. O que some é a prova em si: o agrupamento, as tentativas e a comparação entre elas.`))return;
   const guardadas=acervoGuardarProva(prova);
+  provaArquivar(prova);
   db.provas=(db.provas||[]).filter(p=>p.id!==id);
   saveDB();
   renderSimGeralScreen();
@@ -13378,7 +13497,7 @@ function provasGuardadasHTML(){
     <div class="sec-title" style="margin-bottom:4px">🗄️ Provas guardadas</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600">
       ${esperando?`<b style="color:var(--gold-t,var(--orange-t))">${esperando} prova${esperando>1?'s':''} esperando</b> — a 1ª vez que você faz uma delas conta em tudo (estatística por assunto, Banco de Erros, flashcard). `:''}Refazer semanas depois é o treino que mais rende em certo/errado, e a refação não mexe nas estatísticas: ela só compara com a vez anterior.
-      <span style="color:var(--muted)">Cabem ${PROVAS_MAX} provas (${lista.length} guardada${lista.length>1?'s':''}). Passando disso a mais antiga sai da lista, mas as <b>questões</b> dela vão pro banco${(db.acervo||[]).length?` — que hoje tem <b>${db.acervo.length}</b> e não tem validade: nada sai de lá`:''}, e voltam em "Montar prova sob medida".</span>
+      <span style="color:var(--muted)">Cabem ${PROVAS_MAX} provas (${lista.length} guardada${lista.length>1?'s':''}). Passando disso a mais antiga sai da lista, mas não se perde: as <b>questões</b> vão pro Banco de Questões${(db.acervo||[]).length?` (hoje com <b>${db.acervo.length}</b>, e nada sai de lá)`:''} e a prova fica em <b>Provas arquivadas</b>, aqui embaixo, pra você rever o que marcou.</span>
     </div>
     ${lista.map(p=>{
       const ce=(p.formato||'multipla')==='certoerrado';
@@ -13421,6 +13540,39 @@ function provasGuardadasHTML(){
       :'<i>Nunca feita — esta prova conta como simulado de verdade na primeira vez.</i>'):linhas}</div>
       </div>`;
     }).join('')}
+  </div>`;
+}
+// "Ela fica guardada onde que eu nao vejo?" — ficava em lugar nenhum: so as questoes
+// sobreviviam, soltas no banco. Agora a prova continua aqui embaixo, remontada do banco
+// na hora de abrir. Fechada por padrao porque e historico, nao trabalho do dia.
+let provarqAberto=false;
+function provarqToggle(){provarqAberto=!provarqAberto;renderProvasScreen();}
+function provasArquivadasHTML(){
+  const arq=(db.provasArquivo||[]).filter(a=>(a.chaves||[]).length);
+  if(!arq.length)return'';
+  return`<div class="section-card">
+    <button class="sg-mais" style="font-size:12px;font-weight:900;color:var(--text2)"
+      onclick="provarqToggle()">${provarqAberto?'▴':'▾'} 🗄️ Provas arquivadas (${arq.length})</button>
+    <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.55;font-weight:600">
+      Saíram da lista acima, mas não se perderam: as questões estão no Banco de Questões e a prova é remontada de lá quando você abre. Dá pra rever o que você marcou; refazer, não — pra isso, monte um caderno no Banco de Questões.
+    </div>
+    ${provarqAberto?`<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+      ${arq.map(a=>{
+        const ce=(a.formato||'multipla')==='certoerrado';
+        const ts=a.tentativas||[];
+        const linhas=ts.map((t,i)=>{
+          const tot=(t.respostas||[]).length||(a.chaves||[]).length;
+          const marcadas=(t.respostas||[]).filter(Boolean).length;
+          const liq=(t.acertos||0)-(marcadas-(t.acertos||0));
+          return`<button class="prova-tent" onclick="provaRevisarArquivada('${a.id}',${i})" title="Abrir esta tentativa e ver o que você marcou">${i+1}ª: <b>${t.acertos||0}/${tot}</b>${ce?` · líq. ${liq>0?'+':''}${liq}`:''} <i class="fa fa-magnifying-glass"></i></button>`;
+        }).join('<span style="color:var(--border)"> → </span>');
+        return`<div class="sg-todos-linha" style="padding:8px 10px;flex-wrap:wrap;gap:8px">
+          <span style="font-weight:800">${escapeHtml(provaRotulo(a))}</span>
+          <span style="color:var(--muted);font-size:10px">${(a.chaves||[]).length} itens · ${new Date(a.criadaEm).toLocaleDateString('pt-BR')}</span>
+          <span style="flex:1"></span>
+          ${linhas||'<span style="color:var(--muted);font-size:10px">nunca feita</span>'}
+        </div>`;}).join('')}
+    </div>`:''}
   </div>`;
 }
 function simGeralCorrigir(){
@@ -25534,6 +25686,8 @@ window.montarTrocarModo=montarTrocarModo;
 window.montarAlternarAssunto=montarAlternarAssunto;
 window.montarAlternarMateria=montarAlternarMateria;
 window.provaRenomear=provaRenomear;
+window.provaRevisarArquivada=provaRevisarArquivada;
+window.provarqToggle=provarqToggle;
 window.montarQtdGravar=montarQtdGravar;
 window.comentarProva=comentarProva;
 window.comentarUma=comentarUma;
