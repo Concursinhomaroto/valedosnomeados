@@ -12214,11 +12214,22 @@ const PROVAS_BYTES_MAX=1600000;   // ~1,6 MB no total; acima disso a mais antiga
 // laco que insira sem parar). Em ritmo de 120 itens por dia, sao mais de 4 anos pra
 // encostar nele — e, se encostar, o app avisa em vez de descartar calado.
 const ACERVO_MAX=20000;
+// Sai o que pertence AQUELA TENTATIVA (o que voce marcou, por que errou, o grifo).
+// Fica tudo o que pertence a QUESTAO — inclusive o que e seu: o comentario, a fonte, o
+// trecho da norma que voce mandou buscar e a nota que voce escreveu com as suas
+// palavras. Eles eram descartados por um orcamento de bytes que nao existe mais desde
+// que o banco saiu do registro principal, e a nota escrita e a coisa mais cara de
+// reproduzir que tem ali dentro.
+// Os grifos ficam de fora de proposito: eles sao posicoes dentro do texto renderizado,
+// e ressuscitar posicao fora do lugar onde foi feita e pedir grifo torto.
 function acervoLimparQuestao(q){
-  const {userAnswer,motivo,minhaNota,marcas,apoioWeb,_histId,_qIdxInHist,
+  const {userAnswer,motivo,marcas,_histId,_qIdxInHist,
          revisado,problematico,_resp,...limpa}=q;
   return limpa;
 }
+// Campos que a versao que chega pode ter e a guardada nao.
+const ACERVO_ENRIQUECE=['explicacao','fonte','apoioWeb','minhaNota','textoApoio'];
+function acervoTem(v){return Array.isArray(v)?v.length>0:!!(v&&String(v).trim());}
 // Guarda as questoes de UMA prova que esta saindo. Carimba o que voce fez nelas
 // (_resp: C acertou, X errou) pra o filtro "so o que eu errei" continuar valendo
 // depois que a prova de origem ja nao existe.
@@ -12226,21 +12237,36 @@ function acervoGuardarProva(prova){
   db.acervo=db.acervo||[];
   const ts=prova.tentativas||[];
   const resp=(ts[ts.length-1]||{}).respostas||[];
-  const jaTem=new Set(db.acervo.map(q=>montarChaveQ(q)));
-  let novas=0;
+  const porChave=new Map();
+  db.acervo.forEach(q=>{const k=montarChaveQ(q);if(k&&!porChave.has(k))porChave.set(k,q);});
+  let novas=0,melhoradas=0;
   (prova.questoes||[]).forEach((q,i)=>{
     if(questaoForaDaConta(q))return;              // item quebrado nao volta pro banco
     const chave=montarChaveQ(q);
-    if(!chave||jaTem.has(chave))return;
-    jaTem.add(chave);
+    if(!chave)return;
     const limpa=acervoLimparQuestao(q);
     const dada=resp[i]||'';
     if(dada)limpa._resp=(dada===q.correta)?'C':'X';
+    const velha=porChave.get(chave);
+    if(velha){
+      // A MESMA questao costuma estar em duas provas — uma comentada, a outra nao. Antes,
+      // a segunda era simplesmente ignorada: se a copia que ja estava no banco era a sem
+      // comentario, o comentario que voce mandou gerar morria ali. Agora o banco fica com
+      // a melhor das duas, campo a campo. Nada e sobrescrito: so preenche o que falta.
+      let mudou=false;
+      ACERVO_ENRIQUECE.forEach(c=>{
+        if(acervoTem(limpa[c])&&!acervoTem(velha[c])){velha[c]=limpa[c];mudou=true;}
+      });
+      if(!velha._resp&&limpa._resp){velha._resp=limpa._resp;mudou=true;}
+      if(mudou)melhoradas++;
+      return;
+    }
+    porChave.set(chave,limpa);
     db.acervo.unshift(limpa);
     novas++;
   });
   acervoAparar();
-  if(novas)acervoSalvar();
+  if(novas||melhoradas)acervoSalvar();
   return novas;
 }
 function acervoAparar(){
@@ -13197,7 +13223,10 @@ function montarAgora(){
   for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
   const escolhidas=arr.slice(0,qtd);
   const questoes=escolhidas.map(x=>{
-    const {userAnswer,motivo,minhaNota,marcas,_resp,...limpa}=x.q;   // caderno limpo: sem a sua marca da vez passada
+    // Sai o que voce marcou da vez passada; fica a sua nota escrita e o trecho da fonte,
+    // que so aparecem na tela DEPOIS de corrigir — entao nao entregam o gabarito, e
+    // reencontrar o que voce mesmo escreveu e metade do valor de refazer.
+    const {userAnswer,motivo,marcas,_resp,...limpa}=x.q;
     return limpa;
   });
   const formato=questoes.every(q=>q.formato==='certoerrado')?'certoerrado':'multipla';
