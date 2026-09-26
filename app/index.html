@@ -3690,7 +3690,7 @@ function cacheLocalOutrasChaves(){
 function gravarCacheLocal(){
   // Mesmo motivo do payload: o banco tem a sua propria chave de cache, gravada so
   // quando ele muda. Sem isto, cada saveDB copiaria o banco inteiro de novo.
-  const {acervo,provasArquivo,...semAcervo}=db;
+  const {acervo,provasArquivo,hist,...semAcervo}=db;
   const copia=sanitizeForFirebase(semAcervo);   // já é uma cópia profunda; não mexe no db
   if(currentUser&&currentUser.uid)copia._uid=currentUser.uid;
   const chave=lsKey();
@@ -4039,6 +4039,8 @@ function applyDefaults(){
   // ===== Banco de questoes e numeracao das provas =====
   if(!Array.isArray(db.acervo))db.acervo=[];
   if(!Array.isArray(db.provasArquivo))db.provasArquivo=[];
+  if(!db.hist||typeof db.hist!=='object')db.hist=histVazio();
+  ['geral','sessoes','subs'].forEach(k=>{if(!Array.isArray(db.hist[k]))db.hist[k]=[];});
   if(typeof db.provaSeq!=='number')db.provaSeq=0;
   if(Array.isArray(db.provas)){
     // O maior numero ja usado manda: numero de prova nao pode se repetir, senao o
@@ -5566,7 +5568,7 @@ function guardarPlanoDoServidor(data){
 function payloadParaFirebase(){
   // O banco de questoes tem no proprio (vdn_acervo) e nao entra aqui: e o que mantem o
   // registro principal pequeno, e o registro principal e o que sobe a cada saveDB.
-  const {acervo,provasArquivo,...semAcervo}=db;
+  const {acervo,provasArquivo,hist,...semAcervo}=db;
   const copia=sanitizeForFirebase(semAcervo);
   CAMPOS_PLANO.forEach(k=>{
     if(planoDoServidor[k]!==undefined)copia[k]=planoDoServidor[k];
@@ -10095,7 +10097,7 @@ function simCorrigir(subId){
   const histId=genId();
   active.histId=histId;
   sub.simHistorico.unshift({id:histId,data:new Date().toISOString(),quantidade:total,acertos,erros:total-acertos,questoes:active.questoes,formato:active.formato||'multipla',nivel:active.nivel});
-  sub.simHistorico=sub.simHistorico.slice(0,5);
+  histApararSub(sub);
   db.simSessionsCount=(db.simSessionsCount||0)+1;
   active.questoes.filter(q=>q.userAnswer!==q.correta).forEach(q=>criarFlashcardDeQuestaoErrada(subId,q));
   const simXp=total+acertos*2; // 1 XP por questão respondida + 2 XP extra por questão certa
@@ -11782,20 +11784,25 @@ function simGeralConfigHTML(){
     <button id="sg-gerar-btn" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:14px" onclick="generateSimuladoGeral()" ${simGeralConfig.selectedSubIds.size===0?'disabled':''}><i class="fa fa-wand-magic-sparkles"></i> Gerar Simulado Geral</button>
   </div>`;
 
-  if(hist.length){
+  const histTudo=histGeralTudo();
+  if(histTudo.length){
+    const mostra=sgHistTudo?histTudo:histTudo.slice(0,10);
     html+=`<div class="section-card" style="margin-top:16px">
-      <div class="sec-title" style="margin-bottom:10px;font-size:12px">📜 Histórico de Simulados Gerais</div>
-      ${hist.slice(0,10).map(h=>{
+      <div class="sec-title" style="margin-bottom:10px;font-size:12px">📜 Histórico de Simulados Gerais <span style="font-weight:700;color:var(--muted);font-size:10px;letter-spacing:0">· ${histTudo.length} desde ${new Date(histTudo[histTudo.length-1].data).toLocaleDateString('pt-BR')}</span></div>
+      ${mostra.map(h=>{
         const pct=h.quantidade?Math.round(h.acertos/h.quantidade*100):0;
         return`<div class="sg-hist-row">
           <div><b>${new Date(h.data).toLocaleDateString('pt-BR')}</b> · ${h.formato==='certoerrado'?'✔️✖️ C/E':'🔤 Múltipla'} · ${h.quantidade} questões · ${h.assuntos.length} assunto(s) · ⏱ ${fmtHMS(h.tempoGastoSec||0)}</div>
           <div style="color:${pct>=60?'var(--green-t)':'var(--red-t)'};font-weight:800">${h.acertos}/${h.quantidade} (${pct}%)</div>
         </div>`;
       }).join('')}
+      ${histTudo.length>10?`<button class="sg-mais" onclick="sgHistTudoToggle()">${sgHistTudo?'▴ mostrar só os 10 últimos':`▾ ver os ${histTudo.length} — nenhum se perde`}</button>`:''}
     </div>`;
   }
   return html;
 }
+let sgHistTudo=false;
+function sgHistTudoToggle(){sgHistTudo=!sgHistTudo;renderSimGeralScreen();}
 function sgToggleSub(subId,checked){
   if(checked)simGeralConfig.selectedSubIds.add(subId);else simGeralConfig.selectedSubIds.delete(subId);
   sgUpdateSummary();
@@ -12241,7 +12248,11 @@ const PROVAS_BYTES_MAX=1600000;   // ~1,6 MB no total; acima disso a mais antiga
 // O numero abaixo nao e politica de descarte: e limite de seguranca contra defeito (um
 // laco que insira sem parar). Em ritmo de 120 itens por dia, sao mais de 4 anos pra
 // encostar nele — e, se encostar, o app avisa em vez de descartar calado.
-const ACERVO_MAX=20000;
+const ACERVO_MAX=50000;
+// Avisa ANTES de doer. "Nada pode sumir" so vale se a pessoa souber quando o limite
+// esta chegando — descobrir depois nao adianta, porque ai ja sumiu.
+const ACERVO_AVISO=0.8;
+let acervoAvisou=false;
 // Sai o que pertence AQUELA TENTATIVA (o que voce marcou, por que errou, o grifo).
 // Fica tudo o que pertence a QUESTAO — inclusive o que e seu: o comentario, a fonte, o
 // trecho da norma que voce mandou buscar e a nota que voce escreveu com as suas
@@ -12299,6 +12310,10 @@ function acervoGuardarProva(prova){
 }
 function acervoAparar(){
   if(!db.acervo)return 0;
+  if(!acervoAvisou&&db.acervo.length>=ACERVO_MAX*ACERVO_AVISO&&db.acervo.length<=ACERVO_MAX){
+    acervoAvisou=true;
+    toast(`📚 Seu banco passou de ${db.acervo.length} questões (o limite é ${ACERVO_MAX}). Ainda cabe, mas me avise pra eu dividir o banco em partes antes de encostar.`,'var(--orange)');
+  }
   if(db.acervo.length<=ACERVO_MAX)return 0;
   const sobra=db.acervo.length-ACERVO_MAX;
   db.acervo=db.acervo.slice(0,ACERVO_MAX);
@@ -12368,8 +12383,116 @@ async function acervoCarregar(){
     if(noRegistro)saveDB();   // o registro principal encolhe na mesma hora
   }
   await provarqCarregar();
+  await histCarregar();
   renderSimGeralScreen();
   return db.acervo.length;
+}
+
+// ===== HISTORICO LONGO =====
+// Tres listas do registro principal eram cortadas pra ele nao crescer: o historico de
+// simulados gerais (20), o log de sessoes de estudo (50) e o historico por miniboss (5
+// por assunto). Isso e o registro da sua vida de estudo — a curva de progresso, o tempo
+// acumulado — e ele sumia pela porta dos fundos, sem aviso.
+//
+// O corte continua, porque e ele que mantem o registro principal leve e as telas
+// rapidas. O que muda e que o excedente NAO e mais jogado fora: ele vai pra ca, num no
+// proprio, do mesmo jeito que o banco e o arquivo de provas.
+//
+// O historico por miniboss vai SEM as questoes: elas ja estao no Banco de Questoes e no
+// arquivo de provas, e era justamente o peso delas que obrigava o teto de 5.
+let HIST_REF=null;
+let histTimer=null;
+function histChaveCache(){return lsKey()+'_hist';}
+function histVazio(){return{geral:[],sessoes:[],subs:[]};}
+function histSalvar(agora){
+  if(histTimer){clearTimeout(histTimer);histTimer=null;}
+  const grava=()=>{
+    histTimer=null;
+    const d=sanitizeForFirebase(db.hist||histVazio());
+    try{if(cacheIdbOk)idbGravar(histChaveCache(),d);}catch(e){}
+    if(!HIST_REF)return;
+    try{
+      const r=HIST_REF.set(d);
+      if(r&&r.catch)r.catch(e=>console.warn('Falha ao salvar o histórico:',e));
+    }catch(e){console.warn('Falha síncrona ao salvar o histórico:',e);}
+  };
+  if(agora)grava(); else histTimer=setTimeout(grava,1500);
+}
+// Cada lista e append-only e cada item tem id proprio, entao juntar por id e sempre
+// certo — nao existe versao "mais nova" de um registro de historico.
+function histUnir(a,b,chave){
+  const vistos=new Set(); const out=[];
+  [].concat(Array.isArray(a)?a:[],Array.isArray(b)?b:[]).forEach(x=>{
+    if(!x)return;
+    const k=chave(x);
+    if(!k||vistos.has(k))return;
+    vistos.add(k); out.push(x);
+  });
+  return out;
+}
+const histChaveGeral=h=>h.id||h.data;
+const histChaveSessao=x=>`${x.data}|${x.hora}|${x.tipo}|${x.segundos}`;
+const histChaveSub=h=>h.id||`${h.subId}|${h.data}`;
+async function histCarregar(){
+  HIST_REF=userRef('vdn_historico');
+  let local=null,nuvem=null;
+  try{local=await idbLer(histChaveCache());}catch(e){}
+  if(HIST_REF){
+    try{
+      nuvem=await new Promise(res=>{
+        const t=setTimeout(()=>res(null),8000);
+        HIST_REF.once('value').then(sn=>{clearTimeout(t);res(sn.val());},
+                                    ()=>{clearTimeout(t);res(null);});
+      });
+    }catch(e){}
+  }
+  const n=nuvem||{},l=local||{},m=db.hist||{};
+  db.hist={
+    geral:histUnir(histUnir(n.geral,l.geral,histChaveGeral),m.geral,histChaveGeral),
+    sessoes:histUnir(histUnir(n.sessoes,l.sessoes,histChaveSessao),m.sessoes,histChaveSessao),
+    subs:histUnir(histUnir(n.subs,l.subs,histChaveSub),m.subs,histChaveSub),
+  };
+  db.hist.geral.sort((x,y)=>new Date(y.data||0)-new Date(x.data||0));
+  db.hist.subs.sort((x,y)=>new Date(y.data||0)-new Date(x.data||0));
+  return db.hist.geral.length+db.hist.sessoes.length+db.hist.subs.length;
+}
+function histGuardar(lista,itens){
+  if(!itens||!itens.length)return 0;
+  db.hist=db.hist||histVazio();
+  db.hist[lista]=(db.hist[lista]||[]).concat(itens);
+  histSalvar();
+  return itens.length;
+}
+// Corta a lista do registro e manda o excedente pro no, em vez de jogar fora.
+function histApararGeral(){
+  const h=(db.simGeral&&db.simGeral.historico)||[];
+  if(h.length<=HIST_GERAL_VIVO)return;
+  histGuardar('geral',h.slice(HIST_GERAL_VIVO));
+  db.simGeral.historico=h.slice(0,HIST_GERAL_VIVO);
+}
+function histApararSessoes(){
+  const f=db.freeSessions||[];
+  if(f.length<=HIST_SESSOES_VIVAS)return;
+  histGuardar('sessoes',f.slice(0,f.length-HIST_SESSOES_VIVAS));
+  db.freeSessions=f.slice(-HIST_SESSOES_VIVAS);
+}
+// Do miniboss vai so o agregado: as questoes ficam no Banco de Questoes.
+function histApararSub(sub){
+  const h=sub.simHistorico||[];
+  if(h.length<=HIST_SUB_VIVO)return;
+  histGuardar('subs',h.slice(HIST_SUB_VIVO).map(x=>{
+    const{questoes,...leve}=x;
+    return{...leve,subId:sub.id,subName:sub.name,semQuestoes:true};
+  }));
+  sub.simHistorico=h.slice(0,HIST_SUB_VIVO);
+}
+const HIST_GERAL_VIVO=20;    // o que fica no registro principal, pro dashboard ser rapido
+const HIST_SESSOES_VIVAS=50;
+const HIST_SUB_VIVO=5;
+// A lista completa, pra quem quiser ver a vida inteira.
+function histGeralTudo(){
+  return histUnir((db.simGeral&&db.simGeral.historico)||[],(db.hist||{}).geral,histChaveGeral)
+    .sort((x,y)=>new Date(y.data||0)-new Date(x.data||0));
 }
 
 // ===== ARQUIVO DE PROVAS =====
@@ -12379,7 +12502,7 @@ async function acervoCarregar(){
 // Aqui fica so o ESQUELETO: nome, data, tentativas e as CHAVES das questoes. O enunciado
 // nao e duplicado — ele ja esta no banco, e a prova e remontada na hora de abrir. Uma
 // prova de 120 itens custa ~5 KB assim, contra ~70 KB inteira.
-const PROVARQ_MAX=500;
+const PROVARQ_MAX=5000;
 let PROVARQ_REF=null;
 let provarqTimer=null;
 function provarqChaveCache(){return lsKey()+'_provarq';}
@@ -13659,7 +13782,7 @@ function simGeralCorrigir(){
     // visível ali também sem precisar de nenhuma outra sincronização.
     qs.forEach((q,idx)=>{q._histId=histId;q._qIdxInHist=idx;});
     sub.simHistorico.unshift({id:histId,data:new Date().toISOString(),quantidade:qs.length,acertos:acertosSub,erros:qs.length-acertosSub,questoes:qs,geral:true,formato:simGeralActive.formato||'multipla',nivel:simGeralActive.nivel});
-    sub.simHistorico=sub.simHistorico.slice(0,5);
+    histApararSub(sub);
     assuntosResumo.push({subId,subName:sub.name,acertos:acertosSub,total:qs.length});
     qs.filter(q=>q.userAnswer!==q.correta).forEach(q=>criarFlashcardDeQuestaoErrada(subId,q));
 
@@ -13683,7 +13806,7 @@ function simGeralCorrigir(){
     db.lifetimeSeconds=(db.lifetimeSeconds||0)+simGeralActive.tempoGastoSec;
     if(!db.freeSessions)db.freeSessions=[];
     db.freeSessions.push({tipo:'simulado',reinoId:'',reinoName:'Simulado Geral',segundos:simGeralActive.tempoGastoSec,data:todayStr(),hora:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})});
-    if(db.freeSessions.length>50)db.freeSessions=db.freeSessions.slice(-50);
+    histApararSessoes();
     logSessionEvent('simulado',simGeralActive.tempoGastoSec,null);
   }
 
@@ -13696,7 +13819,7 @@ function simGeralCorrigir(){
     formato:simGeralActive.formato||'multipla',nivel:simGeralActive.nivel,
     assuntos:assuntosResumo
   });
-  db.simGeral.historico=db.simGeral.historico.slice(0,20);
+  histApararGeral();
 
   db.simSessionsCount=(db.simSessionsCount||0)+1;
   db.simGeralSessionsCount=(db.simGeralSessionsCount||0)+1;
@@ -22982,7 +23105,7 @@ function floatTimerSave(){
   db.lifetimeSeconds=(db.lifetimeSeconds||0)+total;
   if(!db.freeSessions)db.freeSessions=[];
   db.freeSessions.push({tipo,reinoId,reinoName,chefaoId,chefaoName:chefao?chefao.name:'',segundos:total,data:todayStr(),hora:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})});
-  if(db.freeSessions.length>50)db.freeSessions=db.freeSessions.slice(-50);
+  histApararSessoes();
   logSessionEvent('livre',total,reinoId);
   saveDB();gainXP(Math.floor(total/60));
   toast('✅ '+fmtTime(total)+' de '+(tl[tipo]||tipo)+(chefao?(' — '+chefao.name):(reinoId?' ('+reinoName+')':''))+' registrado!','var(--green)');
@@ -23068,7 +23191,7 @@ function pmdPhaseComplete(){
     db.lifetimeSeconds=(db.lifetimeSeconds||0)+secs;
     if(!db.freeSessions)db.freeSessions=[];
     db.freeSessions.push({tipo:'pomodoro',reinoId,reinoName,segundos:secs,data:todayStr(),hora:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})});
-    if(db.freeSessions.length>50)db.freeSessions=db.freeSessions.slice(-50);
+    histApararSessoes();
     logSessionEvent('pomodoro',secs,reinoId);
     saveDB();gainXP(Math.floor(secs/60));
     const sc=document.querySelector('.screen.active')?.id;if(sc==='screen-dashboard')renderDashboard();
@@ -25737,6 +25860,7 @@ window.montarAlternarMateria=montarAlternarMateria;
 window.provaRenomear=provaRenomear;
 window.provaRevisarArquivada=provaRevisarArquivada;
 window.provarqToggle=provarqToggle;
+window.sgHistTudoToggle=sgHistTudoToggle;
 window.montarQtdGravar=montarQtdGravar;
 window.comentarProva=comentarProva;
 window.comentarUma=comentarUma;
