@@ -737,7 +737,18 @@ nav{
   font-weight:700;color:var(--text2);padding:2px 0}
 .ce-vazio{font-size:10.5px;line-height:1.6;color:var(--text2);font-weight:600}
 .ce-vazio>div{margin-top:5px;color:var(--muted);font-weight:600}
-.sim-comentar{margin-top:6px}
+.sim-acoes{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.fonte-web{margin-top:8px;border:1px solid var(--border);border-radius:10px;
+  background:var(--panel2);padding:8px 10px}
+.fonte-web-cab{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;
+  color:var(--muted);margin-bottom:6px;line-height:1.4}
+.fonte-web-x{margin-left:auto;background:none;border:0;color:var(--muted);cursor:pointer;
+  font-size:12px;line-height:1;padding:0 2px;font-family:inherit}
+.fonte-web-item{margin-bottom:7px}
+.fonte-web-item a{font-size:11px;font-weight:800;color:var(--accent);
+  word-break:break-word;text-decoration:none}
+.fonte-web-item a:hover{text-decoration:underline}
+.fonte-web-trecho{font-size:10.5px;line-height:1.55;color:var(--text2);margin-top:2px}
 .sim-fonte{margin-top:5px;font-size:10px;font-weight:700;color:var(--muted);
   display:flex;align-items:center;gap:5px;line-height:1.4}
 .sim-ferramentas{display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -12446,6 +12457,104 @@ async function comentarUma(i){
   }
   renderSimGeralScreen();
 }
+// ===== BUSCAR A FONTE (Tavily puro, sem modelo nenhum) =====
+// O Tavily e busca, nao modelo: ele nao escreve comentario. O que ele faz, e que pra
+// esse caso vale mais, e trazer o TRECHO da fonte oficial com o link. Nenhum texto e
+// reescrito por ninguem, entao nao ha o que alucinar — voce le a norma e julga.
+const FONTE_MAX_TRECHOS=3;
+const FONTE_TRECHO_CHARS=420;   // teto curto de proposito: isto vai pra dentro da prova,
+                                // e prova que engorda demais empurra as outras pra fora
+let fonteRodando=false;
+
+// A consulta sai do proprio item. Referencia de norma no enunciado ("Lei n.o 8.080",
+// "Resolucao Cofen 564") e o termo de maior sinal que existe — vai na frente.
+function fonteConsulta(q){
+  const txt=String(q.questao||'');
+  const normas=(txt.match(/(lei|decreto|resolu[çc][ãa]o|portaria|rdc|s[úu]mula)[^.,;]{0,40}?n?[.\s º°]*\d[\d.\/-]*/gi)||[])
+    .slice(0,2).map(x=>x.replace(/\s+/g,' ').trim());
+  const palavras=txt.replace(/\s+/g,' ').split(' ').slice(0,22).join(' ');
+  return [q.subName||'',normas.join(' '),palavras].filter(Boolean).join(' ').slice(0,380);
+}
+async function fonteDaQuestao(q){
+  const r=await tavilyBuscar(fonteConsulta(q),{oficial:db.tavilySoOficial!==false,profundo:true,max:5});
+  const vistos=new Set();
+  const blocos=String(r.texto||'').split(/\n\n---\n\n/);
+  const out=[];
+  r.fontes.forEach((f,i)=>{
+    if(out.length>=FONTE_MAX_TRECHOS||vistos.has(f.url))return;
+    vistos.add(f.url);
+    const corpo=String(blocos[i]||'').replace(/^\[FONTE \d+\][^\n]*\n(URL:[^\n]*\n)?/,'').trim();
+    if(!corpo)return;
+    out.push({titulo:String(f.titulo||f.url).slice(0,120),url:f.url,
+              trecho:cortarNoPonto(corpo,FONTE_TRECHO_CHARS)});
+  });
+  return out;
+}
+function fonteGravar(i,achados){
+  const active=simGeralActive;
+  if(active&&active.questoes[i])active.questoes[i].apoioWeb=achados;
+  const prova=active&&active.provaId?provaAchar(active.provaId):null;
+  if(prova&&prova.questoes[i])prova.questoes[i].apoioWeb=achados;
+}
+async function fonteBuscar(i){
+  if(!tavilyAtivo()){toast('⚠️ Sem chave do Tavily — configure em Ajustes.','var(--red)');return;}
+  if(fonteRodando){toast('Já estou buscando — espera terminar.','var(--orange)');return;}
+  const q=simGeralActive&&simGeralActive.questoes[i];
+  if(!q)return;
+  fonteRodando=true;
+  toast('🔎 Procurando a fonte oficial...','var(--accent)');
+  try{
+    const achados=await fonteDaQuestao(q);
+    if(!achados.length){toast('Não achei nada em fonte oficial pra esse item.','var(--orange)');return;}
+    fonteGravar(i,achados);
+    saveDB();
+    renderSimGeralScreen();
+    toast(`🔎 ${achados.length} trecho(s) de fonte oficial. Leia e julgue — ninguém reescreveu nada.`,'var(--green)');
+  }catch(e){
+    toast(`⚠️ A busca falhou: ${e.message}`,'var(--orange)');
+  }finally{fonteRodando=false;}
+}
+// Em lote, so nas que voce errou: sao as que voce vai reler, e cada questao e uma busca
+// paga. Buscar nas 120 gastaria credito nas 80 que voce acertou e nao vai abrir.
+async function fonteBuscarErradas(){
+  if(!tavilyAtivo()){toast('⚠️ Sem chave do Tavily — configure em Ajustes.','var(--red)');return;}
+  if(fonteRodando){toast('Já estou buscando — espera terminar.','var(--orange)');return;}
+  const active=simGeralActive;
+  if(!active)return;
+  const alvo=active.questoes.map((q,i)=>({q,i}))
+    .filter(x=>!questaoForaDaConta(x.q)&&x.q.userAnswer&&x.q.userAnswer!==x.q.correta
+               &&!(x.q.apoioWeb||[]).length);
+  if(!alvo.length){toast('Nenhuma questão errada sem fonte buscada.','var(--muted)');return;}
+  if(!confirm(`Buscar a fonte de ${alvo.length} ${alvo.length===1?'questão errada':'questões erradas'}?\n\nÉ ${alvo.length} ${alvo.length===1?'busca':'buscas'} no Tavily, uma por item. Nenhum modelo escreve nada — só trechos com link.`))return;
+  fonteRodando=true;
+  let ok=0,falhas=0;
+  try{
+    for(let k=0;k<alvo.length;k++){
+      toast(`🔎 ${k+1} de ${alvo.length}...`,'var(--accent)');
+      try{
+        const achados=await fonteDaQuestao(alvo[k].q);
+        if(achados.length){fonteGravar(alvo[k].i,achados);ok++;}else falhas++;
+      }catch(e){falhas++;}
+    }
+  }finally{
+    fonteRodando=false; saveDB(); renderSimGeralScreen();
+  }
+  toast(ok?`🔎 Fonte achada em ${ok} ${ok===1?'questão':'questões'}${falhas?` · ${falhas} sem resultado`:''}.`
+          :'Não achei fonte oficial pra nenhuma delas.',ok?'var(--green)':'var(--orange)');
+}
+function fonteApoioHTML(q,i){
+  const a=q.apoioWeb||[];
+  if(!a.length)return'';
+  return`<div class="fonte-web">
+    <div class="fonte-web-cab"><i class="fa fa-book-open"></i> Trecho da fonte oficial — ninguém reescreveu, é o texto como está lá
+      <button class="fonte-web-x" onclick="fonteLimpar(${i})" title="Tirar estes trechos">✕</button></div>
+    ${a.map(f=>`<div class="fonte-web-item">
+      <a href="${escapeHtml(f.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(f.titulo)}</a>
+      <div class="fonte-web-trecho">${escapeHtml(f.trecho)}</div>
+    </div>`).join('')}
+  </div>`;
+}
+function fonteLimpar(i){fonteGravar(i,[]);saveDB();renderSimGeralScreen();}
 const NOTA_MAX=600;
 // Escrever com as proprias palavras por que o item esta certo ou errado e o passo que
 // transforma "li a explicacao e concordei" em "eu sei". A nota mora na QUESTAO dentro
@@ -12895,6 +13004,7 @@ function simGeralResultsHTML(){
       <span><i class="fa fa-highlighter"></i> Selecione um trecho de qualquer questão pra grifar</span>
       ${marcaPaletaHTML()}
     </div>
+    ${tavilyAtivo()?`<button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-bottom:10px" onclick="fonteBuscarErradas()"><i class="fa fa-book-open"></i> Buscar a fonte oficial das que eu errei</button>`:''}
     <div style="display:flex;flex-direction:column;gap:8px">
       ${active.questoes.map((q,i)=>`
         <div class="sim-q${q.problematico?' sim-q-flagged':''}">
@@ -12912,7 +13022,11 @@ function simGeralResultsHTML(){
           </div>
           ${q.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${escapeHtml(q.explicacao)}</div>`:''}
           ${q.fonte?`<div class="sim-fonte" title="De onde a explicação saiu — confira quando o ponto for número, prazo ou dose"><i class="fa fa-link"></i> ${escapeHtml(q.fonte)}</div>`:''}
-          ${active.provaId?`<button class="btn btn-xs btn-ghost sim-comentar" onclick="comentarUma(${i})"><i class="fa fa-comment-dots"></i> ${q.explicacao?'Refazer o comentário':'Gerar comentário'}</button>`:''}
+          ${fonteApoioHTML(q,i)}
+          <div class="sim-acoes">
+            ${tavilyAtivo()?`<button class="btn btn-xs btn-ghost" onclick="fonteBuscar(${i})" title="Busca o trecho da norma em fonte oficial e guarda com o link. Nenhum modelo escreve nada."><i class="fa fa-book-open"></i> ${(q.apoioWeb||[]).length?'Buscar de novo':'Buscar a fonte'}</button>`:''}
+            ${active.provaId?`<button class="btn btn-xs btn-ghost" onclick="comentarUma(${i})"><i class="fa fa-comment-dots"></i> ${q.explicacao?'Refazer o comentário':'Gerar comentário'}</button>`:''}
+          </div>
           </div>
           ${simMotivoHTML(q,i)}
           ${simNotaHTML(q,i)}
@@ -24780,6 +24894,9 @@ window.montarAlternarAssunto=montarAlternarAssunto;
 window.montarQtdGravar=montarQtdGravar;
 window.comentarProva=comentarProva;
 window.comentarUma=comentarUma;
+window.fonteBuscar=fonteBuscar;
+window.fonteBuscarErradas=fonteBuscarErradas;
+window.fonteLimpar=fonteLimpar;
 window.simNotaSalvar=simNotaSalvar;
 window.simMotivoSalvar=simMotivoSalvar;
 window.provaRevisar=provaRevisar;
