@@ -542,7 +542,23 @@ nav{
 .sim-alt.sim-selected{border-color:var(--accent);background:rgba(124,58,237,0.08);}
 .sim-alt.sim-correct{border-color:var(--green);background:rgba(21,128,61,0.1);color:var(--green-t);font-weight:700;}
 .sim-alt.sim-wrong{border-color:var(--red);background:rgba(220,38,38,0.1);color:var(--red-t);font-weight:700;}
-.sim-explain{font-size:11.5px;color:var(--muted);margin-top:6px;padding:8px 10px;background:rgba(0,0,0,0.03);border-radius:8px;line-height:1.5;}
+.sim-explain{font-size:12px;color:var(--text2);margin-top:7px;padding:9px 12px;
+  background:var(--panel2);border-radius:10px;line-height:1.6;font-weight:600;
+  border-left:4px solid var(--accent)}
+.sim-explain.expl-certo{border-left-color:var(--green-t);background:rgba(34,197,94,.08)}
+.sim-explain.expl-errado{border-left-color:var(--red-t);background:rgba(239,68,68,.08)}
+/* Selo com a cor no texto e na borda, nao no preenchimento: --green-t e escuro no tema
+   claro e claro no escuro, entao texto branco em cima dele so funcionaria num dos dois. */
+.expl-selo{display:inline-block;font-size:10px;font-weight:900;letter-spacing:.6px;
+  padding:2px 9px;border-radius:99px;margin-bottom:7px;border:1.5px solid currentColor;
+  background:var(--panel)}
+.expl-certo .expl-selo{color:var(--green-t)}
+.expl-errado .expl-selo{color:var(--red-t)}
+.expl-txt+.expl-txt{margin-top:5px}
+.expl-marca{margin-top:9px;padding:8px 11px;border-radius:9px;background:var(--panel);
+  border:1.5px dashed var(--accent);color:var(--text);font-weight:700;font-size:11.5px;
+  line-height:1.55}
+.expl-marca>b{color:var(--accent);font-weight:900;letter-spacing:.5px;font-size:10.5px}
 .sim-score-banner{text-align:center;padding:12px;border-radius:12px;margin-bottom:12px;font-weight:900;font-size:15px;}
 .sim-score-banner.sim-good{background:rgba(21,128,61,0.1);color:var(--green-t);border:1.5px solid rgba(21,128,61,0.3);}
 .sim-score-banner.sim-bad{background:rgba(220,38,38,0.1);color:var(--red-t);border:1.5px solid rgba(220,38,38,0.3);}
@@ -9854,7 +9870,7 @@ function simPanelHTML(s){
               return`<div class="sim-alt${cls}"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`;
             }).join('')}
           </div>
-          ${q.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${escapeHtml(q.explicacao)}</div>`:''}
+          ${simExplicacaoHTML(q)}
           ${q.problematico?'<div class="sim-flagged-banner"><i class="fa fa-flag"></i> Marcada como problemática — não conta nas suas estatísticas.</div>':''}
           <button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="toggleQuestaoProblematica('${s.id}','${active.histId}',${i})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>
         </div>
@@ -12532,6 +12548,51 @@ function simCartaoForaDaConta(i,fora){
   const banner=cartao.querySelector('.sim-flagged-banner');
   if(banner)banner.style.display=fora?'':'none';
 }
+// O comentario e a parte mais relida da tela de resultado, e estava em cinza 11,5px
+// sobre cinza — a mesma cor da legenda de rodape. Aqui ele ganha a cor do gabarito
+// (verde pra certo, vermelho pra errado), o veredito vira selo em vez de sumir no meio
+// da primeira frase, e o "GUARDE:" — que e justamente a linha que se relê na véspera —
+// sai do paragrafo e vira bloco proprio.
+const EXPL_MARCAS={GUARDE:'🔑',DECORE:'🔑',PEGADINHA:'🪤',ATENCAO:'⚠️',CUIDADO:'⚠️',REGRA:'📐',MACETE:'🔑'};
+const EXPL_RE_MARCA=/\b(GUARDE|DECORE|PEGADINHA|ATEN[ÇC][ÃA]O|CUIDADO|REGRA|MACETE)\s*:\s*/g;
+function explIcone(tag){
+  const k=tag.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  return EXPL_MARCAS[k]||'🔑';
+}
+// O texto e escapado ANTES de qualquer marcacao: o destaque e aplicado sobre o texto ja
+// seguro, entao comentario vindo de fora (colado, ou escrito por modelo) nao vira HTML.
+function simExplicacaoHTML(q){
+  const bruto=String((q&&q.explicacao)||'').trim();
+  if(!bruto)return'';
+  let txt=escapeHtml(bruto);
+  let veredito='';
+  txt=txt.replace(/^(?:item\s+)?(certo|errado|correto|incorreto)\s*[.:\u2014\u2013-]*\s*/i,(m,v)=>{
+    veredito=v.toLowerCase(); return'';
+  });
+  let certo=null;
+  if(veredito)certo=/^(certo|correto)$/.test(veredito);
+  else if((q.formato==='certoerrado')&&/^[CE]$/.test(q.correta||''))certo=q.correta==='C';
+  const partes=[];
+  let fim=0,m;
+  EXPL_RE_MARCA.lastIndex=0;
+  while((m=EXPL_RE_MARCA.exec(txt))){
+    if(m.index>fim)partes.push({tag:'',corpo:txt.slice(fim,m.index)});
+    const ini=EXPL_RE_MARCA.lastIndex;
+    const prox=new RegExp(EXPL_RE_MARCA.source,'g');
+    prox.lastIndex=ini;
+    const achou=prox.exec(txt);
+    const ate=achou?achou.index:txt.length;
+    partes.push({tag:m[1].toUpperCase(),corpo:txt.slice(ini,ate)});
+    fim=ate; EXPL_RE_MARCA.lastIndex=ate;
+  }
+  if(fim<txt.length)partes.push({tag:'',corpo:txt.slice(fim)});
+  const corpo=partes.filter(x=>x.corpo.trim()).map(x=>x.tag
+    ? `<div class="expl-marca">${explIcone(x.tag)} <b>${x.tag}</b> ${x.corpo.trim()}</div>`
+    : `<div class="expl-txt">${x.corpo.trim()}</div>`).join('');
+  const cls=certo===null?'':(certo?' expl-certo':' expl-errado');
+  const selo=certo===null?'':`<span class="expl-selo">${certo?'✔️ CERTO':'✖️ ERRADO'}</span>`;
+  return`<div class="sim-explain${cls}">${selo}${corpo}</div>`;
+}
 function simMotivoHTML(q,i){
   const certa=q.userAnswer===q.correta;
   const opcoes=(certa?[SIM_MOTIVO_SORTE]:SIM_MOTIVOS).concat(SIM_MOTIVO_DATADO);
@@ -12596,6 +12657,8 @@ REGRAS
 - Item CERTO: diga por que está certo, apontando o que o sustenta.
 - Item ERRADO: aponte exatamente QUAL parte da afirmação está incorreta e qual seria a redação correta. É a parte que mais ensina, e é a que não pode faltar.
 - Todo número em ALGARISMO, nunca por extenso.
+- Comece pela palavra "Certo." ou "Errado.", conforme o gabarito — é o que a pessoa lê primeiro.
+- Termine com uma linha "GUARDE: ..." — em até 15 palavras, o que ela precisa levar pra prova. É a linha que ela vai reler na véspera, então tem que valer sozinha, sem o item do lado.
 - Não repita a afirmação com outras palavras. Se a sua explicação puder ser lida sem saber o gabarito, ela não explicou nada.
 - Campo "fonte": em uma linha curta, a norma ou diretriz em que você se apoiou, COM O ANO da versão ("Lei 8.080/1990, art. 7º", "PNI — Calendário 2026"). Não conseguiu confirmar? Escreva "não confirmada" e NÃO cite número, prazo ou dose nessa explicação.
 - Se você não conseguir justificar o gabarito, escreva na explicação: "Não consegui confirmar por que a banca considerou ${'${letra}'}" e ponha "fonte": "não confirmada". Comentário inventado é pior do que campo vazio.
@@ -13443,7 +13506,7 @@ function simGeralResultsHTML(){
               return`<div class="sim-alt${cls}"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`;
             }).join('')}
           </div>
-          ${q.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${escapeHtml(q.explicacao)}</div>`:''}
+          ${simExplicacaoHTML(q)}
           ${q.fonte?`<div class="sim-fonte" title="De onde a explicação saiu — confira quando o ponto for número, prazo ou dose"><i class="fa fa-link"></i> ${escapeHtml(q.fonte)}</div>`:''}
           ${fonteApoioHTML(q,i)}
           </div>
@@ -15077,7 +15140,7 @@ function renderErrosScreen(){
         }).join('')}
       </div>
       ${!it.userAnswer?`<div class="err-skipped"><i class="fa fa-circle-exclamation"></i> Você não respondeu esta questão no simulado.</div>`:''}
-      ${it.explicacao?`<div class="sim-explain"><i class="fa fa-circle-info"></i> ${escapeHtml(it.explicacao)}</div>`:''}
+      ${simExplicacaoHTML(it)}
       <button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="goToSubtopic('${it.subId}')"><i class="fa fa-location-arrow"></i> Ir para o assunto</button>
     </div>
   `).join('');
