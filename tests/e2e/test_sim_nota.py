@@ -65,7 +65,7 @@ async def main():
           simNotaSalvar(0);
           const prova=db.provas[0];
           const hist=simFindSub(simGeralActive.questoes[0].subId).simHistorico[0];
-          return {naProva:prova.questoes[0].minhaNota,
+          return {naProva:provaQuestoes(prova)[0].minhaNota,
                   naViva:simGeralActive.questoes[0].minhaNota,
                   noHistorico:(hist.questoes[0]||{}).minhaNota,
                   selo:document.getElementById('sim-nota-selo-0').textContent.trim()};}""")
@@ -86,7 +86,7 @@ async def main():
           marcaAplicarTodas(true);
           const mk=zona.querySelector('mark.resumo-marca');
           return {chave,texto:mk?mk.textContent:null,cor:mk?mk.getAttribute('data-cor'):null,
-                  naProva:(db.provas[0].questoes[0].marcas||[]).length};}""")
+                  naProva:(provaQuestoes(db.provas[0])[0].marcas||[]).length};}""")
         print('   chave da zona: %r'%r['chave'])
         print('   grifado: %r (cor %s) · marcas na prova guardada: %s'
               %(r['texto'],r['cor'],r['naProva']))
@@ -100,8 +100,8 @@ async def main():
           const chave=zona.getAttribute('data-sub');
           marcaRemover(chave,0);
           marcaAplicarTodas(true);
-          return {marcas:(db.provas[0].questoes[0].marcas||[]).length,
-                  nota:db.provas[0].questoes[0].minhaNota.slice(0,8),
+          return {marcas:(provaQuestoes(db.provas[0])[0].marcas||[]).length,
+                  nota:provaQuestoes(db.provas[0])[0].minhaNota.slice(0,8),
                   mk:!!zona.querySelector('mark.resumo-marca')};}""")
         print('   marcas: %s · o grifo sumiu da tela: %s · a nota continua: %r'
               %(r['marcas'],not r['mk'],r['nota']))
@@ -164,7 +164,7 @@ async def main():
         r=await page.evaluate("""()=>{
           document.getElementById('sim-nota-1').value='<img src=x onerror=alert(1)>'+'a'.repeat(900);
           simNotaSalvar(1);
-          const g=db.provas[0].questoes[1].minhaNota;
+          const g=provaQuestoes(db.provas[0])[1].minhaNota;
           const html=simGeralResultsHTML();
           return {len:g.length,teto:NOTA_MAX,cru:html.includes('<img src=x'),
                   escapado:html.includes('&lt;img src=x')};}""")

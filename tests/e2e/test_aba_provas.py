@@ -113,7 +113,7 @@ async def main():
         print('=== F) a nota escrita e o grifo aparecem na revisao ===')
         r=await page.evaluate("""()=>{
           const id=db.provas[0].id;
-          db.provas[0].questoes[0].minhaNota='Errei porque troquei com o pediatrico.';
+          provaEscreverCampo(db.provas[0],0,'minhaNota','Errei porque troquei com o pediatrico.');
           marcaAlvo('q:'+id+':0').set([{t:'Item 1',n:0,c:'v'}]);
           provaRevisar(id);
           marcaAplicarTodas(true);

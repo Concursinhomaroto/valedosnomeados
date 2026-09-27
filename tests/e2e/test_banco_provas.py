@@ -83,8 +83,8 @@ async def main():
           const st=simFindSub('s1').simStats;
           return {provas:db.provas.length,tentativas:db.provas[0].tentativas.length,
                   acertos:db.provas[0].tentativas[0].acertos,
-                  questoesGuardadas:db.provas[0].questoes.length,
-                  semRespostaNaQuestao:db.provas[0].questoes.every(q=>q.userAnswer===undefined),
+                  questoesGuardadas:provaQuestoes(db.provas[0]).length,
+                  semRespostaNaQuestao:provaQuestoes(db.provas[0]).every(q=>q.userAnswer===undefined),
                   statsTentativas:st?st.tentativas:0,statsQuestoes:st?st.questoesTotal:0};}"""%RESPONDER,8)
         print('   provas no banco: %s (não duplicou) · tentativas nela: %s · acertos: %s'
               %(r['provas'],r['tentativas'],r['acertos']))

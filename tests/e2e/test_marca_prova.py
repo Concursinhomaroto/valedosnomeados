@@ -82,7 +82,7 @@ async def main():
           const mk=zona?zona.querySelector('mark.resumo-marca'):null;
           return {chave:zona?zona.getAttribute('data-sub'):null,
                   grifo:mk?mk.textContent:null,
-                  naProva:(db.provas[0].questoes[0].marcas||[]).length};}""")
+                  naProva:(provaQuestoes(db.provas[0])[0].marcas||[]).length};}""")
         print('   chave no resultado: %r · grifo: %r · guardado na prova: %s'
               %(r['chave'],r['grifo'],r['naProva']))
         assert r['chave'].startswith('q:') and r['grifo']=='Item 1' and r['naProva']==1
@@ -108,7 +108,7 @@ async def main():
         r=await page.evaluate("""()=>{
           marcaAlvo('a:1').set([{t:'Item 2',n:0,c:'r'}]);
           return {noVivo:(simGeralActive.questoes[1].marcas||[]).length,
-                  naProva:(db.provas[0].questoes[1].marcas||[]).length};}""")
+                  naProva:(provaQuestoes(db.provas[0])[1].marcas||[]).length};}""")
         print('   no item vivo: %s · na prova guardada: %s'%(r['noVivo'],r['naProva']))
         assert r['noVivo']==1 and r['naProva']==1
         print('   OK\n')
@@ -119,7 +119,7 @@ async def main():
           marcaAplicarTodas(true);
           const zona=document.querySelectorAll('#simgeral-content .marca-zona[data-sub]')[1];
           return {vivo:(simGeralActive.questoes[1].marcas||[]).length,
-                  prova:(db.provas[0].questoes[1].marcas||[]).length,
+                  prova:(provaQuestoes(db.provas[0])[1].marcas||[]).length,
                   naTela:!!(zona&&zona.querySelector('mark.resumo-marca'))};}""")
         print('   vivo: %s · prova: %s · na tela: %s'%(r['vivo'],r['prova'],r['naTela']))
         assert r['vivo']==0 and r['prova']==0 and not r['naTela']

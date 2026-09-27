@@ -67,19 +67,21 @@ async def main():
         r=await page.evaluate("""()=>{
           simMotivoSalvar(6,'atencao');
           const a={naQuestao:simGeralActive.questoes[6].motivo,
-                   naProva:db.provas[0].questoes[6].motivo,
+                   naProva:provaQuestoes(db.provas[0])[6].motivo,
                    ativo:!!document.querySelector('#sim-motivo-6 .sim-motivo-btn.ativo'),
                    nota:(document.querySelector('#sim-motivo-6 .sim-motivo-nota')||{}).innerText||''};
           simMotivoSalvar(6,'atencao');
           return {a,depois:simGeralActive.questoes[6].motivo,
-                  naProvaDepois:db.provas[0].questoes[6].motivo,
+                  naProvaDepois:provaQuestoes(db.provas[0])[6].motivo,
                   aindaAtivo:!!document.querySelector('#sim-motivo-6 .sim-motivo-btn.ativo')};}""")
         print('   marcou: %r (guardado na prova: %r)'%(r['a']['naQuestao'],r['a']['naProva']))
         print('   conserto exibido: %r'%r['a']['nota'][:60])
         print('   clicando de novo: %r · botão ativo: %s'%(r['depois'],r['aindaAtivo']))
         assert r['a']['naQuestao']=='atencao' and r['a']['naProva']=='atencao' and r['a']['ativo']
         assert 'leitura' in r['a']['nota'] or 'trocou' in r['a']['nota']
-        assert r['depois']=='' and r['naProvaDepois']=='' and not r['aindaAtivo']
+        # naProvaDepois: desmarcar apaga a entrada esparsa (nao fica '' guardado a toa),
+        # entao a leitura hidratada volta pra undefined — mesmo estado de "nunca marcado".
+        assert r['depois']=='' and not r['naProvaDepois'] and not r['aindaAtivo']
         print('   OK\n')
 
         print('=== E) o painel soma os baldes e aponta o gargalo ===')
@@ -108,14 +110,11 @@ async def main():
         print('=== F) o gargalo muda quando os numeros mudam ===')
         r=await page.evaluate("""()=>{
           simGeralActive=null;
-          db.provas[0].questoes[6].motivo='chute';
-          db.provas[0].questoes[7].motivo='chute';
-          db.provas[0].questoes[8].motivo='chute';
+          const pr=db.provas[0];
+          [6,7,8].forEach(i=>provaMarcar(pr,i,{...provaQuestoes(pr)[i],motivo:'chute'}));
           renderControleErros();
           const a=document.getElementById('controle-erros').innerText;
-          db.provas[0].questoes[6].motivo='conteudo';
-          db.provas[0].questoes[7].motivo='conteudo';
-          db.provas[0].questoes[8].motivo='conteudo';
+          [6,7,8].forEach(i=>provaMarcar(pr,i,{...provaQuestoes(pr)[i],motivo:'conteudo'}));
           renderControleErros();
           const c=document.getElementById('controle-erros').innerText;
           return {chute:/decis/i.test(a)&&/branco/i.test(a),

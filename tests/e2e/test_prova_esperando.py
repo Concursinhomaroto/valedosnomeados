@@ -94,8 +94,8 @@ async def main():
           provaRestaurar(id);
           const p=provaAchar(id);
           return {antes, lista:db.provas.length, arq:db.provasArquivo.length,
-                  nome:p?p.nome:null, itens:p?p.questoes.length:0,
-                  temEnunciado:!!(p&&p.questoes[0].questao),
+                  nome:p?p.nome:null, itens:p?provaQuestoes(p).length:0,
+                  temEnunciado:!!(p&&provaQuestoes(p)[0].questao),
                   nuncaFeita:p?!provaFoiFeita(p):null,
                   daPraFazer:/provaRefazer\\('"""+"""/.test(provasGuardadasHTML())};}""")
         print('   antes: %s na lista, %s arquivadas'%(r['antes']['lista'],r['antes']['arq']))

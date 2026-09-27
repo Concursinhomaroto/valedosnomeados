@@ -43,15 +43,16 @@ async def main():
           simGeralCorrigir();
           await new Promise(r=>setTimeout(r,400));
           const pr=(db.provas||[])[0];
+          const prQs=pr?provaQuestoes(pr):[];
           return {n:(db.provas||[]).length,
-                  questoes:pr?pr.questoes.length:0,
+                  questoes:pr?prQs.length:0,
                   origem:pr?pr.origem:null,
                   tentativas:pr?pr.tentativas.length:0,
                   acertos:pr?pr.tentativas[0].acertos:null,
-                  temExplicacao:!!(pr&&pr.questoes[0].explicacao),
-                  temAlternativas:!!(pr&&pr.questoes[0].alternativas),
-                  temApoio:!!(pr&&pr.questoes[0].textoApoio),
-                  semResposta:pr?pr.questoes.every(q=>q.userAnswer===undefined):null,
+                  temExplicacao:!!(pr&&prQs[0].explicacao),
+                  temAlternativas:!!(pr&&prQs[0].alternativas),
+                  temApoio:!!(pr&&prQs[0].textoApoio),
+                  semResposta:pr?prQs.every(q=>q.userAnswer===undefined):null,
                   respostasNaTentativa:pr?pr.tentativas[0].respostas.length:0};}"""%MONTA,10)
         print('   provas guardadas: %s · questões: %s · origem: %s'%(r['n'],r['questoes'],r['origem']))
         print('   guarda alternativas: %s · explicação: %s · texto de apoio: %s'
@@ -80,10 +81,11 @@ async def main():
           const id=db.provas[0].id;
           provaRefazer(id);
           const a=simGeralActive;
+          const guardadaQ0=provaQuestoes(db.provas[0])[0];
           return {n:a.questoes.length,semResposta:a.questoes.every(q=>!q.userAnswer),
                   refazendo:!!a.refazendo,tentativa:a.tentativaNum,
-                  mesmoTexto:a.questoes[0].questao===db.provas[0].questoes[0].questao,
-                  outroObjeto:a.questoes[0]!==db.provas[0].questoes[0]};}""")
+                  mesmoTexto:a.questoes[0].questao===guardadaQ0.questao,
+                  outroObjeto:a.questoes[0]!==guardadaQ0};}""")
         print('   %s questões, todas em branco: %s · %sª tentativa'
               %(r['n'],r['semResposta'],r['tentativa']))
         print('   mesmo enunciado: %s · é cópia (não a guardada): %s'
@@ -147,8 +149,8 @@ async def main():
           }
           await new Promise(r=>setTimeout(r,300));
           return {n:db.provas.length,teto:PROVAS_MAX,
-                  maisNova:db.provas[0].questoes.length,
-                  aindaTem10:db.provas.some(p=>p.questoes.length===10)};}"""%MONTA,4)
+                  maisNova:provaTotalQuestoes(db.provas[0]),
+                  aindaTem10:db.provas.some(p=>provaTotalQuestoes(p)===10)};}"""%MONTA,4)
         print('   provas guardadas: %s (teto %s) · a de 10 questões ainda existe: %s'
               %(r['n'],r['teto'],r['aindaTem10']))
         assert r['n']==r['teto'] and not r['aindaTem10']
