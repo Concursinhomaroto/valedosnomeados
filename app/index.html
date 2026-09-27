@@ -781,6 +781,18 @@ nav{
   color:var(--text2);padding:3px 2px;cursor:pointer}
 .montar-ass span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .montar-ass b{color:var(--muted);font-size:10px}
+.banco-filtros{margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.banco-filtros-linha{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.banco-check{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;
+  color:var(--text2);white-space:nowrap;cursor:pointer}
+.banco-faixa{width:56px;padding:5px 6px;text-align:center;font-weight:700}
+.banco-lista{display:flex;flex-direction:column;gap:6px;margin-top:8px;
+  max-height:320px;overflow:auto}
+.banco-item{border:1px solid var(--border);border-radius:9px;padding:8px 10px;
+  background:var(--panel2)}
+.banco-item-txt{font-size:11px;font-weight:600;color:var(--text2);line-height:1.5}
+.banco-item-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:5px;
+  font-size:10px;font-weight:700;color:var(--muted)}
 .prova-treino{font-size:9px;font-weight:800;letter-spacing:.3px;padding:2px 7px;
   border-radius:999px;background:var(--accent);color:#fff;white-space:nowrap}
 .prova-fora{font-size:9px;font-weight:800;padding:2px 7px;border-radius:999px;
@@ -13641,6 +13653,10 @@ function simNotaHTML(q,i){
 // assuntos e nao tem o que fazer com isso. Aqui o diagnostico vira caderno — sacando das
 // provas que ja estao no banco, sem guardar questao nova em lugar nenhum.
 const MONTAR_MODOS=[
+  // 'todas' vem primeiro, e e o default: a busca por texto (passo 3) precisa achar
+  // QUALQUER questao, nao so as que ja foram erradas — senao um item nunca respondido
+  // fica invisivel pra busca sem voce descobrir por que.
+  {id:'todas',  lbl:'Todo o banco',        nota:'Todas as questões — use a busca abaixo pra achar uma específica.'},
   {id:'errei',  lbl:'Só o que eu errei',   nota:'As que você marcou errado na última tentativa de cada prova.'},
   {id:'gargalo',lbl:'Pelo meu gargalo',    nota:'Assuntos onde o motivo escolhido domina — é o painel de erros virando prova.'},
   {id:'assunto',lbl:'Por assunto',         nota:'Você escolhe os minibosses.'},
@@ -13664,8 +13680,7 @@ function montarQtdGravar(el){
   if(n>MONTAR_QTD_MAX)n=MONTAR_QTD_MAX;
   if(el)el.value=n;
   try{localStorage.setItem(MONTAR_QTD_KEY,String(n));}catch(e){}
-  const c=document.getElementById('montar-conta');
-  if(c)c.textContent=montarResumoPool();
+  bancoListaRefrescar();
 }
 
 // Toda questao das provas guardadas, com o que aconteceu na ULTIMA tentativa dela.
@@ -13687,6 +13702,14 @@ function montarAcervo(){
   // errou em alguma. Ficar so com a primeira copia encontrada quebrava o filtro "so o
   // que eu errei" — a copia sem resposta, dentro da prova montada, tapava a original
   // respondida, e o filtro esvaziava depois da primeira montagem.
+  //
+  // Indice pro acervo por chave: uma questao pode estar AO MESMO TEMPO numa prova ainda
+  // viva e ja ter entrada no acervo (de uma ocorrencia anterior). tags/favorita/status
+  // moram so no acervo — sem isto, a copia da prova viva (que nunca carrega esses campos)
+  // tampava a do acervo, e marcar favorita sumia da lista assim que a mesma questao
+  // aparecesse numa prova nova.
+  const porAcervoChave=new Map();
+  (db.acervo||[]).forEach(q=>{const k=acervoChave2De(q);if(k&&!porAcervoChave.has(k))porAcervoChave.set(k,q);});
   const porChave=new Map();
   (db.provas||[]).forEach(p=>{
     const ts=p.tentativas||[];
@@ -13695,7 +13718,9 @@ function montarAcervo(){
       const chave=acervoChave2De(q);
       if(queimadas.has(chave))return;
       const dada=resp[i]||'';
-      const reg=porChave.get(chave)||{q,subId:q.subId,respondida:false,errou:false};
+      // respondida/errou vem da tentativa VIVA (mais atual que qualquer coisa no acervo);
+      // tags/favorita/status/contadores vem do acervo quando ele ja tem uma entrada.
+      const reg=porChave.get(chave)||{q:porAcervoChave.get(chave)||q,subId:q.subId,respondida:false,errou:false};
       reg.respondida=reg.respondida||!!dada;
       reg.errou=reg.errou||(!!dada&&dada!==q.correta);
       porChave.set(chave,reg);
@@ -13726,6 +13751,7 @@ function montarAssuntosDoGargalo(motivo){
 }
 function montarPool(modo,motivo){
   const acervo=montarAcervo();
+  if(modo==='todas')return acervo;
   if(modo==='errei')return acervo.filter(x=>x.errou);
   if(modo==='gargalo'){
     const nomes=montarAssuntosDoGargalo(motivo||'conteudo');
@@ -13736,11 +13762,11 @@ function montarPool(modo,motivo){
   return acervo;
 }
 function montarAgora(){
-  const modo=(document.getElementById('montar-modo')||{}).value||'errei';
+  const modo=(document.getElementById('montar-modo')||{}).value||'todas';
   const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
   const qtd=Math.max(1,Math.min(MONTAR_QTD_MAX,
     parseInt((document.getElementById('montar-qtd')||{}).value,10)||montarQtdLembrada()));
-  const pool=montarPool(modo,motivo);
+  const pool=bancoAplicarFiltros(montarPool(modo,motivo));
   if(!pool.length){
     toast('⚠️ Não achei questão nenhuma com esse filtro. Faça uma prova e classifique os erros primeiro.','var(--orange)');
     return;
@@ -13776,24 +13802,167 @@ function montarAgora(){
 function montarTrocarModo(){renderSimGeralScreen();}
 function montarAlternarAssunto(subId,el){
   if(el&&el.checked)montarSel.add(subId); else montarSel.delete(subId);
-  const c=document.getElementById('montar-conta');
-  if(c)c.textContent=montarResumoPool();
+  bancoListaRefrescar();
 }
 function montarAlternarMateria(kId,el){
   if(el&&el.checked)montarSelMat.add(kId); else montarSelMat.delete(kId);
-  const c=document.getElementById('montar-conta');
-  if(c)c.textContent=montarResumoPool();
+  bancoListaRefrescar();
 }
-function montarResumoPool(){
-  const modo=(document.getElementById('montar-modo')||{}).value||'errei';
+// ===== BUSCA E FILTROS DO BANCO (passo 3) =====
+// Oito facetas: texto, reino, assunto, formato, status, tag, favorita, faixa de acerto,
+// nunca respondida. Reino e assunto ja tem porta propria — os modos 'materia' e
+// 'assunto' de MONTAR_MODOS — entao nao duplico aqui: os filtros abaixo COMPOEM em cima
+// do pool que o modo escolhido ja produziu, nao competem com ele.
+//
+// status/favorita/tags ainda nao tem como ser MARCADOS em questao nenhuma — isso e o
+// editor, que chega no proximo passo. O motor de filtro ja suporta os oito (testado com
+// dado sintetico), mas so entram na TELA os quatro que ja valem a pena sem o editor:
+// texto, formato, faixa de acerto e nunca respondida. Os outros tres sobem na tela
+// junto com o editor, pra nao ter controle que filtra por algo que nada ainda tem.
+let bancoFiltro={texto:'',formato:'',status:'',favorita:false,tags:new Set(),
+                 faixaMin:null,faixaMax:null,naoRespondida:false};
+let bancoListaAberta=false;
+function bancoFiltroTemAlgo(){
+  const f=bancoFiltro;
+  return !!(f.texto||f.formato||f.status||f.favorita||f.tags.size
+            ||f.faixaMin!=null||f.faixaMax!=null||f.naoRespondida);
+}
+function bancoFiltroLimpar(){
+  bancoFiltro={texto:'',formato:'',status:'',favorita:false,tags:new Set(),
+               faixaMin:null,faixaMax:null,naoRespondida:false};
+  bancoListaRefrescar();
+}
+// A taxa de acerto so existe pra questao que ja foi respondida ALGUMA vez (vezesRespondida
+// vem do acervo — item so respondido dentro de uma prova ainda viva, nunca arquivada, nao
+// tem esse campo ainda). Filtrar por faixa exclui quem nao tem taxa nenhuma, de proposito:
+// "entre 0% e 50%" nao pode confundir "nunca fiz" com "faço mal".
+function bancoTaxaAcerto(q){
+  const v=q&&q.vezesRespondida;
+  return v?Math.round(100*q.acertos/v):null;
+}
+function bancoAplicarFiltros(pool,f){
+  f=f||bancoFiltro;
+  let out=pool;
+  if(f.texto){
+    const alvo=normalizeForDedup(f.texto);
+    out=out.filter(x=>normalizeForDedup(x.q.questao||'').includes(alvo));
+  }
+  if(f.formato)out=out.filter(x=>(x.q.formato||'multipla')===f.formato);
+  if(f.status)out=out.filter(x=>(x.q.status||'ativa')===f.status);
+  if(f.favorita)out=out.filter(x=>!!x.q.favorita);
+  if(f.tags&&f.tags.size)out=out.filter(x=>(x.q.tags||[]).some(t=>f.tags.has(t)));
+  if(f.naoRespondida)out=out.filter(x=>!x.respondida);
+  if(f.faixaMin!=null||f.faixaMax!=null){
+    out=out.filter(x=>{
+      const t=bancoTaxaAcerto(x.q);
+      if(t==null)return false;
+      if(f.faixaMin!=null&&t<f.faixaMin)return false;
+      if(f.faixaMax!=null&&t>f.faixaMax)return false;
+      return true;
+    });
+  }
+  return out;
+}
+// Todas as tags que ja existem em alguma questao do acervo — pra mostrar como chip em
+// vez de exigir digitar de cabeca. Vazio ate o editor (proximo passo) permitir marcar.
+function bancoTagsExistentes(){
+  const s=new Set();
+  (db.acervo||[]).forEach(q=>(q.tags||[]).forEach(t=>{if(t)s.add(t);}));
+  return[...s].sort();
+}
+function bancoPoolFiltrado(){
+  const modo=(document.getElementById('montar-modo')||{}).value||'todas';
   const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
-  const n=montarPool(modo,motivo).length;
-  if(!n)return 'nenhuma questão com esse filtro ainda';
+  return bancoAplicarFiltros(montarPool(modo,motivo));
+}
+function bancoFiltroMudouTexto(el){
+  bancoFiltro.texto=el.value;
+  bancoListaRefrescar();          // so os alvos abaixo — o campo de texto nao se mexe
+}
+function bancoFiltroMudouFormato(el){bancoFiltro.formato=el.value;bancoListaRefrescar();}
+function bancoFiltroMudouNaoRespondida(el){bancoFiltro.naoRespondida=el.checked;bancoListaRefrescar();}
+function bancoFiltroMudouFaixa(qual,el){
+  const n=el.value===''?null:Math.max(0,Math.min(100,parseInt(el.value,10)||0));
+  bancoFiltro[qual]=n;
+  bancoListaRefrescar();
+}
+function bancoListaToggle(){bancoListaAberta=!bancoListaAberta;bancoListaRefrescar();}
+// Refresca SO a contagem e a lista — nunca os controles de filtro. E o que deixa digitar
+// no campo de busca sem perder o foco a cada letra: um innerHTML da tela inteira reseta
+// cursor e recomeça o campo do zero.
+function bancoListaRefrescar(){
+  const conta=document.getElementById('banco-filtro-conta');
+  const lista=document.getElementById('banco-filtro-lista');
+  if(!conta||!lista)return;
+  const pool=bancoPoolFiltrado();
+  conta.innerHTML=bancoFiltroContaHTML(pool);
+  lista.innerHTML=bancoListaAberta?bancoListaItensHTML(pool):'';
+  const btn=document.getElementById('banco-filtro-ver');
+  if(btn)btn.textContent=bancoListaAberta?'▴ esconder':`▾ ver (${Math.min(pool.length,30)}${pool.length>30?' de '+pool.length:''})`;
+}
+// Um contador so — antes existiam dois (montarResumoPool, ligado a #montar-conta, e este),
+// e o primeiro ficou orfao (nenhum elemento na tela lia ele mais) quando o painel de
+// filtro assumiu o lugar. O aviso "vai sair com N, que e tudo que ha" que ele dava
+// migrou pra ca, e nao pode faltar: e o que avisa ANTES de montar que o pedido nao cabe.
+function bancoFiltroContaHTML(pool){
+  const n=pool.length;
+  if(!n)return'nenhuma questão com esse filtro';
   const el=document.getElementById('montar-qtd');
   const pedido=parseInt(el&&el.value,10)||montarQtdLembrada();
   const sai=Math.min(pedido,n);
-  return `${n} ${n===1?'questão disponível':'questões disponíveis'} com esse filtro`
-        +(pedido>n?` — o caderno vai sair com ${sai}, que é tudo que há`:'');
+  return`<b>${n}</b> ${n===1?'questão encontrada':'questões encontradas'}${bancoFiltroTemAlgo()?' com este filtro':''}`
+        +(pedido>n?` — o caderno vai sair com <b>${sai}</b>, que é tudo que há`:'');
+}
+function bancoListaItensHTML(pool){
+  if(!pool.length)return'<div class="empty" style="padding:14px 0"><p style="font-size:11px">Nada com esse filtro.</p></div>';
+  return pool.slice(0,30).map(x=>{
+    const q=x.q;
+    const taxa=bancoTaxaAcerto(q);
+    return`<div class="banco-item">
+      <div class="banco-item-txt">${escapeHtml((q.questao||'').slice(0,140))}${(q.questao||'').length>140?'…':''}</div>
+      <div class="banco-item-meta">
+        <span>${q.kingdomIcon||'📘'} ${escapeHtml(q.subName||'—')}</span>
+        <span>${(q.formato||'multipla')==='certoerrado'?'✔️✖️':'🔤'}</span>
+        ${taxa!=null?`<span title="${q.acertos}/${q.vezesRespondida}">${taxa}% de acerto</span>`:'<span style="color:var(--muted)">nunca respondida</span>'}
+        ${q.favorita?'<span>⭐</span>':''}
+      </div>
+    </div>`;
+  }).join('');
+}
+// O bloco de busca+filtros+lista, plugado logo abaixo dos controles de montar. So os
+// quatro que ja funcionam sem o editor de questao (proximo passo): texto, formato, faixa
+// de acerto, nunca respondida. status/favorita/tags sobem junto com o editor.
+function bancoFiltrosHTML(){
+  const f=bancoFiltro;
+  const pool=bancoPoolFiltrado();
+  return`<div class="banco-filtros">
+    <div class="banco-filtros-linha">
+      <input id="banco-filtro-texto" class="inp" type="search" placeholder="Buscar no enunciado..."
+        value="${escapeHtml(f.texto)}" oninput="bancoFiltroMudouTexto(this)" style="flex:2;min-width:160px">
+      <select id="banco-filtro-formato" class="inp" style="width:auto" onchange="bancoFiltroMudouFormato(this)">
+        <option value=""${f.formato?'':' selected'}>Qualquer formato</option>
+        <option value="certoerrado"${f.formato==='certoerrado'?' selected':''}>✔️✖️ Certo/Errado</option>
+        <option value="multipla"${f.formato==='multipla'?' selected':''}>🔤 Múltipla escolha</option>
+      </select>
+      <label class="banco-check"><input type="checkbox" ${f.naoRespondida?'checked':''}
+        onchange="bancoFiltroMudouNaoRespondida(this)"> nunca respondida</label>
+    </div>
+    <div class="banco-filtros-linha">
+      <label style="font-size:10.5px;color:var(--muted);font-weight:700">Taxa de acerto entre</label>
+      <input class="inp banco-faixa" type="number" min="0" max="100" placeholder="0"
+        value="${f.faixaMin==null?'':f.faixaMin}" onchange="bancoFiltroMudouFaixa('faixaMin',this)">
+      <span style="color:var(--muted);font-size:10.5px">% e</span>
+      <input class="inp banco-faixa" type="number" min="0" max="100" placeholder="100"
+        value="${f.faixaMax==null?'':f.faixaMax}" onchange="bancoFiltroMudouFaixa('faixaMax',this)">
+      <span style="color:var(--muted);font-size:10.5px">%</span>
+      ${bancoFiltroTemAlgo()?`<button class="btn btn-xs btn-ghost" onclick="bancoFiltroLimpar();renderSimGeralScreen()" style="margin-left:auto">Limpar filtro</button>`:''}
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
+      <span id="banco-filtro-conta" style="font-size:10.5px;font-weight:700;color:var(--muted)">${bancoFiltroContaHTML(pool)}</span>
+      <button id="banco-filtro-ver" class="sg-mais" onclick="bancoListaToggle()" style="margin:0">${bancoListaAberta?'▴ esconder':`▾ ver (${Math.min(pool.length,30)}${pool.length>30?' de '+pool.length:''})`}</button>
+    </div>
+    <div id="banco-filtro-lista" class="banco-lista">${bancoListaAberta?bancoListaItensHTML(pool):''}</div>
+  </div>`;
 }
 // A aba inteira. montarHTML continua devolvendo '' quando nao ha questao nenhuma — o
 // que servia quando ele era uma secao no meio de outra tela. Numa aba propria, tela em
@@ -13817,7 +13986,7 @@ function bancoHTML(){
 function montarHTML(){
   const acervo=montarAcervo();
   if(!acervo.length)return'';
-  const modo=(document.getElementById('montar-modo')||{}).value||'errei';
+  const modo=(document.getElementById('montar-modo')||{}).value||'todas';
   const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
   const {ix}=simColarMapa();
   const comQuestao={};
@@ -13852,9 +14021,8 @@ function montarHTML(){
         title="Quantos itens o caderno vai ter. Se o filtro tiver menos que isso, ele monta com o que houver.">
       <button class="btn btn-sm btn-primary" onclick="montarAgora()"><i class="fa fa-wand-magic-sparkles"></i> Montar</button>
     </div>
-    <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.55;font-weight:600">
-      ${escapeHtml(nota)} <b id="montar-conta">${escapeHtml(montarResumoPool())}</b>
-    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.55;font-weight:600">${escapeHtml(nota)}</div>
+    ${bancoFiltrosHTML()}
     ${modo==='materia'?`<div class="montar-assuntos">
       ${Object.entries(porMateria).sort((a,b)=>b[1].n-a[1].n).map(([kId,m])=>`
         <label class="montar-ass">
@@ -26075,6 +26243,12 @@ window.provaRevisarArquivada=provaRevisarArquivada;
 window.provarqToggle=provarqToggle;
 window.sgHistTudoToggle=sgHistTudoToggle;
 window.resumoUsarComoEsta=resumoUsarComoEsta;
+window.bancoFiltroMudouTexto=bancoFiltroMudouTexto;
+window.bancoFiltroMudouFormato=bancoFiltroMudouFormato;
+window.bancoFiltroMudouNaoRespondida=bancoFiltroMudouNaoRespondida;
+window.bancoFiltroMudouFaixa=bancoFiltroMudouFaixa;
+window.bancoFiltroLimpar=bancoFiltroLimpar;
+window.bancoListaToggle=bancoListaToggle;
 window.provaRestaurar=provaRestaurar;
 window.montarQtdGravar=montarQtdGravar;
 window.comentarProva=comentarProva;
