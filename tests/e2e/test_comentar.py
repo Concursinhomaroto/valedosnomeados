@@ -60,8 +60,8 @@ async def main():
           await comentarProva(db.provas[0].id,'sem');
           const pr=db.provas[0];
           return {chamadas:window.__chamadas.length,
-                  comentadas:pr.questoes.filter(q=>q.explicacao).length,
-                  comFonte:pr.questoes.filter(q=>q.fonte).length,
+                  comentadas:provaQuestoes(pr).filter(q=>q.explicacao).length,
+                  comFonte:provaQuestoes(pr).filter(q=>q.fonte).length,
                   pendentes:comentarPendentes(pr,'sem').length,
                   lote:COMENTAR_LOTE};}""")
         print('   %s chamadas ao modelo pra 10 questões (lote de %s)'%(r['chamadas'],r['lote']))
@@ -96,7 +96,7 @@ async def main():
         print('=== D) sem Tavily, ele liga a busca do proprio modelo ===')
         r=await page.evaluate("""async()=>{
           const key=db.tavilyApiKey; db.tavilyApiKey='';
-          db.provas[0].questoes[0].explicacao='';
+          provaEscreverCampo(db.provas[0],0,'explicacao','');
           window.__chamadas=[];
           await comentarProva(db.provas[0].id,'sem');
           db.tavilyApiKey=key;
@@ -110,11 +110,11 @@ async def main():
         print('=== E) item fora da conta nao e comentado ===')
         r=await page.evaluate("""()=>{
           const pr=db.provas[0];
-          pr.questoes.forEach(q=>{q.explicacao='';});
+          provaQuestoes(pr).forEach((q,i)=>provaEscreverCampo(pr,i,'explicacao',''));
           const antes=comentarPendentes(pr,'sem').length;
-          pr.questoes[0].motivo='datado';
+          provaMarcar(pr,0,{...provaQuestoes(pr)[0],motivo:'datado'});
           const depois=comentarPendentes(pr,'sem').length;
-          pr.questoes[0].motivo='';
+          provaMarcar(pr,0,{...provaQuestoes(pr)[0],motivo:''});
           return {antes,depois};}""")
         print('   pendentes: %s -> %s ao marcar um como desatualizado'%(r['antes'],r['depois']))
         assert r['depois']==r['antes']-1
@@ -134,7 +134,7 @@ async def main():
 
         print('=== G) lote que falha nao derruba os outros ===')
         r=await page.evaluate("""async()=>{
-          db.provas[0].questoes.forEach(q=>{q.explicacao='';});
+          provaQuestoes(db.provas[0]).forEach((q,i)=>provaEscreverCampo(db.provas[0],i,'explicacao',''));
           let n=0;
           window.callGeminiJSON=async(key,prompt)=>{
             n++;
@@ -144,7 +144,7 @@ async def main():
           };
           await comentarProva(db.provas[0].id,'sem');
           const pr=db.provas[0];
-          return {comentadas:pr.questoes.filter(q=>q.explicacao).length,
+          return {comentadas:provaQuestoes(pr).filter(q=>q.explicacao).length,
                   pendentes:comentarPendentes(pr,'sem').length};}""")
         print('   1º lote falhou · comentadas: %s · ainda pendentes: %s'
               %(r['comentadas'],r['pendentes']))

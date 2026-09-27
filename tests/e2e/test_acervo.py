@@ -75,9 +75,11 @@ async def main():
         # So prova ja feita e despejada: prova esperando e trabalho marcado, nao
         # historico, e tem teste proprio em test_prova_esperando.
         r=await page.evaluate("""()=>{
-          db.provas.forEach(p=>{if(!(p.tentativas||[]).length)
+          db.provas.forEach(p=>{if(!(p.tentativas||[]).length){
+            const qs=provaQuestoes(p);
             p.tentativas=[{data:new Date().toISOString(),
-              respostas:p.questoes.map(q=>q.correta),acertos:p.questoes.length,tempoGastoSec:60}];});
+              respostas:qs.map(q=>q.correta),acertos:qs.length,tempoGastoSec:60}];
+          }});
           const antes=db.provas.length;
           for(let i=0;i<PROVAS_MAX;i++){
             const id=provaGuardarLote(QS('kSus','Saúde Pública','⚕️','sS1','Lei 8080',6,'C'+i),
@@ -88,7 +90,7 @@ async def main():
           provasAparar();
           return {antes, provas:db.provas.length, teto:PROVAS_MAX,
                   banco:(db.acervo||[]).length,
-                  aindaTemAsPrimeiras:db.provas.some(p=>p.questoes[0].questao.startsWith('A ')),
+                  aindaTemAsPrimeiras:db.provas.some(p=>provaQuestoes(p)[0].questao.startsWith('A ')),
                   noBancoAsPrimeiras:(db.acervo||[]).some(q=>q.questao.startsWith('A '))};}""")
         print('   %s provas feitas → guardei mais %s → ficaram %s (teto %s)'
               %(r['antes'],r['teto'],r['provas'],r['teto']))

@@ -88,7 +88,7 @@ async def main():
 
         print('=== E) a fonte fica guardada na prova e volta na revisao ===')
         r=await page.evaluate("""()=>{
-          const q0=db.provas[0].questoes[0];
+          const q0=provaQuestoes(db.provas[0])[0];
           provaRevisar(db.provas[0].id);
           const naTela=[...document.querySelectorAll('.sim-fonte')].map(e=>e.innerText.trim());
           return {naProva:q0.fonte||null,naTela:naTela.length};}""")

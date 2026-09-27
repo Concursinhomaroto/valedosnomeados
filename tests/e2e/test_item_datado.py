@@ -46,7 +46,7 @@ async def main():
           simMotivoSalvar(5,'datado');
           return {antes,motivo:q.motivo,flag:!!q.problematico,
                   qt:sub.simStats.questoesTotal,ac:sub.simStats.acertosTotal,
-                  naProva:db.provas[0].questoes[5].motivo,
+                  naProva:provaQuestoes(db.provas[0])[5].motivo,
                   banner:/não conta nas suas estat/i.test(document.querySelectorAll('.sim-q')[5].innerText)};}""")
         print('   antes: %s questões na estatística · depois: %s'%(r['antes']['qt'],r['qt']))
         print('   motivo: %r · marcado como problemático: %s'%(r['motivo'],r['flag']))
@@ -107,7 +107,7 @@ async def main():
           const depois=simFindSub('s1').simStats.questoesTotal
                       +simFindSub('s2').simStats.questoesTotal;
           return {motivo:simGeralActive.questoes[3].motivo,
-                  naProva:db.provas[0].questoes[3].motivo,
+                  naProva:provaQuestoes(db.provas[0])[3].motivo,
                   statsIntacto:antes===depois,
                   temHist:!!simGeralActive.questoes[3]._histId};}""")
         print('   motivo guardado: %r (na prova: %r)'%(r['motivo'],r['naProva']))

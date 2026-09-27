@@ -255,7 +255,7 @@ async def main():
 
         print('=== K) o trecho sobrevive a fechar e reabrir a prova ===')
         r=await page.evaluate("""()=>{
-          const antes=(db.provas[0].questoes[0].apoioWeb||[]).length;
+          const antes=(provaQuestoes(db.provas[0])[0].apoioWeb||[]).length;
           simGeralActive=null; provaRevisar(db.provas[0].id);
           const h=document.getElementById('simgeral-content').innerHTML;
           return {antes,depois:(simGeralActive.questoes[0].apoioWeb||[]).length,

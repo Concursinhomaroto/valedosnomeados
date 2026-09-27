@@ -9090,16 +9090,16 @@ function marcaAlvo(chave){
     const q=simGeralActive&&simGeralActive.questoes[i];
     if(!q)return null;
     const prova=simGeralActive.provaId?provaAchar(simGeralActive.provaId):null;
-    const pq=prova&&prova.questoes[i];
     return{get:()=>q.marcas||[],
-           set:a=>{q.marcas=a; if(pq)pq.marcas=a.map(m=>({...m}));}};
+           set:a=>{q.marcas=a; if(prova)provaMarcar(prova,i,{...q,marcas:a});}};
   }
   if(s.indexOf('q:')===0){
     const partes=s.split(':');
     const prova=provaAchar(partes[1]);
-    const q=prova&&prova.questoes[parseInt(partes[2],10)];
+    const i=parseInt(partes[2],10);
+    const q=prova&&provaQuestoes(prova)[i];
     if(!q)return null;
-    return{get:()=>q.marcas||[],set:a=>{q.marcas=a;}};
+    return{get:()=>q.marcas||[],set:a=>{if(prova)provaMarcar(prova,i,{...q,marcas:a});}};
   }
   const sub=simFindSub(s);
   if(!sub||!sub.resumo)return null;
@@ -12463,7 +12463,11 @@ function acervoGuardarProva(prova){
   const porChave=new Map();
   db.acervo.forEach(q=>{const k=acervoChave2De(q);if(k&&!porChave.has(k))porChave.set(k,q);});
   let novas=0,melhoradas=0;
-  (prova.questoes||[]).forEach((q,i)=>{
+  // provaQuestoes: prova ja convertida (passo 6) devolve a hidratacao a partir do
+  // proprio acervo — que e exatamente onde estas questoes ja estao, entao o laco abaixo
+  // vira so a atualizacao dos contadores/ultimoResultado, sem duplicar nada. Prova ainda
+  // no formato antigo continua vindo da copia cheia, como sempre.
+  provaQuestoes(prova).forEach((q,i)=>{
     if(questaoForaDaConta(q))return;              // item quebrado nao volta pro banco
     const limpa=acervoLimparQuestao(q);
     if(!limpa.questao)return;
@@ -12767,27 +12771,129 @@ async function provarqCarregar(){
 }
 // Grava uma marcacao sua direto no esqueleto arquivado, na posicao ORIGINAL do item —
 // que nao e o indice na tela, porque item quebrado sai da remontagem.
+// Escritor unico do overlay esparso — usado tanto pelo arquivo (marcacoes de
+// db.provasArquivo) quanto, a partir do passo 6, pela prova VIVA (marcacoes de
+// db.provas, depois que ela vira referencia). "g" e o grifo (marcas de texto): nao
+// existia no overlay do arquivo antes desta versao — arquivar uma prova perdia o grifo
+// em silencio, e agora que os dois usam o mesmo escritor isso sai de graca.
+function provaMarcacaoEscrever(alvo,i,q,salvar){
+  alvo.marcacoes=alvo.marcacoes||{};
+  const temGrifo=q.marcas&&q.marcas.length;
+  if(!q.motivo&&!q.problematico&&!temGrifo)delete alvo.marcacoes[i];
+  else alvo.marcacoes[i]={m:q.motivo||'',p:q.problematico?1:0,
+                          s:q.subName||'',k:q.kingdomIcon||'',
+                          g:temGrifo?q.marcas.map(m=>({...m})):undefined};
+  if(salvar)salvar();
+}
 function arqMarcar(id,iTela,q){
   const a=(db.provasArquivo||[]).find(x=>x.id===id);
   if(!a)return;
   const orig=(a._mapa||[])[iTela];
   if(orig==null)return;
-  a.marcacoes=a.marcacoes||{};
-  if(!q.motivo&&!q.problematico)delete a.marcacoes[orig];
-  else a.marcacoes[orig]={m:q.motivo||'',p:q.problematico?1:0,
-                          s:q.subName||'',k:q.kingdomIcon||''};
-  provarqSalvar();
+  provaMarcacaoEscrever(a,orig,q,provarqSalvar);
 }
+// So usado pra prova ainda no formato ANTIGO (copia cheia) — uma vez convertida
+// (provaConverterParaReferencia), a prova ja nasce com marcacoes{} e escreve nele
+// direto via provaMarcar, nunca precisa reconstruir a partir de questoes[].
 function provaMarcacoes(prova){
   const m={};
   (prova.questoes||[]).forEach((q,i)=>{
-    if(!q.motivo&&!q.problematico)return;
-    m[i]={m:q.motivo||'',p:q.problematico?1:0,s:q.subName||'',k:q.kingdomIcon||''};
+    const temGrifo=q.marcas&&q.marcas.length;
+    if(!q.motivo&&!q.problematico&&!temGrifo)return;
+    m[i]={m:q.motivo||'',p:q.problematico?1:0,s:q.subName||'',k:q.kingdomIcon||'',
+          g:temGrifo?q.marcas.map(x=>({...x})):undefined};
   });
   return m;
 }
+// Equivalente vivo do arqMarcar: grava motivo/problematico/grifo da questao i desta
+// prova (guardada, ja convertida) no overlay, sem tocar em identidade nenhuma.
+function provaMarcar(prova,i,q){
+  if(!prova)return;
+  if(!prova.chaves){   // ainda no formato antigo: a copia cheia continua sendo a verdade
+    if(prova.questoes&&prova.questoes[i])prova.questoes[i]=q;
+    saveDB();
+    return;
+  }
+  provaMarcacaoEscrever(prova,i,q,saveDB);
+}
+// Escreve um campo de IDENTIDADE (explicacao, fonte, apoioWeb, minhaNota) na questao i
+// desta prova. Convertida: vai direto no item do acervo, por identidade — dali em diante
+// vale pra qualquer prova ou pool que cite a mesma questao, nao so esta (mesmo
+// comportamento que corrigir uma questao ja tem hoje pro arquivo). Formato antigo:
+// continua indo na copia local, como sempre foi.
+function provaEscreverCampo(prova,i,campo,valor){
+  if(!prova)return false;
+  if(prova.chaves){
+    const chave=(prova.chaves2||[])[i];
+    const item=chave&&(db.acervo||[]).find(x=>x._chaveForte===chave);
+    if(!item)return false;
+    item[campo]=valor;
+    return true;
+  }
+  if(prova.questoes&&prova.questoes[i]){prova.questoes[i][campo]=valor;return true;}
+  return false;
+}
+// Sai da fase "copia cheia" pra "referencia por chave" — so quando a prova deixa de ser
+// so trabalho engavetado e ganha a 1a tentativa de verdade. Antes disso ela fica intacta:
+// "prova esperando nao e historico" e "nao entra no banco cedo demais" sao regras ja
+// testadas, e converter cedo demais (na criacao) furaria as duas — toda prova guardada
+// pra depois entraria no Banco de Questoes antes mesmo de o usuario abrir ela.
+// bancoAdicionarOuFundir(...) e a MESMA decisao de identidade que criar/importar questao
+// a mao ja usa: se a questao ja existe no acervo (mesmo texto+formato), so completa o
+// que faltava nela — nunca duplica.
+function provaConverterParaReferencia(prova){
+  if(!prova||prova.chaves)return;
+  const questoes=prova.questoes||[];
+  const origemAcervo=prova.origem==='colado'?'colado':'ia';
+  const chaves2=questoes.map(q=>{
+    const limpa=acervoLimparQuestao(q);
+    const chave=acervoChave2(limpa);
+    bancoAdicionarOuFundir(limpa,origemAcervo);
+    return chave;
+  });
+  prova.chaves=questoes.map(q=>montarChaveQ(q));
+  prova.chaves2=chaves2;
+  prova.marcacoes=provaMarcacoes(prova);
+  delete prova.questoes;
+}
+// Hidrata as questoes de uma prova VIVA guardada, igual provaDoArquivo ja faz pra
+// arquivada — so que aqui nunca "some" questao: um item que saiu do acervo (raridade —
+// so acontece se o teto de 50 mil evictar um item bem antigo) vira um aviso na MESMA
+// posicao, pra tentativas[].respostas[] continuar batendo com o indice certo em vez de
+// desalinhar. Prova no formato antigo (ainda nao converteu): devolve a copia de sempre.
+function provaQuestaoFaltando(){
+  return{questao:'Esta questão não está mais disponível no banco — o item foi removido.',
+         formato:'certoerrado',alternativas:SIM_ALTS_CE.map(a=>({...a})),correta:'',
+         explicacao:'',fonte:'',subName:'',subId:'',kingdomIcon:'',kingdomName:'',
+         marcas:[],_faltando:true};
+}
+function provaQuestoes(prova){
+  if(!prova)return[];
+  if(!prova.chaves)return prova.questoes||[];
+  const porChave2=new Map();
+  (db.acervo||[]).forEach(q=>{const k=acervoChave2De(q);if(k&&!porChave2.has(k))porChave2.set(k,q);});
+  const porChave=new Map();
+  (db.acervo||[]).forEach(q=>{const k=montarChaveQ(q);if(k&&!porChave.has(k))porChave.set(k,q);});
+  return prova.chaves.map((k,i)=>{
+    const alvo=(prova.chaves2||[])[i];
+    const q=(alvo&&porChave2.get(alvo))||porChave.get(k);
+    if(!q)return provaQuestaoFaltando();
+    const mk=(prova.marcacoes||{})[i];
+    return mk?{...q,motivo:mk.m||undefined,problematico:!!mk.p,marcas:mk.g||[]}:{...q,marcas:[]};
+  });
+}
+// Copia funda o bastante: cada entrada do overlay e um objeto piso (m/p/s/k), so o grifo
+// (g) e array de objetos por dentro dele.
+function provaMarcacoesClone(marcacoes){
+  const out={};
+  Object.entries(marcacoes||{}).forEach(([i,mk])=>{
+    out[i]={...mk,g:mk.g?mk.g.map(m=>({...m})):undefined};
+  });
+  return out;
+}
 function provaArquivar(prova){
-  if(!prova||!(prova.questoes||[]).length)return false;
+  const n=prova&&(prova.chaves?prova.chaves.length:(prova.questoes||[]).length);
+  if(!prova||!n)return false;
   db.provasArquivo=db.provasArquivo||[];
   if(db.provasArquivo.some(a=>a.id===prova.id))return false;
   db.provasArquivo.unshift({
@@ -12801,14 +12907,16 @@ function provaArquivar(prova){
     // colidirem (dois itens certo/errado com o mesmo comeco), o leitor sabe qual das
     // candidatas e a certa. Prova arquivada antes desta versao nao tem chaves2 — o leitor
     // cai pro comportamento de sempre (primeira candidata) pra ela, sem quebrar nada.
-    chaves:(prova.questoes||[]).map(q=>montarChaveQ(q)),
-    chaves2:(prova.questoes||[]).map(q=>acervoChave2De(q)),
+    // Prova ja convertida (passo 6) ja TEM chaves/chaves2/marcacoes prontos — so copia,
+    // sem reconstruir do zero.
+    chaves:prova.chaves?prova.chaves.slice():(prova.questoes||[]).map(q=>montarChaveQ(q)),
+    chaves2:prova.chaves2?prova.chaves2.slice():(prova.questoes||[]).map(q=>acervoChave2De(q)),
     // O que VOCE marcou na questao: por que errou, e se reportou problema. Nao vai pro
     // banco (la a questao e so o enunciado, sem tentativa) e sem isto ia embora com a
     // prova — o painel Controle de Erros zerava sozinho conforme as provas envelheciam.
     // Esparso de proposito: numa prova de 120 em que voce classificou 12 erros, sao 12
     // entradas, nao 120.
-    marcacoes:provaMarcacoes(prova),
+    marcacoes:prova.chaves?provaMarcacoesClone(prova.marcacoes):provaMarcacoes(prova),
     tentativas:(prova.tentativas||[]).map(t=>({
       data:t.data,respostas:(t.respostas||[]).slice(),
       acertos:t.acertos||0,tempoGastoSec:t.tempoGastoSec||0}))
@@ -12848,7 +12956,7 @@ function provaDoArquivo(id){
     if(!q)return;
     origem.push(i);
     const mk=(a.marcacoes||{})[i]||(a.marcacoes||{})[String(i)];
-    questoes.push(mk?{...q,motivo:mk.m||undefined,problematico:!!mk.p}:{...q});
+    questoes.push(mk?{...q,motivo:mk.m||undefined,problematico:!!mk.p,marcas:mk.g||[]}:{...q});
     tent.forEach((t,ti)=>t.respostas.push(((a.tentativas[ti]||{}).respostas||[])[i]||''));
   });
   if(!questoes.length)return null;
@@ -12886,11 +12994,11 @@ function provaRevisarArquivada(id,tIdx){
 // pra nomear de qualquer jeito.
 function provaMateria(p){
   const por={};
-  (p.questoes||[]).forEach(q=>{
+  provaQuestoes(p).forEach(q=>{
     const n=q.kingdomName||'';
     if(n)por[n]=(por[n]||0)+1;
   });
-  const total=(p.questoes||[]).length;
+  const total=provaTotalQuestoes(p);
   const top=Object.entries(por).sort((a,b)=>b[1]-a[1])[0];
   if(!top||!total)return'Geral';
   return (top[1]/total)>=0.7?top[0]:'Geral';
@@ -12959,12 +13067,17 @@ function provaGuardar(active,assuntosResumo){
   if(!active||!active.questoes||!active.questoes.length)return null;
   const jaExiste=active.provaId?provaAchar(active.provaId):null;
   if(jaExiste){
+    // So converte na 1a tentativa de verdade — e o que separa "so esperando" (copia
+    // cheia, nao entra no banco cedo demais) de "ja tem historico" (vira referencia,
+    // que e o que economiza o payload que sobe pro Firebase a cada saveDB).
+    if(!(jaExiste.tentativas||[]).length)provaConverterParaReferencia(jaExiste);
     jaExiste.tentativas=jaExiste.tentativas||[];
     jaExiste.tentativas.push(provaTentativaDe(active));
     return jaExiste.id;
   }
   const prova=provaNova(active.questoes,active);
   prova.tentativas=[provaTentativaDe(active)];
+  provaConverterParaReferencia(prova);
   db.provas=db.provas||[];
   db.provas.unshift(prova);
   provasAparar();
@@ -12980,6 +13093,11 @@ function provaGuardar(active,assuntosResumo){
 function provaFoiFeita(p){return ((p&&p.tentativas)||[]).length>0;}
 function provasAparar(){
   if(!db.provas)return 0;
+  // Migracao preguicosa: prova que ja tinha tentativa ANTES desta versao (carregada do
+  // Firebase ainda em copia cheia) so converte aqui, no proximo ciclo de guarda — sem
+  // isto, so prova nova ganharia a economia de payload, e quem ja tem 30 provas feitas
+  // no ar continuaria pagando o preco antigo pra sempre.
+  db.provas.forEach(p=>{if(!p.chaves&&provaFoiFeita(p))provaConverterParaReferencia(p);});
   const saindo=[];
   // db.provas e a mais nova primeiro, entao varrer de tras pra frente acha a mais antiga.
   const despejarUmaFeita=()=>{
@@ -13019,11 +13137,19 @@ function provaRestaurar(id){
   // A ordem importa: restaurada, ela SAI do arquivo — entao provaDoArquivo devolve null
   // e acusaria "nao consegui remontar" num clique repetido, que e o oposto da verdade.
   if(provaAchar(id)){toast('Essa prova já está na lista.','var(--muted)');return;}
+  const bruta=(db.provasArquivo||[]).find(a=>a.id===id);
   const prova=provaDoArquivo(id);
   if(!prova){toast('Não consegui remontar esta prova — as questões dela não estão mais no banco.','var(--orange)');return;}
-  const {arquivada,faltando,chaves,marcacoes,arquivadaEm,_mapa,...limpa}=prova;
+  const {arquivada,faltando,chaves,chaves2,marcacoes,arquivadaEm,_mapa,questoes,tentativas,...limpa}=prova;
   db.provas=db.provas||[];
-  db.provas.unshift({...limpa,questoes:prova.questoes.map(q=>({...q}))});
+  // Volta ja em referencia por chave — o esqueleto do arquivo ja tem tudo pronto (o
+  // mesmo formato que uma prova viva convertida usa), nao precisa reconstruir a copia
+  // cheia. tentativas vem do esqueleto BRUTO (indices originais), nao da remontagem de
+  // provaDoArquivo — mas como a prova volta com as MESMAS chaves do esqueleto, os
+  // indices de resposta continuam batendo com os de questoes de qualquer forma.
+  db.provas.unshift({...limpa,chaves:bruta.chaves.slice(),chaves2:(bruta.chaves2||[]).slice(),
+    marcacoes:provaMarcacoesClone(bruta.marcacoes),
+    tentativas:(bruta.tentativas||[]).map(t=>({...t,respostas:(t.respostas||[]).slice()}))});
   db.provasArquivo=(db.provasArquivo||[]).filter(a=>a.id!==id);
   provarqSalvar();
   saveDB();
@@ -13048,7 +13174,7 @@ function provaRefazer(id){
   // exatamente como a refacao inflaria, e e o mesmo motivo.
   const soTreino=!!prova.treino;
   simGeralActive={
-    questoes:prova.questoes.map(q=>({...q})),   // copia: fazer nao suja a guardada
+    questoes:provaQuestoes(prova).map(q=>({...q})),   // copia: fazer nao suja a guardada
     startedAt:Date.now(),limiteSec:limite,corrected:false,
     formato:prova.formato,nivel:prova.nivel,
     importado:prova.origem==='colado',
@@ -13086,7 +13212,7 @@ function provaRevisar(id,tIdx){
      &&!confirm('Você tem um simulado em andamento. Abrir a revisão descarta o que está na tela. Continuar?'))return;
   const resp=t.respostas||[];
   simGeralActive={
-    questoes:prova.questoes.map((q,k)=>({...q,userAnswer:resp[k]||undefined})),
+    questoes:provaQuestoes(prova).map((q,k)=>({...q,userAnswer:resp[k]||undefined})),
     startedAt:Date.now(),limiteSec:0,corrected:true,
     formato:prova.formato,nivel:prova.nivel,
     importado:prova.origem==='colado',
@@ -13103,6 +13229,9 @@ function provaCorrigirRefacao(){
   const prova=provaAchar(active.provaId);
   const acertos=active.questoes.filter(q=>q.userAnswer===q.correta).length;
   if(prova){
+    // Prova MONTADA (treino) fecha a 1a "tentativa" por aqui, nao por provaGuardar — sem
+    // este gatilho tambem aqui, uma prova de treino nunca converteria pra referencia.
+    if(!(prova.tentativas||[]).length)provaConverterParaReferencia(prova);
     prova.tentativas=prova.tentativas||[];
     prova.tentativas.push({data:new Date().toISOString(),
       respostas:active.questoes.map(q=>q.userAnswer||''),
@@ -13125,10 +13254,11 @@ function provaTentativaAnterior(active){
   const n=(active.tentativaNum||2)-1;
   return prova.tentativas[n-1]||null;
 }
+function provaTotalQuestoes(prova){return prova&&(prova.chaves?prova.chaves.length:(prova.questoes||[]).length);}
 function provaApagar(id){
   const prova=provaAchar(id);
   if(!prova)return;
-  if(!confirm(`Apagar "${provaRotulo(prova)}" (${prova.questoes.length} questões)?\n\nAs questões vão pro banco de questões e continuam disponíveis pra montar caderno. O que some é a prova em si: o agrupamento, as tentativas e a comparação entre elas.`))return;
+  if(!confirm(`Apagar "${provaRotulo(prova)}" (${provaTotalQuestoes(prova)} questões)?\n\nAs questões vão pro banco de questões e continuam disponíveis pra montar caderno. O que some é a prova em si: o agrupamento, as tentativas e a comparação entre elas.`))return;
   const guardadas=acervoGuardarProva(prova);
   provaArquivar(prova);
   db.provas=(db.provas||[]).filter(p=>p.id!==id);
@@ -13144,7 +13274,7 @@ function provaApagar(id){
 // fora da conta. Sem isto o banco mostrava 101/120 enquanto a tela de resultado, ja
 // consertada, mostrava 100/119 — dois numeros pra mesma prova.
 function provaPlacar(prova,t){
-  const qs=(prova&&prova.questoes)||[];
+  const qs=provaQuestoes(prova);
   const resp=(t&&t.respostas)||[];
   let total=0,acertos=0,marcadas=0;
   qs.forEach((q,i)=>{
@@ -13196,18 +13326,20 @@ function simMotivoSalvar(i,id){
   const novo=q.motivo===id?'':id;          // clicar de novo desmarca
   q.motivo=novo;
   const prova=active.provaId?provaAchar(active.provaId):null;
-  if(prova&&prova.questoes[i])prova.questoes[i].motivo=novo;
+  // "Item desatualizado" nao e so um rotulo: o item tem que sair da conta. Reusa a
+  // marcacao de questao problematica, que ja sabe desfazer o efeito nas estatisticas.
+  // So alcanca o historico na 1a correcao (refacao e revisao nao tem _histId) — nesses
+  // casos fica o registro, que e o que alimenta o painel. Isto TEM que rodar antes de
+  // gravar o overlay da prova/arquivo abaixo: e o toggle que atualiza q.problematico, e
+  // gravar antes dele guarda um "problematico" um passo atrasado (o do clique anterior).
+  if(q._histId&&!!q.problematico!==(novo===SIM_MOTIVO_DATADO.id)){
+    toggleQuestaoProblematica(q.subId,q._histId,q._qIdxInHist);
+  }
+  if(prova)provaMarcar(prova,i,q);
   // Revisando uma prova ARQUIVADA nao ha prova viva pra escrever: a marcacao vai direto
   // pro esqueleto no arquivo. Sem isto, classificar um erro olhando uma prova antiga era
   // um clique que sumia ao trocar de tela.
   if(active.arquivada&&active.arquivadaId)arqMarcar(active.arquivadaId,i,q);
-  // "Item desatualizado" nao e so um rotulo: o item tem que sair da conta. Reusa a
-  // marcacao de questao problematica, que ja sabe desfazer o efeito nas estatisticas.
-  // So alcanca o historico na 1a correcao (refacao e revisao nao tem _histId) — nesses
-  // casos fica o registro, que e o que alimenta o painel.
-  if(q._histId&&!!q.problematico!==(novo===SIM_MOTIVO_DATADO.id)){
-    toggleQuestaoProblematica(q.subId,q._histId,q._qIdxInHist);
-  }
   saveDB();
   const cx=document.getElementById('sim-motivo-'+i);
   if(cx)cx.outerHTML=simMotivoHTML(q,i);
@@ -13322,7 +13454,18 @@ function motivosAgregado(){
     Object.values(a.marcacoes||{}).forEach(mk=>conta(mk.m,mk.s,mk.k));
   });
   (db.provas||[]).forEach(p=>{
-    const ult=(p.tentativas||[])[(p.tentativas||[]).length-1];
+    const ts=p.tentativas||[];
+    const ult=ts[ts.length-1];
+    // Convertida (passo 6): mesmo caminho do arquivo, direto no overlay — nao precisa
+    // hidratar a questao pra ler motivo/assunto, que ja moram em p.marcacoes.
+    if(p.chaves){
+      if(ult){
+        const marcadas=(ult.respostas||[]).filter(Boolean).length;
+        erradas+=Math.max(0,marcadas-(ult.acertos||0));
+      }
+      Object.values(p.marcacoes||{}).forEach(mk=>conta(mk.m,mk.s,mk.k));
+      return;
+    }
     const resp=(ult&&ult.respostas)||[];
     (p.questoes||[]).forEach((q,i)=>{
       if(resp.length&&resp[i]&&resp[i]!==q.correta)erradas++;
@@ -13343,7 +13486,7 @@ const COMENTAR_LOTE=8;          // questoes por chamada ao modelo
 let comentarRodando=false;
 
 function comentarPendentes(prova,modo){
-  const qs=(prova&&prova.questoes)||[];
+  const qs=provaQuestoes(prova);
   const ts=(prova&&prova.tentativas)||[];
   const resp=(ts[ts.length-1]||{}).respostas||[];
   return qs.map((q,i)=>({q,i,resp:resp[i]||''}))
@@ -13416,8 +13559,9 @@ async function comentarProva(provaId,modo){
           const exp=String((o&&o.explicacao)||'').trim();
           if(!exp)return;
           x.q.explicacao=exp;
+          provaEscreverCampo(prova,x.i,'explicacao',exp);
           const f=simFonteLimpa(o&&o.fonte);
-          if(f)x.q.fonte=f;
+          if(f){x.q.fonte=f;provaEscreverCampo(prova,x.i,'fonte',f);}
           feitas++;
         });
       }catch(e){
@@ -13427,6 +13571,7 @@ async function comentarProva(provaId,modo){
     }
   }finally{
     comentarRodando=false;
+    acervoSalvar();
     saveDB();
     renderSimGeralScreen();
   }
@@ -13439,16 +13584,19 @@ async function comentarUma(i){
   const active=simGeralActive;
   if(!active||!active.provaId){toast('⚠️ Essa prova ainda não está guardada.','var(--orange)');return;}
   const prova=provaAchar(active.provaId);
-  const q=prova&&prova.questoes[i];
+  const q=prova&&provaQuestoes(prova)[i];
   if(!q)return;
   const antes=q.explicacao;
-  q.explicacao='';                       // faz ela entrar como pendente
+  provaEscreverCampo(prova,i,'explicacao','');   // faz ela entrar como pendente
   await comentarProva(active.provaId,'sem');
-  if(!q.explicacao)q.explicacao=antes;   // falhou: devolve o que havia
+  const depois=provaQuestoes(prova)[i]||{};
+  if(!depois.explicacao)provaEscreverCampo(prova,i,'explicacao',antes);   // falhou: devolve
+  const final=provaQuestoes(prova)[i]||{};
   if(active.questoes[i]){
-    active.questoes[i].explicacao=q.explicacao;
-    active.questoes[i].fonte=q.fonte;
+    active.questoes[i].explicacao=final.explicacao;
+    active.questoes[i].fonte=final.fonte;
   }
+  acervoSalvar();
   renderSimGeralScreen();
 }
 // ===== BUSCAR A FONTE (Tavily puro, sem modelo nenhum) =====
@@ -13606,7 +13754,7 @@ function fonteGravar(i,achados){
   const active=simGeralActive;
   if(active&&active.questoes[i])active.questoes[i].apoioWeb=achados;
   const prova=active&&active.provaId?provaAchar(active.provaId):null;
-  if(prova&&prova.questoes[i])prova.questoes[i].apoioWeb=achados;
+  if(prova)provaEscreverCampo(prova,i,'apoioWeb',achados);
 }
 async function fonteBuscar(i){
   if(!tavilyAtivo()){toast('⚠️ Sem chave do Tavily — configure em Ajustes.','var(--red)');return;}
@@ -13622,6 +13770,7 @@ async function fonteBuscar(i){
                      :'Não achei nada em site oficial que trate deste item.','var(--orange)');
       return;}
     fonteGravar(i,r.achados);
+    acervoSalvar();
     saveDB();
     renderSimGeralScreen();
     toast(`🔎 ${r.achados.length} trecho(s)${r.ampliou?', fora de site oficial':''}. Leia e julgue — ninguém reescreveu nada.`,'var(--green)');
@@ -13652,7 +13801,7 @@ async function fonteBuscarErradas(){
       }catch(e){falhas++;}
     }
   }finally{
-    fonteRodando=false; saveDB(); renderSimGeralScreen();
+    fonteRodando=false; acervoSalvar(); saveDB(); renderSimGeralScreen();
   }
   toast(ok?`🔎 Fonte achada em ${ok} ${ok===1?'questão':'questões'}${falhas?` · ${falhas} sem resultado`:''}.`
           :'Não achei fonte oficial pra nenhuma delas.',ok?'var(--green)':'var(--orange)');
@@ -13669,7 +13818,7 @@ function fonteApoioHTML(q,i){
     </div>`).join('')}
   </div>`;
 }
-function fonteLimpar(i){fonteGravar(i,[]);saveDB();renderSimGeralScreen();}
+function fonteLimpar(i){fonteGravar(i,[]);acervoSalvar();saveDB();renderSimGeralScreen();}
 const NOTA_MAX=600;
 // Escrever com as proprias palavras por que o item esta certo ou errado e o passo que
 // transforma "li a explicacao e concordei" em "eu sei". A nota mora na QUESTAO dentro
@@ -13683,7 +13832,8 @@ function simNotaSalvar(i){
   const q=active.questoes[i];
   if(q)q.minhaNota=txt;                       // a live: o histórico do miniboss usa a mesma referência
   const prova=active.provaId?provaAchar(active.provaId):null;
-  if(prova&&prova.questoes[i])prova.questoes[i].minhaNota=txt;
+  if(prova)provaEscreverCampo(prova,i,'minhaNota',txt);
+  acervoSalvar();
   saveDB();
   const selo=document.getElementById('sim-nota-selo-'+i);
   if(selo)selo.textContent=txt?'✅ guardada':'';
@@ -13754,9 +13904,21 @@ function montarAcervo(){
   // item certo/errado como desatualizado podia "queimar" de brinde outro item que so
   // compartilhava o comeco do enunciado.
   const queimadas=new Set();
-  (db.provas||[]).forEach(p=>(p.questoes||[]).forEach(q=>{
-    if(questaoForaDaConta(q))queimadas.add(acervoChave2De(q));
-  }));
+  (db.provas||[]).forEach(p=>{
+    // Convertida (passo 6): motivo/problematico ja moram no overlay (p.marcacoes),
+    // endereçados por chaves2 — nao precisa hidratar a questao so pra saber se ela
+    // esta queimada.
+    if(p.chaves){
+      (p.chaves2||[]).forEach((chave,i)=>{
+        const mk=(p.marcacoes||{})[i];
+        if(mk&&questaoForaDaConta({motivo:mk.m,problematico:!!mk.p}))queimadas.add(chave);
+      });
+      return;
+    }
+    (p.questoes||[]).forEach(q=>{
+      if(questaoForaDaConta(q))queimadas.add(acervoChave2De(q));
+    });
+  });
   // A mesma questao pode estar em varias provas (caderno importado duas vezes, e sempre
   // que ela entra num caderno montado). O historico dela e a SOMA das copias: errou se
   // errou em alguma. Ficar so com a primeira copia encontrada quebrava o filtro "so o
@@ -13774,6 +13936,21 @@ function montarAcervo(){
   (db.provas||[]).forEach(p=>{
     const ts=p.tentativas||[];
     const resp=(ts[ts.length-1]||{}).respostas||[];
+    if(p.chaves){
+      // Ja convertida: a questao em si e o proprio item do acervo (porAcervoChave, que
+      // ja esta em maos) — so falta cruzar com a resposta desta tentativa.
+      (p.chaves2||[]).forEach((chave,i)=>{
+        if(queimadas.has(chave))return;
+        const item=porAcervoChave.get(chave);
+        if(!item)return;   // item saiu do acervo (raro) — nao entra no pool
+        const dada=resp[i]||'';
+        const reg=porChave.get(chave)||{q:item,subId:item.subId,respondida:false,errou:false};
+        reg.respondida=reg.respondida||!!dada;
+        reg.errou=reg.errou||(!!dada&&dada!==item.correta);
+        porChave.set(chave,reg);
+      });
+      return;
+    }
     (p.questoes||[]).forEach((q,i)=>{
       const chave=acervoChave2De(q);
       if(queimadas.has(chave))return;
@@ -14041,10 +14218,12 @@ function bancoAplicarEdicao(item,dados){
   }
   return false;
 }
-// Corrige toda referencia do arquivo de provas que apontava pro endereco/identidade
-// ANTIGOS desta questao, pra apontar pros NOVOS. So mexe em quem realmente apontava pra
-// ELA (confere pela identidade forte quando existe, senao so pelo endereco — mesma
-// logica de desempate que provaDoArquivo ja usa pra ler).
+// Corrige toda referencia — do arquivo E de prova VIVA ja convertida (passo 6) — que
+// apontava pro endereco/identidade ANTIGOS desta questao, pra apontar pros NOVOS. So
+// mexe em quem realmente apontava pra ELA (confere pela identidade forte quando existe,
+// senao so pelo endereco — mesma logica de desempate que provaDoArquivo/provaQuestoes ja
+// usam pra ler). Sem isto, editar o enunciado de uma questao que ja esta numa prova viva
+// guardada deixava aquela referencia orfa — a prova passaria a mostrar "nao disponivel".
 function bancoReenderecarArquivo(enderecoAntes,chaveForteAntes,item){
   let tocou=false;
   (db.provasArquivo||[]).forEach(a=>{
@@ -14057,6 +14236,18 @@ function bancoReenderecarArquivo(enderecoAntes,chaveForteAntes,item){
     });
   });
   if(tocou)provarqSalvar();
+  let tocouViva=false;
+  (db.provas||[]).forEach(p=>{
+    if(!p.chaves)return;
+    p.chaves.forEach((k,i)=>{
+      if(k!==enderecoAntes)return;
+      if(p.chaves2&&p.chaves2[i]&&p.chaves2[i]!==chaveForteAntes)return;
+      p.chaves[i]=montarChaveQ(item);
+      if(p.chaves2)p.chaves2[i]=item._chaveForte;
+      tocouViva=true;
+    });
+  });
+  if(tocouViva)saveDB();
 }
 function bancoCardHTML(x){
   const q=x.q;
@@ -14442,10 +14633,12 @@ function provasGuardadasHTML(){
     </div>
     ${lista.map(p=>{
       const ce=(p.formato||'multipla')==='certoerrado';
-      const total=p.questoes.length;
+      const total=provaTotalQuestoes(p);
       const ts=p.tentativas||[];
       const nova=!ts.length;
-      const foraP=(p.questoes||[]).filter(questaoForaDaConta).length;
+      const foraP=p.chaves
+        ?Object.values(p.marcacoes||{}).filter(mk=>questaoForaDaConta({motivo:mk.m,problematico:!!mk.p})).length
+        :(p.questoes||[]).filter(questaoForaDaConta).length;
       const linhas=ts.map((t,i)=>{
         const pl=provaPlacar(p,t);
         const pct=pl.total?Math.round(pl.acertos/pl.total*100):0;
@@ -14613,7 +14806,10 @@ function simGeralCorrigir(){
 // mas continuava dentro do placar DESTA tela, que e justamente o numero que voce olha:
 // voce tirava o item da conta e continuava vendo 101/120 com ele contado como erro.
 function questaoForaDaConta(q){
-  return !!(q&&(q.problematico||q.motivo==='datado'));
+  // _faltando: referencia por chave (passo 6) cujo item sumiu do acervo (raro — so o
+  // teto de 50 mil evictando algo bem antigo). Nao ha enunciado de verdade ali, entao
+  // conta como fora da conta pelo mesmo motivo que um item marcado datado/com problema.
+  return !!(q&&(q.problematico||q.motivo==='datado'||q._faltando));
 }
 // Uma prova de 120 itens toca uns 40 assuntos, e a quebra listava os 40, um por linha
 // gorda. Vira uma parede: o que voce precisa ver — em que BLOCO do edital perdeu e

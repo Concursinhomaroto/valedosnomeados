@@ -50,8 +50,9 @@ async def main():
           montarAgora();
           const nova=db.provas[0];
           const orig=db.provas[1];
+          const origQs=provaQuestoes(orig);
           const errRespostas=(orig.tentativas[0].respostas||[])
-            .map((r,i)=>r&&r!==orig.questoes[i].correta?orig.questoes[i].questao:null).filter(Boolean);
+            .map((r,i)=>r&&r!==origQs[i].correta?origQs[i].questao:null).filter(Boolean);
           return {provas:db.provas.length,n:nova.questoes.length,
                   treino:!!nova.treino,origem:nova.origem,tentativas:nova.tentativas.length,
                   todasErradas:nova.questoes.every(q=>errRespostas.includes(q.questao)),
@@ -89,10 +90,10 @@ async def main():
         r=await page.evaluate("""()=>{
           // classifica: PCR vira gargalo de conteudo, Choque septico de atencao
           const orig=db.provas.find(p=>!p.treino);
-          orig.questoes.forEach((q,i)=>{
+          provaQuestoes(orig).forEach((q,i)=>{
             const resp=orig.tentativas[0].respostas[i];
             if(!resp||resp===q.correta)return;
-            q.motivo=(q.subName==='PCR')?'conteudo':'atencao';});
+            provaMarcar(orig,i,{...q,motivo:(q.subName==='PCR')?'conteudo':'atencao'});});
           const porConteudo=[...montarAssuntosDoGargalo('conteudo')];
           const porAtencao=[...montarAssuntosDoGargalo('atencao')];
           return {porConteudo,porAtencao,
@@ -124,9 +125,9 @@ async def main():
         r=await page.evaluate("""()=>{
           const orig=db.provas.find(p=>!p.treino);
           const antes=montarAcervo().length;
-          orig.questoes[0].motivo='datado';
+          provaMarcar(orig,0,{...provaQuestoes(orig)[0],motivo:'datado'});
           const depois=montarAcervo().length;
-          orig.questoes[0].motivo='';
+          provaMarcar(orig,0,{...provaQuestoes(orig)[0],motivo:''});
           return {antes,depois};}""")
         print('   acervo: %s -> %s ao marcar um item como desatualizado'%(r['antes'],r['depois']))
         assert r['depois']==r['antes']-1
