@@ -10538,6 +10538,35 @@ function simNormalizaQuestao(q,formato){
   return{...q,alternativas:alts,correta,formato:'multipla',fonte:fonte||undefined};
 }
 
+// ===== BANCO ANTES DA IA (passo 5) =====
+// Gerar questao nova pela IA custa quota e, com pesquisa ligada, credito do Tavily — e o
+// banco pode ja ter uma boa candidata sobre o mesmo assunto. "Boa candidata" e: nunca
+// respondida, OU respondida ha mais de BANCO_REAPROVEITAR_DIAS_MIN dias (tempo o bastante
+// pra nao repetir a mesma questao de uma prova pra outra em sequencia, curto o bastante
+// pra o banco nao virar so questoes que nunca mais voltam). Quem o usuario marcou como
+// 'arquivada' no editor fica de fora — arquivar ali e "guarda mas nao me mostre mais",
+// nao "essa e ruim" (isso e o que questaoForaDaConta cobre, e tambem exclui daqui).
+const BANCO_REAPROVEITAR_DIAS_MIN=5;
+function bancoElegiveisParaReaproveitar(subIds,formato){
+  const limite=Date.now()-BANCO_REAPROVEITAR_DIAS_MIN*86400000;
+  return(db.acervo||[]).filter(q=>
+    subIds.has(q.subId)&&(q.formato||'multipla')===formato&&
+    (q.status||'ativa')!=='arquivada'&&!questaoForaDaConta(q)&&
+    (!q.ultimaVezEm||new Date(q.ultimaVezEm).getTime()<limite));
+}
+// Ate `quantidade` copias limpas (sem resposta/comentario/marca da sessao anterior — os
+// contadores agregados ficam, sao historico da QUESTAO, nao desta prova) pra entrar no
+// lote no lugar do que a IA geraria. Mesma limpeza que montarAgora ja faz.
+function bancoReaproveitar(subIds,formato,quantidade){
+  if(!quantidade)return[];
+  const arr=bancoElegiveisParaReaproveitar(subIds,formato);
+  for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
+  return arr.slice(0,quantidade).map(q=>{
+    const{userAnswer,motivo,marcas,ultimoResultado,...limpa}=q;
+    return{...limpa,userAnswer:null};
+  });
+}
+
 async function generateQuestionsForSubject(apiKey,kingdom,topic,sub,quantidade,opts){
   const formato=(opts&&opts.formato)||'multipla';
   const nivel=(opts&&opts.nivel)||'dificil';
@@ -10578,12 +10607,17 @@ RESPONDA APENAS COM UM JSON (array de ${qtd} itens), sem markdown, no formato ex
 ${ce?`[{"afirmacao":"...","gabarito":"C","explicacao":"...","fonte":"Lei 8.080/1990, art. 7º"},{"afirmacao":"...","gabarito":"E","explicacao":"...","fonte":"Cofen 564/2017, art. 45"}]`
     :`[{"questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"...","fonte":"PNI — Calendário Nacional de Vacinação 2026"}]`}`;
 
+  // Antes de gastar quota da IA (e credito do Tavily, se for pesquisar): o banco pode
+  // ja ter questao boa sobre este assunto. So a busca e a geracao ficam pro que faltar.
+  const reaproveitadas=bancoReaproveitar(new Set([sub.id]),formato,quantidade);
+  const faltam=quantidade-reaproveitadas.length;
+
   // Pesquisa uma vez só, antes do laço de tentativas: o assunto é o mesmo em
   // todas elas, e cada busca custa crédito do Tavily. Sem chave, ou com a busca
   // desligada, o fluxo é exatamente o de antes.
   let busca={material:'',fontes:[],via:null,diag:[]};
-  if(pesquisar&&tavilyAtivo()){
-    busca=await buscarMaterial(sub.name,`${kingdom.name} — ${topic.name}`,materialParaQtd(quantidade));
+  if(faltam>0&&pesquisar&&tavilyAtivo()){
+    busca=await buscarMaterial(sub.name,`${kingdom.name} — ${topic.name}`,materialParaQtd(faltam));
   }
 
   // A IA às vezes ignora a instrução de quantidade (ou tem a resposta cortada por limite de
@@ -10592,8 +10626,10 @@ ${ce?`[{"afirmacao":"...","gabarito":"C","explicacao":"...","fonte":"Lei 8.080/1
   // depois de algumas tentativas — assim o simulado sempre sai com o número escolhido
   // (ou, na pior hipótese, avisa exatamente quantas faltaram, em vez de simplesmente
   // entregar menos sem avisar).
-  const questoes=await gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,rotulo:sub.name});
-  return{questoes,busca};
+  const questoes=faltam>0
+    ?await gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,rotulo:sub.name,reaproveitadas})
+    :reaproveitadas;
+  return{questoes,busca,doBanco:reaproveitadas.length};
 }
 
 // O laco de retentativa e o mesmo para os dois escopos (um assunto ou um chefao
@@ -10624,9 +10660,13 @@ const SIM_LOTE_MAX=20;
 // maximo a toa (resposta grande e mais lenta e mais cara).
 function simTetoSaida(qtd){return Math.min(32768,Math.max(4096,Math.round(qtd*420)+1200));}
 
-async function gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,rotulo}){
-  const questoes=[];
-  const vistas=new Set();
+// reaproveitadas (passo 5: banco antes da IA) entram JA no lote, como se fossem a
+// primeira leva — o resto do laco (o que evitar, o dedup, quantas tentativas sobram, o
+// aviso final se faltar) e so a diferenca entre o que ja tem e `quantidade`, sem precisar
+// saber se aquela diferenca comecou do banco ou de uma chamada anterior.
+async function gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,rotulo,reaproveitadas}){
+  const questoes=(reaproveitadas||[]).slice();
+  const vistas=new Set(questoes.map(q=>normalizeForDedup(q.questao)));
   let tentativas=0;
   // Mais lotes precisam de mais tentativas — senao 50 questoes parariam no 4o lote
   // mesmo indo tudo bem. Sobram 3 de folga pra repetir lote que falhar.
@@ -10716,16 +10756,29 @@ RESPONDA APENAS COM UM JSON (array de ${qtd} itens), sem markdown, no formato ex
 ${ce?`[{"assunto":1,"afirmacao":"...","gabarito":"C","explicacao":"...","fonte":"Lei 8.080/1990, art. 7º"}]`
     :`[{"assunto":1,"questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"...","fonte":"PNI — Calendário Nacional de Vacinação 2026"}]`}`;
 
+  // Antes de gastar quota da IA: o banco pode ja ter questao boa sobre qualquer um dos
+  // assuntos deste chefao. Cada reaproveitada ja sabe o proprio assunto (e o subId dela
+  // no acervo), entao ganha _sub direto — nao precisa do palpite por texto la embaixo,
+  // que e so pra questao que a IA acabou de gerar.
+  const subIds=new Set(subs.map(s=>s.id));
+  const reaproveitadas=bancoReaproveitar(subIds,formato,quantidade)
+    .map(q=>({...q,_sub:subs.find(s=>s.id===q.subId)||subs[0]}));
+  const faltam=quantidade-reaproveitadas.length;
+
   // Uma pesquisa para o tema inteiro, no lugar de uma por assunto.
   let busca={material:'',fontes:[],via:null,diag:[]};
-  if(pesquisar&&tavilyAtivo()){
-    busca=await buscarMaterial(topic.name,`${kingdom.name} — ${subs.slice(0,6).map(s=>s.name).join(', ')}`,materialParaQtd(quantidade));
+  if(faltam>0&&pesquisar&&tavilyAtivo()){
+    busca=await buscarMaterial(topic.name,`${kingdom.name} — ${subs.slice(0,6).map(s=>s.name).join(', ')}`,materialParaQtd(faltam));
   }
-  const questoes=await gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,rotulo:topic.name});
+  const questoes=faltam>0
+    ?await gerarComRetentativa({apiKey,buildPrompt,quantidade,formato,busca,rotulo:topic.name,reaproveitadas})
+    :reaproveitadas;
   // Devolve cada questao ao assunto que ela cobre. Indice invalido cai no assunto
   // cujo nome mais aparece no enunciado; sem isso tambem, no primeiro da lista —
-  // atribuir errado e melhor que a questao nao contar em lugar nenhum.
+  // atribuir errado e melhor que a questao nao contar em lugar nenhum. Reaproveitada ja
+  // chegou com _sub, entao pula direto essa parte.
   questoes.forEach(q=>{
+    if(q._sub)return;
     const i=parseInt(q.assunto,10);
     let alvo=(i>=1&&i<=subs.length)?subs[i-1]:null;
     if(!alvo){
@@ -10735,7 +10788,7 @@ ${ce?`[{"assunto":1,"afirmacao":"...","gabarito":"C","explicacao":"...","fonte":
     q._sub=alvo;
     delete q.assunto;
   });
-  return{questoes,busca};
+  return{questoes,busca,doBanco:reaproveitadas.length};
 }
 
 async function generateSimulado(subId){
@@ -10768,9 +10821,10 @@ async function generateSimulado(subId){
     const r=await generateQuestionsForSubject(apiKey,kingdom,topic,sub,quantidade,{formato,nivel});
     const questoes=r.questoes;
     simActive[subId]={questoes,quantidade:questoes.length,corrected:false,formato,nivel,fontes:r.busca.fontes};
+    const doBanco=r.doBanco?` (${r.doBanco} do banco, sem gastar IA)`:'';
     toast(r.busca.via==='tavily'
-      ?`🔎 Simulado ${formato==='certoerrado'?'certo/errado':'de múltipla escolha'} gerado com pesquisa na internet (${r.busca.fontes.length} fontes)!`
-      :'🎯 Simulado gerado! Responda e depois corrija.','var(--pink)');
+      ?`🔎 Simulado ${formato==='certoerrado'?'certo/errado':'de múltipla escolha'} gerado com pesquisa na internet (${r.busca.fontes.length} fontes)${doBanco}!`
+      :`🎯 Simulado gerado!${doBanco} Responda e depois corrija.`,'var(--pink)');
   }catch(e){
     toast('❌ '+(e.message||'Erro ao gerar simulado'),'var(--red)');
   }finally{
@@ -12111,6 +12165,7 @@ async function generateSimuladoGeral(){
   // exceeded". Com pausa entre cada chamada, a maioria passa dentro da janela do limite.
   const questoes=[];
   const falhas=[];
+  let doBanco=0;
   for(let i=0;i<plano.length;i++){
     const p=plano[i];
     if(container)container.innerHTML=`<div class="section-card"><div class="empty"><i class="fa fa-spinner fa-spin"></i><p>${pesquisar&&tavilyAtivo()?'Pesquisando na internet e gerando':'Gerando'} questões... (${i+1}/${plano.length})<br><span style="font-size:10px">${escapeHtml(p.rotulo)}${p.tipo==='chefao'?` · chefão inteiro (${p.subs.length} assuntos)`:''}</span></p></div></div>`;
@@ -12119,6 +12174,7 @@ async function generateSimuladoGeral(){
         ?await generateQuestionsForTopic(apiKey,p.kingdom,p.topic,p.subs,p.quantidade,{formato,nivel,pesquisar})
         :await generateQuestionsForSubject(apiKey,p.kingdom,p.topic,p.sub,p.quantidade,{formato,nivel,pesquisar});
       if(r.busca.via==='tavily')pesquisados++;
+      doBanco+=r.doBanco||0;
       questoes.push(...r.questoes.map(q=>{
         const sub=p.tipo==='chefao'?(q._sub||p.subs[0]):p.sub;
         const{_sub,...limpa}=q;
@@ -12142,7 +12198,7 @@ async function generateSimuladoGeral(){
       toast(`⚠️ Simulado gerado com ${questoes.length} questões, mas ${falhas.length} assunto${falhas.length>1?'s falharam':' falhou'} (provável limite de requisições da API). Pode gerar de novo depois pra cobrir o resto.`,'var(--orange)');
     }else{
       const chefoes=plano.filter(u=>u.tipo==='chefao').length;
-      toast(`🏛️ Simulado ${formato==='certoerrado'?'certo/errado':'de múltipla escolha'} (${simNivelLbl(nivel).toLowerCase()}) gerado! ${questoes.length} questões de ${subjects.length} assunto(s) em ${plano.length} chamada${plano.length>1?'s':''}${chefoes?` (${chefoes} chefão${chefoes>1?'es':''} inteiro${chefoes>1?'s':''})`:''}${pesquisados?` · ${pesquisados} pesquisa${pesquisados>1?'s':''} na internet`:''}.`,'var(--accent)');
+      toast(`🏛️ Simulado ${formato==='certoerrado'?'certo/errado':'de múltipla escolha'} (${simNivelLbl(nivel).toLowerCase()}) gerado! ${questoes.length} questões de ${subjects.length} assunto(s) em ${plano.length} chamada${plano.length>1?'s':''}${chefoes?` (${chefoes} chefão${chefoes>1?'es':''} inteiro${chefoes>1?'s':''})`:''}${pesquisados?` · ${pesquisados} pesquisa${pesquisados>1?'s':''} na internet`:''}${doBanco?` · ${doBanco} do banco (sem gastar IA)`:''}.`,'var(--accent)');
     }
   }
   renderSimGeralScreen();
