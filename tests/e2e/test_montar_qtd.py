@@ -70,7 +70,7 @@ async def main():
           document.getElementById('montar-modo').value='errei';
           const el=document.getElementById('montar-qtd');
           el.value='100'; montarQtdGravar(el);
-          const aviso=document.getElementById('montar-conta').textContent;
+          const aviso=document.getElementById('banco-filtro-conta').textContent;
           const pool=montarPool('errei').length;
           montarAgora();
           return {aviso,pool,montou:db.provas[0].questoes.length};}""")
@@ -85,7 +85,7 @@ async def main():
           document.getElementById('montar-modo').value='errei';
           const el=document.getElementById('montar-qtd');
           el.value='5'; montarQtdGravar(el);
-          const aviso=document.getElementById('montar-conta').textContent;
+          const aviso=document.getElementById('banco-filtro-conta').textContent;
           montarAgora();
           const el2=document.getElementById('montar-qtd');
           return {aviso,montou:db.provas[0].questoes.length,
