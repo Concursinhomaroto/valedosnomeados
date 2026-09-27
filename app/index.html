@@ -12336,7 +12336,7 @@ let acervoAvisou=false;
 // e ressuscitar posicao fora do lugar onde foi feita e pedir grifo torto.
 function acervoLimparQuestao(q){
   const {userAnswer,motivo,marcas,_histId,_qIdxInHist,
-         revisado,problematico,_resp,...limpa}=q;
+         revisado,problematico,ultimoResultado,...limpa}=q;
   return limpa;
 }
 // Campos que a versao que chega pode ter e a guardada nao.
@@ -12363,8 +12363,24 @@ function acervoChave2(q){
 // Le a identidade sem gravar nada — usa o campo se ja existir (caso comum: item que
 // passou pela migracao ou ja nasceu com ela), e cai pro calculo na hora se nao.
 function acervoChave2De(q){return (q&&q._chaveForte)||acervoChave2(q);}
+// Passo 2 do plano do Banco de Questoes: metadados de organizacao e qualidade.
+// Com menos de 3 respostas, uma unica sorte ou azar decidiria o rotulo — fica null ate
+// ter amostra. As faixas sao deliberadamente largas: isto e um indicador pra VOCE olhar
+// o banco, nao uma nota que a IA declarou.
+const ACERVO_DIFICULDADE_MIN_AMOSTRA=3;
+function acervoDificuldade(acertos,vezes){
+  if(vezes<ACERVO_DIFICULDADE_MIN_AMOSTRA)return null;
+  const taxa=acertos/vezes;
+  return taxa>=0.75?'facil':(taxa>=0.4?'media':'dificil');
+}
+// Campos que existem uma vez e nunca mudam depois de criados.
+function acervoCamposNovos(origem){
+  return{tags:[],favorita:false,status:'ativa',
+         vezesRespondida:0,acertos:0,erros:0,ultimaVezEm:null,dificuldadeAferida:null,
+         criadaEm:new Date().toISOString(),origem:origem||'ia'};
+}
 // Guarda as questoes de UMA prova que esta saindo. Carimba o que voce fez nelas
-// (_resp: C acertou, X errou) pra o filtro "so o que eu errei" continuar valendo
+// (ultimoResultado: C acertou, X errou) pra o filtro "so o que eu errei" continuar valendo
 // depois que a prova de origem ja nao existe.
 function acervoGuardarProva(prova){
   db.acervo=db.acervo||[];
@@ -12382,7 +12398,11 @@ function acervoGuardarProva(prova){
     limpa._chaveForte=acervoChave2(limpa);         // gravado uma vez, nunca recalculado depois
     const chave=limpa._chaveForte;
     const dada=resp[i]||'';
-    if(dada)limpa._resp=(dada===q.correta)?'C':'X';
+    // ultimoResultado e o C/E da ULTIMA tentativa — e o que "so o que eu errei" le pra
+    // questao sem prova viva. Precisa refletir a MAIS RECENTE, nao a primeira que chegou
+    // (ao contrario do ACERVO_ENRIQUECE: la, o comentario mais antigo que ja preenche o
+    // campo e igual de bom, aqui um resultado velho escondendo um mais novo estaria errado).
+    if(dada)limpa.ultimoResultado=(dada===q.correta)?'C':'X';
     const velha=porChave.get(chave);
     if(velha){
       // A MESMA questao costuma estar em duas provas — uma comentada, a outra nao. Antes,
@@ -12394,9 +12414,31 @@ function acervoGuardarProva(prova){
         if(acervoTem(limpa[c])&&!acervoTem(velha[c])){velha[c]=limpa[c];mudou=true;}
       });
       if(!velha._chaveForte)velha._chaveForte=chave;   // migra a antiga de passagem, sem custo extra
-      if(!velha._resp&&limpa._resp){velha._resp=limpa._resp;mudou=true;}
+      // Item que ja existia antes desta versao pode nao ter os campos novos — entra aqui,
+      // uma vez, sem esperar por acervoCarregar (que so migra o que ja estava salvo).
+      Object.entries(acervoCamposNovos(velha.origem)).forEach(([c,v])=>{
+        if(velha[c]===undefined){velha[c]=v;mudou=true;}
+      });
+      if(limpa.ultimoResultado){
+        // newest wins pro resultado; os contadores SOMAM, nunca substituem.
+        velha.ultimoResultado=limpa.ultimoResultado;
+        velha.vezesRespondida=(velha.vezesRespondida||0)+1;
+        if(limpa.ultimoResultado==='C')velha.acertos=(velha.acertos||0)+1;
+        else velha.erros=(velha.erros||0)+1;
+        velha.ultimaVezEm=new Date().toISOString();
+        velha.dificuldadeAferida=acervoDificuldade(velha.acertos,velha.vezesRespondida);
+        mudou=true;
+      }
       if(mudou)melhoradas++;
       return;
+    }
+    Object.assign(limpa,acervoCamposNovos(prova.origem));
+    if(limpa.ultimoResultado){
+      limpa.vezesRespondida=1;
+      limpa.acertos=limpa.ultimoResultado==='C'?1:0;
+      limpa.erros=limpa.ultimoResultado==='X'?1:0;
+      limpa.ultimaVezEm=new Date().toISOString();
+      limpa.dificuldadeAferida=acervoDificuldade(limpa.acertos,limpa.vezesRespondida);
     }
     porChave.set(chave,limpa);
     db.acervo.unshift(limpa);
@@ -13665,7 +13707,7 @@ function montarAcervo(){
   (db.acervo||[]).forEach(q=>{
     const chave=acervoChave2De(q);
     if(!chave||queimadas.has(chave)||porChave.has(chave))return;
-    porChave.set(chave,{q,subId:q.subId,respondida:!!q._resp,errou:q._resp==='X',doBanco:true});
+    porChave.set(chave,{q,subId:q.subId,respondida:(q.vezesRespondida||0)>0,errou:q.ultimoResultado==='X',doBanco:true});
   });
   return [...porChave.values()];
 }
@@ -13710,8 +13752,11 @@ function montarAgora(){
   const questoes=escolhidas.map(x=>{
     // Sai o que voce marcou da vez passada; fica a sua nota escrita e o trecho da fonte,
     // que so aparecem na tela DEPOIS de corrigir — entao nao entregam o gabarito, e
-    // reencontrar o que voce mesmo escreveu e metade do valor de refazer.
-    const {userAnswer,motivo,marcas,_resp,...limpa}=x.q;
+    // reencontrar o que voce mesmo escreveu e metade do valor de refazer. ultimoResultado
+    // sai pelo mesmo motivo que userAnswer: e o resultado de UMA tentativa especifica, nao
+    // desta. Os contadores agregados (vezesRespondida etc.) ficam — sao historico da
+    // QUESTAO, nao desta tentativa, e uteis de ver enquanto treina.
+    const {userAnswer,motivo,marcas,ultimoResultado,...limpa}=x.q;
     return limpa;
   });
   const formato=questoes.every(q=>q.formato==='certoerrado')?'certoerrado':'multipla';
