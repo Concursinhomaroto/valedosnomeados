@@ -1,0 +1,5 @@
+# Screenshots que alguns testes de tests/e2e tiram pra conferência visual manual —
+# não fazem parte da asserção, e são gerados a cada rodada.
+tests/e2e/_out/
+__pycache__/
+*.pyc
