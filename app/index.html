@@ -793,6 +793,10 @@ nav{
 .banco-item-txt{font-size:11px;font-weight:600;color:var(--text2);line-height:1.5}
 .banco-item-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:5px;
   font-size:10px;font-weight:700;color:var(--muted)}
+.banco-item-editando{background:var(--panel);border-color:var(--accent)}
+.banco-edit-linha{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.banco-tag{font-size:9.5px;font-weight:700;color:var(--accent);background:var(--panel2);
+  border-radius:999px;padding:2px 7px;white-space:nowrap}
 .prova-treino{font-size:9px;font-weight:800;letter-spacing:.3px;padding:2px 7px;
   border-radius:999px;background:var(--accent);color:#fff;white-space:nowrap}
 .prova-fora{font-size:9px;font-weight:800;padding:2px 7px;border-radius:999px;
@@ -13881,6 +13885,12 @@ function bancoFiltroMudouTexto(el){
 }
 function bancoFiltroMudouFormato(el){bancoFiltro.formato=el.value;bancoListaRefrescar();}
 function bancoFiltroMudouNaoRespondida(el){bancoFiltro.naoRespondida=el.checked;bancoListaRefrescar();}
+function bancoFiltroMudouFavorita(el){bancoFiltro.favorita=el.checked;bancoListaRefrescar();}
+function bancoFiltroMudouStatus(el){bancoFiltro.status=el.value;bancoListaRefrescar();}
+function bancoFiltroMudouTag(tag,el){
+  if(el&&el.checked)bancoFiltro.tags.add(tag); else bancoFiltro.tags.delete(tag);
+  bancoListaRefrescar();
+}
 function bancoFiltroMudouFaixa(qual,el){
   const n=el.value===''?null:Math.max(0,Math.min(100,parseInt(el.value,10)||0));
   bancoFiltro[qual]=n;
@@ -13896,7 +13906,7 @@ function bancoListaRefrescar(){
   if(!conta||!lista)return;
   const pool=bancoPoolFiltrado();
   conta.innerHTML=bancoFiltroContaHTML(pool);
-  lista.innerHTML=bancoListaAberta?bancoListaItensHTML(pool):'';
+  lista.innerHTML=bancoListaConteudoHTML(pool);
   const btn=document.getElementById('banco-filtro-ver');
   if(btn)btn.textContent=bancoListaAberta?'▴ esconder':`▾ ver (${Math.min(pool.length,30)}${pool.length>30?' de '+pool.length:''})`;
 }
@@ -13913,28 +13923,325 @@ function bancoFiltroContaHTML(pool){
   return`<b>${n}</b> ${n===1?'questão encontrada':'questões encontradas'}${bancoFiltroTemAlgo()?' com este filtro':''}`
         +(pedido>n?` — o caderno vai sair com <b>${sai}</b>, que é tudo que há`:'');
 }
+// ===== EDITOR, CRIAR A MAO, IMPORTAR EM LOTE (passo 4) =====
+//
+// Uma armadilha real: montarChaveQ (o ENDERECO gravado em provasArquivo[].chaves) e
+// recalculado AO VIVO a partir de q.questao — nunca fica guardado. Editar o enunciado ou
+// o formato move o item pra um endereco novo, e qualquer prova ja arquivada que apontava
+// pro endereco velho para de achar a questao (ela some da remontagem, com faltando++ —
+// o MESMO efeito que marcar um item como quebrado ja causa hoje, entao nao e um estado
+// novo pro resto do app). Em vez de aceitar essa perda calada, bancoReenderecarArquivo
+// varre o arquivo de provas e atualiza toda referencia que apontava pro endereco velho —
+// so quando questao ou formato realmente mudam, e so as PRE-EXISTENTES (o resto do app
+// nunca soube que isso e um risco: entao concertar aqui, uma vez, vale mais que pedir
+// pra cada tela futura lembrar).
+let bancoEditando=new Set();      // chaves fortes em edicao
+let bancoCriando=false;
+let bancoImportando=false;
+function bancoItemPorChaveForte(cf){
+  return (db.acervo||[]).find(q=>q._chaveForte===cf)||null;
+}
+// Mesma validacao que simNormalizaQuestao ja faz pra colar prova (gabarito tem que
+// bater com uma alternativa de verdade, senao a questao nunca pode ser acertada) —
+// aqui reaproveitada pra ler os campos de um FORM em vez de um JSON da IA.
+function bancoLerForm(prefixo){
+  const el=id=>document.getElementById(prefixo+id);
+  const formato=(el('formato')||{}).value||'certoerrado';
+  const questao=((el('questao')||{}).value||'').trim();
+  const explicacao=((el('explicacao')||{}).value||'').trim();
+  const fonte=simFonteLimpa((el('fonte')||{}).value||'');
+  const tags=((el('tags')||{}).value||'').split(',').map(t=>t.trim()).filter(Boolean);
+  const favorita=!!(el('favorita')||{}).checked;
+  const status=(el('status')||{}).value||'ativa';
+  if(formato==='certoerrado'){
+    const gab=(el('gabarito')||{}).value;
+    const norm=simNormalizaQuestao({afirmacao:questao,gabarito:gab,explicacao,fonte},'certoerrado');
+    return norm&&{...norm,tags,favorita,status};
+  }
+  const letras=['A','B','C','D','E'];
+  const alternativas=letras.map(letra=>{
+    const texto=((el('alt'+letra)||{}).value||'').trim();
+    return texto?{letra,texto}:null;
+  }).filter(Boolean);
+  const correta=(el('gabarito')||{}).value;
+  const norm=simNormalizaQuestao({questao,alternativas,correta,explicacao,fonte},'multipla');
+  return norm&&{...norm,tags,favorita,status};
+}
+// Aplica os campos editaveis SEM tocar em identidade, historico ou o que e do usuario
+// por natureza (_chaveForte, criadaEm, contadores). Devolve o que mudou de endereco, se
+// mudou, pra quem chamou decidir se reendereca o arquivo.
+function bancoAplicarEdicao(item,dados){
+  const enderecoAntes=montarChaveQ(item);
+  const mudouTexto=item.questao!==dados.questao||item.formato!==dados.formato;
+  item.questao=dados.questao; item.formato=dados.formato;
+  item.alternativas=dados.alternativas; item.correta=dados.correta;
+  item.explicacao=dados.explicacao; item.fonte=dados.fonte;
+  item.tags=dados.tags; item.favorita=dados.favorita; item.status=dados.status;
+  if(mudouTexto){
+    const chaveForteAntes=item._chaveForte;
+    item._chaveForte=acervoChave2(item);
+    bancoReenderecarArquivo(enderecoAntes,chaveForteAntes,item);
+    return true;
+  }
+  return false;
+}
+// Corrige toda referencia do arquivo de provas que apontava pro endereco/identidade
+// ANTIGOS desta questao, pra apontar pros NOVOS. So mexe em quem realmente apontava pra
+// ELA (confere pela identidade forte quando existe, senao so pelo endereco — mesma
+// logica de desempate que provaDoArquivo ja usa pra ler).
+function bancoReenderecarArquivo(enderecoAntes,chaveForteAntes,item){
+  let tocou=false;
+  (db.provasArquivo||[]).forEach(a=>{
+    (a.chaves||[]).forEach((k,i)=>{
+      if(k!==enderecoAntes)return;
+      if(a.chaves2&&a.chaves2[i]&&a.chaves2[i]!==chaveForteAntes)return;   // era outra colisao
+      a.chaves[i]=montarChaveQ(item);
+      if(a.chaves2)a.chaves2[i]=item._chaveForte;
+      tocou=true;
+    });
+  });
+  if(tocou)provarqSalvar();
+}
+function bancoCardHTML(x){
+  const q=x.q;
+  const cf=q._chaveForte;
+  if(cf&&bancoEditando.has(cf))return bancoEditorHTML(q,'edit');
+  const taxa=bancoTaxaAcerto(q);
+  return`<div class="banco-item" id="banco-card-${cf}">
+    <div class="banco-item-txt">${escapeHtml((q.questao||'').slice(0,140))}${(q.questao||'').length>140?'…':''}</div>
+    <div class="banco-item-meta">
+      <span>${q.kingdomIcon||'📘'} ${escapeHtml(q.subName||'—')}</span>
+      <span>${(q.formato||'multipla')==='certoerrado'?'✔️✖️':'🔤'}</span>
+      ${taxa!=null?`<span title="${q.acertos}/${q.vezesRespondida}">${taxa}% de acerto</span>`:'<span style="color:var(--muted)">nunca respondida</span>'}
+      ${q.favorita?'<span>⭐</span>':''}
+      ${q.status&&q.status!=='ativa'?`<span>${q.status==='revisar'?'🚩 revisar':'🗄️ arquivada'}</span>`:''}
+      ${(q.tags||[]).map(t=>`<span class="banco-tag">#${escapeHtml(t)}</span>`).join('')}
+      ${cf?`<button class="btn btn-xs btn-ghost" style="margin-left:auto" onclick="bancoEditarAbrir('${cf}')"><i class="fa fa-pen"></i> Editar</button>`:''}
+    </div>
+  </div>`;
+}
+// Um form so, reaproveitado por editar/criar — a diferenca e so o que ja vem preenchido
+// e o que o botao Salvar chama por baixo.
+function bancoEditorHTML(q,modo){
+  const cf=(q&&q._chaveForte)||'';
+  const prefixo=modo==='criar'?'banco-novo-':'banco-edit-'+cf+'-';
+  const formato=(q&&q.formato)||'certoerrado';
+  const alts=(q&&q.alternativas)||[];
+  const altDe=letra=>(alts.find(a=>a.letra===letra)||{}).texto||'';
+  return`<div class="banco-item banco-item-editando" id="${modo==='criar'?'banco-card-novo':'banco-card-'+cf}">
+    <div class="banco-edit-linha">
+      <select id="${prefixo}formato" class="inp" style="width:auto" onchange="bancoFormatoTrocou('${prefixo}')">
+        <option value="certoerrado"${formato==='certoerrado'?' selected':''}>✔️✖️ Certo/Errado</option>
+        <option value="multipla"${formato==='multipla'?' selected':''}>🔤 Múltipla escolha</option>
+      </select>
+    </div>
+    <textarea id="${prefixo}questao" class="inp" spellcheck="true" placeholder="Enunciado..."
+      style="width:100%;min-height:70px;font-size:12px;line-height:1.5;margin-top:6px">${escapeHtml((q&&q.questao)||'')}</textarea>
+    <div id="${prefixo}alts" style="margin-top:6px">${bancoAltsHTML(prefixo,formato,altDe)}</div>
+    <div class="banco-edit-linha" style="margin-top:6px">
+      <label style="font-size:10.5px;color:var(--muted);font-weight:700">Gabarito:</label>
+      <select id="${prefixo}gabarito" class="inp" style="width:auto">${bancoGabaritoOpcoesHTML(formato,alts,(q&&q.correta)||'')}</select>
+    </div>
+    <textarea id="${prefixo}explicacao" class="inp" placeholder="Explicação (opcional)..."
+      style="width:100%;min-height:44px;font-size:11.5px;margin-top:6px">${escapeHtml((q&&q.explicacao)||'')}</textarea>
+    <input id="${prefixo}fonte" class="inp" placeholder="Fonte (opcional)..." value="${escapeHtml((q&&q.fonte)||'')}" style="margin-top:6px">
+    <div class="banco-edit-linha" style="margin-top:6px">
+      <input id="${prefixo}tags" class="inp" style="flex:1" placeholder="tags, separadas, por vírgula" value="${escapeHtml(((q&&q.tags)||[]).join(', '))}">
+      <label class="banco-check"><input type="checkbox" id="${prefixo}favorita"${q&&q.favorita?' checked':''}> ⭐ favorita</label>
+      <select id="${prefixo}status" class="inp" style="width:auto">
+        <option value="ativa"${(!q||q.status==='ativa'||!q.status)?' selected':''}>ativa</option>
+        <option value="revisar"${q&&q.status==='revisar'?' selected':''}>🚩 revisar</option>
+        <option value="arquivada"${q&&q.status==='arquivada'?' selected':''}>🗄️ arquivada</option>
+      </select>
+    </div>
+    <div class="banco-edit-linha" style="margin-top:8px">
+      <button class="btn btn-sm btn-primary" onclick="${modo==='criar'?'bancoCriarSalvar()':`bancoEditarSalvar('${cf}')`}"><i class="fa fa-check"></i> Salvar</button>
+      <button class="btn btn-sm btn-ghost" onclick="${modo==='criar'?'bancoCriarCancelar()':`bancoEditarCancelar('${cf}')`}">Cancelar</button>
+    </div>
+  </div>`;
+}
+function bancoAltsHTML(prefixo,formato,altDe){
+  if(formato!=='multipla')return'';
+  return['A','B','C','D','E'].map(letra=>
+    `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <b style="font-size:11px;color:var(--muted);width:14px">${letra})</b>
+      <input id="${prefixo}alt${letra}" class="inp" style="flex:1;padding:5px 8px;font-size:11.5px"
+        placeholder="${letra==='A'||letra==='B'?'obrigatória':'opcional'}" value="${escapeHtml((altDe&&altDe(letra))||'')}">
+    </div>`).join('');
+}
+function bancoGabaritoOpcoesHTML(formato,alts,atual){
+  if(formato==='certoerrado')
+    return`<option value="C"${atual==='C'?' selected':''}>Certo</option><option value="E"${atual==='E'?' selected':''}>Errado</option>`;
+  return['A','B','C','D','E'].map(l=>`<option value="${l}"${atual===l?' selected':''}>${l}</option>`).join('');
+}
+function bancoFormatoTrocou(prefixo){
+  const formato=document.getElementById(prefixo+'formato').value;
+  const altsEl=document.getElementById(prefixo+'alts');
+  if(altsEl)altsEl.innerHTML=bancoAltsHTML(prefixo,formato,l=>(document.getElementById(prefixo+'alt'+l)||{}).value||'');
+  const gabEl=document.getElementById(prefixo+'gabarito');
+  if(gabEl)gabEl.innerHTML=bancoGabaritoOpcoesHTML(formato,[],'');
+}
 function bancoListaItensHTML(pool){
   if(!pool.length)return'<div class="empty" style="padding:14px 0"><p style="font-size:11px">Nada com esse filtro.</p></div>';
-  return pool.slice(0,30).map(x=>{
-    const q=x.q;
-    const taxa=bancoTaxaAcerto(q);
-    return`<div class="banco-item">
-      <div class="banco-item-txt">${escapeHtml((q.questao||'').slice(0,140))}${(q.questao||'').length>140?'…':''}</div>
-      <div class="banco-item-meta">
-        <span>${q.kingdomIcon||'📘'} ${escapeHtml(q.subName||'—')}</span>
-        <span>${(q.formato||'multipla')==='certoerrado'?'✔️✖️':'🔤'}</span>
-        ${taxa!=null?`<span title="${q.acertos}/${q.vezesRespondida}">${taxa}% de acerto</span>`:'<span style="color:var(--muted)">nunca respondida</span>'}
-        ${q.favorita?'<span>⭐</span>':''}
-      </div>
-    </div>`;
-  }).join('');
+  return pool.slice(0,30).map(bancoCardHTML).join('');
+}
+function bancoEditarAbrir(cf){
+  bancoEditando=new Set([cf]);   // um por vez: dois forms abertos juntos e's confuso pra digitar
+  bancoListaAberta=true;
+  bancoListaRefrescar();
+}
+function bancoEditarCancelar(cf){
+  bancoEditando.delete(cf);
+  bancoListaRefrescar();
+}
+function bancoEditarSalvar(cf){
+  const item=bancoItemPorChaveForte(cf);
+  if(!item){toast('⚠️ Essa questão não existe mais no banco.','var(--orange)');return;}
+  const dados=bancoLerForm('banco-edit-'+cf+'-');
+  if(!dados){toast('⚠️ Confira o gabarito — ele precisa bater com uma alternativa de verdade.','var(--red)');return;}
+  const mudouEndereco=bancoAplicarEdicao(item,dados);
+  bancoEditando.delete(cf);
+  acervoSalvar();
+  saveDB();
+  bancoListaRefrescar();
+  toast(mudouEndereco
+    ?'✏️ Questão corrigida — provas já arquivadas que a citavam foram reendereçadas.'
+    :'✏️ Questão corrigida.','var(--green)');
+}
+// Abrir/fechar/salvar criar e importar usam RENDER CHEIO da aba, nao o refresco visado —
+// diferente do campo de busca, aqui nao ha foco de digitacao pra perder a cada clique, e o
+// banco vazio precisa poder trocar de "vazio" pro painel de filtro completo (e vice-versa
+// ao cancelar sem ter criado nada) — o refresco visado so mexe dentro de um esqueleto que,
+// vazio, nem existe ainda.
+function bancoCriarAbrir(){
+  bancoCriando=true;
+  bancoListaAberta=true;
+  renderBancoScreen();
+}
+function bancoCriarCancelar(){
+  bancoCriando=false;
+  renderBancoScreen();
+}
+// Adiciona ou funde no acervo. Reaproveita a MESMA decisao de identidade que
+// acervoGuardarProva ja usa (acervoChave2), entao uma questao criada a mao ou importada
+// que por acaso ja exista no banco (mesmo texto e formato) engorda a que ja tinha, em vez
+// de duplicar — e ela ainda entra com os contadores/campos que ja tinha, intactos.
+function bancoAdicionarOuFundir(dados,origem){
+  db.acervo=db.acervo||[];
+  const chave=acervoChave2(dados);
+  const velha=db.acervo.find(q=>acervoChave2De(q)===chave);
+  if(velha){
+    let mudou=false;
+    ACERVO_ENRIQUECE.forEach(c=>{
+      if(acervoTem(dados[c])&&!acervoTem(velha[c])){velha[c]=dados[c];mudou=true;}
+    });
+    if(dados.tags&&dados.tags.length&&!(velha.tags||[]).length){velha.tags=dados.tags;mudou=true;}
+    return{novo:false,mudou};
+  }
+  const nova={...dados,_chaveForte:chave,...acervoCamposNovos(origem)};
+  db.acervo.unshift(nova);
+  return{novo:true,mudou:true};
+}
+function bancoCriarSalvar(){
+  const dados=bancoLerForm('banco-novo-');
+  if(!dados){toast('⚠️ Confira o enunciado e o gabarito — ele precisa bater com uma alternativa de verdade.','var(--red)');return;}
+  const subId=(document.getElementById('banco-novo-assunto')||{}).value;
+  const sub=subId&&simFindSub(subId);
+  if(!sub){toast('⚠️ Escolha o assunto — é por ele que a questão entra nos filtros e no montar.','var(--red)');return;}
+  let kingdomId='',topicName='';
+  db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>{if((t.subtopics||[]).some(s=>s.id===subId)){kingdomId=k.id;topicName=t.name;}}));
+  const kingdom=db.kingdoms.find(k=>k.id===kingdomId);
+  Object.assign(dados,{subId:sub.id,subName:sub.name,topicName,
+    kingdomId,kingdomName:kingdom?kingdom.name:'',kingdomIcon:kingdom?kingdom.icon:''});
+  const r=bancoAdicionarOuFundir(dados,'manual');
+  bancoCriando=false;
+  acervoAparar(); acervoSalvar();
+  renderBancoScreen();
+  toast(r.novo?'✅ Questão criada e guardada no banco.':'✅ Já existia uma igual — os campos vazios foram preenchidos.','var(--green)');
+}
+function bancoImportarAbrir(){bancoImportando=true;bancoListaAberta=true;renderBancoScreen();}
+function bancoImportarCancelar(){bancoImportando=false;renderBancoScreen();}
+// Mesmo parser da colagem de prova (extractAIJson + o resgate pra resposta cortada) e o
+// mesmo normalizador (simNormalizaQuestao) — o formato que a IA devolve e igual nos dois
+// casos, so o destino que muda: aqui vai direto pro banco, sem virar prova primeiro.
+function bancoImportarProcessar(){
+  const ta=document.getElementById('banco-importar-txt');
+  if(!ta)return;
+  const subId=(document.getElementById('banco-importar-assunto')||{}).value;
+  const sub=subId&&simFindSub(subId);
+  if(!sub){toast('⚠️ Escolha o assunto que estas questões pertencem.','var(--red)');return;}
+  const bruto=(ta.value||'').trim();
+  if(!bruto){toast('⚠️ Cole o JSON primeiro.','var(--red)');return;}
+  let arr=null;
+  try{arr=extractAIJson(bruto);}catch(e){arr=simColarResgatar(bruto);}
+  if(!Array.isArray(arr)){toast('❌ Não achei uma lista de questões nesse texto. Cole um array JSON, do [ até o ].','var(--red)');return;}
+  let kingdomId='',topicName='';
+  db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>{if((t.subtopics||[]).some(s=>s.id===subId)){kingdomId=k.id;topicName=t.name;}}));
+  const kingdom=db.kingdoms.find(k=>k.id===kingdomId);
+  let novas=0,fundidas=0,descartadas=0;
+  arr.forEach(item=>{
+    if(!item||typeof item!=='object'){descartadas++;return;}
+    const fmt=(item.alternativas&&Array.isArray(item.alternativas)&&item.alternativas.length>2)?'multipla':'certoerrado';
+    const norm=simNormalizaQuestao(item,fmt);
+    if(!norm){descartadas++;return;}
+    Object.assign(norm,{subId:sub.id,subName:sub.name,topicName,
+      kingdomId,kingdomName:kingdom?kingdom.name:'',kingdomIcon:kingdom?kingdom.icon:''});
+    const r=bancoAdicionarOuFundir(norm,'importada');
+    if(r.novo)novas++; else if(r.mudou)fundidas++;
+  });
+  if(!novas&&!fundidas){toast('❌ Nenhuma questão aproveitável nesse JSON.','var(--red)');return;}
+  acervoAparar(); acervoSalvar();
+  ta.value=''; bancoImportando=false;
+  renderBancoScreen();
+  toast(`📥 ${novas} questão(ões) nova(s)${fundidas?` · ${fundidas} já existiam e ganharam o que faltava`:''}${descartadas?` · ${descartadas} descartada(s) (gabarito não bate com as alternativas)`:''}.`,'var(--green)');
 }
 // O bloco de busca+filtros+lista, plugado logo abaixo dos controles de montar. So os
 // quatro que ja funcionam sem o editor de questao (proximo passo): texto, formato, faixa
 // de acerto, nunca respondida. status/favorita/tags sobem junto com o editor.
+function bancoAssuntoSelectHTML(id,selecionado){
+  const ix=simIndiceAssuntos();
+  const porReino={};
+  ix.forEach(c=>{(porReino[c.kingdom.id]=porReino[c.kingdom.id]||{nome:c.kingdom.name,itens:[]}).itens.push(c);});
+  return`<select id="${id}" class="inp" style="width:auto">
+    <option value="">Escolha o assunto...</option>
+    ${Object.values(porReino).map(g=>`<optgroup label="${escapeHtml(g.nome)}">
+      ${g.itens.map(c=>`<option value="${c.sub.id}"${selecionado===c.sub.id?' selected':''}>${escapeHtml(c.sub.name)}</option>`).join('')}
+    </optgroup>`).join('')}
+  </select>`;
+}
+// So um select (agrupado por reino via optgroup) — nao precisa de um segundo select so
+// pro reino: kingdomId/topicName sao derivados do subId escolhido, do mesmo jeito que
+// bancoImportarProcessar ja faz.
+function bancoAssuntoLinhaHTML(id,selecionado){
+  return`<div class="banco-edit-linha" style="margin-top:6px">
+    <label style="font-size:10.5px;color:var(--muted);font-weight:700">Assunto:</label>
+    ${bancoAssuntoSelectHTML(id,selecionado||'')}
+  </div>`;
+}
+// Usado tanto no primeiro render (bancoFiltrosHTML) quanto no refresco visado
+// (bancoListaRefrescar) — sem isto, abrir "Nova questão"/"Importar em lote" nao
+// aparecia, porque o refresco so tocava a lista de itens, nunca esses dois blocos.
+function bancoListaConteudoHTML(pool){
+  return(bancoCriando?bancoEditorHTML(null,'criar')+bancoAssuntoLinhaHTML('banco-novo-assunto',''):'')
+        +(bancoImportando?bancoImportarHTML():'')
+        +(bancoListaAberta?bancoListaItensHTML(pool):'');
+}
+function bancoImportarHTML(){
+  return`<div class="banco-item banco-item-editando" id="banco-card-importar">
+    ${bancoAssuntoLinhaHTML('banco-importar-assunto','')}
+    <textarea id="banco-importar-txt" class="inp" spellcheck="false"
+      placeholder="Cole aqui o array JSON de questões (do [ até o ])..."
+      style="width:100%;min-height:120px;font-size:11.5px;font-family:monospace;margin-top:6px"></textarea>
+    <div class="banco-edit-linha" style="margin-top:8px">
+      <button class="btn btn-sm btn-primary" onclick="bancoImportarProcessar()"><i class="fa fa-file-import"></i> Importar</button>
+      <button class="btn btn-sm btn-ghost" onclick="bancoImportarCancelar()">Cancelar</button>
+    </div>
+  </div>`;
+}
 function bancoFiltrosHTML(){
   const f=bancoFiltro;
   const pool=bancoPoolFiltrado();
+  const tags=bancoTagsExistentes();
   return`<div class="banco-filtros">
     <div class="banco-filtros-linha">
       <input id="banco-filtro-texto" class="inp" type="search" placeholder="Buscar no enunciado..."
@@ -13946,6 +14253,8 @@ function bancoFiltrosHTML(){
       </select>
       <label class="banco-check"><input type="checkbox" ${f.naoRespondida?'checked':''}
         onchange="bancoFiltroMudouNaoRespondida(this)"> nunca respondida</label>
+      <label class="banco-check"><input type="checkbox" ${f.favorita?'checked':''}
+        onchange="bancoFiltroMudouFavorita(this)"> ⭐ favorita</label>
     </div>
     <div class="banco-filtros-linha">
       <label style="font-size:10.5px;color:var(--muted);font-weight:700">Taxa de acerto entre</label>
@@ -13955,13 +14264,29 @@ function bancoFiltrosHTML(){
       <input class="inp banco-faixa" type="number" min="0" max="100" placeholder="100"
         value="${f.faixaMax==null?'':f.faixaMax}" onchange="bancoFiltroMudouFaixa('faixaMax',this)">
       <span style="color:var(--muted);font-size:10.5px">%</span>
+      <select id="banco-filtro-status" class="inp" style="width:auto" onchange="bancoFiltroMudouStatus(this)">
+        <option value=""${f.status?'':' selected'}>Qualquer status</option>
+        <option value="ativa"${f.status==='ativa'?' selected':''}>ativa</option>
+        <option value="revisar"${f.status==='revisar'?' selected':''}>🚩 revisar</option>
+        <option value="arquivada"${f.status==='arquivada'?' selected':''}>🗄️ arquivada</option>
+      </select>
       ${bancoFiltroTemAlgo()?`<button class="btn btn-xs btn-ghost" onclick="bancoFiltroLimpar();renderSimGeralScreen()" style="margin-left:auto">Limpar filtro</button>`:''}
     </div>
+    ${tags.length?`<div class="banco-filtros-linha">
+      <label style="font-size:10.5px;color:var(--muted);font-weight:700">Tags:</label>
+      ${tags.map(t=>`<label class="banco-check"><input type="checkbox" ${f.tags.has(t)?'checked':''}
+        onchange="bancoFiltroMudouTag('${escapeHtml(t)}',this)">#${escapeHtml(t)}</label>`).join('')}
+    </div>`:''}
     <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
       <span id="banco-filtro-conta" style="font-size:10.5px;font-weight:700;color:var(--muted)">${bancoFiltroContaHTML(pool)}</span>
       <button id="banco-filtro-ver" class="sg-mais" onclick="bancoListaToggle()" style="margin:0">${bancoListaAberta?'▴ esconder':`▾ ver (${Math.min(pool.length,30)}${pool.length>30?' de '+pool.length:''})`}</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-xs btn-ghost" onclick="bancoCriarAbrir()"><i class="fa fa-plus"></i> Nova questão</button>
+      <button class="btn btn-xs btn-ghost" onclick="bancoImportarAbrir()"><i class="fa fa-file-import"></i> Importar em lote</button>
     </div>
-    <div id="banco-filtro-lista" class="banco-lista">${bancoListaAberta?bancoListaItensHTML(pool):''}</div>
+    <div id="banco-filtro-lista" class="banco-lista">
+      ${bancoListaConteudoHTML(pool)}
+    </div>
   </div>`;
 }
 // A aba inteira. montarHTML continua devolvendo '' quando nao ha questao nenhuma — o
@@ -13970,6 +14295,8 @@ function bancoFiltrosHTML(){
 function bancoHTML(){
   const m=montarHTML();
   if(m)return m;
+  // Banco vazio nao pode deixar criar/importar inalcancaveis: sao as duas formas de
+  // colocar a PRIMEIRA questao ai dentro sem depender de fazer uma prova pela IA antes.
   return`<div class="section-card">
     <div class="sec-title" style="margin-bottom:4px">📚 Banco de Questões</div>
     <div class="empty"><i class="fa fa-layer-group"></i>
@@ -13978,9 +14305,15 @@ function bancoHTML(){
         Ele enche sozinho: toda questão de prova que você faz entra aqui e <b>fica</b> —
         não sai mais, nem quando a prova sai da lista de Minhas Provas.
         Importe um caderno em <b>Caderno da Banca</b> ou cole uma prova em
-        <b>Minhas Provas</b> pra começar.
+        <b>Minhas Provas</b> pra começar — ou crie a primeira questão você mesmo, aqui embaixo.
       </p>
     </div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:8px;flex-wrap:wrap">
+      <button class="btn btn-xs btn-ghost" onclick="bancoCriarAbrir()"><i class="fa fa-plus"></i> Nova questão</button>
+      <button class="btn btn-xs btn-ghost" onclick="bancoImportarAbrir()"><i class="fa fa-file-import"></i> Importar em lote</button>
+    </div>
+    ${bancoCriando?bancoEditorHTML(null,'criar')+bancoAssuntoLinhaHTML('banco-novo-assunto',''):''}
+    ${bancoImportando?bancoImportarHTML():''}
   </div>`;
 }
 function montarHTML(){
@@ -26246,9 +26579,22 @@ window.resumoUsarComoEsta=resumoUsarComoEsta;
 window.bancoFiltroMudouTexto=bancoFiltroMudouTexto;
 window.bancoFiltroMudouFormato=bancoFiltroMudouFormato;
 window.bancoFiltroMudouNaoRespondida=bancoFiltroMudouNaoRespondida;
+window.bancoFiltroMudouFavorita=bancoFiltroMudouFavorita;
+window.bancoFiltroMudouStatus=bancoFiltroMudouStatus;
+window.bancoFiltroMudouTag=bancoFiltroMudouTag;
 window.bancoFiltroMudouFaixa=bancoFiltroMudouFaixa;
 window.bancoFiltroLimpar=bancoFiltroLimpar;
 window.bancoListaToggle=bancoListaToggle;
+window.bancoFormatoTrocou=bancoFormatoTrocou;
+window.bancoEditarAbrir=bancoEditarAbrir;
+window.bancoEditarCancelar=bancoEditarCancelar;
+window.bancoEditarSalvar=bancoEditarSalvar;
+window.bancoCriarAbrir=bancoCriarAbrir;
+window.bancoCriarCancelar=bancoCriarCancelar;
+window.bancoCriarSalvar=bancoCriarSalvar;
+window.bancoImportarAbrir=bancoImportarAbrir;
+window.bancoImportarCancelar=bancoImportarCancelar;
+window.bancoImportarProcessar=bancoImportarProcessar;
 window.provaRestaurar=provaRestaurar;
 window.montarQtdGravar=montarQtdGravar;
 window.comentarProva=comentarProva;
