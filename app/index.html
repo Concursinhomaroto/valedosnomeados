@@ -12342,6 +12342,27 @@ function acervoLimparQuestao(q){
 // Campos que a versao que chega pode ter e a guardada nao.
 const ACERVO_ENRIQUECE=['explicacao','fonte','apoioWeb','minhaNota','textoApoio'];
 function acervoTem(v){return Array.isArray(v)?v.length>0:!!(v&&String(v).trim());}
+// montarChaveQ (120 chars, sem formato) e um ENDERECO: fica gravado dentro do arquivo de
+// provas (chaves[]) e nao pode mudar de definicao, senao provas ja arquivadas param de
+// resolver. Mas como ENDERECO ele e fraco pra decidir IDENTIDADE: dois itens certo/errado
+// da Cebraspe costumam compartilhar um enunciado longo e divergir so na clausula final —
+// "...sem previsao legal expressa" vs "...mediante convenio formal" — e os 120 primeiros
+// caracteres saem identicos. A questao que chega depois era tratada como repeticao da
+// primeira e descartada, sem aviso.
+//
+// acervoChave2 e a IDENTIDADE de verdade: hash do enunciado INTEIRO (sem cortar) mais o
+// formato. Reaproveita o backupHash (djb2 + tamanho) que ja existe pro diff do backup —
+// nao precisa de biblioteca nova, e colisao exigiria dois enunciados diferentes baterem
+// no hash E terem exatamente o mesmo tamanho. So decide "e a mesma questao ou nao" nos
+// tres lugares que tomam essa decisao: guardar prova no acervo, unir copias do acervo no
+// boot, e montar o pool de "montar prova sob medida". Nao mexe em como o arquivo de
+// provas ENDEREÇA uma questao — isso continua por montarChaveQ, de proposito.
+function acervoChave2(q){
+  return (q&&q.formato||'multipla')+'|'+backupHash(normalizeForDedup((q&&q.questao)||''));
+}
+// Le a identidade sem gravar nada — usa o campo se ja existir (caso comum: item que
+// passou pela migracao ou ja nasceu com ela), e cai pro calculo na hora se nao.
+function acervoChave2De(q){return (q&&q._chaveForte)||acervoChave2(q);}
 // Guarda as questoes de UMA prova que esta saindo. Carimba o que voce fez nelas
 // (_resp: C acertou, X errou) pra o filtro "so o que eu errei" continuar valendo
 // depois que a prova de origem ja nao existe.
@@ -12349,14 +12370,17 @@ function acervoGuardarProva(prova){
   db.acervo=db.acervo||[];
   const ts=prova.tentativas||[];
   const resp=(ts[ts.length-1]||{}).respostas||[];
+  // Chave por IDENTIDADE, nao por endereco: e aqui que a colisao do prefixo de 120
+  // caracteres fazia uma questao de verdade sumir dentro de outra.
   const porChave=new Map();
-  db.acervo.forEach(q=>{const k=montarChaveQ(q);if(k&&!porChave.has(k))porChave.set(k,q);});
+  db.acervo.forEach(q=>{const k=acervoChave2De(q);if(k&&!porChave.has(k))porChave.set(k,q);});
   let novas=0,melhoradas=0;
   (prova.questoes||[]).forEach((q,i)=>{
     if(questaoForaDaConta(q))return;              // item quebrado nao volta pro banco
-    const chave=montarChaveQ(q);
-    if(!chave)return;
     const limpa=acervoLimparQuestao(q);
+    if(!limpa.questao)return;
+    limpa._chaveForte=acervoChave2(limpa);         // gravado uma vez, nunca recalculado depois
+    const chave=limpa._chaveForte;
     const dada=resp[i]||'';
     if(dada)limpa._resp=(dada===q.correta)?'C':'X';
     const velha=porChave.get(chave);
@@ -12369,6 +12393,7 @@ function acervoGuardarProva(prova){
       ACERVO_ENRIQUECE.forEach(c=>{
         if(acervoTem(limpa[c])&&!acervoTem(velha[c])){velha[c]=limpa[c];mudou=true;}
       });
+      if(!velha._chaveForte)velha._chaveForte=chave;   // migra a antiga de passagem, sem custo extra
       if(!velha._resp&&limpa._resp){velha._resp=limpa._resp;mudou=true;}
       if(mudou)melhoradas++;
       return;
@@ -12423,10 +12448,13 @@ function acervoSalvar(agora){
 // fora —, entao nao existe conflito de verdade: juntar tudo e a resposta certa pra
 // "estudei no celular sem internet e tambem no computador".
 function acervoUnir(...listas){
+  // Por IDENTIDADE, nao por endereco — mesmo motivo do guardar: sem isso, duas questoes
+  // diferentes que colidissem no prefixo de 120 chars eram fundidas de novo TODA VEZ que
+  // o app abrisse, mesmo depois do guardar ja ter aprendido a separa-las.
   const vistos=new Set(); const junto=[];
   listas.forEach(l=>(Array.isArray(l)?l:[]).forEach(q=>{
     if(!q||!q.questao)return;
-    const k=montarChaveQ(q);
+    const k=acervoChave2De(q);
     if(!k||vistos.has(k))return;
     vistos.add(k); junto.push(q);
   }));
@@ -12451,7 +12479,12 @@ async function acervoCarregar(){
   const noRegistro=(db.acervo||[]).length;
   db.acervo=acervoUnir(nuvem,local,db.acervo);
   acervoAparar();
-  if(noRegistro||db.acervo.length!==((Array.isArray(nuvem)?nuvem:[]).length)){
+  // Migracao da chave forte: passagem unica, so preenche quem ainda nao tem. Idempotente
+  // por natureza — rodar de novo sobre um item que ja tem _chaveForte nao faz nada, entao
+  // abrir o app duas vezes nao recalcula e muito menos duplica.
+  let migrou=0;
+  db.acervo.forEach(q=>{if(!q._chaveForte){q._chaveForte=acervoChave2(q);migrou++;}});
+  if(noRegistro||migrou||db.acervo.length!==((Array.isArray(nuvem)?nuvem:[]).length)){
     acervoSalvar(true);
     if(noRegistro)saveDB();   // o registro principal encolhe na mesma hora
   }
@@ -12648,9 +12681,14 @@ function provaArquivar(prova){
     criadaEm:prova.criadaEm,arquivadaEm:new Date().toISOString(),
     formato:prova.formato||'multipla',nivel:prova.nivel||'dificil',
     origem:prova.origem||'ia',treino:!!prova.treino,limiteSec:prova.limiteSec||0,
-    // O que identifica cada questao dentro do banco. Mesma chave usada pelo dedup, entao
-    // uma questao que entrou por outra prova serve pra remontar esta aqui tambem.
+    // O que identifica cada questao dentro do banco. chaves e o ENDERECO (montarChaveQ,
+    // 120 chars) — nunca muda de definicao, senao provas ja arquivadas param de resolver.
+    // chaves2 e a IDENTIDADE forte, guardada junto so pra DESAMBIGUAR: se dois enderecos
+    // colidirem (dois itens certo/errado com o mesmo comeco), o leitor sabe qual das
+    // candidatas e a certa. Prova arquivada antes desta versao nao tem chaves2 — o leitor
+    // cai pro comportamento de sempre (primeira candidata) pra ela, sem quebrar nada.
     chaves:(prova.questoes||[]).map(q=>montarChaveQ(q)),
+    chaves2:(prova.questoes||[]).map(q=>acervoChave2De(q)),
     // O que VOCE marcou na questao: por que errou, e se reportou problema. Nao vai pro
     // banco (la a questao e so o enunciado, sem tentativa) e sem isto ia embora com a
     // prova — o painel Controle de Erros zerava sozinho conforme as provas envelheciam.
@@ -12671,13 +12709,28 @@ function provaArquivar(prova){
 function provaDoArquivo(id){
   const a=(db.provasArquivo||[]).find(x=>x.id===id);
   if(!a)return null;
+  // Agrupa por ENDERECO (pode ter mais de uma candidata, se dois itens colidirem no
+  // prefixo de 120 chars) — e desempata por IDENTIDADE quando a prova guardou chaves2.
   const mapa=new Map();
-  (db.acervo||[]).forEach(q=>{const k=montarChaveQ(q);if(k&&!mapa.has(k))mapa.set(k,q);});
+  (db.acervo||[]).forEach(q=>{
+    const k=montarChaveQ(q);
+    if(!k)return;
+    if(!mapa.has(k))mapa.set(k,[]);
+    mapa.get(k).push(q);
+  });
+  const acharQuestao=(k,i)=>{
+    const candidatas=mapa.get(k);
+    if(!candidatas||!candidatas.length)return null;
+    if(candidatas.length===1)return candidatas[0];
+    const alvo=(a.chaves2||[])[i];
+    if(alvo){const certa=candidatas.find(q=>acervoChave2De(q)===alvo);if(certa)return certa;}
+    return candidatas[0];   // prova antiga sem chaves2: comportamento de sempre
+  };
   const questoes=[];
   const origem=[];              // indice na tela -> indice original no esqueleto
   const tent=(a.tentativas||[]).map(t=>({...t,respostas:[]}));
   (a.chaves||[]).forEach((k,i)=>{
-    const q=mapa.get(k);
+    const q=acharQuestao(k,i);
     if(!q)return;
     origem.push(i);
     const mk=(a.marcacoes||{})[i]||(a.marcacoes||{})[String(i)];
@@ -13580,9 +13633,12 @@ function montarAcervo(){
   // Duas passadas. A primeira levanta quais questoes estao queimadas: se QUALQUER copia
   // dela foi marcada como desatualizada ou com problema, a questao esta quebrada e nao
   // volta — nem pela copia limpa que ficou numa prova montada antes da marcacao.
+  // Por IDENTIDADE (acervoChave2De), nao pelo endereco de 120 chars: senao marcar UM
+  // item certo/errado como desatualizado podia "queimar" de brinde outro item que so
+  // compartilhava o comeco do enunciado.
   const queimadas=new Set();
   (db.provas||[]).forEach(p=>(p.questoes||[]).forEach(q=>{
-    if(questaoForaDaConta(q))queimadas.add(montarChaveQ(q));
+    if(questaoForaDaConta(q))queimadas.add(acervoChave2De(q));
   }));
   // A mesma questao pode estar em varias provas (caderno importado duas vezes, e sempre
   // que ela entra num caderno montado). O historico dela e a SOMA das copias: errou se
@@ -13594,7 +13650,7 @@ function montarAcervo(){
     const ts=p.tentativas||[];
     const resp=(ts[ts.length-1]||{}).respostas||[];
     (p.questoes||[]).forEach((q,i)=>{
-      const chave=montarChaveQ(q);
+      const chave=acervoChave2De(q);
       if(queimadas.has(chave))return;
       const dada=resp[i]||'';
       const reg=porChave.get(chave)||{q,subId:q.subId,respondida:false,errou:false};
@@ -13607,7 +13663,7 @@ function montarAcervo(){
   // origem, mas carregam o carimbo do que voce fez nelas — entao "so o que eu errei"
   // continua valendo pra uma prova que voce fez em agosto e nao existe mais.
   (db.acervo||[]).forEach(q=>{
-    const chave=montarChaveQ(q);
+    const chave=acervoChave2De(q);
     if(!chave||queimadas.has(chave)||porChave.has(chave))return;
     porChave.set(chave,{q,subId:q.subId,respondida:!!q._resp,errou:q._resp==='X',doBanco:true});
   });
