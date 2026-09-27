@@ -853,6 +853,7 @@ nav{
 .sg-timer-display.sg-timer-warn{color:var(--red-t);animation:pulse 1s infinite;}
 .sg-progress{font-size:11px;font-weight:700;color:var(--muted);}
 .sg-q-tag{font-size:9.5px;font-weight:800;color:var(--pink-t);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;}
+.sim-q-historico{font-size:11px;font-weight:700;color:var(--accent);background:rgba(99,102,241,0.08);border-radius:8px;padding:5px 9px;margin-bottom:8px;display:inline-flex;align-items:center;gap:6px;}
 .prova-editar{padding:2px 6px!important;color:var(--muted)}
 .prova-editar:hover{color:var(--accent)}
 .sim-pausado{border:1.5px solid var(--accent);border-radius:14px;padding:12px 14px;
@@ -10079,14 +10080,14 @@ function findTopicIdForSub(subId){
 function criarFlashcardDeQuestaoErrada(subId,q){
   if(!db.flashcards)db.flashcards={};
   const topicId=findTopicIdForSub(subId);
-  if(!topicId)return;
+  if(!topicId)return false;
   // Só o enunciado na frente do card — colar a questão + todas as alternativas deixava o
   // card poluído e difícil de revisar rápido. A resposta certa (com a alternativa e a
   // explicação) já dá o contexto que falta, sem precisar repetir as opções erradas.
   const pergunta=(q.questao||'').trim();
   const chave=normalizeForDedup(pergunta);
   const jaExiste=Object.values(db.flashcards).some(c=>c.mbId===topicId&&normalizeForDedup(c.pergunta)===chave);
-  if(jaExiste)return;
+  if(jaExiste)return false;
   const altCorreta=(q.alternativas||[]).find(a=>a.letra===q.correta);
   // Num item certo/errado, "Resposta certa: E) Errado" nao ensina nada sozinho —
   // o que vale e o gabarito mais a explicacao de qual parte estava errada.
@@ -10101,6 +10102,18 @@ function criarFlashcardDeQuestaoErrada(subId,q){
   db.flashcards[id]={id,mbId:topicId,subId,...(subErro?{subNome:subErro.name}:{}),
     pergunta,resposta,tags:'banco-de-erros',dificuldade:2,acertos:0,erros:0,lastConf:0,
     criacao:new Date().toISOString(),ultimaRevisao:null};
+  return true;
+}
+// Botao manual da tela de resultado: acerto que quer revisar, erro de refacao (que nao
+// passa pelo caminho automatico) ou so controle explicito. O dedup por texto+miniboss ja
+// existente em criarFlashcardDeQuestaoErrada e o que faz chamar isso repetido ser seguro.
+function simEnviarParaFlashcard(i){
+  const active=simGeralActive;
+  if(!active||!active.questoes[i])return;
+  const q=active.questoes[i];
+  const criado=criarFlashcardDeQuestaoErrada(q.subId,q);
+  if(criado)saveDB();
+  toast(criado?'📇 Flashcard criado a partir desta questão.':'📇 Esta questão já tinha um flashcard (ou não achei o miniboss dela).','var(--accent)');
 }
 // Num item de duas alternativas, 50% e o resultado do chute. Somar certo/errado
 // e multipla escolha no mesmo balde compara coisas diferentes: 70% num
@@ -12445,6 +12458,19 @@ function acervoDificuldade(acertos,vezes){
   const taxa=acertos/vezes;
   return taxa>=0.75?'facil':(taxa>=0.4?'media':'dificil');
 }
+// Unico lugar que soma um resultado (C/X) nos contadores de um item do acervo — usado
+// tanto na eviction (prova no formato antigo, acervoGuardarProva) quanto, a partir do
+// passo 7, em tempo real na correcao (provaRegistrarTentativaNoAcervo), pra prova ja
+// convertida por chave nao ficar com o numero desatualizado enquanto ainda esta viva.
+function acervoAtualizarContadores(item,resultado){
+  if(!item||!resultado)return;
+  item.ultimoResultado=resultado;
+  item.vezesRespondida=(item.vezesRespondida||0)+1;
+  if(resultado==='C')item.acertos=(item.acertos||0)+1;
+  else item.erros=(item.erros||0)+1;
+  item.ultimaVezEm=new Date().toISOString();
+  item.dificuldadeAferida=acervoDificuldade(item.acertos,item.vezesRespondida);
+}
 // Campos que existem uma vez e nunca mudam depois de criados.
 function acervoCamposNovos(origem){
   return{tags:[],favorita:false,status:'ativa',
@@ -12495,26 +12521,21 @@ function acervoGuardarProva(prova){
       Object.entries(acervoCamposNovos(velha.origem)).forEach(([c,v])=>{
         if(velha[c]===undefined){velha[c]=v;mudou=true;}
       });
-      if(limpa.ultimoResultado){
+      // Prova ja convertida (passo 6) ja contou este resultado em tempo real, na
+      // correcao (provaRegistrarTentativaNoAcervo) — contar de novo aqui na eviction
+      // duplicaria vezesRespondida/acertos/erros. So prova no formato antigo (nunca
+      // passou pelo caminho ao vivo) ainda conta por aqui, como sempre foi.
+      if(limpa.ultimoResultado&&!prova.chaves){
         // newest wins pro resultado; os contadores SOMAM, nunca substituem.
-        velha.ultimoResultado=limpa.ultimoResultado;
-        velha.vezesRespondida=(velha.vezesRespondida||0)+1;
-        if(limpa.ultimoResultado==='C')velha.acertos=(velha.acertos||0)+1;
-        else velha.erros=(velha.erros||0)+1;
-        velha.ultimaVezEm=new Date().toISOString();
-        velha.dificuldadeAferida=acervoDificuldade(velha.acertos,velha.vezesRespondida);
+        acervoAtualizarContadores(velha,limpa.ultimoResultado);
         mudou=true;
       }
       if(mudou)melhoradas++;
       return;
     }
     Object.assign(limpa,acervoCamposNovos(prova.origem));
-    if(limpa.ultimoResultado){
-      limpa.vezesRespondida=1;
-      limpa.acertos=limpa.ultimoResultado==='C'?1:0;
-      limpa.erros=limpa.ultimoResultado==='X'?1:0;
-      limpa.ultimaVezEm=new Date().toISOString();
-      limpa.dificuldadeAferida=acervoDificuldade(limpa.acertos,limpa.vezesRespondida);
+    if(limpa.ultimoResultado&&!prova.chaves){
+      acervoAtualizarContadores(limpa,limpa.ultimoResultado);
     }
     porChave.set(chave,limpa);
     db.acervo.unshift(limpa);
@@ -12882,6 +12903,34 @@ function provaQuestoes(prova){
     return mk?{...q,motivo:mk.m||undefined,problematico:!!mk.p,marcas:mk.g||[]}:{...q,marcas:[]};
   });
 }
+// Contraparte AO VIVO do que acervoGuardarProva fazia so na eviction: atualiza os
+// contadores do item no banco assim que uma tentativa e corrigida, em vez de deixar os
+// numeros parados enquanto a prova (ja convertida por chave) ainda esta guardada em
+// db.provas — o que pode levar bastante tempo, ate as provas de folga do teto se
+// esvaziarem. Tambem carimba _historicoAntes em cada questao ATIVA antes de atualizar,
+// com o estado de ANTES desta tentativa — e o que deixa a tela de resultado comparar
+// "voce ja viu N vezes, acertava X%" sem se misturar com o resultado que acabou de entrar.
+// So se aplica a prova ja convertida (prova.chaves) — prova no formato antigo continua
+// contando so na eviction, como sempre.
+function provaRegistrarTentativaNoAcervo(prova,questoesAtivas,respostas){
+  if(!prova||!prova.chaves)return;
+  const porChave2=new Map();
+  (db.acervo||[]).forEach(q=>{const k=acervoChave2De(q);if(k&&!porChave2.has(k))porChave2.set(k,q);});
+  let mudou=false;
+  (questoesAtivas||[]).forEach((q,i)=>{
+    if(questaoForaDaConta(q))return;
+    const chave=(prova.chaves2||[])[i];
+    const item=chave&&porChave2.get(chave);
+    if(!item)return;
+    q._historicoAntes={vezes:item.vezesRespondida||0,acertos:item.acertos||0,
+                        dificuldade:item.dificuldadeAferida};
+    const dada=(respostas||[])[i]||'';
+    if(!dada)return;
+    acervoAtualizarContadores(item,dada===q.correta?'C':'X');
+    mudou=true;
+  });
+  if(mudou)acervoSalvar();
+}
 // Copia funda o bastante: cada entrada do overlay e um objeto piso (m/p/s/k), so o grifo
 // (g) e array de objetos por dentro dele.
 function provaMarcacoesClone(marcacoes){
@@ -13072,12 +13121,16 @@ function provaGuardar(active,assuntosResumo){
     // que e o que economiza o payload que sobe pro Firebase a cada saveDB).
     if(!(jaExiste.tentativas||[]).length)provaConverterParaReferencia(jaExiste);
     jaExiste.tentativas=jaExiste.tentativas||[];
-    jaExiste.tentativas.push(provaTentativaDe(active));
+    const tentativa=provaTentativaDe(active);
+    jaExiste.tentativas.push(tentativa);
+    provaRegistrarTentativaNoAcervo(jaExiste,active.questoes,tentativa.respostas);
     return jaExiste.id;
   }
   const prova=provaNova(active.questoes,active);
-  prova.tentativas=[provaTentativaDe(active)];
+  const tentativa=provaTentativaDe(active);
+  prova.tentativas=[tentativa];
   provaConverterParaReferencia(prova);
+  provaRegistrarTentativaNoAcervo(prova,active.questoes,tentativa.respostas);
   db.provas=db.provas||[];
   db.provas.unshift(prova);
   provasAparar();
@@ -13233,9 +13286,10 @@ function provaCorrigirRefacao(){
     // este gatilho tambem aqui, uma prova de treino nunca converteria pra referencia.
     if(!(prova.tentativas||[]).length)provaConverterParaReferencia(prova);
     prova.tentativas=prova.tentativas||[];
+    const respostas=active.questoes.map(q=>q.userAnswer||'');
     prova.tentativas.push({data:new Date().toISOString(),
-      respostas:active.questoes.map(q=>q.userAnswer||''),
-      acertos,tempoGastoSec:active.tempoGastoSec||0});
+      respostas,acertos,tempoGastoSec:active.tempoGastoSec||0});
+    provaRegistrarTentativaNoAcervo(prova,active.questoes,respostas);
   }
   if(active.tempoGastoSec>0){
     db.lifetimeSeconds=(db.lifetimeSeconds||0)+active.tempoGastoSec;
@@ -13319,6 +13373,16 @@ function simMotivoDe(id){
   return SIM_MOTIVOS.find(m=>m.id===id)
       ||[SIM_MOTIVO_SORTE,SIM_MOTIVO_DATADO].find(m=>m.id===id)||null;
 }
+// Ponte pro Banco de Questoes: marcar "item desatualizado" aqui tambem poe o item como
+// "revisar" la, pra aparecer separado na hora de organizar o banco — sem sobrepor uma
+// decisao que voce ja tenha tomado direto no Banco (so mexe se ainda estiver "ativa").
+// Por identidade (acervoChave2De), nao por indice: funciona tanto pra prova viva quanto
+// arquivada, e mesmo pra questao que ainda nem entrou no acervo (aí so nao acha nada).
+function simMotivoMarcarAcervoDatado(q){
+  const chave=acervoChave2De(q);
+  const item=chave&&(db.acervo||[]).find(x=>acervoChave2De(x)===chave);
+  if(item&&item.status==='ativa'){item.status='revisar';acervoSalvar();}
+}
 function simMotivoSalvar(i,id){
   const active=simGeralActive;
   if(!active||!active.questoes[i])return;
@@ -13335,6 +13399,7 @@ function simMotivoSalvar(i,id){
   if(q._histId&&!!q.problematico!==(novo===SIM_MOTIVO_DATADO.id)){
     toggleQuestaoProblematica(q.subId,q._histId,q._qIdxInHist);
   }
+  if(novo===SIM_MOTIVO_DATADO.id)simMotivoMarcarAcervoDatado(q);
   if(prova)provaMarcar(prova,i,q);
   // Revisando uma prova ARQUIVADA nao ha prova viva pra escrever: a marcacao vai direto
   // pro esqueleto no arquivo. Sem isto, classificar um erro olhando uma prova antiga era
@@ -13416,6 +13481,15 @@ function simExplicacaoHTML(q){
   const cls=certo===null?'':(certo?' expl-certo':' expl-errado');
   const selo=certo===null?'':`<span class="expl-selo">${certo?'✔️ CERTO':'✖️ ERRADO'}</span>`;
   return`<div class="sim-explain${cls}">${selo}${corpo}</div>`;
+}
+// So aparece quando provaRegistrarTentativaNoAcervo carimbou o estado de ANTES desta
+// tentativa (prova ja convertida por chave, questao ja tinha alguma vez anterior) — em
+// revisao/prova nova nao ha o que comparar, e o pill some sozinho.
+function simHistoricoAntesHTML(q){
+  const h=q._historicoAntes;
+  if(!h||!h.vezes)return'';
+  const pct=Math.round((h.acertos/h.vezes)*100);
+  return`<div class="sim-q-historico"><i class="fa fa-clock-rotate-left"></i> Você já viu esta questão ${h.vezes}× · acertava ${pct}%</div>`;
 }
 function simMotivoHTML(q,i){
   const certa=q.userAnswer===q.correta;
@@ -14944,6 +15018,7 @@ function simGeralResultsHTML(){
       ${active.questoes.map((q,i)=>`
         <div class="sim-q${q.problematico?' sim-q-flagged':''}">
           <div class="sg-q-tag">${q.kingdomIcon} ${q.kingdomName} · ${q.topicName} · ${q.subName}</div>
+          ${simHistoricoAntesHTML(q)}
           <div class="marca-zona"${active.provaId?` data-sub="${marcaChaveQuestao(active.provaId,i)}"`:''}>
           ${textoApoioHTML(q)}
           <div class="sim-q-text">${i+1}. ${escapeHtml(q.questao)}</div>
@@ -14962,7 +15037,10 @@ function simGeralResultsHTML(){
           ${simMotivoHTML(q,i)}
           ${simNotaHTML(q,i)}
           <div class="sim-flagged-banner" style="display:${questaoForaDaConta(q)?'':'none'}"><i class="fa fa-flag"></i> Fora da conta — não pesa no placar nem nas suas estatísticas.</div>
-          ${(active.refazendo||active.revisando)?'':`<button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="toggleQuestaoProblematica('${q.subId}','${q._histId}',${q._qIdxInHist})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>`}
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            ${(active.refazendo||active.revisando)?'':`<button class="btn btn-xs btn-ghost" onclick="toggleQuestaoProblematica('${q.subId}','${q._histId}',${q._qIdxInHist})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>`}
+            <button class="btn btn-xs btn-ghost" onclick="simEnviarParaFlashcard(${i})"><i class="fa fa-layer-group"></i> Mandar pro flashcard</button>
+          </div>
         </div>
       `).join('')}
     </div>
