@@ -46,6 +46,12 @@
   --orange:#c2410c;
   --red:#b91c1c;
   --pink:#be185d;
+  /* Confianca declarada (passo 8): certeza=roxo primario, duvida=ambar — as duas ja
+     existem (--accent/--orange-t). "Chutei" precisa de uma 3a leitura que nao dependa so
+     do matiz (dois usuarios daltonicos pra roxo x laranja ainda tem que distinguir): o
+     tom mais pesado/escuro que existe no tema claro. No escuro a logica inverte — o mais
+     "pesado" contra fundo escuro e o mais claro, nao o mais escuro. */
+  --conf-chute:#1b1730;
   --text:#2e1065;
   --text2:#5b21b6;
   --muted:#6d5f9c;   /* era #a78bfa, 2,72:1 sobre branco — legenda, data e placeholder ficavam ilegíveis */
@@ -113,6 +119,7 @@
   --danger:#b91c1c;
   --red-t:#f87171; --green-t:#4ade80; --orange-t:#fb923c;
     --cyan-t:#22d3ee; --pink-t:#f472b6; --gold-t:#fbbf24;
+  --conf-chute:#f5f3ff;
   --shadow:0 4px 24px rgba(0,0,0,0.35);
   --shadow2:0 8px 40px rgba(0,0,0,0.5);
   --map-bg:linear-gradient(160deg,#171528 0%,#1a1830 50%,#201d38 100%);
@@ -126,6 +133,7 @@
     --text:#ede9fe; --text2:#c4b5fd; --muted:#8b7fb8;
   --red-t:#f87171; --green-t:#4ade80; --orange-t:#fb923c;
     --cyan-t:#22d3ee; --pink-t:#f472b6; --gold-t:#fbbf24;
+    --conf-chute:#f5f3ff;
     --shadow:0 4px 24px rgba(0,0,0,0.35); --shadow2:0 8px 40px rgba(0,0,0,0.5);
     --map-bg:linear-gradient(160deg,#171528 0%,#1a1830 50%,#201d38 100%);
     --note-bg:#3d3315;
@@ -852,6 +860,40 @@ nav{
 .sg-timer-display{font-size:18px;font-weight:900;color:var(--accent);font-variant-numeric:tabular-nums;}
 .sg-timer-display.sg-timer-warn{color:var(--red-t);animation:pulse 1s infinite;}
 .sg-progress{font-size:11px;font-weight:700;color:var(--muted);}
+/* Progresso segmentado por confianca (passo 8): substitui "respondida/nao respondida"
+   por "com que confianca" — o proprio conceito central do redesenho, so que sem
+   repaginar a prova pra questao-unica (ela continua uma pagina rolavel so). */
+.sg-progress-wrap{display:flex;flex-direction:column;gap:4px;min-width:160px;flex:1;}
+.sg-progress-seg{display:flex;height:8px;border-radius:999px;overflow:hidden;background:var(--border);}
+.sg-progress-seg span{height:100%;}
+.sg-progress-seg .seg-certeza{background:var(--accent);}
+.sg-progress-seg .seg-duvida{background:var(--orange-t);}
+.sg-progress-seg .seg-chute{background:var(--conf-chute);}
+.sg-progress-legenda{font-size:9.5px;color:var(--muted);font-weight:700;display:flex;gap:9px;flex-wrap:wrap;}
+.sg-progress-legenda i{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:3px;}
+.sg-nav-strip{display:flex;gap:5px;overflow-x:auto;padding:8px 2px 2px;margin-top:6px;border-top:1px dashed var(--border);flex-basis:100%;width:100%;}
+.sg-nav-num{flex:0 0 auto;width:26px;height:26px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;font-size:10.5px;font-weight:800;cursor:pointer;background:var(--panel2);
+  border:1.5px solid var(--border);color:var(--muted);}
+.sg-nav-num.nc-certeza{background:var(--accent);color:#fff;border-color:var(--accent);}
+.sg-nav-num.nc-duvida{background:var(--orange-t);color:#fff;border-color:var(--orange-t);}
+.sg-nav-num.nc-chute{background:var(--conf-chute);color:var(--bg);border-color:var(--conf-chute);}
+.sg-nav-num.nc-revisar{box-shadow:0 0 0 2px var(--orange-t);}
+.sg-revisar-btn.ativo{background:var(--orange-t);color:#fff;border-color:var(--orange-t);}
+.sg-confianca{border-top:1px dashed var(--border);margin-top:10px;padding-top:10px;}
+.sg-confianca-pergunta{font-size:11px;font-weight:800;color:var(--muted);margin-bottom:8px;}
+.sg-confianca-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.sg-confianca-btn{border:1.5px solid var(--border);border-radius:11px;padding:8px 9px;text-align:left;
+  cursor:pointer;background:var(--panel2);}
+.sg-confianca-btn b{display:block;font-size:12.5px;margin-bottom:2px;}
+.sg-confianca-btn span{display:block;font-size:10.5px;color:var(--muted);font-weight:600;line-height:1.35;}
+.sg-confianca-btn.tipo-certeza.ativo{border-color:var(--accent);background:rgba(124,58,237,0.1);}
+.sg-confianca-btn.tipo-certeza.ativo b{color:var(--accent);}
+.sg-confianca-btn.tipo-duvida.ativo{border-color:var(--orange-t);background:rgba(194,65,12,0.1);}
+.sg-confianca-btn.tipo-duvida.ativo b{color:var(--orange-t);}
+.sg-confianca-btn.tipo-chute.ativo{border-color:var(--conf-chute);background:rgba(27,23,48,0.08);}
+.sg-confianca-btn.tipo-chute.ativo b{color:var(--conf-chute);}
+.sg-confianca-consequencia{font-size:10.5px;color:var(--orange-t);font-weight:700;margin-top:8px;}
 .sg-q-tag{font-size:9.5px;font-weight:800;color:var(--pink-t);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;}
 .sim-q-historico{font-size:11px;font-weight:700;color:var(--accent);background:rgba(99,102,241,0.08);border-radius:8px;padding:5px 9px;margin-bottom:8px;display:inline-flex;align-items:center;gap:6px;}
 .prova-editar{padding:2px 6px!important;color:var(--muted)}
@@ -12216,6 +12258,122 @@ async function generateSimuladoGeral(){
   }
   renderSimGeralScreen();
 }
+// Confianca declarada (passo 8): registrada ANTES de ver o gabarito, um clique so, sem
+// bloquear "Finalizar" — quem nao clica so fica sem a comparacao na tela de resultado
+// depois, igual quem nao grifa. E o que separa acerto real de sorte, coisa que o app
+// antes desta versao nao distinguia de jeito nenhum.
+const SG_CONFIANCAS=[
+  {id:'chute',lbl:'Chutei',desc:'Não fazia ideia',
+   consequencia:'se acertar, entra no deck "Acertei chutando" em vez de contar como domínio'},
+  {id:'duvida',lbl:'Fiquei na dúvida',desc:'Entre duas',
+   consequencia:'volta antes das que você acertou com certeza'},
+  {id:'certeza',lbl:'Tenho certeza',desc:'Sei de onde vem',
+   consequencia:'se errar, vira erro perigoso — é o pior tipo'}
+];
+function sgConfiancaDe(id){return SG_CONFIANCAS.find(c=>c.id===id)||null;}
+function sgConfiancaHTML(q,i){
+  const m=sgConfiancaDe(q.confianca);
+  return`<div class="sg-confianca" id="sg-confianca-${i}">
+    <div class="sg-confianca-pergunta">Antes de ver o gabarito — como você respondeu?</div>
+    <div class="sg-confianca-row">
+      ${SG_CONFIANCAS.map(c=>`<div class="sg-confianca-btn tipo-${c.id}${q.confianca===c.id?' ativo':''}" onclick="sgSetConfianca(${i},'${c.id}')">
+        <b>${c.lbl}</b><span>${c.desc}</span>
+      </div>`).join('')}
+    </div>
+    ${m?`<div class="sg-confianca-consequencia">${m.consequencia}</div>`:''}
+  </div>`;
+}
+function sgSetConfianca(qIdx,valor){
+  if(!simGeralActive||simGeralActive.corrected)return;
+  const q=simGeralActive.questoes[qIdx];
+  if(!q)return;
+  q.confianca=q.confianca===valor?'':valor;   // clicar de novo desmarca
+  const cx=document.getElementById('sg-confianca-'+qIdx);
+  if(cx)cx.outerHTML=sgConfiancaHTML(q,qIdx);
+  sgAtualizarProgresso();
+  simGeralSalvarAndamento();
+}
+// Bandeira leve da PROVA, pra voltar numa questao sem se perder no scroll — diferente de
+// "reportar problema" (que e sobre a QUESTAO, so aparece no resultado, depois do gabarito).
+function sgMarcarRevisarBtnHTML(q,i){
+  return`<button id="sg-revisar-${i}" class="btn btn-xs btn-ghost sg-revisar-btn${q.marcadoRevisar?' ativo':''}" onclick="sgToggleMarcarRevisar(${i})">
+    <i class="fa fa-bookmark"></i> ${q.marcadoRevisar?'Marcada':'Marcar pra revisar'}</button>`;
+}
+function sgToggleMarcarRevisar(qIdx){
+  if(!simGeralActive||simGeralActive.corrected)return;
+  const q=simGeralActive.questoes[qIdx];
+  if(!q)return;
+  q.marcadoRevisar=!q.marcadoRevisar;
+  const btn=document.getElementById('sg-revisar-'+qIdx);
+  if(btn)btn.outerHTML=sgMarcarRevisarBtnHTML(q,qIdx);
+  sgAtualizarProgresso();
+  simGeralSalvarAndamento();
+}
+function sgProgressoContagem(active){
+  const out={certeza:0,duvida:0,chute:0,vazio:0,total:active.questoes.length,marcadas:0};
+  active.questoes.forEach(q=>{
+    if(q.marcadoRevisar)out.marcadas++;
+    if(q.confianca==='certeza')out.certeza++;
+    else if(q.confianca==='duvida')out.duvida++;
+    else if(q.confianca==='chute')out.chute++;
+    else out.vazio++;
+  });
+  return out;
+}
+// A barra e por CONFIANCA, nao por respondida/nao-respondida — e o conceito central do
+// redesenho aplicado ao proprio indicador de progresso, sem precisar de tela nova.
+function sgProgressoSegHTML(active){
+  const c=sgProgressoContagem(active);
+  const pct=n=>c.total?(100*n/c.total):0;
+  return`<div class="sg-progress-wrap" id="sg-progress-wrap">
+    <div class="sg-progress-seg">
+      <span class="seg-certeza" style="width:${pct(c.certeza)}%"></span>
+      <span class="seg-duvida" style="width:${pct(c.duvida)}%"></span>
+      <span class="seg-chute" style="width:${pct(c.chute)}%"></span>
+    </div>
+    <div class="sg-progress-legenda">
+      <span><i style="background:var(--accent)"></i>certeza ${c.certeza}</span>
+      <span><i style="background:var(--orange-t)"></i>dúvida ${c.duvida}</span>
+      <span><i style="background:var(--conf-chute)"></i>chute ${c.chute}</span>
+      <span><i style="background:var(--border)"></i>sem confiança ${c.vazio}</span>
+      ${c.marcadas?`<span style="margin-left:auto;color:var(--orange-t)"><i class="fa fa-bookmark"></i> ${c.marcadas} pra revisar</span>`:''}
+    </div>
+  </div>`;
+}
+function sgNavNumClass(q){
+  if(q.confianca==='certeza')return'nc-certeza';
+  if(q.confianca==='duvida')return'nc-duvida';
+  if(q.confianca==='chute')return'nc-chute';
+  return'';
+}
+// Substitui a "grade de numeros" de 244px do mockup — aqui e uma tira que rola até a
+// questao em vez de trocar de pagina: a prova continua uma unica pagina rolavel.
+function sgNavStripHTML(active){
+  return`<div class="sg-nav-strip" id="sg-nav-strip">
+    ${active.questoes.map((q,i)=>`<div class="sg-nav-num ${sgNavNumClass(q)}${q.marcadoRevisar?' nc-revisar':''}" onclick="sgIrPara(${i})" title="Questão ${i+1}">${i+1}</div>`).join('')}
+  </div>`;
+}
+function sgIrPara(i){
+  const el=document.getElementById('sgq-'+i);
+  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+}
+// Cicla pra frente a partir da 1a marcada que ainda esta abaixo do topo visivel — sem
+// isso, clicar de novo sempre voltaria pra mesma primeira marcada da lista.
+function sgIrParaMarcadas(){
+  const qs=(simGeralActive&&simGeralActive.questoes)||[];
+  const marcadas=qs.map((q,i)=>q.marcadoRevisar?i:-1).filter(i=>i>=0);
+  if(!marcadas.length){toast('Nenhuma questão marcada pra revisar.','var(--muted)');return;}
+  const tops=marcadas.map(i=>{const el=document.getElementById('sgq-'+i);return el?el.getBoundingClientRect().top:Infinity;});
+  const proxima=marcadas.find((i,k)=>tops[k]>80);
+  sgIrPara(proxima==null?marcadas[0]:proxima);
+}
+function sgAtualizarProgresso(){
+  if(!simGeralActive)return;
+  const wrap=document.getElementById('sg-progress-wrap');
+  if(wrap)wrap.outerHTML=sgProgressoSegHTML(simGeralActive);
+  const strip=document.getElementById('sg-nav-strip');
+  if(strip)strip.outerHTML=sgNavStripHTML(simGeralActive);
+}
 function simGeralExamHTML(){
   const active=simGeralActive;
   const answered=active.questoes.filter(q=>q.userAnswer).length;
@@ -12223,10 +12381,13 @@ function simGeralExamHTML(){
     <div class="sg-timer-bar">
       <div id="sg-timer-display" class="sg-timer-display">⏱ --:--</div>
       <div class="sg-progress">${answered}/${active.questoes.length} respondidas</div>
+      ${sgProgressoSegHTML(active)}
       <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-ghost" onclick="sgIrParaMarcadas()" title="Pula pra próxima questão marcada pra revisar"><i class="fa fa-bookmark"></i> Ir pras marcadas</button>
         <button class="btn btn-sm btn-ghost" onclick="simGeralPausar()" title="Guarda as respostas, o grifo e o tempo. O relógio para até você voltar."><i class="fa fa-pause"></i> Pausar</button>
         <button class="btn btn-sm btn-pink" onclick="simGeralCorrigir()"><i class="fa fa-flag-checkered"></i> Finalizar Simulado</button>
       </div>
+      ${sgNavStripHTML(active)}
     </div>
     <div class="section-card" style="margin-top:12px">
       <div class="sim-ferramentas">
@@ -12234,8 +12395,11 @@ function simGeralExamHTML(){
         ${marcaPaletaHTML()}
       </div>
       ${active.questoes.map((q,i)=>`
-        <div class="sim-q sg-q">
-          <div class="sg-q-tag">${q.kingdomIcon} ${q.kingdomName} · ${q.topicName} · ${q.subName}</div>
+        <div class="sim-q sg-q" id="sgq-${i}">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="sg-q-tag" style="margin-bottom:0;flex:1;min-width:140px">${q.kingdomIcon} ${q.kingdomName} · ${q.topicName} · ${q.subName}</div>
+            ${sgMarcarRevisarBtnHTML(q,i)}
+          </div>
           <div class="marca-zona" data-sub="${marcaChaveAtiva(i)}">
           ${textoApoioHTML(q)}
           <div class="sim-q-text">${i+1}. ${escapeHtml(q.questao)}</div>
@@ -12243,6 +12407,7 @@ function simGeralExamHTML(){
           <div class="sim-alts${q.formato==='certoerrado'?' sim-alts-ce':''}">
             ${(q.alternativas||[]).map(alt=>`<div class="sim-alt${q.userAnswer===alt.letra?' sim-selected':''}" onclick="sgSelectAnswer(${i},'${escapeAttrJs(alt.letra)}')"><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`).join('')}
           </div>
+          ${sgConfiancaHTML(q,i)}
         </div>
       `).join('')}
       <button class="btn btn-sm btn-pink" style="width:100%;justify-content:center;margin-top:14px" onclick="simGeralCorrigir()"><i class="fa fa-flag-checkered"></i> Finalizar Simulado</button>
@@ -12420,7 +12585,7 @@ let acervoAvisou=false;
 // Os grifos ficam de fora de proposito: eles sao posicoes dentro do texto renderizado,
 // e ressuscitar posicao fora do lugar onde foi feita e pedir grifo torto.
 function acervoLimparQuestao(q){
-  const {userAnswer,motivo,marcas,_histId,_qIdxInHist,
+  const {userAnswer,motivo,marcas,_histId,_qIdxInHist,confianca,marcadoRevisar,
          revisado,problematico,ultimoResultado,...limpa}=q;
   return limpa;
 }
@@ -13073,7 +13238,7 @@ function provaAchar(id){return (db.provas||[]).find(p=>p.id===id)||null;}
 // resposta pertence a TENTATIVA, nao a questao. E o que permite refazer do zero e
 // comparar a 1a com a 2a sem duplicar o enunciado.
 function provaLimparQuestao(q){
-  const {userAnswer,_histId,_qIdxInHist,revisado,problematico,...limpa}=q;
+  const {userAnswer,confianca,marcadoRevisar,_histId,_qIdxInHist,revisado,problematico,...limpa}=q;
   return limpa;
 }
 // Uma prova no banco e so o enunciado + o gabarito. A tentativa e um evento separado,
@@ -13097,6 +13262,12 @@ function provaNova(questoes,meta){
 function provaTentativaDe(active){
   return{data:new Date().toISOString(),
          respostas:active.questoes.map(q=>q.userAnswer||''),
+         // Confianca declarada (passo 8): 'chute'/'duvida'/'certeza', na MESMA posicao da
+         // resposta — opcional, sempre foi e continua sendo (nao bloqueia Finalizar). Vazio
+         // aqui e o que separa tentativa velha (de antes deste recurso) de tentativa que
+         // teve a pergunta feita e nao foi respondida — os dois casos tem que ficar honestos
+         // na tela de resultado, sem se disfarcar um do outro.
+         confiancas:active.questoes.map(q=>q.confianca||''),
          acertos:active.questoes.filter(q=>q.userAnswer===q.correta).length,
          tempoGastoSec:active.tempoGastoSec||0};
 }
@@ -13287,8 +13458,9 @@ function provaCorrigirRefacao(){
     if(!(prova.tentativas||[]).length)provaConverterParaReferencia(prova);
     prova.tentativas=prova.tentativas||[];
     const respostas=active.questoes.map(q=>q.userAnswer||'');
+    const confiancas=active.questoes.map(q=>q.confianca||'');
     prova.tentativas.push({data:new Date().toISOString(),
-      respostas,acertos,tempoGastoSec:active.tempoGastoSec||0});
+      respostas,confiancas,acertos,tempoGastoSec:active.tempoGastoSec||0});
     provaRegistrarTentativaNoAcervo(prova,active.questoes,respostas);
   }
   if(active.tempoGastoSec>0){
