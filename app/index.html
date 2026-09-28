@@ -12383,8 +12383,8 @@ function simGeralExamHTML(){
       <div class="sg-progress">${answered}/${active.questoes.length} respondidas</div>
       ${sgProgressoSegHTML(active)}
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-sm btn-ghost" onclick="sgIrParaMarcadas()" title="Pula pra próxima questão marcada pra revisar"><i class="fa fa-bookmark"></i> Ir pras marcadas</button>
         <button class="btn btn-sm btn-ghost" onclick="simGeralPausar()" title="Guarda as respostas, o grifo e o tempo. O relógio para até você voltar."><i class="fa fa-pause"></i> Pausar</button>
+        <button class="btn btn-sm btn-ghost" onclick="sgIrParaMarcadas()" title="Pula pra próxima questão marcada pra revisar"><i class="fa fa-bookmark"></i> Ir pras marcadas</button>
         <button class="btn btn-sm btn-pink" onclick="simGeralCorrigir()"><i class="fa fa-flag-checkered"></i> Finalizar Simulado</button>
       </div>
       ${sgNavStripHTML(active)}
