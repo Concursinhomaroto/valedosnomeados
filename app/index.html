@@ -947,6 +947,71 @@ nav{
 .treinar-deck-desc{font-size:10.5px;color:var(--muted);font-weight:600;line-height:1.3;margin-top:2px;flex:1;}
 .treinar-avancado-faixa{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
   border:1.5px dashed var(--border);border-radius:12px;padding:10px 14px;margin-top:16px;font-size:11px;color:var(--muted);font-weight:700;}
+/* ===== Modo Treino completo — redesenho (prancha "5 · Treinar v2" / "6 · Sessão de treino") ===== */
+.treino-topo-entrada{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.treino-entrada{display:flex;flex-direction:column;gap:14px;}
+.treino-grid-2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;align-items:start;}
+@media (max-width:900px){.treino-grid-2{grid-template-columns:1fr;}}
+.treino-destaque{background:var(--accent-deep,#1b1730);color:#fff;border-radius:16px;padding:22px 24px;display:flex;flex-direction:column;}
+.treino-destaque-eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.08em;opacity:.75;}
+.treino-destaque-titulo{font-size:22px;font-weight:900;margin-top:6px;line-height:1.2;}
+.treino-destaque-sub{font-size:12.5px;opacity:.85;margin-top:8px;font-weight:600;}
+.treino-destaque-btn{margin-top:16px;background:#fff;color:var(--accent-deep,#1b1730);font-weight:800;justify-content:center;width:max-content;padding:10px 20px;}
+.treino-destaque-rodape{font-size:10.5px;opacity:.7;margin-top:14px;font-weight:600;display:flex;gap:6px;align-items:center;}
+.treino-placar-topo{display:flex;align-items:center;gap:16px;}
+.treino-placar-anel{width:64px;height:64px;border-radius:50%;border:5px solid var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.treino-placar-anel b{font-size:16px;font-weight:900;}
+.treino-placar-linhas{display:flex;flex-direction:column;gap:4px;font-size:11.5px;font-weight:700;color:var(--muted);}
+.pill-ok,.pill-bad,.pill-neutro{display:inline-block;padding:1px 7px;border-radius:999px;font-size:10.5px;font-weight:800;}
+.pill-ok{background:rgba(22,163,74,.14);color:var(--green-t,#16a34a);}
+.pill-bad{background:rgba(220,38,38,.12);color:var(--red-t,#dc2626);}
+.pill-neutro{background:var(--panel2);color:var(--text);}
+.empty-mini{font-size:11.5px;color:var(--muted);font-weight:600;padding:8px 0;}
+.treino-foco-linha{display:grid;grid-template-columns:1fr 90px 34px auto;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;}
+.treino-foco-linha:last-child{border-bottom:none;}
+.treino-foco-nome{display:flex;flex-direction:column;}
+.treino-foco-nome b{font-size:12.5px;font-weight:800;}
+.treino-foco-nome span{font-size:10px;color:var(--muted);font-weight:600;}
+.treino-foco-barra{height:6px;border-radius:999px;background:var(--border);overflow:hidden;}
+.treino-foco-barra span{display:block;height:100%;}
+.treino-foco-pct{font-size:11px;font-weight:800;text-align:right;}
+.treino-deck-linha{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);cursor:pointer;}
+.treino-deck-linha:last-child{border-bottom:none;}
+.treino-deck-linha:hover{background:var(--panel2);}
+.treino-deck-linha-vazio{opacity:.55;cursor:default;}
+.treino-deck-linha-vazio:hover{background:none;}
+.treino-deck-linha-icon{font-size:17px;width:22px;text-align:center;}
+.treino-deck-linha-txt{display:flex;flex-direction:column;flex:1;min-width:0;}
+.treino-deck-linha-txt b{font-size:12.5px;font-weight:800;}
+.treino-deck-linha-txt span{font-size:10px;color:var(--muted);font-weight:600;}
+.treino-deck-linha-num{font-size:15px;font-weight:900;}
+.treino-deck-linha-ambar .treino-deck-linha-num{color:var(--orange-t);}
+.treino-deck-linha i.fa-chevron-right{color:var(--muted);font-size:11px;}
+.treino-montar-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--panel2);
+  border:1px solid var(--border);border-radius:12px;padding:10px 14px;}
+.treino-montar-titulo{font-size:12px;font-weight:800;margin-right:4px;}
+.treino-montar-bar select{width:auto;padding:6px 8px;font-size:11.5px;}
+.treino-montar-count{font-size:11px;color:var(--muted);font-weight:700;margin-left:auto;}
+.treino-rodape-linha{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--muted);font-weight:600;padding:2px 2px;}
+.treino-sessao{max-width:900px;margin:0 auto;}
+.treino-topo{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.treino-topo-titulo{display:flex;flex-direction:column;align-items:center;text-align:center;}
+.treino-topo-titulo span{font-size:9.5px;color:var(--muted);text-transform:uppercase;font-weight:800;letter-spacing:.06em;}
+.treino-topo-titulo b{font-size:12.5px;font-weight:800;}
+.treino-placar-sessao{display:flex;gap:6px;flex-wrap:wrap;font-size:10.5px;font-weight:700;color:var(--muted);align-items:center;}
+.treino-etiquetas{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px;}
+.chip-sm{background:var(--panel2);border:1px solid var(--border);border-radius:999px;padding:1px 8px;font-size:10px;font-weight:800;}
+.chip-pegadinha{background:rgba(194,65,12,.12);color:var(--orange-t);border-color:rgba(194,65,12,.25);}
+.treino-antes{margin-top:14px;}
+.treino-acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.treino-rodape{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:16px;
+  border-top:1px solid var(--border);padding-top:14px;}
+.treino-atalhos{font-size:10px;color:var(--muted);font-weight:600;}
+@media (max-width:640px){
+  .treino-placar-topo{flex-direction:column;align-items:flex-start;}
+  .treino-montar-bar select{width:100%;}
+  .treino-montar-count{margin-left:0;width:100%;}
+}
 .prova-editar{padding:2px 6px!important;color:var(--muted)}
 .prova-editar:hover{color:var(--accent)}
 .sim-pausado{border:1.5px solid var(--accent);border-radius:14px;padding:12px 14px;
@@ -11960,8 +12025,25 @@ function simColarHTML(){
 // So considera item ATIVO (status!=='revisar' e !=='arquivada'): questao em quarentena
 // nao pode te puxar de volta pra treinar nela — e o mesmo principio que ja regia
 // questaoForaDaConta no placar do simulado, aplicado aqui na porta de entrada.
+//
+// MODO TREINO (achado pelo usuario): o pool de treino nao pode ser so o Acervo. Prova
+// colada e nunca feita ("esperando") guarda as questoes cruas em prova.questoes — elas so
+// entram no Acervo na 1a correcao — entao ficavam invisiveis pro treino, e Treinar/Acervo
+// mostravam numeros diferentes (1.136 x 2.563). Arquivada (ja saiu da lista) tambem
+// hidrata por chaves2, do mesmo jeito. Dedup pela chave v2, Acervo primeiro: a MESMA
+// questao pode existir crua numa prova esperando E ja ter contadores no Acervo (bateu nela
+// por outro caminho antes) — o Acervo, mais rico, tem que ganhar.
+// montarAcervo() (a mesma funcao que a tela Acervo ja usa pro numero que ela mostra) e o
+// pool certo: db.provas INTEIRO (inclusive prova esperando, nunca feita — ela varre sem
+// filtrar por tentativa) unido com db.acervo (que agora tambem cobre o arquivo, ver o laco
+// novo dentro de montarAcervo), deduplicado pela chave v2, ja sem item queimado. Reusar em
+// vez de reimplementar e o que GARANTE Treinar e Acervo mostrarem o mesmo total, por
+// construcao — nao por coincidencia de duas contas paralelas.
+function treinoPoolCompleto(){
+  return montarAcervo().filter(x=>(x.q.status||'ativa')==='ativa').map(x=>x.q);
+}
 function treinarPoolAtivo(){
-  return(db.acervo||[]).filter(q=>(q.status||'ativa')==='ativa');
+  return treinoPoolCompleto();
 }
 // "Acertou ha muito tempo, capaz que ja esqueceu" — 30 dias e o mesmo horizonte que os
 // baralhos de flashcard usam pra considerar um card maduro.
@@ -12006,19 +12088,345 @@ function treinarFaixaContagem(ativo){
   return{...c,pctDominadas:100*c.dominadas/tot,pctFrageis:100*c.frageis/tot,
          pctDivida:100*c.divida/tot,pctNuncaVistas:100*c.nuncaVistas/tot};
 }
-// Clique no bloco/card = direto pro exame, sem tela intermediaria — "comeca uma prova em
-// dois cliques" do criterio de aceite. Reusa provaRefazer (que ja sabe tratar prova.treino
-// como "nao conta nas estatisticas", igual toda prova montada sob medida).
+// Clique no bloco/card = direto pra sessao de treino, sem tela intermediaria e SEM criar
+// prova nenhuma (achado pelo usuario: cada clique num deck virava um "Simulado 29 —
+// Geral · 954 questões · treino" pendurado em Minhas Provas). Modo Treino nao passa mais
+// por montarProvaDeItens/provaRefazer — vai direto pro pool com treinoIniciar.
 // Leva o deck INTEIRO — o numero no card e o numero que abre, sem excecao. Um teto aqui
-// escondia questoes em silencio (o card dizia 47, a prova vinha com 20), e "nenhum numero
+// escondia questoes em silencio (o card dizia 47, a sessao vinha com 20), e "nenhum numero
 // morto" (principio do proprio redesenho) vale tambem pra nao MENTIR um numero vivo.
 function treinarComDeck(deckId){
   const deck=treinarDecks().find(d=>d.id===deckId);
   if(!deck||!deck.itens.length){toast('Nenhuma questão nesse deck agora — volte depois de treinar mais um pouco.','var(--muted)');return;}
-  const pool=deck.itens.map(q=>({q}));
-  const r=montarProvaDeItens(pool,pool.length);
-  if(!r){toast('❌ Não consegui montar.','var(--red)');return;}
-  provaRefazer(r.id);
+  let itens=deck.itens.slice();
+  // Refazer: a que esta ha MAIS TEMPO sem resposta primeiro — sem isto a ordem era
+  // aleatoria e a questao mais atrasada podia nunca aparecer numa sessao curta.
+  if(deckId==='refazer')itens.sort((a,b)=>new Date(a.ultimaVezEm||0)-new Date(b.ultimaVezEm||0));
+  else{for(let i=itens.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[itens[i],itens[j]]=[itens[j],itens[i]];}}
+  treinoIniciar(itens,{titulo:deck.nome});
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+}
+// ===== SESSAO DE TREINO (Modo Treino completo) =====
+// Tela propria — NAO reaproveita simGeralExamHTML (pagina unica com todas as questoes de
+// uma prova, e nao vale arriscar o que ja funciona la). Reaproveita os RECURSOS que ja
+// existem (SG_CONFIANCAS, simExplicacaoHTML, criarFlashcardDeQuestaoErrada, fonteDaQuestao),
+// so que aplicados numa questao por vez, sem prova nenhuma por tras.
+//
+// Cada resposta escreve DIRETO no item do Acervo (mesma referencia — nao ha copia, nao ha
+// prova, nao ha "salvar no final"): fechar a aba no meio de uma sessao nao perde nada do
+// que ja foi respondido, porque nao havia nada acumulado esperando esse salvar.
+let treinoSessao=null;
+let treinoResumo=null;
+// Garante que a questao existe no Acervo — miniboss cru vindo de prova esperando ou
+// arquivada pode nunca ter passado por bancoAdicionarOuFundir — e devolve a referencia
+// VIVA (mesmo objeto de db.acervo): responder, marcar motivo, favoritar etc. escrevem
+// direto nela, sem indireção nenhuma.
+function treinoResolverItem(q){
+  const chave=acervoChave2De(q);
+  if(!chave)return null;
+  let item=(db.acervo||[]).find(x=>acervoChave2De(x)===chave);
+  if(!item){
+    bancoAdicionarOuFundir(q,q.origem||'ia');
+    item=db.acervo[0];
+  }
+  return item;
+}
+function treinoIniciar(pool,meta){
+  if(!pool||!pool.length){toast('Nenhuma questão nesse recorte agora.','var(--muted)');return false;}
+  const itens=pool.map(treinoResolverItem).filter(Boolean);
+  if(!itens.length){toast('❌ Não consegui montar.','var(--red)');return false;}
+  acervoSalvar();
+  treinoResumo=null;
+  treinoSessao={itens,idx:0,titulo:(meta&&meta.titulo)||'Treino livre',
+    iniciadoEm:Date.now(),respondidas:0,certas:0,erradas:0,
+    puladas:new Set(),respondidasSet:new Set()};
+  return true;
+}
+// Cada resposta conta NA HORA: item do Acervo, estatistica do assunto, Banco de Erros (se
+// errou, automatico, igual simCorrigir ja faz) e XP — os quatro juntos, sem esperar
+// encerrar a sessao nem fechar a tela. E o que faz "fechei a aba no meio" ser inofensivo.
+function treinoResponder(letra){
+  const s=treinoSessao;
+  if(!s)return;
+  const i=s.idx;
+  const item=s.itens[i];
+  if(!item||s.respondidasSet.has(i))return;
+  item.userAnswer=letra;
+  const acertou=letra===item.correta;
+  s.respondidasSet.add(i);
+  s.puladas.delete(i);
+  s.respondidas++;
+  if(acertou)s.certas++; else s.erradas++;
+  const sub=simFindSub(item.subId);
+  if(sub)simAcumulaStats(sub,[item]);
+  acervoAtualizarContadores(item,acertou?'C':'X',item.confianca);
+  if(!acertou)criarFlashcardDeQuestaoErrada(item.subId,item);
+  acervoSalvar();
+  gainXP(1+(acertou?2:0));
+  renderSimGeralScreen();
+}
+function treinoSetConfianca(valor){
+  const s=treinoSessao;
+  if(!s)return;
+  const item=s.itens[s.idx];
+  if(!item||s.respondidasSet.has(s.idx))return;
+  item.confianca=item.confianca===valor?'':valor;
+  renderSimGeralScreen();
+}
+// Pular nao conta nem como acerto nem como erro — no Cebraspe deixar em branco e
+// estrategia. Fica revisitavel por "Anterior", como qualquer outra.
+function treinoPular(){
+  const s=treinoSessao;
+  if(!s)return;
+  s.puladas.add(s.idx);
+  treinoProxima();
+}
+function treinoAnterior(){
+  const s=treinoSessao;
+  if(!s||s.idx<=0)return;
+  s.idx--;
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+}
+function treinoProxima(){
+  const s=treinoSessao;
+  if(!s)return;
+  if(s.idx>=s.itens.length-1){treinoEncerrar();return;}
+  s.idx++;
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+}
+function treinoMotivoSalvar(id){
+  const s=treinoSessao;
+  if(!s)return;
+  const item=s.itens[s.idx];
+  if(!item)return;
+  item.motivo=item.motivo===id?'':id;
+  if(item.motivo===SIM_MOTIVO_DATADO.id){item.status='revisar';}
+  acervoSalvar();
+  const m=simMotivoDe(item.motivo);
+  toast(m?`${m.icone} ${m.lbl} — ${m.conserto}`:'Classificação removida.',m?'var(--accent)':'var(--muted)');
+  renderSimGeralScreen();
+}
+function treinoNotaSalvar(){
+  const s=treinoSessao;
+  const el=document.getElementById('treino-nota');
+  if(!s||!el)return;
+  const item=s.itens[s.idx];
+  if(!item)return;
+  item.minhaNota=String(el.value||'').trim().slice(0,NOTA_MAX);
+  acervoSalvar();
+  toast(item.minhaNota?'✍️ Nota guardada.':'Nota apagada.',item.minhaNota?'var(--green)':'var(--muted)');
+}
+function treinoFavoritar(){
+  const s=treinoSessao;
+  if(!s)return;
+  const item=s.itens[s.idx];
+  if(!item)return;
+  item.favorita=!item.favorita;
+  acervoSalvar();
+  renderSimGeralScreen();
+}
+function treinoMarcarProblema(){
+  const s=treinoSessao;
+  if(!s)return;
+  const item=s.itens[s.idx];
+  if(!item)return;
+  const motivo=(prompt('Por que esta questão tem problema? (gabarito errado, desatualizada, mal formulada...)')||'').trim();
+  if(!motivo)return;
+  item.problematico=true;
+  item.motivoProblema=motivo;
+  acervoSalvar();
+  toast('🚩 Marcada com problema — sai da conta a partir de agora.','var(--orange)');
+  renderSimGeralScreen();
+}
+function treinoEnviarFlashcard(){
+  const s=treinoSessao;
+  if(!s)return;
+  const item=s.itens[s.idx];
+  if(!item)return;
+  const criado=criarFlashcardDeQuestaoErrada(item.subId,item);
+  if(criado)saveDB();
+  toast(criado?'📇 Flashcard criado.':'📇 Esta questão já tinha um flashcard.','var(--accent)');
+}
+let treinoFonteRodando=false;
+async function treinoBuscarFonte(){
+  if(!tavilyAtivo()){toast('⚠️ Sem chave do Tavily — configure em Ajustes.','var(--red)');return;}
+  if(treinoFonteRodando)return;
+  const s=treinoSessao;
+  const item=s&&s.itens[s.idx];
+  if(!item)return;
+  treinoFonteRodando=true;
+  toast('🔎 Procurando a fonte oficial...','var(--accent)');
+  try{
+    const r=await fonteDaQuestao(item);
+    if(!r.achados.length){
+      toast(r.ampliou?'Não achei nada que trate deste item.':'Não achei nada em site oficial que trate deste item.','var(--orange)');
+      return;
+    }
+    item.apoioWeb=r.achados;
+    acervoSalvar();
+    renderSimGeralScreen();
+    toast(`🔎 ${r.achados.length} trecho(s) encontrado(s).`,'var(--green)');
+  }catch(e){
+    toast(`⚠️ A busca falhou: ${e.message}`,'var(--orange)');
+  }finally{treinoFonteRodando=false;}
+}
+function treinoIrParaAssunto(){
+  const s=treinoSessao;
+  const item=s&&s.itens[s.idx];
+  if(!item||!item.subId)return;
+  showScreen('banco');
+  bancoMapaAbrirAssunto(item.subId);
+}
+function treinoEncerrar(){
+  const s=treinoSessao;
+  if(!s)return;
+  const itensErrados=s.itens.filter((it,i)=>s.respondidasSet.has(i)&&it.userAnswer&&it.userAnswer!==it.correta);
+  treinoResumo={certas:s.certas,erradas:s.erradas,respondidas:s.respondidas,
+    total:s.itens.length,liquida:s.certas-s.erradas,itensErrados,titulo:s.titulo};
+  if(s.respondidas>0)treinoRegistrarSessaoNoHistorico(treinoResumo);
+  treinoSessao=null;
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+}
+function treinoTreinarErradas(){
+  const r=treinoResumo;
+  if(!r||!r.itensErrados.length)return;
+  const itens=r.itensErrados.slice();
+  treinoIniciar(itens,{titulo:'Só as que errei'});
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+}
+function treinoFecharResumo(){
+  treinoResumo=null;
+  renderSimGeralScreen();
+}
+function treinoConfiancaHTML(item){
+  return`<div class="sg-confianca">
+    <div class="sg-confianca-pergunta">Confiança (opcional):</div>
+    <div class="sg-confianca-row">
+      ${SG_CONFIANCAS.map(c=>`<div class="sg-confianca-btn tipo-${c.id}${item.confianca===c.id?' ativo':''}" onclick="treinoSetConfianca('${c.id}')">
+        <b>${c.lbl}</b><span>${c.desc}</span>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+function treinoMotivoHTML(item){
+  const certa=item.userAnswer===item.correta;
+  const opcoes=(certa?[SIM_MOTIVO_SORTE]:SIM_MOTIVOS).concat(SIM_MOTIVO_DATADO);
+  const sel=item.motivo||'';
+  const escolhido=simMotivoDe(sel);
+  return`<div class="sim-motivo">
+    <span class="sim-motivo-lbl">${certa?'Acertou por sorte?':'Por que errou?'}</span>
+    ${opcoes.map(m=>`<button class="sim-motivo-btn${sel===m.id?' ativo':''}"
+      onclick="treinoMotivoSalvar('${m.id}')" title="${escapeHtml(m.conserto)}">${m.icone} ${m.lbl}</button>`).join('')}
+    ${escolhido?`<span class="sim-motivo-nota">${escapeHtml(escolhido.conserto)}</span>`:''}
+  </div>`;
+}
+function treinoAcoesHTML(item){
+  return`<div class="treino-acoes">
+    <button class="btn btn-xs ${item.favorita?'btn-gold':'btn-ghost'}" onclick="treinoFavoritar()"><i class="fa fa-star"></i> ${item.favorita?'Favoritada':'Favoritar'}</button>
+    <button class="btn btn-xs btn-ghost" onclick="treinoMarcarProblema()"><i class="fa fa-flag"></i> Marcar problema</button>
+    <button class="btn btn-xs btn-ghost" onclick="treinoEnviarFlashcard()"><i class="fa fa-layer-group"></i> Mandar pro flashcard</button>
+    ${tavilyAtivo()?`<button class="btn btn-xs btn-ghost" onclick="treinoBuscarFonte()"><i class="fa fa-magnifying-glass"></i> Buscar fonte</button>`:''}
+    ${item.subId?`<button class="btn btn-xs btn-ghost" onclick="treinoIrParaAssunto()"><i class="fa fa-book"></i> Ir para o assunto</button>`:''}
+  </div>`;
+}
+function treinoHistoricoHTML(item){
+  if(!item.vezesRespondida)return`<div class="sim-q-historico">Primeira vez que você vê esta questão.</div>`;
+  const pct=Math.round((item.acertos||0)/item.vezesRespondida*100);
+  const ultima=item.ultimaVezEm?`, da última vez você ${item.ultimoResultado==='C'?'acertou':'errou'} (${new Date(item.ultimaVezEm).toLocaleDateString('pt-BR')})`:'';
+  return`<div class="sim-q-historico"><i class="fa fa-clock-rotate-left"></i> Respondida ${item.vezesRespondida}× · acertou ${pct}%${ultima}</div>`;
+}
+function treinoQuestaoHTML(){
+  const s=treinoSessao;
+  const i=s.idx;
+  const item=s.itens[i];
+  const respondida=s.respondidasSet.has(i);
+  const etiquetas=`<div class="treino-etiquetas">
+    <span>${escapeHtml(item.kingdomName||'')}${item.kingdomName&&item.subName?' › ':''}${escapeHtml(item.subName||'')}</span>
+    <span class="chip-sm">${item.formato==='certoerrado'?'CERTO/ERRADO':'MÚLTIPLA'}</span>
+    ${item.dificuldadeAferida?`<span class="chip-sm">nível ${item.dificuldadeAferida}</span>`:''}
+    ${(item.tags||[]).map(t=>`<span class="chip-sm chip-pegadinha">${escapeHtml(t)}</span>`).join('')}
+  </div>`;
+  const alts=(item.alternativas||[]).map(alt=>{
+    let cls='';
+    if(respondida){
+      if(alt.letra===item.correta)cls=' sim-correct';
+      else if(alt.letra===item.userAnswer)cls=' sim-wrong';
+    }
+    const onclick=respondida?'':` onclick="treinoResponder('${escapeAttrJs(alt.letra)}')"`;
+    return`<div class="sim-alt${cls}"${onclick}><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`;
+  }).join('');
+  return`<div class="sim-q">
+    ${etiquetas}
+    ${treinoHistoricoHTML(item)}
+    ${textoApoioHTML(item)}
+    <div class="sim-q-text" style="font-size:16px;margin-top:8px">${escapeHtml(item.questao)}</div>
+    <div class="sim-alts${item.formato==='certoerrado'?' sim-alts-ce':''}">${alts}</div>
+    ${!respondida?`<div class="treino-antes">
+      ${treinoConfiancaHTML(item)}
+      <button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="treinoPular()">Deixar em branco</button>
+    </div>`:''}
+    ${respondida?`<div class="sim-score-banner ${item.userAnswer===item.correta?'sim-good':'sim-bad'}">${item.userAnswer===item.correta?'✔️ Você acertou':'✖️ Você errou'}</div>
+      ${simExplicacaoHTML(item)}
+      ${fonteApoioTreinoHTML(item)}
+      ${treinoMotivoHTML(item)}
+      <div class="sim-nota">
+        <div class="sim-nota-cab"><span><i class="fa fa-pen"></i> Sua nota</span></div>
+        <textarea id="treino-nota" class="inp" rows="2" maxlength="${NOTA_MAX}" placeholder="Escreva com suas palavras por que está certo/errado..." onblur="treinoNotaSalvar()">${escapeHtml(item.minhaNota||'')}</textarea>
+      </div>
+      ${treinoAcoesHTML(item)}`:''}
+  </div>`;
+}
+function fonteApoioTreinoHTML(item){
+  const a=item.apoioWeb||[];
+  if(!a.length)return'';
+  return`<div class="fonte-web">
+    <div class="fonte-web-cab"><i class="fa fa-book-open"></i> Trecho copiado da fonte — ninguém reescreveu, é o texto como está lá</div>
+    ${a.map(f=>`<div class="fonte-web-item">
+      <a href="${escapeHtml(f.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(f.titulo)}</a>
+      <div class="fonte-web-trecho">${escapeHtml(f.trecho)}</div>
+    </div>`).join('')}
+  </div>`;
+}
+function treinoSessaoHTML(){
+  const s=treinoSessao;
+  const liquida=s.certas-s.erradas;
+  return`<div class="section-card treino-sessao">
+    <div class="treino-topo">
+      <button class="btn btn-sm btn-ghost" onclick="treinoEncerrar()"><i class="fa fa-arrow-left"></i> Encerrar</button>
+      <div class="treino-topo-titulo"><span>treinando</span><b>${escapeHtml(s.titulo)} · questão ${s.idx+1} de ${s.itens.length}</b></div>
+      <div class="treino-placar-sessao">
+        <span>${s.respondidas} respondidas</span><span class="pill-ok">${s.certas} certas</span>
+        <span class="pill-bad">${s.erradas} erradas</span><span class="pill-neutro">líquida ${liquida>0?'+':''}${liquida}</span>
+      </div>
+    </div>
+    ${treinoQuestaoHTML()}
+    <div class="treino-rodape">
+      <button class="btn btn-sm btn-ghost" onclick="treinoAnterior()" ${s.idx<=0?'disabled':''}><i class="fa fa-arrow-left"></i> Anterior</button>
+      <span class="treino-atalhos">${s.itens[s.idx].formato==='certoerrado'?'C / E':'A–E'} responder · B deixar em branco · Enter próxima</span>
+      <button class="btn btn-sm btn-primary" onclick="treinoProxima()">${s.idx>=s.itens.length-1?'Encerrar':'Próxima'} <i class="fa fa-arrow-right"></i></button>
+    </div>
+  </div>`;
+}
+function treinoResumoHTML(){
+  const r=treinoResumo;
+  const pct=r.respondidas?Math.round(r.certas/r.respondidas*100):0;
+  return`<div class="section-card">
+    <div class="sec-title">🏁 Sessão encerrada — ${escapeHtml(r.titulo)}</div>
+    <div class="sim-score-banner ${pct>=60?'sim-good':'sim-bad'}">${r.certas}/${r.respondidas} acertos (${pct}%) · líquida ${r.liquida>0?'+':''}${r.liquida}</div>
+    ${r.itensErrados.length?`<div style="margin-top:10px;font-size:12px;color:var(--muted);font-weight:700">Errou ${r.itensErrados.length} questão${r.itensErrados.length>1?'ões':''}:</div>
+      <ul style="margin:6px 0 0;padding-left:18px;font-size:12px">
+        ${r.itensErrados.map(it=>`<li>${escapeHtml((it.questao||'').slice(0,110))}${(it.questao||'').length>110?'…':''}</li>`).join('')}
+      </ul>`:''}
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      ${r.itensErrados.length?`<button class="btn btn-primary" onclick="treinoTreinarErradas()"><i class="fa fa-rotate"></i> Treinar só as que errei</button>`:''}
+      <button class="btn btn-ghost" onclick="treinoFecharResumo()"><i class="fa fa-arrow-left"></i> Voltar para Treinar</button>
+    </div>
+  </div>`;
 }
 function treinarAbrirAvancado(){
   const el=document.getElementById('treinar-avancado');
@@ -12028,40 +12436,33 @@ function treinarAbrirAvancado(){
   const btn=document.getElementById('treinar-avancado-btn');
   if(btn)btn.textContent=abrindo?'▴ Fechar montagem avançada':'Abrir montagem avançada';
 }
-function treinarEntradaHTML(){
-  const ativo=treinarPoolAtivo();
-  // Acervo vazio ou quase: 8 decks quase todos zerados e pior que nenhum deck — um
-  // cartao so, convidando a gerar a primeira leva.
-  if(ativo.length<5){
-    return`<div class="section-card">
-      <div class="sec-title" style="margin-bottom:4px">🎯 Treinar</div>
-      <div class="empty"><i class="fa fa-seedling"></i>
-        <p>Seu Acervo ainda tem poucas questões pra organizar por estado.<br>Gere um Simulado Geral ou importe um Caderno da Banca — assim que você responder, elas entram pro Acervo e os decks aparecem aqui.</p>
-      </div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="treinarAbrirAvancado()"><i class="fa fa-wand-magic-sparkles"></i> Montar do zero</button>
-      <div id="treinar-avancado" style="display:none;margin-top:14px">${simGeralConfigHTML()}</div>
-    </div>${sgHistoricoCardHTML()}`;
-  }
-  const decks=treinarDecks();
-  const c=treinarFaixaContagem(ativo);
-  const feridas=decks.find(d=>d.id==='feridas');
-  const chutando=decks.find(d=>d.id==='chutando');
-  // "Nenhum numero morto": deck com zero some, exceto os dois que sustentam o loop
-  // diario (nunca vistas some no dia em que voce zera o acervo; refazer some quando nada
-  // ainda maturou 30 dias) — esses ficam, com framing positivo, pra tela nao parecer
-  // quebrada exatamente quando voce esta em dia.
-  const visiveis=decks.filter(d=>d.itens.length||d.id==='nuncavistas'||d.id==='refazer');
+// ===== Modo Treino completo — redesenho da entrada (prancha "5 · Treinar v2") =====
+function treinoPlacarGeral(){
+  let respondidas=0,certas=0;
+  (db.acervo||[]).forEach(q=>{
+    if((q.status||'ativa')!=='ativa')return;
+    respondidas+=q.vezesRespondida||0;
+    certas+=q.acertos||0;
+  });
+  const erradas=respondidas-certas;
+  return{respondidas,certas,erradas,liquida:certas-erradas,
+         pct:respondidas?Math.round(certas/respondidas*100):0};
+}
+function treinoPlacarHTML(){
+  const p=treinoPlacarGeral();
+  const c=treinarFaixaContagem(treinarPoolAtivo());
   return`<div class="section-card">
-    <div class="sec-title" style="margin-bottom:10px">🎯 Treinar</div>
-    <div class="treinar-faixa">
-      <div class="treinar-faixa-total"><b>${ativo.length}</b><span>questões no Acervo</span></div>
-      <div class="treinar-faixa-blocos">
-        <div class="treinar-bloco" onclick="treinarComDeck('nuncavistas')"><b>${c.nuncaVistas}</b><span>nunca vistas</span></div>
-        <div class="treinar-bloco" onclick="treinarComDeck('feridas')"><b>${feridas.itens.length}</b><span>feridas abertas</span></div>
-        <div class="treinar-bloco treinar-bloco-ambar" onclick="treinarComDeck('chutando')"><b>${chutando.itens.length}</b><span>acertei chutando</span></div>
+    <div class="sec-title" style="margin-bottom:10px">Seu desempenho</div>
+    <div class="treino-placar-topo">
+      <div class="treino-placar-anel"><b>${p.pct}%</b></div>
+      <div class="treino-placar-linhas">
+        <span><b>${p.respondidas}</b> respondidas</span>
+        <span class="pill-ok">${p.certas} certas</span>
+        <span class="pill-bad">${p.erradas} erradas</span>
+        <span class="pill-neutro">nota líquida ${p.liquida>0?'+':''}${p.liquida}</span>
       </div>
     </div>
-    <div class="treinar-progresso-seg">
+    <div class="treinar-progresso-seg" style="margin-top:12px">
       <span style="width:${c.pctDominadas}%;background:var(--accent)"></span>
       <span style="width:${c.pctFrageis}%;background:var(--accent2)"></span>
       <span style="width:${c.pctDivida}%;background:var(--orange-t)"></span>
@@ -12073,24 +12474,192 @@ function treinarEntradaHTML(){
       <span><i style="background:var(--orange-t)"></i>em dívida ${c.divida}</span>
       <span><i style="background:var(--border)"></i>nunca vistas ${c.nuncaVistas}</span>
     </div>
-    <div class="treinar-decks">
-      ${visiveis.map((d,i)=>`
-        <div class="treinar-deck${d.ambar?' treinar-deck-ambar':''}">
-          <div class="treinar-deck-icon">${d.icon}</div>
-          <div class="treinar-deck-num">${d.itens.length}</div>
-          <div class="treinar-deck-nome">${escapeHtml(d.nome)}</div>
-          <div class="treinar-deck-desc">${escapeHtml(d.desc)}</div>
-          <button class="btn btn-sm ${i===0&&d.itens.length?'btn-primary':'btn-ghost'}" style="width:100%;justify-content:center;margin-top:8px"
-            onclick="treinarComDeck('${d.id}')" ${d.itens.length?'':'disabled'}>Treinar</button>
-        </div>
-      `).join('')}
+  </div>`;
+}
+// "O que focar" (minimo pra parte 1, ja no lugar certo): pior % por assunto, amostra
+// minima de 3 pra um erro isolado nao acusar um assunto inteiro.
+function treinoFocoLista(){
+  const porSub={};
+  (db.acervo||[]).forEach(q=>{
+    if((q.status||'ativa')!=='ativa'||!q.subId||!q.vezesRespondida)return;
+    const s=porSub[q.subId]=porSub[q.subId]||{subId:q.subId,subName:q.subName||'',kingdomName:q.kingdomName||'',vezes:0,acertos:0};
+    s.vezes+=q.vezesRespondida; s.acertos+=q.acertos||0;
+  });
+  return Object.values(porSub).filter(s=>s.vezes>=3)
+    .map(s=>({...s,pct:Math.round(s.acertos/s.vezes*100)}))
+    .sort((a,b)=>a.pct-b.pct).slice(0,4);
+}
+function treinoFocoHTML(){
+  const lista=treinoFocoLista();
+  return`<div class="section-card">
+    <div class="sec-title" style="margin-bottom:2px">O que focar</div>
+    <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:10px">onde você está perdendo ponto</div>
+    ${lista.length?lista.map(s=>`<div class="treino-foco-linha" onclick="treinoTreinarAssunto('${s.subId}')">
+      <div class="treino-foco-nome"><b>${escapeHtml(s.subName)}</b><span>${escapeHtml(s.kingdomName)} · ${s.vezes} respostas</span></div>
+      <div class="treino-foco-barra"><span style="width:${s.pct}%;background:${s.pct<50?'var(--red-t)':(s.pct<70?'var(--orange-t)':'var(--accent2)')}"></span></div>
+      <span class="treino-foco-pct">${s.pct}%</span>
+      <button class="btn btn-xs btn-primary" onclick="event.stopPropagation();treinoTreinarAssunto('${s.subId}')">Treinar</button>
+    </div>`).join(''):`<div class="empty-mini">Responda mais questões pra eu achar onde focar.</div>`}
+  </div>`;
+}
+function treinoTreinarAssunto(subId){
+  const pool=treinoPoolCompleto().filter(q=>q.subId===subId);
+  const sub=simFindSub(subId);
+  if(!treinoIniciar(pool,{titulo:sub?sub.name:'Assunto'}))return;
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+}
+function treinoDecksListaHTML(decks){
+  const visiveis=decks.filter(d=>d.itens.length||d.id==='nuncavistas'||d.id==='refazer');
+  return`<div class="section-card">
+    <div class="sec-title" style="margin-bottom:8px">Decks</div>
+    ${visiveis.map(d=>`<div class="treino-deck-linha${d.ambar?' treino-deck-linha-ambar':''}${d.itens.length?'':' treino-deck-linha-vazio'}" ${d.itens.length?`onclick="treinarComDeck('${d.id}')"`:''}>
+      <span class="treino-deck-linha-icon">${d.icon}</span>
+      <div class="treino-deck-linha-txt"><b>${escapeHtml(d.nome)}</b><span>${escapeHtml(d.desc)}</span></div>
+      <span class="treino-deck-linha-num">${d.itens.length}</span>
+      <i class="fa fa-chevron-right"></i>
+    </div>`).join('')}
+  </div>`;
+}
+function treinoDestaqueHTML(){
+  const foco=treinoFocoLista()[0];
+  const nuncavistas=treinarDecks().find(d=>d.id==='nuncavistas');
+  const usaFoco=!!foco;
+  const titulo=usaFoco?'Comece pelo que mais te derruba':'Comece agora';
+  const sub=usaFoco?`${escapeHtml(foco.subName)} · ${foco.pct}% de acerto em ${foco.vezes} resposta${foco.vezes>1?'s':''}`
+                   :`${nuncavistas.itens.length} questões esperando por você`;
+  const onclick=usaFoco?`treinoTreinarAssunto('${foco.subId}')`:`treinarComDeck('nuncavistas')`;
+  return`<div class="treino-destaque">
+    <div class="treino-destaque-eyebrow">PRONTO PARA TREINAR</div>
+    <div class="treino-destaque-titulo">${titulo}</div>
+    <div class="treino-destaque-sub">${sub}</div>
+    <button class="btn treino-destaque-btn" onclick="${onclick}"><i class="fa fa-play"></i> Treinar agora</button>
+    <div class="treino-destaque-rodape"><i class="fa fa-circle-info"></i> Nada vira prova. Pare quando quiser — tudo o que você responder já conta.</div>
+  </div>`;
+}
+// ===== Montar meu treino (secao 1.3) — filtros combinaveis, contagem ao vivo, sem prova =====
+let treinoFiltro={materia:'',assunto:'',formato:'',estado:'',nivel:''};
+function treinoFiltroOpcoesMaterias(){
+  const nomes=new Set();
+  treinoPoolCompleto().forEach(q=>{if(q.kingdomName)nomes.add(q.kingdomName);});
+  return[...nomes].sort((a,b)=>a.localeCompare(b));
+}
+function treinoFiltroOpcoesAssuntos(){
+  const nomes=new Map();
+  treinoPoolCompleto().forEach(q=>{
+    if(treinoFiltro.materia&&q.kingdomName!==treinoFiltro.materia)return;
+    if(q.subId)nomes.set(q.subId,q.subName||q.subId);
+  });
+  return[...nomes.entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+}
+function treinoFiltroAplicar(){
+  return treinoPoolCompleto().filter(q=>{
+    if(treinoFiltro.materia&&q.kingdomName!==treinoFiltro.materia)return false;
+    if(treinoFiltro.assunto&&q.subId!==treinoFiltro.assunto)return false;
+    if(treinoFiltro.formato&&(q.formato||'multipla')!==treinoFiltro.formato)return false;
+    if(treinoFiltro.nivel&&q.dificuldadeAferida!==treinoFiltro.nivel)return false;
+    if(treinoFiltro.estado==='nuncavistas'&&q.vezesRespondida)return false;
+    if(treinoFiltro.estado==='erradas'&&q.ultimoResultado!=='X')return false;
+    if(treinoFiltro.estado==='acertadas'&&q.ultimoResultado!=='C')return false;
+    return true;
+  });
+}
+function treinoFiltroMudou(campo,valor){
+  treinoFiltro[campo]=valor;
+  if(campo==='materia')treinoFiltro.assunto='';
+  const el=document.getElementById('treino-montar-bar');
+  if(el)el.outerHTML=treinoMontarBarHTML();
+}
+function treinoFiltroTreinar(){
+  const pool=treinoFiltroAplicar();
+  if(!treinoIniciar(pool,{titulo:'Treino montado'}))return;
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+}
+function treinoMontarBarHTML(){
+  const materias=treinoFiltroOpcoesMaterias();
+  const assuntos=treinoFiltroOpcoesAssuntos();
+  const n=treinoFiltroAplicar().length;
+  return`<div class="treino-montar-bar" id="treino-montar-bar">
+    <span class="treino-montar-titulo"><i class="fa fa-sliders"></i> Montar meu treino</span>
+    <select class="inp" onchange="treinoFiltroMudou('materia',this.value)">
+      <option value="">Matéria</option>
+      ${materias.map(m=>`<option value="${escapeHtml(m)}"${treinoFiltro.materia===m?' selected':''}>${escapeHtml(m)}</option>`).join('')}
+    </select>
+    <select class="inp" onchange="treinoFiltroMudou('assunto',this.value)">
+      <option value="">Assunto</option>
+      ${assuntos.map(([id,nome])=>`<option value="${escapeHtml(id)}"${treinoFiltro.assunto===id?' selected':''}>${escapeHtml(nome)}</option>`).join('')}
+    </select>
+    <select class="inp" onchange="treinoFiltroMudou('formato',this.value)">
+      <option value="">Formato</option>
+      <option value="certoerrado"${treinoFiltro.formato==='certoerrado'?' selected':''}>Certo/Errado</option>
+      <option value="multipla"${treinoFiltro.formato==='multipla'?' selected':''}>Múltipla</option>
+    </select>
+    <select class="inp" onchange="treinoFiltroMudou('estado',this.value)">
+      <option value="">Estado</option>
+      <option value="nuncavistas"${treinoFiltro.estado==='nuncavistas'?' selected':''}>Nunca vistas</option>
+      <option value="erradas"${treinoFiltro.estado==='erradas'?' selected':''}>Erradas</option>
+      <option value="acertadas"${treinoFiltro.estado==='acertadas'?' selected':''}>Acertadas</option>
+    </select>
+    <select class="inp" onchange="treinoFiltroMudou('nivel',this.value)">
+      <option value="">Nível</option>
+      <option value="facil"${treinoFiltro.nivel==='facil'?' selected':''}>Fácil</option>
+      <option value="media"${treinoFiltro.nivel==='media'?' selected':''}>Média</option>
+      <option value="dificil"${treinoFiltro.nivel==='dificil'?' selected':''}>Difícil</option>
+    </select>
+    <span class="treino-montar-count">${n} questõe${n===1?'':'s'}</span>
+    <button class="btn btn-primary" onclick="treinoFiltroTreinar()" ${n?'':'disabled'}>Treinar</button>
+  </div>`;
+}
+function treinoRegistrarSessaoNoHistorico(r){
+  db.treinoHistorico=db.treinoHistorico||[];
+  db.treinoHistorico.unshift({id:genId(),data:new Date().toISOString(),
+    titulo:r.titulo,respondidas:r.respondidas,certas:r.certas,liquida:r.liquida});
+  if(db.treinoHistorico.length>50)db.treinoHistorico=db.treinoHistorico.slice(0,50);
+  saveDB();
+}
+function treinoRodapeHTML(){
+  const ult=(db.treinoHistorico||[]).slice(0,3);
+  const txt=ult.length
+    ?ult.map(h=>`${new Date(h.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} · ${h.respondidas} questões · ${h.respondidas?Math.round(h.certas/h.respondidas*100):0}%`).join(' &nbsp;|&nbsp; ')
+    :'nenhum ainda';
+  return`<div class="treino-rodape-linha">
+    <span>Últimos treinos: ${txt}</span>
+    <span>Simulados ficam em <b>Minhas Provas</b></span>
+  </div>`;
+}
+function treinarEntradaHTML(){
+  const ativo=treinarPoolAtivo();
+  const topo=`<div class="treino-topo-entrada">
+      <div class="sec-title" style="margin:0">🎯 Treinar</div>
+      <button class="btn btn-sm btn-ghost" onclick="treinarAbrirAvancado()"><i class="fa fa-stopwatch"></i> Fazer simulado</button>
+    </div>`;
+  // Acervo vazio ou quase: decks quase todos zerados e pior que nenhum deck — um cartao
+  // so, convidando a gerar a primeira leva.
+  if(ativo.length<5){
+    return`<div class="section-card">
+      ${topo}
+      <div class="empty"><i class="fa fa-seedling"></i>
+        <p>Você ainda tem poucas questões pra organizar por estado.<br>Gere um Simulado Geral ou importe um Caderno da Banca — assim que você responder, elas entram pro seu acervo e os decks aparecem aqui.</p>
+      </div>
+      <div id="treinar-avancado" style="display:none;margin-top:14px">${simGeralConfigHTML()}</div>
+    </div>`;
+  }
+  const decks=treinarDecks();
+  return`<div class="treino-entrada">
+    <div class="section-card" style="margin-bottom:0">${topo}</div>
+    <div id="treinar-avancado" style="display:none">${simGeralConfigHTML()}</div>
+    <div class="treino-grid-2">
+      ${treinoDestaqueHTML()}
+      ${treinoPlacarHTML()}
     </div>
-    <div class="treinar-avancado-faixa">
-      <span><i class="fa fa-toolbox"></i> Montar do zero — escolher assunto por assunto, formato, quantidade e tempo</span>
-      <button id="treinar-avancado-btn" class="btn btn-xs btn-ghost" onclick="treinarAbrirAvancado()">Abrir montagem avançada</button>
+    <div class="treino-grid-2">
+      ${treinoFocoHTML()}
+      ${treinoDecksListaHTML(decks)}
     </div>
-    <div id="treinar-avancado" style="display:none;margin-top:14px">${simGeralConfigHTML()}</div>
-  </div>${sgHistoricoCardHTML()}`;
+    ${treinoMontarBarHTML()}
+    ${treinoRodapeHTML()}
+  </div>`;
 }
 function renderSimGeralScreen(){
   renderProvasScreen();
@@ -12098,6 +12667,11 @@ function renderSimGeralScreen(){
   renderBancoScreen();
   const container=document.getElementById('simgeral-content');
   if(!container)return;
+  // Sessao de treino e o resumo dela vem ANTES de simGeralActive: os dois estados sao
+  // mutuamente exclusivos (nada na tela cria os dois ao mesmo tempo), mas se algum dia
+  // coexistirem, o Modo Treino e o mais recente e ganha.
+  if(treinoSessao){container.innerHTML=treinoSessaoHTML();return;}
+  if(treinoResumo){container.innerHTML=treinoResumoHTML();return;}
   if(simGeralActive){
     container.innerHTML=simGeralActive.corrected?simGeralResultsHTML():simGeralExamHTML();
     if(!simGeralActive.corrected)sgStartTimerTick();else sgStopTimerTick();
@@ -12112,10 +12686,13 @@ function renderSimGeralScreen(){
 // A aba Minhas Provas. Todo mundo que mexe em lote ou em prova guardada continua
 // chamando renderSimGeralScreen, que repassa pra ca — assim nao existe caminho que
 // atualize uma tela e esqueca a outra.
+// O historico de Simulado Geral saiu da tela Treinar pra ca (Modo Treino completo):
+// metade da Treinar era esse card, e ele nao tem nada a ver com treinar — e historico
+// de PROVA.
 function renderProvasScreen(){
   const el=document.getElementById('provas-content');
   if(!el)return;
-  el.innerHTML=simColarHTML()+provasGuardadasHTML()+provasArquivadasHTML();
+  el.innerHTML=simColarHTML()+sgHistoricoCardHTML()+provasGuardadasHTML()+provasArquivadasHTML();
 }
 function renderCadernoScreen(){
   const el=document.getElementById('caderno-content');
@@ -14830,6 +15407,19 @@ function montarAcervo(){
     const chave=acervoChave2De(q);
     if(!chave||queimadas.has(chave)||porChave.has(chave))return;
     porChave.set(chave,{q,subId:q.subId,respondida:(q.vezesRespondida||0)>0,errou:q.ultimoResultado==='X',doBanco:true});
+  });
+  // Prova ARQUIVADA (achado do Modo Treino): ja saiu de db.provas de vez, mas o esqueleto
+  // continua com chaves2+tentativas — hidrata igual a prova viva convertida, so que sem
+  // prova nenhuma por tras. Toda questao dela ja deveria estar em db.acervo (e por isso ja
+  // caiu no laco acima) — este laco so pega o raro caso de item que saiu do acervo mas o
+  // arquivo ainda referencia (senao ficaria invisivel pro Modo Treino sem motivo).
+  (db.provasArquivo||[]).forEach(a=>{
+    (a.chaves2||[]).forEach(chave=>{
+      if(!chave||queimadas.has(chave)||porChave.has(chave))return;
+      const item=porAcervoChave.get(chave);
+      if(!item)return;
+      porChave.set(chave,{q:item,subId:item.subId,respondida:(item.vezesRespondida||0)>0,errou:item.ultimoResultado==='X',doBanco:true});
+    });
   });
   return [...porChave.values()];
 }
@@ -27899,6 +28489,27 @@ function bindStaticEvents(){
   document.getElementById('modal')?.addEventListener('click',e=>{
     if(e.target===document.getElementById('modal'))closeModal();
   });
+  document.addEventListener('keydown',treinoAtalhoTeclado);
+}
+// Atalhos da sessao de treino (desejavel do Modo Treino): so reage com a sessao aberta e
+// fora de um campo de texto (senao digitar "certeza" na nota disparava "C" de Certo a
+// cada letra). C/E ou A-E responde, Enter avanca, B deixa em branco.
+function treinoAtalhoTeclado(e){
+  const s=treinoSessao;
+  if(!s)return;
+  const alvo=e.target;
+  if(alvo&&(alvo.tagName==='TEXTAREA'||alvo.tagName==='INPUT'||alvo.tagName==='SELECT'))return;
+  const item=s.itens[s.idx];
+  if(!item)return;
+  const respondida=s.respondidasSet.has(s.idx);
+  const k=e.key.toUpperCase();
+  if(!respondida&&/^[A-E]$/.test(k)){
+    const alt=(item.alternativas||[]).find(a=>a.letra===k);
+    if(alt){e.preventDefault();treinoResponder(k);}
+    return;
+  }
+  if(!respondida&&k==='B'){e.preventDefault();treinoPular();return;}
+  if(k==='ENTER'){e.preventDefault();treinoProxima();return;}
 }
 bindStaticEvents();
 
