@@ -12627,7 +12627,10 @@ function acervoDificuldade(acertos,vezes){
 // tanto na eviction (prova no formato antigo, acervoGuardarProva) quanto, a partir do
 // passo 7, em tempo real na correcao (provaRegistrarTentativaNoAcervo), pra prova ja
 // convertida por chave nao ficar com o numero desatualizado enquanto ainda esta viva.
-function acervoAtualizarContadores(item,resultado){
+// Passo 8.2: confianca (chute/duvida/certeza) e OPCIONAL — so soma no bucket cruzado
+// quando foi de fato declarada, pra tentativa antiga (de antes desse recurso existir)
+// nao fingir um dado que nunca teve.
+function acervoAtualizarContadores(item,resultado,confianca){
   if(!item||!resultado)return;
   item.ultimoResultado=resultado;
   item.vezesRespondida=(item.vezesRespondida||0)+1;
@@ -12635,11 +12638,19 @@ function acervoAtualizarContadores(item,resultado){
   else item.erros=(item.erros||0)+1;
   item.ultimaVezEm=new Date().toISOString();
   item.dificuldadeAferida=acervoDificuldade(item.acertos,item.vezesRespondida);
+  if(confianca){
+    const campo=confianca+(resultado==='C'?'Acertos':'Erros');
+    item[campo]=(item[campo]||0)+1;
+  }
 }
 // Campos que existem uma vez e nunca mudam depois de criados.
 function acervoCamposNovos(origem){
   return{tags:[],favorita:false,status:'ativa',
          vezesRespondida:0,acertos:0,erros:0,ultimaVezEm:null,dificuldadeAferida:null,
+         // Buckets acerto x confianca declarada (passo 8.2) — alimentam a matriz da tela
+         // de resultado e o deck "Acertei chutando". Cumulativos, iguais a acertos/erros.
+         certezaAcertos:0,certezaErros:0,duvidaAcertos:0,duvidaErros:0,
+         chuteAcertos:0,chuteErros:0,
          criadaEm:new Date().toISOString(),origem:origem||'ia'};
 }
 // Guarda as questoes de UMA prova que esta saindo. Carimba o que voce fez nelas
@@ -12648,7 +12659,9 @@ function acervoCamposNovos(origem){
 function acervoGuardarProva(prova){
   db.acervo=db.acervo||[];
   const ts=prova.tentativas||[];
-  const resp=(ts[ts.length-1]||{}).respostas||[];
+  const ultima=ts[ts.length-1]||{};
+  const resp=ultima.respostas||[];
+  const conf=ultima.confiancas||[];
   // Chave por IDENTIDADE, nao por endereco: e aqui que a colisao do prefixo de 120
   // caracteres fazia uma questao de verdade sumir dentro de outra.
   const porChave=new Map();
@@ -12692,7 +12705,7 @@ function acervoGuardarProva(prova){
       // passou pelo caminho ao vivo) ainda conta por aqui, como sempre foi.
       if(limpa.ultimoResultado&&!prova.chaves){
         // newest wins pro resultado; os contadores SOMAM, nunca substituem.
-        acervoAtualizarContadores(velha,limpa.ultimoResultado);
+        acervoAtualizarContadores(velha,limpa.ultimoResultado,conf[i]);
         mudou=true;
       }
       if(mudou)melhoradas++;
@@ -12700,7 +12713,7 @@ function acervoGuardarProva(prova){
     }
     Object.assign(limpa,acervoCamposNovos(prova.origem));
     if(limpa.ultimoResultado&&!prova.chaves){
-      acervoAtualizarContadores(limpa,limpa.ultimoResultado);
+      acervoAtualizarContadores(limpa,limpa.ultimoResultado,conf[i]);
     }
     porChave.set(chave,limpa);
     db.acervo.unshift(limpa);
@@ -13091,7 +13104,7 @@ function provaRegistrarTentativaNoAcervo(prova,questoesAtivas,respostas){
                         dificuldade:item.dificuldadeAferida};
     const dada=(respostas||[])[i]||'';
     if(!dada)return;
-    acervoAtualizarContadores(item,dada===q.correta?'C':'X');
+    acervoAtualizarContadores(item,dada===q.correta?'C':'X',q.confianca);
     mudou=true;
   });
   if(mudou)acervoSalvar();
