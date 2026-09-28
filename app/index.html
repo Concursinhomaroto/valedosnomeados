@@ -12109,12 +12109,15 @@ function treinarFaixaContagem(ativo){
 function treinarComDeck(deckId){
   const deck=treinarDecks().find(d=>d.id===deckId);
   if(!deck||!deck.itens.length){toast('Nenhuma questão nesse deck agora — volte depois de treinar mais um pouco.','var(--muted)');return;}
-  let itens=deck.itens.slice();
-  // Refazer: a que esta ha MAIS TEMPO sem resposta primeiro — sem isto a ordem era
-  // aleatoria e a questao mais atrasada podia nunca aparecer numa sessao curta.
-  if(deckId==='refazer')itens.sort((a,b)=>new Date(a.ultimaVezEm||0)-new Date(b.ultimaVezEm||0));
-  else{for(let i=itens.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[itens[i],itens[j]]=[itens[j],itens[i]];}}
-  treinoIniciar(itens,{titulo:deck.nome});
+  // Refazer: a que esta ha MAIS TEMPO sem resposta primeiro — sem isto a questao mais
+  // atrasada podia nunca aparecer numa sessao curta. E a UNICA excecao ao embaralho padrao
+  // (ordenado:true avisa treinoIniciar pra nao mexer na ordem que acabou de montar aqui).
+  if(deckId==='refazer'){
+    const itens=deck.itens.slice().sort((a,b)=>new Date(a.ultimaVezEm||0)-new Date(b.ultimaVezEm||0));
+    treinoIniciar(itens,{titulo:deck.nome,ordenado:true});
+  }else{
+    treinoIniciar(deck.itens,{titulo:deck.nome});
+  }
   renderSimGeralScreen();
   window.scrollTo(0,0);
 }
@@ -12143,9 +12146,18 @@ function treinoResolverItem(q){
   }
   return item;
 }
+// Embaralha por padrao — achado ao vivo: "Treinar agora"/"O que focar"/"Montar meu treino"
+// chamavam isto direto, sem embaralhar em lugar nenhum, entao a MESMA questao (a primeira
+// do pool, em ordem estavel) abria toda vez que voce clicava "Treinar agora" de novo pro
+// mesmo assunto. So treinarComDeck embaralhava, e so pros decks que nao fossem Refazer.
+// meta.ordenado pula o embaralho pra quem ja montou a ordem de proposito (Refazer).
 function treinoIniciar(pool,meta){
   if(!pool||!pool.length){toast('Nenhuma questão nesse recorte agora.','var(--muted)');return false;}
-  const itens=pool.map(treinoResolverItem).filter(Boolean);
+  const base=pool.slice();
+  if(!(meta&&meta.ordenado)){
+    for(let i=base.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[base[i],base[j]]=[base[j],base[i]];}
+  }
+  const itens=base.map(treinoResolverItem).filter(Boolean);
   if(!itens.length){toast('❌ Não consegui montar.','var(--red)');return false;}
   acervoSalvar();
   treinoResumo=null;

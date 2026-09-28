@@ -224,6 +224,28 @@ async def main():
         assert r['totalAcervo']==3 and r['noPool']==1 and r['temBoa']
         print('   OK\n')
 
+        print('=== L) "Treinar agora"/"O que focar"/"Montar meu treino" embaralham — achado ao vivo ===')
+        # Relato: "Treinar agora" sempre voltava pra mesma primeira pergunta. treinoIniciar
+        # e o unico ponto que TODOS os caminhos passam — so treinarComDeck embaralhava
+        # antes, os outros chamavam treinoIniciar direto, sem mexer na ordem nunca.
+        r=await page.evaluate("""()=>{
+          const qs=QS('sub-mt1','Choque Séptico',10,'Ordem');
+          const original=qs.map(q=>q.questao);
+          const mathRandomReal=Math.random;
+          Math.random=()=>0;   // Fisher-Yates com random=0 sempre troca com o indice 0 — determinista
+          treinoIniciar(qs,{titulo:'Embaralhado'});
+          const embaralhado=treinoSessao.itens.map(q=>q.questao);
+          const ordenado=[...qs];
+          treinoIniciar(ordenado,{titulo:'Ordenado',ordenado:true});
+          const respeitouOrdenado=treinoSessao.itens.map(q=>q.questao);
+          Math.random=mathRandomReal;
+          return {mudouOrdem:JSON.stringify(embaralhado)!==JSON.stringify(original),
+                  ordenadoIntacto:JSON.stringify(respeitouOrdenado)===JSON.stringify(original)};}""")
+        print('   %s'%r)
+        assert r['mudouOrdem'], 'treinoIniciar sem ordenado:true tinha que embaralhar'
+        assert r['ordenadoIntacto'], 'ordenado:true (Refazer) tinha que preservar a ordem de proposito'
+        print('   OK\n')
+
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))
         assert not graves, graves
