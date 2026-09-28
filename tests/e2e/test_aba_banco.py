@@ -28,7 +28,7 @@ async def main():
         print('   abas: %s'%' | '.join(r['ordem']))
         print('   telas com a barra: %s'%len(r['telas']))
         assert r['todasTem5'] and r['cadaUmaTemUmAtivo'], (r['todasTem5'],r['cadaUmaTemUmAtivo'])
-        assert r['ordem'][3].endswith('Banco de Questões')
+        assert r['ordem'][3].endswith('Acervo')   # renomeado no passo 8.3 do redesenho
         assert r['existeATela'] and r['existeOAlvo']
         print('   entrou antes do Banco de Erros, nas 5 telas, sem duplicar o "ativo"')
         print('   OK\n')
@@ -115,7 +115,7 @@ async def main():
                           &&document.getElementById('nav-simgeral').classList.contains('active')};}""")
         print('   sempre 1 tela ativa: %s · a aba continua renderizando: %s'
               %(r['sempreUma'],r['aindaRenderiza']))
-        print('   o menu lateral segue destacando Simulado Geral: %s'%r['menuPai'])
+        print('   o menu lateral segue destacando Treinar: %s'%r['menuPai'])
         assert r['sempreUma'] and r['aindaRenderiza'] and r['menuPai']
         print('   OK\n')
 
