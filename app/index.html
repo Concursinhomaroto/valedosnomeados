@@ -3058,6 +3058,17 @@ nav{
   </div>
 
   <div class="section-card" style="max-width:720px">
+    <div class="sec-title" style="font-size:15px">📚 Backfill do Acervo (provas de antes do passo 6)</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+      Já roda sozinho no boot (silencioso quando não há nada pra fazer). Este botão só serve
+      pra conferir o relatório de novo, ou forçar depois de restaurar um backup antigo —
+      idempotente: rodar de novo sobre prova já migrada não soma nada duas vezes.
+    </div>
+    <button class="btn btn-primary" onclick="adminRodarBackfillAcervo()"><i class="fa fa-database"></i> Rodar backfill e ver relatório</button>
+    <div id="admin-backfill-relatorio" style="margin-top:12px"></div>
+  </div>
+
+  <div class="section-card" style="max-width:720px">
     <div class="sec-title" style="font-size:15px">🗄️ Backups automáticos (sua conta)</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
       Duas cópias dos seus dados são mantidas automaticamente num lugar separado do banco
@@ -5851,6 +5862,25 @@ function adminRefresh(){
 // contas que existiam antes dele, reconciliar um pagamento que o Worker do Pix confirmou
 // direto no Firebase sem a pessoa ter reaberto o app, e conferir se alguém mexeu no
 // próprio registro. Não roda sozinho em lugar nenhum.
+// Botao manual pro backfill que ja roda sozinho no boot (acervoCarregar) — serve pra ver
+// o relatorio de novo sem recarregar a pagina, ou forcar depois de restaurar um backup
+// que trouxe prova sem _acervoBackfillEm de volta. Idempotente por prova: rodar de novo
+// sobre o que ja foi migrado da 0 em tudo, de proposito.
+function adminRodarBackfillAcervo(){
+  const el=document.getElementById('admin-backfill-relatorio');
+  const r=acervoBackfillDeProvasAntigas();
+  const linha=(lbl,v)=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--muted)">${lbl}</span><b>${v}</b></div>`;
+  if(el)el.innerHTML=`<div style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 14px">
+    ${linha('Provas migradas nesta rodada',r.provasMigradas)}
+    ${linha('Tentativas contadas',r.tentativasContadas)}
+    ${linha('Questões novas no Acervo',r.questoesNovas)}
+    ${linha('Questões que já existiam (compartilhadas entre provas)',r.questoesColidiram)}
+    ${linha('Total no Acervo agora',(db.acervo||[]).length)}
+  </div>`;
+  toast(r.provasMigradas
+    ?`✅ ${r.provasMigradas} prova(s) migrada(s) agora.`
+    :'✅ Nada pra migrar — tudo que existe já passou por aqui antes.','var(--accent)');
+}
 async function adminReconstruirIndice(){
   const resultsEl=document.getElementById('admin-results');
   if(!confirm('Reconstruir o índice? Isso lê TODAS as contas por inteiro uma vez — é a leitura pesada que o painel deixou de fazer a cada abertura. Use quando desconfiar que a lista está desatualizada.'))return;
@@ -13030,6 +13060,15 @@ async function acervoCarregar(){
     acervoSalvar(true);
     if(noRegistro)saveDB();   // o registro principal encolhe na mesma hora
   }
+  // Backfill de provas antigas (achado pelo usuario — ver o comentario da propria
+  // funcao). Roda aqui tambem, nao so dentro de provasAparar: guardar uma prova NOVA
+  // nunca foi o unico jeito de abrir o app, e quem so quer OLHAR o que ja tem nao pode
+  // depender de fazer alguma coisa primeiro pra o proprio acervo aparecer.
+  const backfill=acervoBackfillDeProvasAntigas();
+  if(backfill.provasMigradas){
+    console.info('Backfill do acervo (provas de antes do passo 6):',backfill);
+    toast(`📚 ${backfill.provasMigradas} prova(s) antiga(s) recuperada(s) pro Acervo — ${backfill.tentativasContadas} tentativa(s) contada(s).`,'var(--accent)');
+  }
   await provarqCarregar();
   await histCarregar();
   renderSimGeralScreen();
@@ -13333,6 +13372,98 @@ function provaRegistrarTentativaNoAcervo(prova,questoesAtivas,respostas){
     mudou=true;
   });
   if(mudou)acervoSalvar();
+  // Marca como reconciliada: acervoBackfillDeProvasAntigas (chamada dentro de
+  // provasAparar, que roda logo depois de qualquer provaGuardar) pula prova com
+  // _acervoBackfillEm. Sem este carimbo aqui, TODA tentativa nova recem-contada por
+  // este caminho seria contada de NOVO pelo backfill na mesma chamada — ele nao tem
+  // como saber que esta tentativa especifica ja acabou de ser somada, so ve "prova
+  // com tentativa e sem _acervoBackfillEm" e soma tudo de novo do zero.
+  prova._acervoBackfillEm=new Date().toISOString();
+}
+// Migracao pontual (buraco que o passo 6 deixou pra tras, achado pelo usuario): prova que
+// ja tinha tentativa(s) ANTES do passo 6 existir nunca foi convertida nem contada no
+// acervo de verdade. O unico gatilho de conversao ate aqui era guardar uma prova NOVA —
+// e mesmo esse gatilho (a varredura preguicosa de provasAparar) so trocava o FORMATO,
+// sem somar os contadores das tentativas antigas. Quem nao fez simulado nenhum desde o
+// deploy do passo 6 ficava com o Acervo (e a tela Treinar) vazios, apesar de ter provas
+// cheias de questao ja respondida.
+//
+// Idempotente por PROVA: cada uma ganha _acervoBackfillEm na primeira vez que passa por
+// aqui, e uma proxima chamada pula ela inteira — sem isso, rodar de novo somaria as
+// mesmas tentativas antigas outra vez. Tentativa NOVA feita depois do backfill continua
+// contando pelo caminho normal (provaRegistrarTentativaNoAcervo, dentro de provaGuardar),
+// sem relacao nenhuma com isto — nao ha janela de dupla contagem entre os dois caminhos.
+// Nao mexe em db.provas alem de marcar o backfill e converter o formato (o que
+// provasAparar ja fazia de qualquer forma) — nenhuma prova, tentativa ou resposta e apagada.
+//
+// Confianca fica vazia nas tentativas antigas (confiancas[] so existe a partir do passo
+// 8.1) — acervoAtualizarContadores ja trata confianca ausente como "nao entra em bucket
+// nenhum", entao nao precisa de nenhum caso especial aqui: a matriz mostra isso como nota
+// separada, nunca como 4a coluna fingindo dado que a tentativa nao tem.
+function acervoBackfillDeProvasAntigas(){
+  const relatorio={provasMigradas:0,tentativasContadas:0,questoesNovas:0,questoesColidiram:0};
+  const candidatas=(db.provas||[]).filter(p=>!p._acervoBackfillEm);
+  // Prova nunca feita nao tem tentativa pra contar — so marca, pra nao reprocessar de novo
+  // a cada boot, e sai. "Prova esperando nao e historico" continua valendo.
+  candidatas.filter(p=>!provaFoiFeita(p)).forEach(p=>{p._acervoBackfillEm=new Date().toISOString();});
+  const comTentativa=candidatas.filter(provaFoiFeita);
+  if(!comTentativa.length)return relatorio;
+  // "colidiu" = a questao (por IDENTIDADE) ja estava no acervo antes deste backfill, ou
+  // aparece em mais de uma prova dele. Nao e erro: e o dedup funcionando — mesma questao
+  // em provas diferentes vira UM item so, com os contadores das duas somados. O retrato
+  // do que ja existia tem que ser tirado ANTES de converter — depois disso o proprio
+  // provaConverterParaReferencia (via bancoAdicionarOuFundir) ja povoou db.acervo com
+  // tudo, e tudo pareceria "colisao" mesmo sendo tudo novo.
+  const vistoNesteRun=new Set();
+  (db.acervo||[]).forEach(q=>{const k=acervoChave2De(q);if(k)vistoNesteRun.add(k);});
+  // Converte TODAS agora — precisa de chaves2 de cada uma antes de poder ler
+  // provaQuestoes/identidade de ninguem.
+  comTentativa.forEach(prova=>{if(!prova.chaves)provaConverterParaReferencia(prova);});
+  const migraveis=comTentativa.filter(p=>p.chaves);
+  migraveis.forEach(prova=>{
+    provaQuestoes(prova).forEach((q,i)=>{
+      if(questaoForaDaConta(q))return;
+      const chave=(prova.chaves2||[])[i];
+      if(!chave)return;
+      if(vistoNesteRun.has(chave))relatorio.questoesColidiram++;
+      else{vistoNesteRun.add(chave);relatorio.questoesNovas++;}
+    });
+  });
+  // Uma fila SO com (prova,tentativa) de TODAS as provas migrando, ordenada pela data DE
+  // VERDADE de cada tentativa — nao pela ordem de db.provas (mais nova primeiro) nem pela
+  // ordem de tentativas[] dentro de cada uma. ultimoResultado/ultimaVezEm sao "por ultimo
+  // escreve, vale" (acervoAtualizarContadores), entao processar fora de ordem cronologica
+  // faria uma tentativa de MARCO ganhar de uma de AGOSTO so por ter vindo depois no laco —
+  // errado quando a mesma questao aparece em provas diferentes com datas entrelacadas.
+  const fila=[];
+  migraveis.forEach(prova=>{
+    const qs=provaQuestoes(prova);
+    (prova.tentativas||[]).forEach(t=>fila.push({prova,qs,t}));
+  });
+  fila.sort((a,b)=>new Date(a.t.data||0)-new Date(b.t.data||0));
+  const porChave2=new Map();
+  (db.acervo||[]).forEach(q=>{const k=acervoChave2De(q);if(k&&!porChave2.has(k))porChave2.set(k,q);});
+  fila.forEach(({prova,qs,t})=>{
+    const resp=t.respostas||[];
+    const conf=t.confiancas||[];
+    let contou=false;
+    qs.forEach((q,i)=>{
+      if(questaoForaDaConta(q))return;
+      const chave=(prova.chaves2||[])[i];
+      const item=chave&&porChave2.get(chave);
+      if(!item)return;
+      const dada=resp[i]||'';
+      if(!dada)return;
+      acervoAtualizarContadores(item,dada===q.correta?'C':'X',conf[i]);
+      contou=true;
+    });
+    if(contou)relatorio.tentativasContadas++;
+  });
+  comTentativa.forEach(prova=>{prova._acervoBackfillEm=new Date().toISOString();});
+  relatorio.provasMigradas=migraveis.length;
+  acervoSalvar(true);
+  saveDB();
+  return relatorio;
 }
 // Copia funda o bastante: cada entrada do overlay e um objeto piso (m/p/s/k), so o grifo
 // (g) e array de objetos por dentro dele.
@@ -13529,7 +13660,10 @@ function provaGuardar(active,assuntosResumo){
     // So converte na 1a tentativa de verdade — e o que separa "so esperando" (copia
     // cheia, nao entra no banco cedo demais) de "ja tem historico" (vira referencia,
     // que e o que economiza o payload que sobe pro Firebase a cada saveDB).
-    if(!(jaExiste.tentativas||[]).length)provaConverterParaReferencia(jaExiste);
+    // !jaExiste.chaves, nao !tentativas.length: prova legada (tentativa de antes do passo
+    // 6, sem nunca ter passado pelo backfill) tem as duas coisas ao mesmo tempo — so
+    // comprimento pulava a conversao pra sempre nessa prova.
+    if(!jaExiste.chaves)provaConverterParaReferencia(jaExiste);
     jaExiste.tentativas=jaExiste.tentativas||[];
     const tentativa=provaTentativaDe(active);
     jaExiste.tentativas.push(tentativa);
@@ -13559,8 +13693,11 @@ function provasAparar(){
   // Migracao preguicosa: prova que ja tinha tentativa ANTES desta versao (carregada do
   // Firebase ainda em copia cheia) so converte aqui, no proximo ciclo de guarda — sem
   // isto, so prova nova ganharia a economia de payload, e quem ja tem 30 provas feitas
-  // no ar continuaria pagando o preco antigo pra sempre.
-  db.provas.forEach(p=>{if(!p.chaves&&provaFoiFeita(p))provaConverterParaReferencia(p);});
+  // no ar continuaria pagando o preco antigo pra sempre. acervoBackfillDeProvasAntigas
+  // ja faz isso (e mais: soma os contadores das tentativas antigas tambem) e e
+  // idempotente por prova — chamar aqui de novo, a cada guarda, nao tem custo extra
+  // depois da 1a vez.
+  acervoBackfillDeProvasAntigas();
   const saindo=[];
   // db.provas e a mais nova primeiro, entao varrer de tras pra frente acha a mais antiga.
   const despejarUmaFeita=()=>{
@@ -13695,7 +13832,10 @@ function provaCorrigirRefacao(){
   if(prova){
     // Prova MONTADA (treino) fecha a 1a "tentativa" por aqui, nao por provaGuardar — sem
     // este gatilho tambem aqui, uma prova de treino nunca converteria pra referencia.
-    if(!(prova.tentativas||[]).length)provaConverterParaReferencia(prova);
+    // Checa !prova.chaves, nao !tentativas.length: prova legada (tentativa de antes do
+    // passo 6, carregada sem nunca ter passado pelo backfill) tem tentativas>0 e chaves
+    // vazio ao mesmo tempo — checar so o comprimento pulava a conversao pra sempre.
+    if(!prova.chaves)provaConverterParaReferencia(prova);
     prova.tentativas=prova.tentativas||[];
     const respostas=active.questoes.map(q=>q.userAnswer||'');
     const confiancas=active.questoes.map(q=>q.confianca||'');
