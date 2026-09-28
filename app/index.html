@@ -794,6 +794,30 @@ nav{
 .banco-check{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;
   color:var(--text2);white-space:nowrap;cursor:pointer}
 .banco-faixa{width:56px;padding:5px 6px;text-align:center;font-weight:700}
+/* Chips com contagem viva (passo 8.4): ESTADO/NÍVEL/NATUREZA — mesmo estilo, três faixas
+   rotuladas, contorno de 2px + fundo tingido no ativo (nunca só o matiz, sempre também
+   forma/peso — dois sinais diferentes não podem depender só de cor). */
+.banco-chip-grupo{margin-bottom:10px;}
+.banco-chip-rotulo{font-size:9.5px;font-weight:800;color:var(--muted);text-transform:uppercase;
+  letter-spacing:0.5px;display:block;margin-bottom:5px;}
+.banco-chip-nota{font-size:9.5px;color:var(--muted);font-weight:600;font-style:italic;margin-left:6px;}
+.banco-chips{display:flex;flex-wrap:wrap;gap:6px;}
+.banco-chip{border:1.5px solid var(--border);border-radius:999px;padding:5px 11px;
+  font-size:11px;font-weight:700;color:var(--text2);background:var(--panel2);cursor:pointer;
+  white-space:nowrap;}
+.banco-chip b{font-weight:900;margin-left:2px;}
+.banco-chip.ativo{border-color:var(--accent);border-width:2px;background:rgba(124,58,237,0.1);
+  color:var(--accent);}
+.banco-chip-sm{padding:4px 9px;font-size:10px;}
+.banco-chips-sugeridas{margin-top:6px;}
+/* Mapa do Acervo: tamanho = quantidade, cor = acerto (rampa de 4 passos), contorno âmbar
+   quando raso — dois problemas diferentes, dois sinais visuais diferentes na mesma grade. */
+.banco-mapa-grid{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;}
+.banco-mapa-cel{border-radius:10px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:transform .12s;flex:0 0 auto;}
+.banco-mapa-cel:hover{transform:scale(1.05);}
+.banco-mapa-cel span{font-size:12px;font-weight:900;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.4);}
+.banco-mapa-raso{box-shadow:0 0 0 3px var(--orange-t);}
 .banco-lista{display:flex;flex-direction:column;gap:6px;margin-top:8px;
   max-height:320px;overflow:auto}
 .banco-item{border:1px solid var(--border);border-radius:9px;padding:8px 10px;
@@ -14497,16 +14521,21 @@ function montarAlternarMateria(kId,el){
 // texto, formato, faixa de acerto e nunca respondida. Os outros tres sobem na tela
 // junto com o editor, pra nao ter controle que filtra por algo que nada ainda tem.
 let bancoFiltro={texto:'',formato:'',status:'',favorita:false,tags:new Set(),
-                 faixaMin:null,faixaMax:null,naoRespondida:false};
+                 faixaMin:null,faixaMax:null,naoRespondida:false,
+                 // estado/nivel: passo 8.4 do redesenho — chips com contagem viva, por
+                 // cima do que ja existia (naoRespondida/status/faixa continuam vivos,
+                 // so pararam de ter controle proprio na tela — ESTADO junta os tres
+                 // num conceito so, NIVEL troca a faixa numerica por dificuldadeAferida).
+                 estado:'',nivel:''};
 let bancoListaAberta=false;
 function bancoFiltroTemAlgo(){
   const f=bancoFiltro;
   return !!(f.texto||f.formato||f.status||f.favorita||f.tags.size
-            ||f.faixaMin!=null||f.faixaMax!=null||f.naoRespondida);
+            ||f.faixaMin!=null||f.faixaMax!=null||f.naoRespondida||f.estado||f.nivel);
 }
 function bancoFiltroLimpar(){
   bancoFiltro={texto:'',formato:'',status:'',favorita:false,tags:new Set(),
-               faixaMin:null,faixaMax:null,naoRespondida:false};
+               faixaMin:null,faixaMax:null,naoRespondida:false,estado:'',nivel:''};
   bancoListaRefrescar();
 }
 // A taxa de acerto so existe pra questao que ja foi respondida ALGUMA vez (vezesRespondida
@@ -14516,6 +14545,15 @@ function bancoFiltroLimpar(){
 function bancoTaxaAcerto(q){
   const v=q&&q.vezesRespondida;
   return v?Math.round(100*q.acertos/v):null;
+}
+// So existe pra decidir o ESTADO (chip) de um item do pool — "respondida"/"errou" vem do
+// proprio x (montarAcervo ja reconcilia prova viva/arquivada/banco), nao de q direto: uma
+// questao numa prova ainda nao convertida pode ja ter sido respondida sem que
+// q.vezesRespondida saiba disso ainda.
+function bancoEstadoDe(x){
+  if((x.q.status||'ativa')!=='ativa')return'quarentena';
+  if(!x.respondida)return'nunca';
+  return x.errou?'errada':'acertada';
 }
 function bancoAplicarFiltros(pool,f){
   f=f||bancoFiltro;
@@ -14529,6 +14567,8 @@ function bancoAplicarFiltros(pool,f){
   if(f.favorita)out=out.filter(x=>!!x.q.favorita);
   if(f.tags&&f.tags.size)out=out.filter(x=>(x.q.tags||[]).some(t=>f.tags.has(t)));
   if(f.naoRespondida)out=out.filter(x=>!x.respondida);
+  if(f.estado)out=out.filter(x=>bancoEstadoDe(x)===f.estado);
+  if(f.nivel)out=out.filter(x=>x.q.dificuldadeAferida===f.nivel);
   if(f.faixaMin!=null||f.faixaMax!=null){
     out=out.filter(x=>{
       const t=bancoTaxaAcerto(x.q);
@@ -14567,6 +14607,78 @@ function bancoFiltroMudouTag(tag,el){
 function bancoFiltroMudouFaixa(qual,el){
   const n=el.value===''?null:Math.max(0,Math.min(100,parseInt(el.value,10)||0));
   bancoFiltro[qual]=n;
+  bancoListaRefrescar();
+}
+// Pool com o MESMO modo/reino/assunto de sempre, mas sem UM filtro especifico — e o que
+// da a "contagem viva" de cada chip: quantas questoes esse chip traria se voce clicasse
+// nele agora, dado tudo o mais que ja esta filtrado.
+function bancoPoolSemCampo(campo){
+  const modo=(document.getElementById('montar-modo')||{}).value||'todas';
+  const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
+  return bancoAplicarFiltros(montarPool(modo,motivo),{...bancoFiltro,[campo]:campo==='tags'?new Set():''});
+}
+const BANCO_ESTADOS=[
+  {id:'nunca',lbl:'nunca vista',icon:'🌱'},
+  {id:'errada',lbl:'errada',icon:'❌'},
+  {id:'acertada',lbl:'acertada',icon:'✅'},
+  {id:'quarentena',lbl:'em quarentena',icon:'🚧'},
+];
+function bancoChipsEstadoHTML(){
+  const base=bancoPoolSemCampo('estado');
+  const contagem={};
+  base.forEach(x=>{const e=bancoEstadoDe(x);contagem[e]=(contagem[e]||0)+1;});
+  return`<div class="banco-chips" id="banco-filtro-estado">
+    ${BANCO_ESTADOS.map(e=>`<button type="button" class="banco-chip${bancoFiltro.estado===e.id?' ativo':''}" onclick="bancoFiltroMudouEstado('${e.id}')">${e.icon} ${e.lbl} <b>${contagem[e.id]||0}</b></button>`).join('')}
+  </div>`;
+}
+function bancoFiltroMudouEstado(valor){
+  bancoFiltro.estado=bancoFiltro.estado===valor?'':valor;   // clicar de novo volta a "qualquer"
+  const el=document.getElementById('banco-filtro-estado');
+  if(el)el.outerHTML=bancoChipsEstadoHTML();
+  bancoListaRefrescar();
+}
+// dificuldadeAferida ja existe (passo 2 do plano) — so 3 faixas (facil/media/dificil),
+// com amostra minima de 3, deliberadamente largas. O mockup pedia um 4º nivel
+// ("dificílima"): nao inventei um corte novo sem base nos dados so pra bater com o
+// mockup — quem quiser mais fino usa a faixa de acerto (%) que ja existia.
+const BANCO_NIVEIS=[
+  {id:'facil',lbl:'fácil'},{id:'media',lbl:'média'},{id:'dificil',lbl:'difícil'},
+];
+function bancoChipsNivelHTML(){
+  const base=bancoPoolSemCampo('nivel');
+  const contagem={};
+  base.forEach(x=>{if(x.q.dificuldadeAferida)contagem[x.q.dificuldadeAferida]=(contagem[x.q.dificuldadeAferida]||0)+1;});
+  return`<div class="banco-chips" id="banco-filtro-nivel">
+    ${BANCO_NIVEIS.map(n=>`<button type="button" class="banco-chip${bancoFiltro.nivel===n.id?' ativo':''}" onclick="bancoFiltroMudouNivel('${n.id}')">${n.lbl} <b>${contagem[n.id]||0}</b></button>`).join('')}
+  </div>`;
+}
+function bancoFiltroMudouNivel(valor){
+  bancoFiltro.nivel=bancoFiltro.nivel===valor?'':valor;
+  const el=document.getElementById('banco-filtro-nivel');
+  if(el)el.outerHTML=bancoChipsNivelHTML();
+  bancoListaRefrescar();
+}
+// NATUREZA: reaproveita o mesmo tags[] e o mesmo bancoFiltroMudouTag de sempre — so troca
+// checkbox por chip com contagem viva. As 9 sugestoes (bancoTagsSugeridasHTML, no editor)
+// e este filtro sao os dois lados da mesma decisao do usuario: aplicar e um clique no
+// editor, achar e um clique aqui, sem mudar o contrato de geracao da IA em nada.
+function bancoChipsTagsHTML(){
+  const tags=bancoTagsExistentes();
+  if(!tags.length)return'';
+  return`<div class="banco-chips" id="banco-filtro-tags-chips">
+    ${tags.map(t=>{
+      const f={...bancoFiltro,tags:new Set([t])};
+      const modo=(document.getElementById('montar-modo')||{}).value||'todas';
+      const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
+      const n=bancoAplicarFiltros(montarPool(modo,motivo),f).length;
+      return`<button type="button" class="banco-chip${bancoFiltro.tags.has(t)?' ativo':''}" onclick="bancoFiltroToggleTagChip('${escapeAttrJs(t)}')">${escapeHtml(t)} <b>${n}</b></button>`;
+    }).join('')}
+  </div>`;
+}
+function bancoFiltroToggleTagChip(tag){
+  if(bancoFiltro.tags.has(tag))bancoFiltro.tags.delete(tag); else bancoFiltro.tags.add(tag);
+  const el=document.getElementById('banco-filtro-tags-chips');
+  if(el)el.outerHTML=bancoChipsTagsHTML();
   bancoListaRefrescar();
 }
 function bancoListaToggle(){bancoListaAberta=!bancoListaAberta;bancoListaRefrescar();}
@@ -14709,6 +14821,35 @@ function bancoCardHTML(x){
 }
 // Um form so, reaproveitado por editar/criar — a diferenca e so o que ja vem preenchido
 // e o que o botao Salvar chama por baixo.
+// Vocabulario sugerido de NATUREZA (passo 8.4, decisao combinada com o usuario): tags[] ja
+// era campo do usuario (passo 2) e ja filtra (bancoAplicarFiltros); isto e so um menu de
+// valores prontos pra nao depender de digitar de cabeca — aplicacao manual, sem tocar em
+// nenhum contrato de geracao da IA. "direta" entra tambem, pra marcar o oposto de pegadinha.
+const BANCO_TAGS_SUGERIDAS=['direta','troca de número','supressão de ressalva',
+  'inversão de competência','norma revogada','generalização indevida',
+  'confusão entre normas','conceito trocado','correto porém incompleto'];
+function bancoTagsSugeridasHTML(prefixo,valorAtual){
+  const atuais=new Set((valorAtual||'').split(',').map(t=>t.trim().toLowerCase()).filter(Boolean));
+  return`<div class="banco-chips banco-chips-sugeridas" id="${prefixo}tags-sugeridas">
+    ${BANCO_TAGS_SUGERIDAS.map(t=>`<button type="button" class="banco-chip banco-chip-sm${atuais.has(t.toLowerCase())?' ativo':''}" onclick="bancoTagSugeridaToggle('${prefixo}','${escapeAttrJs(t)}')">${escapeHtml(t)}</button>`).join('')}
+  </div>`;
+}
+function bancoTagSugeridaToggle(prefixo,tag){
+  const inp=document.getElementById(prefixo+'tags');
+  if(!inp)return;
+  const atuais=inp.value.split(',').map(t=>t.trim()).filter(Boolean);
+  const i=atuais.findIndex(t=>t.toLowerCase()===tag.toLowerCase());
+  if(i>=0)atuais.splice(i,1); else atuais.push(tag);
+  inp.value=atuais.join(', ');
+  bancoTagsSugeridasAtualizar(prefixo);
+}
+// Digitar a mao (inclusive apagar) tambem atualiza qual chip aparece "ativo" — os dois
+// caminhos (clicar o chip, digitar o texto) sao a mesma fonte de verdade.
+function bancoTagsSugeridasAtualizar(prefixo){
+  const inp=document.getElementById(prefixo+'tags');
+  const box=document.getElementById(prefixo+'tags-sugeridas');
+  if(inp&&box)box.outerHTML=bancoTagsSugeridasHTML(prefixo,inp.value);
+}
 function bancoEditorHTML(q,modo){
   const cf=(q&&q._chaveForte)||'';
   const prefixo=modo==='criar'?'banco-novo-':'banco-edit-'+cf+'-';
@@ -14733,7 +14874,7 @@ function bancoEditorHTML(q,modo){
       style="width:100%;min-height:44px;font-size:11.5px;margin-top:6px">${escapeHtml((q&&q.explicacao)||'')}</textarea>
     <input id="${prefixo}fonte" class="inp" placeholder="Fonte (opcional)..." value="${escapeHtml((q&&q.fonte)||'')}" style="margin-top:6px">
     <div class="banco-edit-linha" style="margin-top:6px">
-      <input id="${prefixo}tags" class="inp" style="flex:1" placeholder="tags, separadas, por vírgula" value="${escapeHtml(((q&&q.tags)||[]).join(', '))}">
+      <input id="${prefixo}tags" class="inp" style="flex:1" placeholder="tags, separadas, por vírgula" value="${escapeHtml(((q&&q.tags)||[]).join(', '))}" oninput="bancoTagsSugeridasAtualizar('${prefixo}')">
       <label class="banco-check"><input type="checkbox" id="${prefixo}favorita"${q&&q.favorita?' checked':''}> ⭐ favorita</label>
       <select id="${prefixo}status" class="inp" style="width:auto">
         <option value="ativa"${(!q||q.status==='ativa'||!q.status)?' selected':''}>ativa</option>
@@ -14741,6 +14882,7 @@ function bancoEditorHTML(q,modo){
         <option value="arquivada"${q&&q.status==='arquivada'?' selected':''}>🗄️ arquivada</option>
       </select>
     </div>
+    ${bancoTagsSugeridasHTML(prefixo,((q&&q.tags)||[]).join(', '))}
     <div class="banco-edit-linha" style="margin-top:8px">
       <button class="btn btn-sm btn-primary" onclick="${modo==='criar'?'bancoCriarSalvar()':`bancoEditarSalvar('${cf}')`}"><i class="fa fa-check"></i> Salvar</button>
       <button class="btn btn-sm btn-ghost" onclick="${modo==='criar'?'bancoCriarCancelar()':`bancoEditarCancelar('${cf}')`}">Cancelar</button>
@@ -14925,6 +15067,82 @@ function bancoImportarHTML(){
     </div>
   </div>`;
 }
+// ===== MAPA DO ACERVO (passo 8.4) =====
+// Dois problemas diferentes, uma grade so: celula PALIDA = voce vai mal (resolve
+// treinando); celula CONTORNADA = voce tem pouca questao (so resolve gerando material
+// novo). O mockup ja separava os dois — aqui e so dar forma a algo que hoje ninguem ve.
+const BANCO_MAPA_RAMPA=['#E8E2F6','#C4B5EC','#7A55E8','#4B1FBF'];
+function bancoMapaCorAcerto(pct){
+  if(pct==null)return'var(--border)';   // nunca respondida: fora da rampa de acerto, nao e "vai mal"
+  if(pct<40)return BANCO_MAPA_RAMPA[0];
+  if(pct<60)return BANCO_MAPA_RAMPA[1];
+  if(pct<80)return BANCO_MAPA_RAMPA[2];
+  return BANCO_MAPA_RAMPA[3];
+}
+const BANCO_MAPA_RASO=15;
+function bancoMapaDados(){
+  const porSub={};
+  (db.acervo||[]).forEach(q=>{
+    if((q.status||'ativa')!=='ativa')return;   // quarentena nao entra na leitura do mapa
+    const id=q.subId; if(!id)return;
+    const reg=porSub[id]=porSub[id]||{subId:id,nome:q.subName||'Sem assunto',n:0,vezes:0,acertos:0};
+    reg.n++;
+    if(q.vezesRespondida){reg.vezes+=q.vezesRespondida;reg.acertos+=q.acertos||0;}
+  });
+  return Object.values(porSub)
+    .map(r=>({...r,pct:r.vezes?Math.round(100*r.acertos/r.vezes):null,raso:r.n<BANCO_MAPA_RASO}))
+    .sort((a,b)=>b.n-a.n);
+}
+function bancoMapaCalorHTML(){
+  const dados=bancoMapaDados();
+  if(!dados.length)return'';
+  const maxN=Math.max(...dados.map(d=>d.n),1);
+  return`<div class="section-card" style="margin-top:16px">
+    <div class="sec-title" style="margin-bottom:4px">🗺️ Mapa do Acervo</div>
+    <div style="font-size:10.5px;color:var(--muted);font-weight:600;margin-bottom:10px">Tamanho = quantas questões você tem · cor = seu acerto · contorno âmbar = banco raso (menos de ${BANCO_MAPA_RASO})</div>
+    <div class="banco-mapa-grid">
+      ${dados.map(d=>{
+        const tam=Math.round(46+54*Math.sqrt(d.n/maxN));   // area ~ proporcional a n, nao o lado
+        return`<div class="banco-mapa-cel${d.raso?' banco-mapa-raso':''}" style="width:${tam}px;height:${tam}px;background:${bancoMapaCorAcerto(d.pct)}"
+          title="${escapeHtml(d.nome)} — ${d.n} questões${d.pct!=null?` · ${d.pct}% de acerto`:' · nunca respondida'}"
+          onclick="bancoMapaAbrirAssunto('${d.subId}')"><span>${d.n}</span></div>`;
+      }).join('')}
+    </div>
+    <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-top:12px" onclick="bancoMapaGerarOndeRaso()"><i class="fa fa-wand-magic-sparkles"></i> Gerar questões onde o banco é raso</button>
+  </div>`;
+}
+// Clicar na celula abre a lista ja filtrada por aquele assunto — reusa o modo "assunto"
+// do motor de montar, que ja existia.
+function bancoMapaAbrirAssunto(subId){
+  const sel=document.getElementById('montar-modo');
+  if(sel)sel.value='assunto';
+  montarSel=new Set([subId]);
+  montarTrocarModo();
+  bancoListaAberta=true;
+  bancoListaRefrescar();
+  const el=document.getElementById('banco-filtro-lista');
+  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+}
+// Marca os assuntos rasos na arvore do Simulado Geral (mesmo mecanismo de sgMarcarEdital)
+// e deixa a pessoa revisar e clicar em Gerar — nao dispara IA sozinho, so poupa o trabalho
+// de achar os assuntos certos um por um.
+function bancoMapaGerarOndeRaso(){
+  const rasos=bancoMapaDados().filter(d=>d.raso);
+  showScreen('simgeral');
+  const painel=document.getElementById('treinar-avancado');
+  if(painel&&painel.style.display==='none')treinarAbrirAvancado();
+  if(!rasos.length){toast('Nenhum assunto com banco raso agora — seu acervo está bem distribuído.','var(--green)');return;}
+  simGeralConfig.selectedSubIds=new Set();
+  let achados=0;
+  document.querySelectorAll('#sg-picker input[data-sub]').forEach(cb=>{
+    const dentro=rasos.some(d=>d.subId===cb.dataset.sub);
+    cb.checked=dentro;
+    if(dentro){simGeralConfig.selectedSubIds.add(cb.dataset.sub);achados++;}
+  });
+  sgUpdateSummary();
+  toast(achados?`🌾 ${achados} assunto(s) com banco raso marcados — é só gerar.`
+               :'Os assuntos com banco raso não estão entre os que você já estudou.','var(--accent)');
+}
 function bancoFiltrosHTML(){
   const f=bancoFiltro;
   const pool=bancoPoolFiltrado();
@@ -14938,31 +15156,22 @@ function bancoFiltrosHTML(){
         <option value="certoerrado"${f.formato==='certoerrado'?' selected':''}>✔️✖️ Certo/Errado</option>
         <option value="multipla"${f.formato==='multipla'?' selected':''}>🔤 Múltipla escolha</option>
       </select>
-      <label class="banco-check"><input type="checkbox" ${f.naoRespondida?'checked':''}
-        onchange="bancoFiltroMudouNaoRespondida(this)"> nunca respondida</label>
       <label class="banco-check"><input type="checkbox" ${f.favorita?'checked':''}
         onchange="bancoFiltroMudouFavorita(this)"> ⭐ favorita</label>
-    </div>
-    <div class="banco-filtros-linha">
-      <label style="font-size:10.5px;color:var(--muted);font-weight:700">Taxa de acerto entre</label>
-      <input class="inp banco-faixa" type="number" min="0" max="100" placeholder="0"
-        value="${f.faixaMin==null?'':f.faixaMin}" onchange="bancoFiltroMudouFaixa('faixaMin',this)">
-      <span style="color:var(--muted);font-size:10.5px">% e</span>
-      <input class="inp banco-faixa" type="number" min="0" max="100" placeholder="100"
-        value="${f.faixaMax==null?'':f.faixaMax}" onchange="bancoFiltroMudouFaixa('faixaMax',this)">
-      <span style="color:var(--muted);font-size:10.5px">%</span>
-      <select id="banco-filtro-status" class="inp" style="width:auto" onchange="bancoFiltroMudouStatus(this)">
-        <option value=""${f.status?'':' selected'}>Qualquer status</option>
-        <option value="ativa"${f.status==='ativa'?' selected':''}>ativa</option>
-        <option value="revisar"${f.status==='revisar'?' selected':''}>🚩 revisar</option>
-        <option value="arquivada"${f.status==='arquivada'?' selected':''}>🗄️ arquivada</option>
-      </select>
       ${bancoFiltroTemAlgo()?`<button class="btn btn-xs btn-ghost" onclick="bancoFiltroLimpar();renderSimGeralScreen()" style="margin-left:auto">Limpar filtro</button>`:''}
     </div>
-    ${tags.length?`<div class="banco-filtros-linha">
-      <label style="font-size:10.5px;color:var(--muted);font-weight:700">Tags:</label>
-      ${tags.map(t=>`<label class="banco-check"><input type="checkbox" ${f.tags.has(t)?'checked':''}
-        onchange="bancoFiltroMudouTag('${escapeHtml(t)}',this)">#${escapeHtml(t)}</label>`).join('')}
+    <div class="banco-chip-grupo">
+      <span class="banco-chip-rotulo">Estado</span>
+      ${bancoChipsEstadoHTML()}
+    </div>
+    <div class="banco-chip-grupo">
+      <span class="banco-chip-rotulo">Nível</span>
+      <span class="banco-chip-nota">aferido pelo seu acerto, não declarado pela IA</span>
+      ${bancoChipsNivelHTML()}
+    </div>
+    ${tags.length?`<div class="banco-chip-grupo">
+      <span class="banco-chip-rotulo">Natureza</span>
+      ${bancoChipsTagsHTML()}
     </div>`:''}
     <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
       <span id="banco-filtro-conta" style="font-size:10.5px;font-weight:700;color:var(--muted)">${bancoFiltroContaHTML(pool)}</span>
@@ -14974,6 +15183,7 @@ function bancoFiltrosHTML(){
     <div id="banco-filtro-lista" class="banco-lista">
       ${bancoListaConteudoHTML(pool)}
     </div>
+    ${bancoMapaCalorHTML()}
   </div>`;
 }
 // A aba inteira. montarHTML continua devolvendo '' quando nao ha questao nenhuma — o
@@ -14985,7 +15195,7 @@ function bancoHTML(){
   // Banco vazio nao pode deixar criar/importar inalcancaveis: sao as duas formas de
   // colocar a PRIMEIRA questao ai dentro sem depender de fazer uma prova pela IA antes.
   return`<div class="section-card">
-    <div class="sec-title" style="margin-bottom:4px">📚 Banco de Questões</div>
+    <div class="sec-title" style="margin-bottom:4px">📚 Acervo</div>
     <div class="empty"><i class="fa fa-layer-group"></i>
       <p>Seu banco ainda está vazio.</p>
       <p style="font-size:11px;color:var(--muted);font-weight:600;line-height:1.6;max-width:420px;margin:8px auto 0">
@@ -15022,7 +15232,7 @@ function montarHTML(){
   const noBanco=acervo.filter(x=>x.doBanco).length;
   const nota=(MONTAR_MODOS.find(m=>m.id===modo)||{}).nota||'';
   return`<div class="section-card">
-    <div class="sec-title" style="margin-bottom:4px">📚 Banco de Questões</div>
+    <div class="sec-title" style="margin-bottom:4px">📚 Acervo</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600">
       Saca das <b>${acervo.length} questões</b> que você já tem${noBanco?` (${acervo.length-noBanco} nas provas guardadas + <b>${noBanco} no banco</b>, de provas que já saíram da lista)`:' nas provas guardadas'} e monta um caderno novo — sem guardar questão repetida em lugar nenhum.
       Como você já viu essas questões, a prova montada é <b>treino</b>: ela não mexe nas estatísticas por assunto nem no Banco de Erros.
