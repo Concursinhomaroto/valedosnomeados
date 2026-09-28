@@ -182,6 +182,8 @@ async def main():
 
         print('=== H) a tela mostra o historico inteiro, nao so o registro ===')
         # Guardar sem mostrar e meia solucao: o que foi pro no tem que aparecer.
+        # O historico de Simulado Geral mora em Minhas Provas (Modo Treino completo tirou
+        # ele da tela Treinar — la agora e so treino, sem prova nenhuma).
         r=await page.evaluate("""()=>{
           db.simGeral={historico:[]}; db.hist={geral:[],sessoes:[],subs:[]};
           for(let i=0;i<40;i++)db.simGeral.historico.unshift(
@@ -190,12 +192,12 @@ async def main():
           histApararGeral();
           sgHistTudo=false;
           simGeralActive=null;      // o histórico mora na tela de configuração
-          showScreen('simgeral');
-          const el=document.getElementById('simgeral-content');
+          showScreen('provas');
+          const el=document.getElementById('provas-content');
           const fechado=el.innerText;
           const linhasFechado=(el.innerHTML.match(/sg-hist-row/g)||[]).length;
           el.querySelector('.sg-mais').click();
-          const aberto=document.getElementById('simgeral-content');
+          const aberto=document.getElementById('provas-content');
           const linhasAberto=(aberto.innerHTML.match(/sg-hist-row/g)||[]).length;
           return {noRegistro:db.simGeral.historico.length, noNo:db.hist.geral.length,
                   cabecalho:/40 desde/i.test(fechado),   // .sec-title é uppercase via CSS

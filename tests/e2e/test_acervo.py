@@ -23,10 +23,14 @@ def seed(extra=None):
     return make_seed(d)
 
 # fabrica questoes de uma materia
+# alternativas presente e no formato certo/errado de verdade (SIM_ALTS_CE) — sem isso o
+# Modo Treino filtra a questao do pool como quebrada (treinoQuestaoUtilizavel exige pelo
+# menos 2 alternativas com letra+texto, achado num item real sem esse campo).
 QS = """(kId,kNome,kIcone,subId,subNome,n,tag)=>{
   const arr=[];
   for(let i=0;i<n;i++)arr.push({questao:tag+' item '+i+' sobre '+subNome,correta:i%2?'C':'E',
-    formato:'certoerrado',explicacao:'x',subId,subName:subNome,topicName:'T',
+    formato:'certoerrado',alternativas:[{letra:'C',texto:'Certo'},{letra:'E',texto:'Errado'}],
+    explicacao:'x',subId,subName:subNome,topicName:'T',
     kingdomId:kId,kingdomName:kNome,kingdomIcon:kIcone});
   return arr;}"""
 
