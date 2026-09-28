@@ -3058,13 +3058,15 @@ nav{
   </div>
 
   <div class="section-card" style="max-width:720px">
-    <div class="sec-title" style="font-size:15px">📚 Backfill do Acervo (provas antigas + miniboss por assunto)</div>
+    <div class="sec-title" style="font-size:15px">📚 Backfill do Acervo (provas + arquivo + miniboss por assunto)</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
-      Duas fontes: provas do Simulado Geral de antes do passo 6, e histórico por assunto
-      (miniboss) que nunca teve caminho pro acervo. Já roda sozinho no boot (silencioso
-      quando não há nada pra fazer). Este botão só serve pra conferir o relatório de novo,
-      ou forçar depois de restaurar um backup antigo — idempotente: rodar de novo sobre o
-      que já foi migrado não soma nada duas vezes.
+      Três fontes: provas do Simulado Geral ainda na lista, provas já arquivadas (a maior
+      parte da vida de estudo de quem usa o app há tempo — saíram da lista faz tempo, mas o
+      arquivo guarda as respostas), e histórico por assunto (miniboss) que nunca teve
+      caminho pro acervo. Já roda sozinho no boot (silencioso quando não há nada pra fazer).
+      Este botão só serve pra conferir o relatório de novo, ou forçar depois de restaurar um
+      backup antigo — idempotente: rodar de novo sobre o que já foi migrado não soma nada
+      duas vezes.
     </div>
     <button class="btn btn-primary" onclick="adminRodarBackfillAcervo()"><i class="fa fa-database"></i> Rodar backfill e ver relatório</button>
     <div id="admin-backfill-relatorio" style="margin-top:12px"></div>
@@ -5873,16 +5875,18 @@ function adminRodarBackfillAcervo(){
   const r=acervoBackfillCompleto();
   const linha=(lbl,v)=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--muted)">${lbl}</span><b>${v}</b></div>`;
   if(el)el.innerHTML=`<div style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 14px">
-    ${linha('Provas migradas nesta rodada (Simulado Geral)',r.provasMigradas)}
-    ${linha('Tentativas contadas (Simulado Geral)',r.tentativasContadas)}
+    ${linha('Provas migradas nesta rodada (Simulado Geral, na lista)',r.provasMigradas)}
+    ${linha('Tentativas contadas (Simulado Geral, na lista)',r.tentativasContadas)}
+    ${linha('Provas migradas nesta rodada (arquivadas)',r.arquivadasMigradas)}
+    ${linha('Tentativas contadas (arquivadas)',r.tentativasArquivoContadas)}
     ${linha('Miniboss migrados nesta rodada (por assunto)',r.assuntosMigrados)}
     ${linha('Tentativas contadas (miniboss)',r.tentativasMinibossContadas)}
     ${linha('Questões novas no Acervo',r.questoesNovas)}
     ${linha('Questões que já existiam (compartilhadas)',r.questoesColidiram)}
     ${linha('Total no Acervo agora',(db.acervo||[]).length)}
   </div>`;
-  toast((r.provasMigradas||r.tentativasMinibossContadas)
-    ?`✅ Migrado agora: ${r.provasMigradas} prova(s) + ${r.tentativasMinibossContadas} tentativa(s) de miniboss.`
+  toast((r.provasMigradas||r.arquivadasMigradas||r.tentativasMinibossContadas)
+    ?`✅ Migrado agora: ${r.provasMigradas} prova(s) + ${r.arquivadasMigradas} arquivada(s) + ${r.tentativasMinibossContadas} tentativa(s) de miniboss.`
     :'✅ Nada pra migrar — tudo que existe já passou por aqui antes.','var(--accent)');
 }
 async function adminReconstruirIndice(){
@@ -13087,23 +13091,25 @@ async function acervoCarregar(){
     acervoSalvar(true);
     if(noRegistro)saveDB();   // o registro principal encolhe na mesma hora
   }
+  await provarqCarregar();
+  await histCarregar();
   // Backfill de historico antigo (achado pelo usuario — ver o comentario das proprias
   // funcoes). Roda aqui tambem, nao so dentro de provasAparar: guardar uma prova NOVA
   // nunca foi o unico jeito de abrir o app, e quem so quer OLHAR o que ja tem nao pode
-  // depender de fazer alguma coisa primeiro pra o proprio acervo aparecer. Duas fontes:
-  // db.provas (Simulado Geral) e sub.simHistorico (miniboss por assunto) — a segunda e
-  // onde estava a maior parte do buraco: o simulado por assunto nunca teve caminho pro
-  // acervo, nem ao vivo nem em backfill nenhum, ate agora.
+  // depender de fazer alguma coisa primeiro pra o proprio acervo aparecer. Tem que vir
+  // DEPOIS de provarqCarregar — a fonte mais gorda das tres e justamente db.provasArquivo,
+  // que so existe em memoria depois dessa chamada. Rodar antes achava a lista vazia todo
+  // boot e nunca recuperava nada sozinho, so quando alguem clicava o botao do Admin depois
+  // do app inteiro carregado.
   const backfill=acervoBackfillCompleto();
-  if(backfill.provasMigradas||backfill.tentativasMinibossContadas){
-    console.info('Backfill do acervo (provas antigas + miniboss por assunto):',backfill);
+  if(backfill.provasMigradas||backfill.arquivadasMigradas||backfill.tentativasMinibossContadas){
+    console.info('Backfill do acervo (provas + arquivo + miniboss por assunto):',backfill);
     const partes=[];
     if(backfill.provasMigradas)partes.push(`${backfill.provasMigradas} prova(s) antiga(s) (${backfill.tentativasContadas} tentativa(s))`);
+    if(backfill.arquivadasMigradas)partes.push(`${backfill.arquivadasMigradas} prova(s) arquivada(s) (${backfill.tentativasArquivoContadas} tentativa(s))`);
     if(backfill.tentativasMinibossContadas)partes.push(`${backfill.tentativasMinibossContadas} tentativa(s) de assunto em ${backfill.assuntosMigrados} miniboss(es)`);
     toast(`📚 Acervo recuperado: ${partes.join(' + ')}.`,'var(--accent)');
   }
-  await provarqCarregar();
-  await histCarregar();
   renderSimGeralScreen();
   return db.acervo.length;
 }
@@ -13602,19 +13608,87 @@ function acervoBackfillDeMinibossAntigos(){
   saveDB();
   return relatorio;
 }
+// Terceiro buraco do mesmo bug — achado por DEDUCAO, a partir do numero baixo de
+// tentativas que o backfill do miniboss conseguiu migrar: quase toda entrada geral:true de
+// sub.simHistorico e espelho de um Simulado Geral cuja PROVA em si ja saiu de db.provas —
+// evictada (teto de PROVAS_MAX/bytes) ou apagada a mao (provaApagar) — e foi pro arquivo
+// (db.provasArquivo), que guarda chaves2+tentativas intactos. acervoGuardarProva roda
+// SEMPRE antes de qualquer arquivamento e SEMPRE cobre a contagem (prova ja convertida foi
+// contada ao vivo antes; prova em formato antigo e contada ali mesmo, dentro dele) — mas
+// isso so e verdade a partir de hoje (passo 7 e o proprio carimbo abaixo, em provaArquivar,
+// sao novos). Tudo que ja estava arquivado ANTES de hoje nao tem esse carimbo — e e
+// justamente ali que mora a maior parte da vida de estudo de quem usa o app ha tempo.
+// Nao precisa converter nem decidir formato antigo/novo: arquivo sempre tem chaves/chaves2
+// prontos (provaArquivar garante), e o carimbo (dele em diante) ja resolve isso pra frente
+// — pra tras, o unico sinal confiavel e a ausencia do proprio carimbo.
+function acervoBackfillDeProvasArquivadas(){
+  const relatorio={arquivadasMigradas:0,tentativasContadas:0,questoesNovas:0,questoesColidiram:0};
+  const semCarimbo=()=>(db.provasArquivo||[]).filter(a=>!a._acervoBackfillEm);
+  const candidatas=semCarimbo().filter(provaFoiFeita);
+  // Arquivada sem nunca ter sido feita (raro — so entra ali por provaApagar) nao tem
+  // tentativa pra contar; so marca, pra nao reprocessar a cada boot.
+  semCarimbo().filter(a=>!provaFoiFeita(a)).forEach(a=>{a._acervoBackfillEm=new Date().toISOString();});
+  if(!candidatas.length)return relatorio;
+  const vistoNesteRun=new Set();
+  (db.acervo||[]).forEach(q=>{const k=acervoChave2De(q);if(k)vistoNesteRun.add(k);});
+  candidatas.forEach(arq=>{
+    provaQuestoes(arq).forEach(q=>{
+      if(questaoForaDaConta(q))return;
+      const chave=acervoChave2De(q);
+      if(!chave)return;
+      if(vistoNesteRun.has(chave))relatorio.questoesColidiram++;
+      else{vistoNesteRun.add(chave);relatorio.questoesNovas++;}
+    });
+  });
+  // Mesma fila cronologica de VERDADE do backfill de provas — a mesma questao pode
+  // aparecer em varias provas arquivadas diferentes, com datas entrelacadas.
+  const fila=[];
+  candidatas.forEach(arq=>{
+    const qs=provaQuestoes(arq);
+    (arq.tentativas||[]).forEach(t=>fila.push({arq,qs,t}));
+  });
+  fila.sort((a,b)=>new Date(a.t.data||0)-new Date(b.t.data||0));
+  const porChave2=new Map();
+  (db.acervo||[]).forEach(q=>{const k=acervoChave2De(q);if(k&&!porChave2.has(k))porChave2.set(k,q);});
+  fila.forEach(({arq,qs,t})=>{
+    const resp=t.respostas||[];
+    let contou=false;
+    qs.forEach((q,i)=>{
+      if(questaoForaDaConta(q))return;
+      const chave=(arq.chaves2||[])[i];
+      const item=chave&&porChave2.get(chave);
+      if(!item)return;
+      const dada=resp[i]||'';
+      if(!dada)return;
+      // null no lugar de confianca: prova arquivada nunca guardou confiancas[] (so
+      // data/respostas/acertos/tempoGastoSec) — nao ha o que declarar aqui.
+      acervoAtualizarContadores(item,dada===q.correta?'C':'X',null,t.data);
+      contou=true;
+    });
+    if(contou)relatorio.tentativasContadas++;
+  });
+  candidatas.forEach(arq=>{arq._acervoBackfillEm=new Date().toISOString();});
+  relatorio.arquivadasMigradas=candidatas.length;
+  acervoSalvar(true);
+  provarqSalvar();
+  return relatorio;
+}
 // Ponto unico chamado pelo boot, por provasAparar e pelo botao manual do Painel Admin —
-// roda as duas migracoes retroativas (db.provas e sub.simHistorico) e devolve um relatorio
-// combinado. As duas sao independentes e cada uma idempotente por si (marcadores em
-// namespaces diferentes: prova._acervoBackfillEm vs hist._acervoBackfillEm), entao rodar
-// as duas sempre, mesmo quando so uma tem novidade, nao tem custo depois da 1a vez.
+// roda as tres migracoes retroativas (db.provas, db.provasArquivo e sub.simHistorico) e
+// devolve um relatorio combinado. As tres sao independentes e cada uma idempotente por si
+// (marcadores em namespaces diferentes: prova._acervoBackfillEm, arquivo._acervoBackfillEm,
+// hist._acervoBackfillEm), entao rodar as tres sempre, mesmo quando so uma tem novidade,
+// nao tem custo depois da 1a vez.
 function acervoBackfillCompleto(){
   const provas=acervoBackfillDeProvasAntigas();
+  const arquivo=acervoBackfillDeProvasArquivadas();
   const miniboss=acervoBackfillDeMinibossAntigos();
   return{
     provasMigradas:provas.provasMigradas,tentativasContadas:provas.tentativasContadas,
+    arquivadasMigradas:arquivo.arquivadasMigradas,tentativasArquivoContadas:arquivo.tentativasContadas,
     assuntosMigrados:miniboss.assuntosMigrados,tentativasMinibossContadas:miniboss.tentativasContadas,
-    questoesNovas:provas.questoesNovas+miniboss.questoesNovas,
-    questoesColidiram:provas.questoesColidiram+miniboss.questoesColidiram
+    questoesNovas:provas.questoesNovas+arquivo.questoesNovas+miniboss.questoesNovas,
+    questoesColidiram:provas.questoesColidiram+arquivo.questoesColidiram+miniboss.questoesColidiram
   };
 }
 // Copia funda o bastante: cada entrada do overlay e um objeto piso (m/p/s/k), so o grifo
@@ -13654,7 +13728,15 @@ function provaArquivar(prova){
     marcacoes:prova.chaves?provaMarcacoesClone(prova.marcacoes):provaMarcacoes(prova),
     tentativas:(prova.tentativas||[]).map(t=>({
       data:t.data,respostas:(t.respostas||[]).slice(),
-      acertos:t.acertos||0,tempoGastoSec:t.tempoGastoSec||0}))
+      acertos:t.acertos||0,tempoGastoSec:t.tempoGastoSec||0})),
+    // Quem chama provaArquivar (provasAparar e provaApagar) SEMPRE chama acervoGuardarProva
+    // logo antes — e essa chamada, hoje, ja cobre a contagem dos dois jeitos possiveis:
+    // prova ja convertida (passo 6) ja foi contada AO VIVO na correcao (ou pelo backfill,
+    // se ainda estivesse esperando na lista); prova em formato antigo e contada ALI MESMO,
+    // dentro de acervoGuardarProva (guarda !prova.chaves). Ou seja: no momento em que este
+    // registro nasce, a tentativa dele JA esta nos contadores do acervo. Carimbar aqui
+    // impede acervoBackfillDeProvasArquivadas de conta-la de novo mais tarde.
+    _acervoBackfillEm:new Date().toISOString()
   });
   if(db.provasArquivo.length>PROVARQ_MAX)db.provasArquivo=db.provasArquivo.slice(0,PROVARQ_MAX);
   provarqSalvar();
