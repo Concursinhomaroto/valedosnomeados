@@ -55,7 +55,7 @@ async def main():
                            {formato:'certoerrado'});
           showScreen('banco');
           const el=document.getElementById('banco-content');
-          return {titulo:/banco de questões/i.test(el.innerText),
+          return {titulo:/acervo/i.test(el.innerText),   // renomeado no passo 8.3/8.4
                   modo:!!el.querySelector('#montar-modo'),
                   qtd:!!el.querySelector('#montar-qtd'),
                   botao:/Montar/.test(el.innerText),
