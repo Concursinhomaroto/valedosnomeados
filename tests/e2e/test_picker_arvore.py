@@ -41,6 +41,9 @@ async def main():
             await page.set_viewport_size({'width':1400,'height':900})
             await page.evaluate("()=>showScreen('simgeral')")
             await page.wait_for_timeout(400)
+            # Passo 8.3 do redesenho: a árvore vira "montagem avançada", colapsada por
+            # padrão atrás da tela Treinar — precisa abrir antes de medir/clicar nela.
+            await page.evaluate("()=>treinarAbrirAvancado()")
             await page.evaluate(CONSTS)
 
             print('=== estado inicial: chefões fechados ===')

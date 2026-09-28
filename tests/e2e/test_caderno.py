@@ -27,15 +27,15 @@ async def main():
           const bs=[...document.querySelectorAll('#screen-caderno .rd-conectivos-tabs button')]
                    .map(x=>x.innerText.trim());
           const i=bs.findIndex(x=>/CADERNO/i.test(x));
-          const j=bs.findIndex(x=>/BANCO DE QUEST/i.test(x));
+          const j=bs.findIndex(x=>/ACERVO/i.test(x));
           return {tem:t.includes('IMPORTAR CADERNO DA BANCA'),
-                  abas:bs,vizinho:Math.abs(i-j)===1,   // agora o vizinho é o Banco de Questões
+                  abas:bs,vizinho:Math.abs(i-j)===1,   // agora o vizinho é o Acervo (passo 8.3: renomeado de Banco de Questões)
                   ativa:(document.querySelector('#screen-caderno .rd-conectivos-tabs button.active')||{}).innerText,
                   foraDeProvas:!document.getElementById('provas-content').innerText.toUpperCase().includes('IMPORTAR CADERNO'),
                   nav:(document.querySelector('.nav-btn.active')||{}).id,
                   campos:!!document.getElementById('cad-texto')&&!!document.getElementById('cad-gab')};}""")
         print('   abas: %s'%r['abas'])
-        print('   ao lado do Banco de Questões: %s · ativa: %r'%(r['vizinho'],(r['ativa'] or '').strip()))
+        print('   ao lado do Acervo: %s · ativa: %r'%(r['vizinho'],(r['ativa'] or '').strip()))
         print('   saiu de Minhas Provas: %s · menu aceso: %s'%(r['foraDeProvas'],r['nav']))
         assert r['tem'] and r['campos'] and r['vizinho'] and r['foraDeProvas']
         assert len(r['abas'])==5 and r['nav']=='nav-simgeral'

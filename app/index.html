@@ -11937,7 +11937,7 @@ function treinarEntradaHTML(){
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="treinarAbrirAvancado()"><i class="fa fa-wand-magic-sparkles"></i> Montar do zero</button>
       <div id="treinar-avancado" style="display:none;margin-top:14px">${simGeralConfigHTML()}</div>
-    </div>`;
+    </div>${sgHistoricoCardHTML()}`;
   }
   const decks=treinarDecks();
   const c=treinarFaixaContagem(ativo);
@@ -11987,7 +11987,7 @@ function treinarEntradaHTML(){
       <button id="treinar-avancado-btn" class="btn btn-xs btn-ghost" onclick="treinarAbrirAvancado()">Abrir montagem avançada</button>
     </div>
     <div id="treinar-avancado" style="display:none;margin-top:14px">${simGeralConfigHTML()}</div>
-  </div>`;
+  </div>${sgHistoricoCardHTML()}`;
 }
 function renderSimGeralScreen(){
   renderProvasScreen();
@@ -12148,11 +12148,16 @@ function simGeralConfigHTML(){
     </label>
     <button id="sg-gerar-btn" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:14px" onclick="generateSimuladoGeral()" ${simGeralConfig.selectedSubIds.size===0?'disabled':''}><i class="fa fa-wand-magic-sparkles"></i> Gerar Simulado Geral</button>
   </div>`;
-
+  return html;
+}
+// Extraido de dentro de simGeralConfigHTML no passo 8.3: a arvore de assuntos virou
+// "montagem avancada" (colapsada), mas o historico de simulados ja feitos e informacao
+// que voce quer ver de cara, sem abrir nada — fica direto na tela Treinar.
+function sgHistoricoCardHTML(){
   const histTudo=histGeralTudo();
-  if(histTudo.length){
-    const mostra=sgHistTudo?histTudo:histTudo.slice(0,10);
-    html+=`<div class="section-card" style="margin-top:16px">
+  if(!histTudo.length)return'';
+  const mostra=sgHistTudo?histTudo:histTudo.slice(0,10);
+  return`<div class="section-card" style="margin-top:16px">
       <div class="sec-title" style="margin-bottom:10px;font-size:12px">📜 Histórico de Simulados Gerais <span style="font-weight:700;color:var(--muted);font-size:10px;letter-spacing:0">· ${histTudo.length} desde ${new Date(histTudo[histTudo.length-1].data).toLocaleDateString('pt-BR')}</span></div>
       ${mostra.map(h=>{
         const pct=h.quantidade?Math.round(h.acertos/h.quantidade*100):0;
@@ -12163,8 +12168,6 @@ function simGeralConfigHTML(){
       }).join('')}
       ${histTudo.length>10?`<button class="sg-mais" onclick="sgHistTudoToggle()">${sgHistTudo?'▴ mostrar só os 10 últimos':`▾ ver os ${histTudo.length} — nenhum se perde`}</button>`:''}
     </div>`;
-  }
-  return html;
 }
 let sgHistTudo=false;
 function sgHistTudoToggle(){sgHistTudo=!sgHistTudo;renderSimGeralScreen();}
