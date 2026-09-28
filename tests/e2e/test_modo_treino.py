@@ -56,10 +56,29 @@ async def main():
         assert r['sessaoAberta'] and r['itens']==6
         print('   OK\n')
 
+        print('=== A.1) tocar na alternativa só SELECIONA — precisa do botão Responder (achado testando no celular) ===')
+        btnDesabilitadoAntes=await page.evaluate("()=>document.querySelector('.sim-q .treino-antes button').disabled")
+        print('   botão Responder desabilitado sem seleção:',btnDesabilitadoAntes)
+        assert btnDesabilitadoAntes
+        r=await page.evaluate("""()=>{
+          const item0=treinoSessao.itens[0];
+          treinoSelecionar(item0.correta);   // clicar na alternativa == chamar isto
+          return {selecionada:item0._selecionada,vezesAinda:item0.vezesRespondida};}""")
+        print('   %s'%r)
+        assert r['selecionada'] and r['vezesAinda']==0, 'selecionar sozinho NAO pode contar'
+        btnHabilitadoDepois=await page.evaluate("()=>document.querySelector('.sim-q .treino-antes button').disabled")
+        assert not btnHabilitadoDepois, 'botão Responder tinha que habilitar depois de selecionar'
+        await page.click('.treino-antes button:has-text("Responder")')
+        r=await page.evaluate("""()=>{
+          const item0=treinoSessao.itens[0];
+          return {vezesDepois:item0.vezesRespondida,respondida:treinoSessao.respondidasSet.has(0)};}""")
+        print('   %s'%r)
+        assert r['vezesDepois']==1 and r['respondida'], 'clicar Responder (o botão de verdade) tinha que confirmar de vez'
+        print('   OK\n')
+
         print('=== B) responder atualiza o Acervo NA HORA, direto, sem repetir na sessão ===')
         r=await page.evaluate("""()=>{
           const item0=treinoSessao.itens[0];
-          treinoResponder(item0.correta);
           const depois=db.acervo.find(x=>x._chaveForte===item0._chaveForte);
           return {vezes:depois.vezesRespondida,acertos:depois.acertos,ultimoResultado:depois.ultimoResultado,
                   respondidasSet:[...treinoSessao.respondidasSet]};}""")

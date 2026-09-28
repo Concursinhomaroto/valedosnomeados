@@ -12146,6 +12146,25 @@ function treinoIniciar(pool,meta){
 // Cada resposta conta NA HORA: item do Acervo, estatistica do assunto, Banco de Erros (se
 // errou, automatico, igual simCorrigir ja faz) e XP — os quatro juntos, sem esperar
 // encerrar a sessao nem fechar a tela. E o que faz "fechei a aba no meio" ser inofensivo.
+// Selecionar so DESTACA a alternativa — nao corrige, nao conta. Precisa do "Responder"
+// explicito (achado pelo usuario testando no celular: tocar numa alternativa corrigia na
+// hora, sem chance de conferir antes — um toque encostado do lado errado virava erro
+// irreversivel). Clicar de novo na mesma alternativa desmarca.
+function treinoSelecionar(letra){
+  const s=treinoSessao;
+  if(!s)return;
+  const item=s.itens[s.idx];
+  if(!item||s.respondidasSet.has(s.idx))return;
+  item._selecionada=item._selecionada===letra?null:letra;
+  renderSimGeralScreen();
+}
+function treinoConfirmarResposta(){
+  const s=treinoSessao;
+  if(!s)return;
+  const item=s.itens[s.idx];
+  if(!item||!item._selecionada)return;
+  treinoResponder(item._selecionada);
+}
 function treinoResponder(letra){
   const s=treinoSessao;
   if(!s)return;
@@ -12153,6 +12172,7 @@ function treinoResponder(letra){
   const item=s.itens[i];
   if(!item||s.respondidasSet.has(i))return;
   item.userAnswer=letra;
+  delete item._selecionada;
   const acertou=letra===item.correta;
   s.respondidasSet.add(i);
   s.puladas.delete(i);
@@ -12217,6 +12237,8 @@ function treinoNotaSalvar(){
   if(!item)return;
   item.minhaNota=String(el.value||'').trim().slice(0,NOTA_MAX);
   acervoSalvar();
+  const selo=document.getElementById('treino-nota-selo');
+  if(selo)selo.textContent=item.minhaNota?'✅ guardada':'';
   toast(item.minhaNota?'✍️ Nota guardada.':'Nota apagada.',item.minhaNota?'var(--green)':'var(--muted)');
 }
 function treinoFavoritar(){
@@ -12356,8 +12378,10 @@ function treinoQuestaoHTML(){
     if(respondida){
       if(alt.letra===item.correta)cls=' sim-correct';
       else if(alt.letra===item.userAnswer)cls=' sim-wrong';
+    }else if(item._selecionada===alt.letra){
+      cls=' sim-selected';
     }
-    const onclick=respondida?'':` onclick="treinoResponder('${escapeAttrJs(alt.letra)}')"`;
+    const onclick=respondida?'':` onclick="treinoSelecionar('${escapeAttrJs(alt.letra)}')"`;
     return`<div class="sim-alt${cls}"${onclick}><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`;
   }).join('');
   return`<div class="sim-q">
@@ -12368,17 +12392,36 @@ function treinoQuestaoHTML(){
     <div class="sim-alts${item.formato==='certoerrado'?' sim-alts-ce':''}">${alts}</div>
     ${!respondida?`<div class="treino-antes">
       ${treinoConfiancaHTML(item)}
-      <button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="treinoPular()">Deixar em branco</button>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="treinoConfirmarResposta()" ${item._selecionada?'':'disabled'}><i class="fa fa-check"></i> Responder</button>
+        <button class="btn btn-sm btn-ghost" onclick="treinoPular()">Deixar em branco</button>
+      </div>
     </div>`:''}
     ${respondida?`<div class="sim-score-banner ${item.userAnswer===item.correta?'sim-good':'sim-bad'}">${item.userAnswer===item.correta?'✔️ Você acertou':'✖️ Você errou'}</div>
       ${simExplicacaoHTML(item)}
       ${fonteApoioTreinoHTML(item)}
       ${treinoMotivoHTML(item)}
-      <div class="sim-nota">
-        <div class="sim-nota-cab"><span><i class="fa fa-pen"></i> Sua nota</span></div>
-        <textarea id="treino-nota" class="inp" rows="2" maxlength="${NOTA_MAX}" placeholder="Escreva com suas palavras por que está certo/errado..." onblur="treinoNotaSalvar()">${escapeHtml(item.minhaNota||'')}</textarea>
-      </div>
+      ${treinoNotaHTML(item)}
       ${treinoAcoesHTML(item)}`:''}
+  </div>`;
+}
+// Mesma composicao do sim-nota da prova (titulo dizendo O QUE escrever, selo de "guardada"
+// e botao explicito) — a versao anterior so tinha textarea+onblur, sem nenhuma das tres,
+// e o usuario testando no celular sentiu falta ("sua nota ta sem organizacao").
+function treinoNotaHTML(item){
+  const txt=item.minhaNota||'';
+  const ce=item.formato==='certoerrado';
+  const titulo=ce
+    ? `Por que este item está <b>${item.correta==='C'?'CERTO':'ERRADO'}</b>, nas suas palavras`
+    : `Por que a <b>${item.correta}</b> é a certa, nas suas palavras`;
+  return`<div class="sim-nota">
+    <div class="sim-nota-cab">
+      <span><i class="fa fa-pen"></i> ${titulo}</span>
+      <span class="sim-nota-selo" id="treino-nota-selo">${txt?'✅ guardada':''}</span>
+    </div>
+    <textarea id="treino-nota" class="inp sim-nota-txt" maxlength="${NOTA_MAX}" spellcheck="true"
+      placeholder="Escreva com as suas palavras. Copiar a explicação acima não adianta — o que fixa é reescrever.">${escapeHtml(txt)}</textarea>
+    <button class="btn btn-xs btn-ghost" onclick="treinoNotaSalvar()"><i class="fa fa-floppy-disk"></i> Guardar nota</button>
   </div>`;
 }
 function fonteApoioTreinoHTML(item){
@@ -12407,7 +12450,7 @@ function treinoSessaoHTML(){
     ${treinoQuestaoHTML()}
     <div class="treino-rodape">
       <button class="btn btn-sm btn-ghost" onclick="treinoAnterior()" ${s.idx<=0?'disabled':''}><i class="fa fa-arrow-left"></i> Anterior</button>
-      <span class="treino-atalhos">${s.itens[s.idx].formato==='certoerrado'?'C / E':'A–E'} responder · B deixar em branco · Enter próxima</span>
+      <span class="treino-atalhos">${s.itens[s.idx].formato==='certoerrado'?'C / E':'A–E'} seleciona · Enter confirma/avança · B deixa em branco</span>
       <button class="btn btn-sm btn-primary" onclick="treinoProxima()">${s.idx>=s.itens.length-1?'Encerrar':'Próxima'} <i class="fa fa-arrow-right"></i></button>
     </div>
   </div>`;
@@ -28503,13 +28546,20 @@ function treinoAtalhoTeclado(e){
   if(!item)return;
   const respondida=s.respondidasSet.has(s.idx);
   const k=e.key.toUpperCase();
+  // Tecla so SELECIONA — confirma com Enter (mesmo comportamento do clique: selecionar e
+  // responder sao dois passos, pra dar pra conferir antes).
   if(!respondida&&/^[A-E]$/.test(k)){
     const alt=(item.alternativas||[]).find(a=>a.letra===k);
-    if(alt){e.preventDefault();treinoResponder(k);}
+    if(alt){e.preventDefault();treinoSelecionar(k);}
     return;
   }
   if(!respondida&&k==='B'){e.preventDefault();treinoPular();return;}
-  if(k==='ENTER'){e.preventDefault();treinoProxima();return;}
+  if(k==='ENTER'){
+    e.preventDefault();
+    if(!respondida&&item._selecionada)treinoConfirmarResposta();
+    else if(respondida)treinoProxima();
+    return;
+  }
 }
 bindStaticEvents();
 
