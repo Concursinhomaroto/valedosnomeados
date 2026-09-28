@@ -975,6 +975,35 @@ nav{
 .sg-todos{border:1px solid var(--border);border-radius:10px;overflow:hidden}
 .sg-todos-linha{display:flex;align-items:center;justify-content:space-between;gap:8px;
   padding:5px 10px;font-size:10.5px;color:var(--text2);border-top:1px solid var(--border)}
+/* Matriz acerto x confianca (passo 8.5) — a peca principal da tela de resultado. */
+.sg-matriz-wrap{margin:16px 0;padding:14px;border:1.5px solid var(--border2);border-radius:14px;background:var(--panel2);}
+.sg-matriz-titulo{font-size:12px;font-weight:900;color:var(--text);margin-bottom:10px;}
+.sg-matriz-grid{display:grid;grid-template-columns:64px repeat(3,1fr);gap:6px;}
+.sg-matriz-cab{font-size:9px;font-weight:800;color:var(--muted);text-align:center;align-self:end;padding-bottom:4px;line-height:1.25;}
+.sg-matriz-linha-lbl{font-size:10px;font-weight:800;color:var(--text2);display:flex;align-items:center;}
+.sg-matriz-cel{border-radius:10px;padding:8px 4px;text-align:center;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;min-height:54px;}
+.sg-matriz-cel b{font-size:19px;font-weight:900;line-height:1.1;}
+.sg-matriz-cel span{font-size:8.5px;font-weight:700;margin-top:2px;line-height:1.2;}
+.mtz-dominio{background:var(--accent);color:#fff;}
+.mtz-fragil{background:var(--accent3,var(--accent2));color:#1b1730;}
+.mtz-falso{background:var(--note-bg);color:var(--orange-t);border:2px solid var(--orange-t);}
+.mtz-perigoso{background:var(--conf-chute);color:var(--bg);border:2px solid var(--orange-t);}
+.mtz-lacuna{background:var(--border);color:var(--muted);}
+.sg-matriz-nota{font-size:10px;color:var(--muted);font-weight:600;margin-top:10px;font-style:italic;line-height:1.4;}
+.sg-matriz-acoes{display:flex;flex-direction:column;gap:8px;margin-top:12px;}
+.sg-matriz-acao{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  padding:9px 12px;border-radius:10px;font-size:11px;font-weight:700;}
+.mtz-falso-bg{background:var(--note-bg);color:var(--orange-t);}
+.mtz-perigoso-bg{background:rgba(194,65,12,0.1);color:var(--orange-t);}
+.sg-conf-quebra{margin:14px 0;}
+.sg-conf-quebra-titulo{font-size:11px;font-weight:800;color:var(--text2);margin-bottom:8px;}
+.sg-conf-bloco{display:grid;grid-template-columns:110px 1fr auto;align-items:center;gap:8px;margin-bottom:6px;font-size:10.5px;}
+.sg-conf-barra{height:8px;border-radius:999px;background:var(--border);overflow:hidden;display:flex;}
+.sg-conf-barra i{height:100%;}
+.sg-conf-num{color:var(--muted);font-weight:700;white-space:nowrap;font-size:10px;}
+.sg-acoes-grupo{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0;}
+.sg-acoes-grupo .btn{flex:1;justify-content:center;min-width:150px;}
 .sg-todos-linha:first-child{border-top:0}
 .sg-todos-linha>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sg-todos-linha>b{font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -13396,8 +13425,9 @@ function provaRevisarArquivada(id,tIdx){
   if(simGeralActive&&!simGeralActive.corrected
      &&!confirm('Você tem um simulado em andamento. Abrir a revisão descarta o que está na tela. Continuar?'))return;
   const resp=t.respostas||[];
+  const conf=t.confiancas||[];
   simGeralActive={
-    questoes:prova.questoes.map((q,k)=>({...q,userAnswer:resp[k]||undefined})),
+    questoes:prova.questoes.map((q,k)=>({...q,userAnswer:resp[k]||undefined,confianca:conf[k]||undefined})),
     startedAt:Date.now(),limiteSec:0,corrected:true,
     formato:prova.formato,nivel:prova.nivel,
     importado:prova.origem==='colado',
@@ -13642,8 +13672,9 @@ function provaRevisar(id,tIdx){
   if(simGeralActive&&!simGeralActive.corrected
      &&!confirm('Você tem um simulado em andamento. Abrir a revisão descarta o que está na tela. Continuar?'))return;
   const resp=t.respostas||[];
+  const conf=t.confiancas||[];
   simGeralActive={
-    questoes:provaQuestoes(prova).map((q,k)=>({...q,userAnswer:resp[k]||undefined})),
+    questoes:provaQuestoes(prova).map((q,k)=>({...q,userAnswer:resp[k]||undefined,confianca:conf[k]||undefined})),
     startedAt:Date.now(),limiteSec:0,corrected:true,
     formato:prova.formato,nivel:prova.nivel,
     importado:prova.origem==='colado',
@@ -15469,6 +15500,127 @@ function questaoForaDaConta(q){
 let sgVerTodos=false;
 function sgVerTodosToggle(){ sgVerTodos=!sgVerTodos; simResumoRefrescar(); }
 function sgCor(pct){ return pct>=70?'var(--green-t)':pct>=50?'var(--orange-t)':'var(--red-t)'; }
+// ===== MATRIZ ACERTO x CONFIANCA (passo 8.5) =====
+// O dado central da tela de resultado: separa acerto real de sorte, coisa que so existe a
+// partir da confianca declarada (passo 8.1). So questao respondida e dentro da conta entra;
+// sem confianca declarada nao cai em NENHUMA celula — vira nota separada e discreta, nunca
+// uma 4a coluna fingindo dado que a tentativa nao tem (pedido explicito do usuario).
+function simGeralMatrizDados(active){
+  const cel={certeza:{acerto:0,erro:0},duvida:{acerto:0,erro:0},chute:{acerto:0,erro:0}};
+  let semConfianca=0;
+  active.questoes.forEach(q=>{
+    if(questaoForaDaConta(q)||!q.userAnswer)return;
+    const acertou=q.userAnswer===q.correta;
+    if(!q.confianca){semConfianca++;return;}
+    cel[q.confianca][acertou?'acerto':'erro']++;
+  });
+  return{cel,semConfianca};
+}
+function simGeralMatrizHTML(active){
+  const{cel,semConfianca}=simGeralMatrizDados(active);
+  const total=Object.values(cel).reduce((n,c)=>n+c.acerto+c.erro,0);
+  if(!total&&!semConfianca)return'';
+  const falsoDominio=cel.chute.acerto, erroPerigoso=cel.certeza.erro;
+  return`<div class="sg-matriz-wrap">
+    <div class="sg-matriz-titulo">🎯 Acerto × confiança</div>
+    <div class="sg-matriz-grid">
+      <div class="sg-matriz-cab"></div>
+      <div class="sg-matriz-cab">Tenho certeza</div>
+      <div class="sg-matriz-cab">Fiquei na dúvida</div>
+      <div class="sg-matriz-cab">Chutei</div>
+      <div class="sg-matriz-linha-lbl">Acertou</div>
+      <div class="sg-matriz-cel mtz-dominio"><b>${cel.certeza.acerto}</b><span>domínio real</span></div>
+      <div class="sg-matriz-cel mtz-fragil"><b>${cel.duvida.acerto}</b><span>frágil</span></div>
+      <div class="sg-matriz-cel mtz-falso"><b>${falsoDominio}</b><span>falso domínio</span></div>
+      <div class="sg-matriz-linha-lbl">Errou</div>
+      <div class="sg-matriz-cel mtz-perigoso"><b>${erroPerigoso}</b><span>erro perigoso</span></div>
+      <div class="sg-matriz-cel mtz-lacuna"><b>${cel.duvida.erro}</b><span>lacuna conhecida</span></div>
+      <div class="sg-matriz-cel mtz-lacuna"><b>${cel.chute.erro}</b><span>lacuna aberta</span></div>
+    </div>
+    ${semConfianca?`<div class="sg-matriz-nota">${semConfianca} resposta${semConfianca>1?'s':''} desta prova ${semConfianca>1?'são':'é'} sem confiança declarada (de antes desse recurso, ou pulada) — não ${semConfianca>1?'entram':'entra'} na matriz.</div>`:''}
+    ${(falsoDominio||erroPerigoso)?`<div class="sg-matriz-acoes">
+      ${falsoDominio?`<div class="sg-matriz-acao mtz-falso-bg">
+        <span>🎲 <b>${falsoDominio}</b> acerto${falsoDominio>1?'s':''} foi sorte — conta${falsoDominio>1?'m':''} no placar, mas não como domínio.</span>
+        <button class="btn btn-xs btn-primary" onclick="simGeralRefazerGrupo('falsoDominio')">Refazer agora</button>
+      </div>`:''}
+      ${erroPerigoso?`<div class="sg-matriz-acao mtz-perigoso-bg">
+        <span>⚠️ <b>${erroPerigoso}</b> erro${erroPerigoso>1?'s':''} perigoso${erroPerigoso>1?'s':''} — você tinha certeza e errou. É onde a nota cai sem aviso.</span>
+        <button class="btn btn-xs btn-ghost" onclick="simGeralVerGrupo('erroPerigoso')">${erroPerigoso>1?`Ver as ${erroPerigoso}`:'Ver a questão'}</button>
+      </div>`:''}
+    </div>`:''}
+  </div>`;
+}
+// Por assunto, so entre o que voce ACERTOU: quanto e dominio de verdade vs sorte. Só
+// mostra assunto que teve pelo menos 1 acerto por chute — sem isso a barra e sempre 100%
+// roxa e nao diz nada de novo.
+function sgQuebraConfiancaHTML(active){
+  const porSub={};
+  active.questoes.forEach(q=>{
+    if(questaoForaDaConta(q)||!q.userAnswer||q.userAnswer!==q.correta)return;
+    const reg=porSub[q.subId]=porSub[q.subId]||{nome:q.subName,icone:q.kingdomIcon,real:0,chute:0};
+    if(q.confianca==='chute')reg.chute++; else reg.real++;
+  });
+  const subs=Object.values(porSub).filter(s=>s.chute>0);
+  if(!subs.length)return'';
+  return`<div class="sg-conf-quebra">
+    <div class="sg-conf-quebra-titulo">Por assunto — quanto do acerto é domínio, quanto é sorte</div>
+    ${subs.sort((a,b)=>b.chute-a.chute).map(s=>{
+      const tot=s.real+s.chute;
+      return`<div class="sg-conf-bloco">
+        <span>${s.icone} ${escapeHtml(s.nome)}</span>
+        <span class="sg-conf-barra"><i style="width:${100*s.real/tot}%;background:var(--accent)"></i><i style="width:${100*s.chute/tot}%;background:var(--orange-t)"></i></span>
+        <span class="sg-conf-num">${s.real}+${s.chute}🎲/${tot}</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+// Reusa o mesmo montarProvaDeItens do passo 8.3 (decks da tela Treinar) — so muda de onde
+// vem a lista de questoes (aqui, um subconjunto da prova recem-corrigida, nao um deck).
+function simGeralRefazerSubset(criterioFn,vazioMsg){
+  const active=simGeralActive;
+  const alvo=(active&&active.questoes||[]).filter(criterioFn);
+  if(!alvo.length){toast(vazioMsg||'Nenhuma questão nesse grupo.','var(--muted)');return;}
+  const pool=alvo.map(q=>{
+    const chave=acervoChave2De(q);
+    const item=(db.acervo||[]).find(x=>acervoChave2De(x)===chave);
+    return{q:item||q};
+  });
+  const r=montarProvaDeItens(pool,pool.length);
+  if(!r){toast('❌ Não consegui montar.','var(--red)');return;}
+  provaRefazer(r.id);
+}
+function simGeralRefazerGrupo(tipo){
+  if(tipo==='falsoDominio')simGeralRefazerSubset(q=>q.confianca==='chute'&&q.userAnswer===q.correta);
+  else if(tipo==='erradas')simGeralRefazerSubset(q=>!questaoForaDaConta(q)&&q.userAnswer&&q.userAnswer!==q.correta);
+}
+function simGeralVerGrupo(tipo){
+  const active=simGeralActive;
+  const idx=(active&&active.questoes||[]).findIndex(q=>{
+    if(tipo==='erroPerigoso')return q.confianca==='certeza'&&q.userAnswer&&q.userAnswer!==q.correta;
+    return false;
+  });
+  if(idx<0){toast('Nenhuma questão nesse grupo.','var(--muted)');return;}
+  const el=document.getElementById('sgres-'+idx);
+  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function simGeralMandarErradosParaFlashcard(){
+  const active=simGeralActive;
+  const errados=(active&&active.questoes||[]).filter(q=>!questaoForaDaConta(q)&&q.userAnswer&&q.userAnswer!==q.correta);
+  if(!errados.length){toast('Nenhum erro nesta prova.','var(--muted)');return;}
+  let criados=0;
+  errados.forEach(q=>{if(criarFlashcardDeQuestaoErrada(q.subId,q))criados++;});
+  if(criados)saveDB();
+  toast(criados?`📇 ${criados} flashcard${criados>1?'s':''} criado${criados>1?'s':''} a partir dos erros desta prova.`
+              :'📇 Todos os erros já tinham flashcard.','var(--accent)');
+}
+function sgAcoesGrupoHTML(active){
+  const erradas=(active.questoes||[]).filter(q=>!questaoForaDaConta(q)&&q.userAnswer&&q.userAnswer!==q.correta).length;
+  if(!erradas)return'';
+  return`<div class="sg-acoes-grupo">
+    <button class="btn btn-sm btn-ghost" onclick="simGeralRefazerGrupo('erradas')"><i class="fa fa-rotate-left"></i> Refazer só as ${erradas} erradas</button>
+    <button class="btn btn-sm btn-ghost" onclick="simGeralMandarErradosParaFlashcard()"><i class="fa fa-layer-group"></i> Mandar os ${erradas} erros pro flashcard</button>
+  </div>`;
+}
 function sgQuebraHTML(bySub){
   const subs=Object.values(bySub);
   if(!subs.length)return'';
@@ -15579,6 +15731,9 @@ function simGeralResultsHTML(){
       </div>`;})():''}
     </div>
     ${sgQuebraHTML(bySub)}
+    ${simGeralMatrizHTML(active)}
+    ${sgQuebraConfiancaHTML(active)}
+    ${!active.revisando&&!active.refazendo?sgAcoesGrupoHTML(active):''}
     ${active.revisando
       ? `<div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap">
           <button class="btn btn-sm btn-ghost" style="flex:1;justify-content:center" onclick="simGeralReset();showScreen('provas')"><i class="fa fa-arrow-left"></i> Voltar pras provas</button>
@@ -15592,7 +15747,7 @@ function simGeralResultsHTML(){
     ${tavilyAtivo()?`<button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-bottom:10px" onclick="fonteBuscarErradas()"><i class="fa fa-book-open"></i> Buscar a fonte oficial das que eu errei</button>`:''}
     <div style="display:flex;flex-direction:column;gap:8px">
       ${active.questoes.map((q,i)=>`
-        <div class="sim-q${q.problematico?' sim-q-flagged':''}">
+        <div class="sim-q${q.problematico?' sim-q-flagged':''}" id="sgres-${i}">
           <div class="sg-q-tag">${q.kingdomIcon} ${q.kingdomName} · ${q.topicName} · ${q.subName}</div>
           ${simHistoricoAntesHTML(q)}
           <div class="marca-zona"${active.provaId?` data-sub="${marcaChaveQuestao(active.provaId,i)}"`:''}>
