@@ -12039,8 +12039,19 @@ function simColarHTML(){
 // novo dentro de montarAcervo), deduplicado pela chave v2, ja sem item queimado. Reusar em
 // vez de reimplementar e o que GARANTE Treinar e Acervo mostrarem o mesmo total, por
 // construcao — nao por coincidencia de duas contas paralelas.
+// Achado ao vivo (usuário testando no celular): item antigo com alternativas vazias/
+// quebradas ("MÚLTIPLA" na etiqueta, mas nenhuma opção pra tocar, nem Responder nem nada —
+// "essa sumiu"). questaoForaDaConta so cobre datado/problema/_faltando; isto cobre um
+// quarto jeito de estar quebrada, especifico de quem TREINA (uma prova antiga podia
+// digerir isso sem travar, uma tela de UMA questao por vez nao tem pra onde desviar).
+function treinoQuestaoUtilizavel(q){
+  if(!q||!q.questao)return false;
+  const alts=q.alternativas;
+  if(!Array.isArray(alts)||alts.length<2)return false;
+  return alts.every(a=>a&&a.letra&&a.texto!=null&&String(a.texto).trim());
+}
 function treinoPoolCompleto(){
-  return montarAcervo().filter(x=>(x.q.status||'ativa')==='ativa').map(x=>x.q);
+  return montarAcervo().filter(x=>(x.q.status||'ativa')==='ativa'&&treinoQuestaoUtilizavel(x.q)).map(x=>x.q);
 }
 function treinarPoolAtivo(){
   return treinoPoolCompleto();

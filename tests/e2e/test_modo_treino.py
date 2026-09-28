@@ -203,6 +203,27 @@ async def main():
         assert r['naMinhasProvas'], 'histórico de simulados tem que aparecer em Minhas Provas'
         print('   OK\n')
 
+        print('=== K) item com alternativas vazias/quebradas não entra no pool — achado ao vivo ===')
+        # Relato do usuário: uma múltipla escolha antiga sem alternativas abria a sessão de
+        # treino sem nada pra tocar — nem opção, nem botão Responder. "Essa sumiu."
+        r=await page.evaluate("""()=>{
+          db.acervo=[];db.provas=[];db.provasArquivo=[];
+          const boa=QS('sub-mt1','Choque Séptico',1,'Boa')[0];
+          const quebrada={...QS('sub-mt1','Choque Séptico',1,'Quebrada')[0],alternativas:[]};
+          const semCampo={...QS('sub-mt1','Choque Séptico',1,'SemCampo')[0]};
+          delete semCampo.alternativas;
+          [boa,quebrada,semCampo].forEach(q=>{
+            db.acervo.push({...q,_chaveForte:acervoChave2(q),tags:[],favorita:false,status:'ativa',
+              vezesRespondida:0,acertos:0,erros:0,ultimaVezEm:null,dificuldadeAferida:null,
+              certezaAcertos:0,certezaErros:0,duvidaAcertos:0,duvidaErros:0,chuteAcertos:0,chuteErros:0,
+              criacao:new Date().toISOString(),origem:'ia'});});
+          const pool=treinoPoolCompleto();
+          return {totalAcervo:db.acervo.length,noPool:pool.length,
+                  temBoa:pool.some(q=>q.questao.includes('Boa'))};}""")
+        print('   %s'%r)
+        assert r['totalAcervo']==3 and r['noPool']==1 and r['temBoa']
+        print('   OK\n')
+
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))
         assert not graves, graves
