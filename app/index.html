@@ -11961,12 +11961,14 @@ function treinarFaixaContagem(ativo){
 // Clique no bloco/card = direto pro exame, sem tela intermediaria — "comeca uma prova em
 // dois cliques" do criterio de aceite. Reusa provaRefazer (que ja sabe tratar prova.treino
 // como "nao conta nas estatisticas", igual toda prova montada sob medida).
-const TREINAR_QTD_DECK=20;
+// Leva o deck INTEIRO — o numero no card e o numero que abre, sem excecao. Um teto aqui
+// escondia questoes em silencio (o card dizia 47, a prova vinha com 20), e "nenhum numero
+// morto" (principio do proprio redesenho) vale tambem pra nao MENTIR um numero vivo.
 function treinarComDeck(deckId){
   const deck=treinarDecks().find(d=>d.id===deckId);
   if(!deck||!deck.itens.length){toast('Nenhuma questão nesse deck agora — volte depois de treinar mais um pouco.','var(--muted)');return;}
   const pool=deck.itens.map(q=>({q}));
-  const r=montarProvaDeItens(pool,Math.min(TREINAR_QTD_DECK,pool.length));
+  const r=montarProvaDeItens(pool,pool.length);
   if(!r){toast('❌ Não consegui montar.','var(--red)');return;}
   provaRefazer(r.id);
 }

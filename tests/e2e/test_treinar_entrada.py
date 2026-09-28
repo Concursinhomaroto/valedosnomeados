@@ -85,6 +85,21 @@ async def main():
         assert r['emExame'] and r['qtd']==3 and r['treino'] and r['refazendo']
         print('   OK\n')
 
+        print('=== D.1) deck GRANDE leva TODAS as questoes — o numero do card e o numero que abre, sem teto escondido ===')
+        r=await page.evaluate("""()=>{
+          simGeralReset();
+          db.acervo=[];db.provas=[];
+          const qs=QS('kEnf','Enfermagem','💉','sE1','Choque septico',47,'B');
+          qs.forEach(q=>{q._chaveForte=acervoChave2(q);Object.assign(q,acervoCamposNovos('ia'));});
+          db.acervo=qs;
+          renderSimGeralScreen();
+          const cardNum=document.querySelector('.treinar-deck-num').textContent;
+          treinarComDeck('nuncavistas');
+          return {cardNum,qtdNaProva:simGeralActive.questoes.length};}""")
+        print('   card: %s · prova abriu com: %s'%(r['cardNum'],r['qtdNaProva']))
+        assert r['cardNum']=='47' and r['qtdNaProva']==47
+        print('   OK\n')
+
         print('=== E) deck inexistente (sem edital em foco) nao quebra ao clicar ===')
         r=await page.evaluate("""()=>{
           simGeralReset();
