@@ -13372,6 +13372,13 @@ function provaRegistrarTentativaNoAcervo(prova,questoesAtivas,respostas){
     mudou=true;
   });
   if(mudou)acervoSalvar();
+  // Marca como reconciliada: acervoBackfillDeProvasAntigas (chamada dentro de
+  // provasAparar, que roda logo depois de qualquer provaGuardar) pula prova com
+  // _acervoBackfillEm. Sem este carimbo aqui, TODA tentativa nova recem-contada por
+  // este caminho seria contada de NOVO pelo backfill na mesma chamada — ele nao tem
+  // como saber que esta tentativa especifica ja acabou de ser somada, so ve "prova
+  // com tentativa e sem _acervoBackfillEm" e soma tudo de novo do zero.
+  prova._acervoBackfillEm=new Date().toISOString();
 }
 // Migracao pontual (buraco que o passo 6 deixou pra tras, achado pelo usuario): prova que
 // ja tinha tentativa(s) ANTES do passo 6 existir nunca foi convertida nem contada no
