@@ -107,7 +107,7 @@ async def main():
           return {primeiraVez,segundaVezToastou:t2.style.display!=='none'};}""")
         print('   %s'%r)
         assert r['primeiraVez']['boostrapadas']==3
-        assert r['primeiraVez']['toast'] and 'recuperada' in r['primeiraVez']['toast']
+        assert r['primeiraVez']['toast'] and 'Acervo recuperado' in r['primeiraVez']['toast']
         assert not r['segundaVezToastou']
         print('   OK\n')
 

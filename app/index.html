@@ -3058,11 +3058,13 @@ nav{
   </div>
 
   <div class="section-card" style="max-width:720px">
-    <div class="sec-title" style="font-size:15px">📚 Backfill do Acervo (provas de antes do passo 6)</div>
+    <div class="sec-title" style="font-size:15px">📚 Backfill do Acervo (provas antigas + miniboss por assunto)</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
-      Já roda sozinho no boot (silencioso quando não há nada pra fazer). Este botão só serve
-      pra conferir o relatório de novo, ou forçar depois de restaurar um backup antigo —
-      idempotente: rodar de novo sobre prova já migrada não soma nada duas vezes.
+      Duas fontes: provas do Simulado Geral de antes do passo 6, e histórico por assunto
+      (miniboss) que nunca teve caminho pro acervo. Já roda sozinho no boot (silencioso
+      quando não há nada pra fazer). Este botão só serve pra conferir o relatório de novo,
+      ou forçar depois de restaurar um backup antigo — idempotente: rodar de novo sobre o
+      que já foi migrado não soma nada duas vezes.
     </div>
     <button class="btn btn-primary" onclick="adminRodarBackfillAcervo()"><i class="fa fa-database"></i> Rodar backfill e ver relatório</button>
     <div id="admin-backfill-relatorio" style="margin-top:12px"></div>
@@ -5868,17 +5870,19 @@ function adminRefresh(){
 // sobre o que ja foi migrado da 0 em tudo, de proposito.
 function adminRodarBackfillAcervo(){
   const el=document.getElementById('admin-backfill-relatorio');
-  const r=acervoBackfillDeProvasAntigas();
+  const r=acervoBackfillCompleto();
   const linha=(lbl,v)=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--muted)">${lbl}</span><b>${v}</b></div>`;
   if(el)el.innerHTML=`<div style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 14px">
-    ${linha('Provas migradas nesta rodada',r.provasMigradas)}
-    ${linha('Tentativas contadas',r.tentativasContadas)}
+    ${linha('Provas migradas nesta rodada (Simulado Geral)',r.provasMigradas)}
+    ${linha('Tentativas contadas (Simulado Geral)',r.tentativasContadas)}
+    ${linha('Miniboss migrados nesta rodada (por assunto)',r.assuntosMigrados)}
+    ${linha('Tentativas contadas (miniboss)',r.tentativasMinibossContadas)}
     ${linha('Questões novas no Acervo',r.questoesNovas)}
-    ${linha('Questões que já existiam (compartilhadas entre provas)',r.questoesColidiram)}
+    ${linha('Questões que já existiam (compartilhadas)',r.questoesColidiram)}
     ${linha('Total no Acervo agora',(db.acervo||[]).length)}
   </div>`;
-  toast(r.provasMigradas
-    ?`✅ ${r.provasMigradas} prova(s) migrada(s) agora.`
+  toast((r.provasMigradas||r.tentativasMinibossContadas)
+    ?`✅ Migrado agora: ${r.provasMigradas} prova(s) + ${r.tentativasMinibossContadas} tentativa(s) de miniboss.`
     :'✅ Nada pra migrar — tudo que existe já passou por aqui antes.','var(--accent)');
 }
 async function adminReconstruirIndice(){
@@ -10351,6 +10355,16 @@ function simCorrigir(subId){
   const histId=genId();
   active.histId=histId;
   sub.simHistorico.unshift({id:histId,data:new Date().toISOString(),quantidade:total,acertos,erros:total-acertos,questoes:active.questoes,formato:active.formato||'multipla',nivel:active.nivel});
+  // Ao vivo, na hora: bug achado pelo usuario — simCorrigir nunca escrevia no acervo,
+  // entao o simulado por assunto (a maior parte do estudo, pelo relato dele) so existia
+  // aqui dentro, sumindo quando histApararSub corta pra HIST_SUB_VIVO. Precisa rodar
+  // ANTES do aparar: depois dele as questoes das tentativas mais velhas ja saem sem
+  // `questoes` (histApararSub tira de proposito). Mesma funcao usada no backfill
+  // retroativo (acervoBackfillDeMinibossAntigos) — o carimbo que ela deixa em hist e o
+  // que impede a mesma tentativa ser contada de novo quando o backfill rodar depois.
+  const histRecemCriado=sub.simHistorico[0];
+  const ctx=simTopicKingdomDoSub(subId)||{};
+  simRegistrarHistoricoNoAcervo(sub,ctx.topic,ctx.kingdom,histRecemCriado,histRecemCriado.data);
   histApararSub(sub);
   db.simSessionsCount=(db.simSessionsCount||0)+1;
   active.questoes.filter(q=>q.userAnswer!==q.correta).forEach(q=>criarFlashcardDeQuestaoErrada(subId,q));
@@ -12885,13 +12899,26 @@ function acervoDificuldade(acertos,vezes){
 // Passo 8.2: confianca (chute/duvida/certeza) e OPCIONAL — so soma no bucket cruzado
 // quando foi de fato declarada, pra tentativa antiga (de antes desse recurso existir)
 // nao fingir um dado que nunca teve.
-function acervoAtualizarContadores(item,resultado,confianca){
+// `quando` e OPCIONAL: sem ele, usa agora (todo caminho ao vivo — a resposta acabou de
+// ser dada). Com ele (backfill de tentativa antiga), so AVANCA ultimoResultado/ultimaVezEm
+// se a data for >= a que ja estava guardada — nunca deixa uma tentativa mais VELHA
+// sobrescrever o resultado de uma mais NOVA. Sem essa guarda, misturar duas fontes de
+// backfill (db.provas e sub.simHistorico) processadas em passes separados — cada uma na
+// SUA propria ordem cronologica, mas nao necessariamente entrelacadas uma com a outra —
+// podia fazer a fonte processada por ultimo "ganhar" so por ter rodado depois, mesmo
+// quando a tentativa dela era a mais antiga das duas. vezesRespondida/acertos/erros
+// continuam somando sempre, incondicional — so o "por ultimo escreve" que passa a
+// respeitar a data de verdade, nao a ordem de chamada.
+function acervoAtualizarContadores(item,resultado,confianca,quando){
   if(!item||!resultado)return;
-  item.ultimoResultado=resultado;
   item.vezesRespondida=(item.vezesRespondida||0)+1;
   if(resultado==='C')item.acertos=(item.acertos||0)+1;
   else item.erros=(item.erros||0)+1;
-  item.ultimaVezEm=new Date().toISOString();
+  const dataNova=quando?new Date(quando).toISOString():new Date().toISOString();
+  if(!item.ultimaVezEm||dataNova>=item.ultimaVezEm){
+    item.ultimaVezEm=dataNova;
+    item.ultimoResultado=resultado;
+  }
   item.dificuldadeAferida=acervoDificuldade(item.acertos,item.vezesRespondida);
   if(confianca){
     const campo=confianca+(resultado==='C'?'Acertos':'Erros');
@@ -13060,14 +13087,20 @@ async function acervoCarregar(){
     acervoSalvar(true);
     if(noRegistro)saveDB();   // o registro principal encolhe na mesma hora
   }
-  // Backfill de provas antigas (achado pelo usuario — ver o comentario da propria
-  // funcao). Roda aqui tambem, nao so dentro de provasAparar: guardar uma prova NOVA
+  // Backfill de historico antigo (achado pelo usuario — ver o comentario das proprias
+  // funcoes). Roda aqui tambem, nao so dentro de provasAparar: guardar uma prova NOVA
   // nunca foi o unico jeito de abrir o app, e quem so quer OLHAR o que ja tem nao pode
-  // depender de fazer alguma coisa primeiro pra o proprio acervo aparecer.
-  const backfill=acervoBackfillDeProvasAntigas();
-  if(backfill.provasMigradas){
-    console.info('Backfill do acervo (provas de antes do passo 6):',backfill);
-    toast(`📚 ${backfill.provasMigradas} prova(s) antiga(s) recuperada(s) pro Acervo — ${backfill.tentativasContadas} tentativa(s) contada(s).`,'var(--accent)');
+  // depender de fazer alguma coisa primeiro pra o proprio acervo aparecer. Duas fontes:
+  // db.provas (Simulado Geral) e sub.simHistorico (miniboss por assunto) — a segunda e
+  // onde estava a maior parte do buraco: o simulado por assunto nunca teve caminho pro
+  // acervo, nem ao vivo nem em backfill nenhum, ate agora.
+  const backfill=acervoBackfillCompleto();
+  if(backfill.provasMigradas||backfill.tentativasMinibossContadas){
+    console.info('Backfill do acervo (provas antigas + miniboss por assunto):',backfill);
+    const partes=[];
+    if(backfill.provasMigradas)partes.push(`${backfill.provasMigradas} prova(s) antiga(s) (${backfill.tentativasContadas} tentativa(s))`);
+    if(backfill.tentativasMinibossContadas)partes.push(`${backfill.tentativasMinibossContadas} tentativa(s) de assunto em ${backfill.assuntosMigrados} miniboss(es)`);
+    toast(`📚 Acervo recuperado: ${partes.join(' + ')}.`,'var(--accent)');
   }
   await provarqCarregar();
   await histCarregar();
@@ -13454,7 +13487,7 @@ function acervoBackfillDeProvasAntigas(){
       if(!item)return;
       const dada=resp[i]||'';
       if(!dada)return;
-      acervoAtualizarContadores(item,dada===q.correta?'C':'X',conf[i]);
+      acervoAtualizarContadores(item,dada===q.correta?'C':'X',conf[i],t.data);
       contou=true;
     });
     if(contou)relatorio.tentativasContadas++;
@@ -13464,6 +13497,125 @@ function acervoBackfillDeProvasAntigas(){
   acervoSalvar(true);
   saveDB();
   return relatorio;
+}
+// Acha o chefao/reino de um assunto, pra questao de miniboss poder entrar no acervo com
+// subId/subName/topicName/kingdomId/kingdomName/kingdomIcon corretos (sem isso ela cai no
+// Acervo "sem assunto": nao aparece nos filtros por reino/chefao nem no Mapa do Acervo).
+function simTopicKingdomDoSub(subId){
+  for(const k of db.kingdoms){
+    const t=(db.topics[k.id]||[]).find(tt=>(tt.subtopics||[]).some(s=>s.id===subId));
+    if(t)return{topic:t,kingdom:k};
+  }
+  return null;
+}
+// Segundo buraco do mesmo bug (achado pelo usuario): a MAIOR PARTE do estudo por assunto
+// (miniboss, sub.simHistorico) nunca ia pro Banco de Questoes — nem ao vivo (simCorrigir
+// nunca chamava nada do acervo) nem em backfill nenhum. So o Simulado Geral (db.provas)
+// tinha caminho pro acervo. E o unico ponto que faz as duas coisas — colocar a questao no
+// banco (criando se preciso, ja que miniboss nunca passou por bancoAdicionarOuFundir antes)
+// e somar o resultado — usado tanto AO VIVO (dentro de simCorrigir, na hora da correcao)
+// quanto no BACKFILL (retroativo, abaixo). `quando` e a data de VERDADE da tentativa
+// (hist.data) — sem isso toda questao migrada em bloco nascia com ultimaVezEm=agora, e o
+// deck Refazer (30 dias parado) achava que tudo tinha acabado de ser respondido.
+// `porChave2` e opcional: o backfill em massa passa um Map ja montado (e vai atualizando
+// conforme cria item novo) pra nao escanear db.acervo inteiro a cada questao; o caminho ao
+// vivo (uma tentativa por vez, poucas questoes) monta o seu na hora, sem custo.
+// Entrada com `hist.geral` e IGNORADA por quem chama isto pro backfill (ver mais abaixo) —
+// e o espelho por assunto que simGeralCorrigir ja grava do MESMO resultado que foi pra
+// db.provas; contar aqui de novo duplicaria.
+function simRegistrarHistoricoNoAcervo(sub,topic,kingdom,hist,quando,porChave2){
+  if(!hist||hist._acervoBackfillEm)return{contou:false};
+  const mapa=porChave2||(()=>{
+    const m=new Map();
+    (db.acervo||[]).forEach(q=>{const k=acervoChave2De(q);if(k&&!m.has(k))m.set(k,q);});
+    return m;
+  })();
+  let contou=false;
+  (hist.questoes||[]).forEach(q=>{
+    if(questaoForaDaConta(q))return;
+    const dada=q.userAnswer;
+    if(!dada)return;
+    const limpa=acervoLimparQuestao(q);
+    const dados={...limpa,subId:sub.id,subName:sub.name,topicName:topic?topic.name:'',
+                 kingdomId:kingdom?kingdom.id:'',kingdomName:kingdom?kingdom.name:'',
+                 kingdomIcon:kingdom?kingdom.icon:''};
+    const chave=acervoChave2(dados);
+    let item=mapa.get(chave);
+    if(!item){
+      bancoAdicionarOuFundir(dados,'ia');
+      item=db.acervo[0];
+      mapa.set(chave,item);
+    }
+    if(!item)return;
+    acervoAtualizarContadores(item,dada===q.correta?'C':'X',q.confianca,quando);
+    contou=true;
+  });
+  hist._acervoBackfillEm=new Date().toISOString();
+  return{contou};
+}
+// Idempotente por TENTATIVA (hist._acervoBackfillEm), nao por assunto: um assunto tem ate
+// HIST_SUB_VIVO tentativas no ar ao mesmo tempo, cada uma e a sua propria unidade — mesma
+// logica de dupla marcacao do backfill de provas (o caminho ao vivo, dentro de simCorrigir,
+// carimba a MESMA tentativa na hora, entao ela nunca chega aqui sem marca pra ser contada
+// de novo). Historico ja evictado pra db.hist.subs (alem de HIST_SUB_VIVO) NAO tem mais
+// questoes — histApararSub tira elas de proposito, na promessa de que ja estariam no
+// acervo. Como essa promessa nunca foi cumprida antes de agora, o que ja foi evictado
+// ficou irrecuperavel: so o agregado sobrou, sem enunciado/resposta pra reconstruir nada.
+// So o que ainda esta em sub.simHistorico (as ultimas HIST_SUB_VIVO de cada assunto) da
+// pra migrar — e e exatamente aonde a bulk deste backfill esta.
+function acervoBackfillDeMinibossAntigos(){
+  const relatorio={assuntosMigrados:0,tentativasContadas:0,questoesNovas:0,questoesColidiram:0};
+  const candidatas=[];
+  simIndiceAssuntos().forEach(({sub,topic,kingdom})=>{
+    (sub.simHistorico||[]).forEach(h=>{
+      if(h.geral||h._acervoBackfillEm)return;
+      candidatas.push({sub,topic,kingdom,hist:h});
+    });
+  });
+  if(!candidatas.length)return relatorio;
+  // Mesmo cuidado do backfill de provas: o retrato do que ja existia (pra contar
+  // questoesNovas/questoesColidiram certo) tem que ser tirado ANTES de qualquer
+  // bancoAdicionarOuFundir rodar, senao tudo pareceria colisao.
+  const vistoNesteRun=new Set();
+  (db.acervo||[]).forEach(q=>{const k=acervoChave2De(q);if(k)vistoNesteRun.add(k);});
+  candidatas.forEach(({hist})=>{
+    (hist.questoes||[]).forEach(q=>{
+      if(questaoForaDaConta(q))return;
+      const chave=acervoChave2(q);
+      if(vistoNesteRun.has(chave))relatorio.questoesColidiram++;
+      else{vistoNesteRun.add(chave);relatorio.questoesNovas++;}
+    });
+  });
+  // Ordem cronologica de VERDADE entre TODOS os assuntos (nao por assunto, nao pela ordem
+  // de varredura de simIndiceAssuntos) — mesmo motivo do backfill de provas: ultimoResultado
+  // /ultimaVezEm sao "por ultimo escreve, vale".
+  candidatas.sort((a,b)=>new Date(a.hist.data||0)-new Date(b.hist.data||0));
+  const porChave2=new Map();
+  (db.acervo||[]).forEach(q=>{const k=acervoChave2De(q);if(k&&!porChave2.has(k))porChave2.set(k,q);});
+  const assuntosTocados=new Set();
+  candidatas.forEach(({sub,topic,kingdom,hist})=>{
+    const r=simRegistrarHistoricoNoAcervo(sub,topic,kingdom,hist,hist.data,porChave2);
+    if(r.contou){relatorio.tentativasContadas++;assuntosTocados.add(sub.id);}
+  });
+  relatorio.assuntosMigrados=assuntosTocados.size;
+  acervoSalvar(true);
+  saveDB();
+  return relatorio;
+}
+// Ponto unico chamado pelo boot, por provasAparar e pelo botao manual do Painel Admin —
+// roda as duas migracoes retroativas (db.provas e sub.simHistorico) e devolve um relatorio
+// combinado. As duas sao independentes e cada uma idempotente por si (marcadores em
+// namespaces diferentes: prova._acervoBackfillEm vs hist._acervoBackfillEm), entao rodar
+// as duas sempre, mesmo quando so uma tem novidade, nao tem custo depois da 1a vez.
+function acervoBackfillCompleto(){
+  const provas=acervoBackfillDeProvasAntigas();
+  const miniboss=acervoBackfillDeMinibossAntigos();
+  return{
+    provasMigradas:provas.provasMigradas,tentativasContadas:provas.tentativasContadas,
+    assuntosMigrados:miniboss.assuntosMigrados,tentativasMinibossContadas:miniboss.tentativasContadas,
+    questoesNovas:provas.questoesNovas+miniboss.questoesNovas,
+    questoesColidiram:provas.questoesColidiram+miniboss.questoesColidiram
+  };
 }
 // Copia funda o bastante: cada entrada do overlay e um objeto piso (m/p/s/k), so o grifo
 // (g) e array de objetos por dentro dele.
@@ -13693,11 +13845,11 @@ function provasAparar(){
   // Migracao preguicosa: prova que ja tinha tentativa ANTES desta versao (carregada do
   // Firebase ainda em copia cheia) so converte aqui, no proximo ciclo de guarda — sem
   // isto, so prova nova ganharia a economia de payload, e quem ja tem 30 provas feitas
-  // no ar continuaria pagando o preco antigo pra sempre. acervoBackfillDeProvasAntigas
-  // ja faz isso (e mais: soma os contadores das tentativas antigas tambem) e e
-  // idempotente por prova — chamar aqui de novo, a cada guarda, nao tem custo extra
-  // depois da 1a vez.
-  acervoBackfillDeProvasAntigas();
+  // no ar continuaria pagando o preco antigo pra sempre. acervoBackfillCompleto ja faz
+  // isso (e mais: soma os contadores das tentativas antigas tambem, tanto de db.provas
+  // quanto de sub.simHistorico) e e idempotente — chamar aqui de novo, a cada guarda,
+  // nao tem custo extra depois da 1a vez.
+  acervoBackfillCompleto();
   const saindo=[];
   // db.provas e a mais nova primeiro, entao varrer de tras pra frente acha a mais antiga.
   const despejarUmaFeita=()=>{
