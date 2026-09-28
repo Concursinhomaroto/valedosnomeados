@@ -896,6 +896,33 @@ nav{
 .sg-confianca-consequencia{font-size:10.5px;color:var(--orange-t);font-weight:700;margin-top:8px;}
 .sg-q-tag{font-size:9.5px;font-weight:800;color:var(--pink-t);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;}
 .sim-q-historico{font-size:11px;font-weight:700;color:var(--accent);background:rgba(99,102,241,0.08);border-radius:8px;padding:5px 9px;margin-bottom:8px;display:inline-flex;align-items:center;gap:6px;}
+/* Tela Treinar (passo 8.3): estado antes de assunto — a entrada organizada pela relação
+   com a questão (nunca vi/errei/acertei chutando/domino), não pela árvore de matérias. */
+.treinar-faixa{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:12px;}
+.treinar-faixa-total{display:flex;flex-direction:column;}
+.treinar-faixa-total b{font-size:28px;font-weight:900;color:var(--accent);line-height:1;}
+.treinar-faixa-total span{font-size:10.5px;color:var(--muted);font-weight:700;}
+.treinar-faixa-blocos{display:flex;gap:8px;flex-wrap:wrap;flex:1;}
+.treinar-bloco{cursor:pointer;background:var(--panel2);border:1.5px solid var(--border);border-radius:12px;
+  padding:8px 12px;display:flex;flex-direction:column;min-width:88px;transition:border-color .15s;}
+.treinar-bloco:hover{border-color:var(--accent);}
+.treinar-bloco b{font-size:18px;font-weight:900;color:var(--text);line-height:1.2;}
+.treinar-bloco span{font-size:10px;color:var(--muted);font-weight:700;}
+.treinar-bloco-ambar{border-color:rgba(194,65,12,0.3);}
+.treinar-bloco-ambar b{color:var(--orange-t);}
+.treinar-progresso-seg{display:flex;height:10px;border-radius:999px;overflow:hidden;background:var(--border);margin-bottom:5px;}
+.treinar-progresso-seg span{height:100%;}
+.treinar-progresso-legenda{font-size:10.5px;color:var(--muted);font-weight:700;display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+.treinar-progresso-legenda i{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:3px;}
+.treinar-decks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+.treinar-deck{background:var(--panel2);border:1.5px solid var(--border);border-radius:13px;padding:12px;display:flex;flex-direction:column;}
+.treinar-deck-ambar{border-color:rgba(194,65,12,0.3);background:var(--note-bg);}
+.treinar-deck-icon{font-size:20px;margin-bottom:4px;}
+.treinar-deck-num{font-size:22px;font-weight:900;color:var(--text);line-height:1.1;}
+.treinar-deck-nome{font-size:13px;font-weight:800;color:var(--text);margin-top:2px;}
+.treinar-deck-desc{font-size:10.5px;color:var(--muted);font-weight:600;line-height:1.3;margin-top:2px;flex:1;}
+.treinar-avancado-faixa{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  border:1.5px dashed var(--border);border-radius:12px;padding:10px 14px;margin-top:16px;font-size:11px;color:var(--muted);font-weight:700;}
 .prova-editar{padding:2px 6px!important;color:var(--muted)}
 .prova-editar:hover{color:var(--accent)}
 .sim-pausado{border:1.5px solid var(--accent);border-radius:14px;padding:12px 14px;
@@ -2351,7 +2378,7 @@ nav{
       <span class="nav-badge" id="rev-badge" style="display:none">0</span>
     </button>
     <button class="nav-btn" id="nav-simgeral">
-      <span class="nav-icon">🏛️</span><span class="nav-label">SIMULADO GERAL</span>
+      <span class="nav-icon">🎯</span><span class="nav-label">TREINAR</span>
       <span class="nav-badge" id="erros-badge" style="display:none">0</span>
     </button>
     <div class="nav-group">Acompanhar</div>
@@ -2473,10 +2500,10 @@ nav{
 <!-- ===== BANCO DE ERROS ===== -->
 <div class="screen" id="screen-erros">
   <div class="rd-conectivos-tabs" style="margin-bottom:14px">
-    <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
+    <button onclick="showScreen('simgeral')"><i class="fa fa-bullseye"></i> Treinar</button>
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
-    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Banco de Questões</button>
+    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Acervo</button>
     <button class="active"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div class="sec-title">📕 Banco de Erros</div>
@@ -2492,10 +2519,10 @@ nav{
 <!-- ===== SIMULADO GERAL ===== -->
 <div class="screen" id="screen-simgeral">
   <div class="rd-conectivos-tabs" style="margin-bottom:14px">
-    <button class="active"><i class="fa fa-landmark"></i> Simulado Geral</button>
+    <button class="active"><i class="fa fa-bullseye"></i> Treinar</button>
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
-    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Banco de Questões</button>
+    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Acervo</button>
     <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="simgeral-content"></div>
@@ -2507,10 +2534,10 @@ nav{
      ficava escondido embaixo da configuração de um simulado gerado. -->
 <div class="screen" id="screen-provas">
   <div class="rd-conectivos-tabs" style="margin-bottom:14px">
-    <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
+    <button onclick="showScreen('simgeral')"><i class="fa fa-bullseye"></i> Treinar</button>
     <button class="active"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
-    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Banco de Questões</button>
+    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Acervo</button>
     <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="provas-content"></div>
@@ -2521,10 +2548,10 @@ nav{
      Provas ela virava so a primeira secao de uma tela que ja tinha outras duas. -->
 <div class="screen" id="screen-caderno">
   <div class="rd-conectivos-tabs" style="margin-bottom:14px">
-    <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
+    <button onclick="showScreen('simgeral')"><i class="fa fa-bullseye"></i> Treinar</button>
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button class="active"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
-    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Banco de Questões</button>
+    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Acervo</button>
     <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="caderno-content"></div>
@@ -2537,10 +2564,10 @@ nav{
      acessório de outro lugar. -->
 <div class="screen" id="screen-banco">
   <div class="rd-conectivos-tabs" style="margin-bottom:14px">
-    <button onclick="showScreen('simgeral')"><i class="fa fa-landmark"></i> Simulado Geral</button>
+    <button onclick="showScreen('simgeral')"><i class="fa fa-bullseye"></i> Treinar</button>
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
-    <button class="active"><i class="fa fa-layer-group"></i> Banco de Questões</button>
+    <button class="active"><i class="fa fa-layer-group"></i> Acervo</button>
     <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="banco-content"></div>
@@ -11822,6 +11849,146 @@ function simColarHTML(){
     </div>`:''}
   </div>`;
 }
+// ===== TELA TREINAR (entrada) — passo 8.3 do redesenho =====
+// Substitui a arvore de 318 assuntos como PORTA DE ENTRADA. A arvore nao sai do ar —
+// simGeralConfigHTML() continua existindo tal e qual, so deixa de ser a primeira coisa
+// que a tela mostra, virando "montagem avancada" (treinarAbrirAvancado). Estado antes de
+// assunto: a entrada passa a ser "em que pe eu estou" (nunca vi / errei / acertei
+// chutando / domino), nao "qual materia estudar" — e a virada central do redesenho.
+//
+// So considera item ATIVO (status!=='revisar' e !=='arquivada'): questao em quarentena
+// nao pode te puxar de volta pra treinar nela — e o mesmo principio que ja regia
+// questaoForaDaConta no placar do simulado, aplicado aqui na porta de entrada.
+function treinarPoolAtivo(){
+  return(db.acervo||[]).filter(q=>(q.status||'ativa')==='ativa');
+}
+// "Acertou ha muito tempo, capaz que ja esqueceu" — 30 dias e o mesmo horizonte que os
+// baralhos de flashcard usam pra considerar um card maduro.
+const TREINAR_REFAZER_DIAS=30;
+function treinarDecks(){
+  const ativo=treinarPoolAtivo();
+  const foco=edFocoIndice();
+  const decks=[
+    {id:'feridas',nome:'Feridas abertas',desc:'Você errou e ainda não bateu de novo',icon:'🩹',
+     itens:ativo.filter(q=>q.ultimoResultado==='X')},
+    {id:'nuncavistas',nome:'Nunca vistas',desc:'Ainda não caiu na sua tela',icon:'🌱',
+     itens:ativo.filter(q=>!q.vezesRespondida)},
+    {id:'chutando',nome:'Acertei chutando',desc:'Acerto que não é domínio — é sorte',icon:'🎲',ambar:true,
+     itens:ativo.filter(q=>(q.chuteAcertos||0)>0)},
+    {id:'refazer',nome:'Refazer',desc:`Acertou há mais de ${TREINAR_REFAZER_DIAS} dias`,icon:'🔁',
+     itens:ativo.filter(q=>q.ultimoResultado==='C'&&q.ultimaVezEm&&
+       (Date.now()-new Date(q.ultimaVezEm).getTime())>TREINAR_REFAZER_DIAS*86400000)},
+    {id:'dificeis',nome:'Dificílimas',desc:'Seu acerto histórico é baixo aqui',icon:'🔥',
+     itens:ativo.filter(q=>q.dificuldadeAferida==='dificil')},
+    {id:'favoritas',nome:'Favoritas',desc:'Você marcou pra guardar por perto',icon:'⭐',
+     itens:ativo.filter(q=>q.favorita)},
+  ];
+  // "Cai em Alagoas" do mockup e generico: aqui e o edital que voce mesmo marcou em foco,
+  // qualquer que seja — reaproveita o mesmo indice que "marcar so o que cai nele" usa.
+  if(foco)decks.push({id:'edital',nome:`Cai no ${foco.edital.nome}`,
+    desc:'Assuntos do edital que você marcou em foco',icon:foco.edital.icon||'🎯',
+    itens:ativo.filter(q=>foco.idx[q.subId])});
+  return decks;
+}
+// dominadas/frageis/em divida/nunca vistas: reaproveita dificuldadeAferida (facil/media/
+// dificil, so calculado com amostra >=3) — item respondido 1-2x ainda sem classificacao
+// cai em "frageis", nao em "divida": amostra curta demais pra chamar de debito ainda.
+function treinarFaixaContagem(ativo){
+  const c={dominadas:0,frageis:0,divida:0,nuncaVistas:0};
+  ativo.forEach(q=>{
+    if(!q.vezesRespondida){c.nuncaVistas++;return;}
+    if(q.dificuldadeAferida==='facil')c.dominadas++;
+    else if(q.dificuldadeAferida==='dificil')c.divida++;
+    else c.frageis++;
+  });
+  const tot=ativo.length||1;
+  return{...c,pctDominadas:100*c.dominadas/tot,pctFrageis:100*c.frageis/tot,
+         pctDivida:100*c.divida/tot,pctNuncaVistas:100*c.nuncaVistas/tot};
+}
+// Clique no bloco/card = direto pro exame, sem tela intermediaria — "comeca uma prova em
+// dois cliques" do criterio de aceite. Reusa provaRefazer (que ja sabe tratar prova.treino
+// como "nao conta nas estatisticas", igual toda prova montada sob medida).
+const TREINAR_QTD_DECK=20;
+function treinarComDeck(deckId){
+  const deck=treinarDecks().find(d=>d.id===deckId);
+  if(!deck||!deck.itens.length){toast('Nenhuma questão nesse deck agora — volte depois de treinar mais um pouco.','var(--muted)');return;}
+  const pool=deck.itens.map(q=>({q}));
+  const r=montarProvaDeItens(pool,Math.min(TREINAR_QTD_DECK,pool.length));
+  if(!r){toast('❌ Não consegui montar.','var(--red)');return;}
+  provaRefazer(r.id);
+}
+function treinarAbrirAvancado(){
+  const el=document.getElementById('treinar-avancado');
+  if(!el)return;
+  const abrindo=el.style.display==='none';
+  el.style.display=abrindo?'':'none';
+  const btn=document.getElementById('treinar-avancado-btn');
+  if(btn)btn.textContent=abrindo?'▴ Fechar montagem avançada':'Abrir montagem avançada';
+}
+function treinarEntradaHTML(){
+  const ativo=treinarPoolAtivo();
+  // Acervo vazio ou quase: 8 decks quase todos zerados e pior que nenhum deck — um
+  // cartao so, convidando a gerar a primeira leva.
+  if(ativo.length<5){
+    return`<div class="section-card">
+      <div class="sec-title" style="margin-bottom:4px">🎯 Treinar</div>
+      <div class="empty"><i class="fa fa-seedling"></i>
+        <p>Seu Acervo ainda tem poucas questões pra organizar por estado.<br>Gere um Simulado Geral ou importe um Caderno da Banca — assim que você responder, elas entram pro Acervo e os decks aparecem aqui.</p>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px" onclick="treinarAbrirAvancado()"><i class="fa fa-wand-magic-sparkles"></i> Montar do zero</button>
+      <div id="treinar-avancado" style="display:none;margin-top:14px">${simGeralConfigHTML()}</div>
+    </div>`;
+  }
+  const decks=treinarDecks();
+  const c=treinarFaixaContagem(ativo);
+  const feridas=decks.find(d=>d.id==='feridas');
+  const chutando=decks.find(d=>d.id==='chutando');
+  // "Nenhum numero morto": deck com zero some, exceto os dois que sustentam o loop
+  // diario (nunca vistas some no dia em que voce zera o acervo; refazer some quando nada
+  // ainda maturou 30 dias) — esses ficam, com framing positivo, pra tela nao parecer
+  // quebrada exatamente quando voce esta em dia.
+  const visiveis=decks.filter(d=>d.itens.length||d.id==='nuncavistas'||d.id==='refazer');
+  return`<div class="section-card">
+    <div class="sec-title" style="margin-bottom:10px">🎯 Treinar</div>
+    <div class="treinar-faixa">
+      <div class="treinar-faixa-total"><b>${ativo.length}</b><span>questões no Acervo</span></div>
+      <div class="treinar-faixa-blocos">
+        <div class="treinar-bloco" onclick="treinarComDeck('nuncavistas')"><b>${c.nuncaVistas}</b><span>nunca vistas</span></div>
+        <div class="treinar-bloco" onclick="treinarComDeck('feridas')"><b>${feridas.itens.length}</b><span>feridas abertas</span></div>
+        <div class="treinar-bloco treinar-bloco-ambar" onclick="treinarComDeck('chutando')"><b>${chutando.itens.length}</b><span>acertei chutando</span></div>
+      </div>
+    </div>
+    <div class="treinar-progresso-seg">
+      <span style="width:${c.pctDominadas}%;background:var(--accent)"></span>
+      <span style="width:${c.pctFrageis}%;background:var(--accent2)"></span>
+      <span style="width:${c.pctDivida}%;background:var(--orange-t)"></span>
+      <span style="width:${c.pctNuncaVistas}%;background:var(--border)"></span>
+    </div>
+    <div class="treinar-progresso-legenda">
+      <span><i style="background:var(--accent)"></i>dominadas ${c.dominadas}</span>
+      <span><i style="background:var(--accent2)"></i>frágeis ${c.frageis}</span>
+      <span><i style="background:var(--orange-t)"></i>em dívida ${c.divida}</span>
+      <span><i style="background:var(--border)"></i>nunca vistas ${c.nuncaVistas}</span>
+    </div>
+    <div class="treinar-decks">
+      ${visiveis.map((d,i)=>`
+        <div class="treinar-deck${d.ambar?' treinar-deck-ambar':''}">
+          <div class="treinar-deck-icon">${d.icon}</div>
+          <div class="treinar-deck-num">${d.itens.length}</div>
+          <div class="treinar-deck-nome">${escapeHtml(d.nome)}</div>
+          <div class="treinar-deck-desc">${escapeHtml(d.desc)}</div>
+          <button class="btn btn-sm ${i===0&&d.itens.length?'btn-primary':'btn-ghost'}" style="width:100%;justify-content:center;margin-top:8px"
+            onclick="treinarComDeck('${d.id}')" ${d.itens.length?'':'disabled'}>Treinar</button>
+        </div>
+      `).join('')}
+    </div>
+    <div class="treinar-avancado-faixa">
+      <span><i class="fa fa-toolbox"></i> Montar do zero — escolher assunto por assunto, formato, quantidade e tempo</span>
+      <button id="treinar-avancado-btn" class="btn btn-xs btn-ghost" onclick="treinarAbrirAvancado()">Abrir montagem avançada</button>
+    </div>
+    <div id="treinar-avancado" style="display:none;margin-top:14px">${simGeralConfigHTML()}</div>
+  </div>`;
+}
 function renderSimGeralScreen(){
   renderProvasScreen();
   renderCadernoScreen();
@@ -11834,7 +12001,7 @@ function renderSimGeralScreen(){
     return;
   }
   sgStopTimerTick();
-  container.innerHTML=simAndamentoCardHTML()+simGeralConfigHTML();
+  container.innerHTML=simAndamentoCardHTML()+treinarEntradaHTML();
   // sem isto, os contadores por chefao/reino e o custo do Tavily nasceriam
   // zerados mesmo com assuntos ja selecionados de uma visita anterior
   sgUpdateSummary();
@@ -14257,16 +14424,13 @@ function montarPool(modo,motivo){
   if(modo==='materia')return acervo.filter(x=>montarSelMat.has(x.q.kingdomId));
   return acervo;
 }
-function montarAgora(){
-  const modo=(document.getElementById('montar-modo')||{}).value||'todas';
-  const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
-  const qtd=Math.max(1,Math.min(MONTAR_QTD_MAX,
-    parseInt((document.getElementById('montar-qtd')||{}).value,10)||montarQtdLembrada()));
-  const pool=bancoAplicarFiltros(montarPool(modo,motivo));
-  if(!pool.length){
-    toast('⚠️ Não achei questão nenhuma com esse filtro. Faça uma prova e classifique os erros primeiro.','var(--orange)');
-    return;
-  }
+// Nucleo comum entre "montar prova sob medida" (por modo/motivo/assunto) e os decks da
+// tela Treinar (passo 8.3): dada uma lista JA FILTRADA de {q,...} do pool do banco,
+// sorteia ate qtd, monta e guarda como prova de TREINO. null se a lista veio vazia ou o
+// guardar falhou — quem chama decide a mensagem, porque os dois casos dizem coisas
+// diferentes ("não achei questão" vs "não consegui montar").
+function montarProvaDeItens(pool,qtd){
+  if(!pool||!pool.length)return null;
   // embaralha pra a ordem nao ser a mesma das provas de origem
   const arr=pool.slice();
   for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
@@ -14283,17 +14447,31 @@ function montarAgora(){
   });
   const formato=questoes.every(q=>q.formato==='certoerrado')?'certoerrado':'multipla';
   const id=provaGuardarLote(questoes,{formato,nivel:'dificil',limiteSec:0,importado:true});
-  if(!id){toast('❌ Não consegui montar.','var(--red)');return;}
+  if(!id)return null;
   // Prova montada e TREINO: as questoes voce ja viu, entao ela nao pode alimentar
   // estatistica por assunto nem Banco de Erros — pelo mesmo motivo que a refacao nao
   // alimenta. Contar de novo o que voce ja respondeu infla o seu aproveitamento.
   const prova=provaAchar(id);
   if(prova){prova.treino=true;prova.origem='montada';}
   saveDB();
+  return{id,total:questoes.length,poolTotal:pool.length};
+}
+function montarAgora(){
+  const modo=(document.getElementById('montar-modo')||{}).value||'todas';
+  const motivo=(document.getElementById('montar-motivo')||{}).value||'conteudo';
+  const qtd=Math.max(1,Math.min(MONTAR_QTD_MAX,
+    parseInt((document.getElementById('montar-qtd')||{}).value,10)||montarQtdLembrada()));
+  const pool=bancoAplicarFiltros(montarPool(modo,motivo));
+  if(!pool.length){
+    toast('⚠️ Não achei questão nenhuma com esse filtro. Faça uma prova e classifique os erros primeiro.','var(--orange)');
+    return;
+  }
+  const r=montarProvaDeItens(pool,qtd);
+  if(!r){toast('❌ Não consegui montar.','var(--red)');return;}
   showScreen('provas');
   renderSimGeralScreen();
   const lbl=(MONTAR_MODOS.find(m=>m.id===modo)||{}).lbl||'';
-  toast(`🎯 Prova montada — ${questoes.length} ${questoes.length===1?'item':'itens'} (${lbl})${pool.length>questoes.length?`, sorteados de ${pool.length}`:''}. Está em Provas guardadas.`,'var(--green)');
+  toast(`🎯 Prova montada — ${r.total} ${r.total===1?'item':'itens'} (${lbl})${r.poolTotal>r.total?`, sorteados de ${r.poolTotal}`:''}. Está em Provas guardadas.`,'var(--green)');
 }
 function montarTrocarModo(){renderSimGeralScreen();}
 function montarAlternarAssunto(subId,el){
