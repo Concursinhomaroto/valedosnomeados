@@ -246,6 +246,24 @@ async def main():
         assert r['ordenadoIntacto'], 'ordenado:true (Refazer) tinha que preservar a ordem de proposito'
         print('   OK\n')
 
+        print('=== M) responder durante o treino NAO recalcula Minhas Provas/Caderno/Acervo (achado: "delay" a cada toque) ===')
+        r=await page.evaluate("""()=>{
+          const qs=QS('sub-mt1','Choque Séptico',3,'Perf');
+          treinoIniciar(qs,{titulo:'Perf'});
+          let provas=0,caderno=0,banco=0;
+          const provasReal=renderProvasScreen, cadernoReal=renderCadernoScreen, bancoReal=renderBancoScreen;
+          renderProvasScreen=()=>{provas++;return provasReal();};
+          renderCadernoScreen=()=>{caderno++;return cadernoReal();};
+          renderBancoScreen=()=>{banco++;return bancoReal();};
+          treinoResponder(treinoSessao.itens[0].correta);
+          treinoProxima();
+          treinoPular();
+          renderProvasScreen=provasReal; renderCadernoScreen=cadernoReal; renderBancoScreen=bancoReal;
+          return {provas,caderno,banco};}""")
+        print('   %s'%r)
+        assert r['provas']==0 and r['caderno']==0 and r['banco']==0, 'treino nao pode recalcular as outras abas a cada toque'
+        print('   OK\n')
+
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))
         assert not graves, graves

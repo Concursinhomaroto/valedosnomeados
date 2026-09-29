@@ -12728,16 +12728,23 @@ function treinarEntradaHTML(){
   </div>`;
 }
 function renderSimGeralScreen(){
+  // Sessao de treino e o resumo dela ANTES de tudo, e SEM tocar nas outras 3 abas: achado
+  // ao vivo (usuario sentiu "delay" em todo toque durante o treino) — cada resposta chama
+  // isto, e renderBancoScreen/renderProvasScreen recalculam a lista inteira do Acervo/
+  // Minhas Provas por baixo do pano, mesmo as duas abas nao estando visiveis. Numa conta
+  // com milhares de questoes isso sozinho custava mais que o proprio clique. As tres telas
+  // continuam se atualizando sozinhas quando voce de fato abre cada uma (showScreen ja
+  // chama o render proprio de cada uma).
+  if(treinoSessao||treinoResumo){
+    const alvo=document.getElementById('simgeral-content');
+    if(alvo)alvo.innerHTML=treinoSessao?treinoSessaoHTML():treinoResumoHTML();
+    return;
+  }
   renderProvasScreen();
   renderCadernoScreen();
   renderBancoScreen();
   const container=document.getElementById('simgeral-content');
   if(!container)return;
-  // Sessao de treino e o resumo dela vem ANTES de simGeralActive: os dois estados sao
-  // mutuamente exclusivos (nada na tela cria os dois ao mesmo tempo), mas se algum dia
-  // coexistirem, o Modo Treino e o mais recente e ganha.
-  if(treinoSessao){container.innerHTML=treinoSessaoHTML();return;}
-  if(treinoResumo){container.innerHTML=treinoResumoHTML();return;}
   if(simGeralActive){
     container.innerHTML=simGeralActive.corrected?simGeralResultsHTML():simGeralExamHTML();
     if(!simGeralActive.corrected)sgStartTimerTick();else sgStopTimerTick();
