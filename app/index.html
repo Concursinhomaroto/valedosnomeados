@@ -2625,33 +2625,16 @@ nav{
   <div id="revisions-list"></div>
 </div>
 
-<!-- ===== BANCO DE ERROS ===== -->
-<div class="screen" id="screen-erros">
-  <div class="rd-conectivos-tabs" style="margin-bottom:14px">
-    <button onclick="showScreen('simgeral')"><i class="fa fa-bullseye"></i> Treinar</button>
-    <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
-    <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
-    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Acervo</button>
-    <button class="active"><i class="fa fa-book-skull"></i> Banco de Erros</button>
-  </div>
-  <div class="sec-title">📕 Banco de Erros</div>
-  <div style="font-size:11px;color:var(--muted);margin-bottom:14px;font-weight:600">Questões que você errou nos simulados, reunidas aqui pra você bater de novo até acertar.</div>
-  <div class="filter-row">
-    <button class="chip active" onclick="filterErros('pending',this)">🔴 Pendentes</button>
-    <button class="chip" onclick="filterErros('reviewed',this)">✅ Revisados</button>
-    <button class="chip" onclick="filterErros('all',this)">📋 Todos</button>
-  </div>
-  <div id="erros-list"></div>
-</div>
-
 <!-- ===== SIMULADO GERAL ===== -->
+<!-- Banco de Erros deixou de ser aba própria (showScreen('erros')) e virou uma seção
+     dentro de Treinar (treinoErrosCardHTML) — mesma gate de plano que Treinar, então
+     nada muda em quem enxerga o quê, só reduz uma aba redundante. -->
 <div class="screen" id="screen-simgeral">
   <div class="rd-conectivos-tabs" style="margin-bottom:14px">
     <button class="active"><i class="fa fa-bullseye"></i> Treinar</button>
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
     <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Acervo</button>
-    <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="simgeral-content"></div>
 </div>
@@ -2666,7 +2649,6 @@ nav{
     <button class="active"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
     <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Acervo</button>
-    <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="provas-content"></div>
 </div>
@@ -2680,7 +2662,6 @@ nav{
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button class="active"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
     <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Acervo</button>
-    <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="caderno-content"></div>
 </div>
@@ -2696,7 +2677,6 @@ nav{
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
     <button class="active"><i class="fa fa-layer-group"></i> Acervo</button>
-    <button onclick="showScreen('erros')"><i class="fa fa-book-skull"></i> Banco de Erros</button>
   </div>
   <div id="banco-content"></div>
 </div>
@@ -5726,11 +5706,10 @@ function isAfterExam(dateStr){return db.examDate&&dateStr>db.examDate;}
 // Depois de expirar, tudo trava (ver LOCKED_SCREENS) exceto o Painel do Herói
 // (dashboard), que continua visível pra pessoa lembrar do progresso e ser convidada a
 // assinar. Ver applyDefaults() pra como db.plan/db.trialStartedAt são definidos.
-const LOCKED_SCREENS=['map','revisions','erros','simgeral','provas','caderno','banco','editais','flashcards','redacoes','repertorio','conquistas'];
+const LOCKED_SCREENS=['map','revisions','simgeral','provas','caderno','banco','editais','flashcards','redacoes','repertorio','conquistas'];
 const LOCKED_SCREEN_INFO={
   map:{icon:'🗺️',title:'Mapa dos Reinos é um recurso do plano completo',desc:'O mapa de progresso por reino/chefão libera junto com o plano completo.'},
   revisions:{icon:'🔔',title:'Revisões é um recurso do plano completo',desc:'A fila de revisões espaçadas (SM-2) — atrasadas, de hoje e dos próximos dias — libera junto com o plano completo.'},
-  erros:{icon:'📕',title:'Banco de Erros é um recurso do plano completo',desc:'O histórico de questões erradas em simulados, organizado pra revisão, libera junto com o plano completo.'},
   simgeral:{icon:'🏛️',title:'Simulado Geral é um recurso do plano completo',desc:'O simulado cronometrado multi-matéria libera junto com o plano completo.'},
   editais:{icon:'📋',title:'Editais é um recurso do plano completo',desc:'O acompanhamento de editais libera junto com o plano completo.'},
   flashcards:{icon:'🃏',title:'Flashcards é um recurso do plano completo',desc:'A criação e o estudo de flashcards com revisão espaçada liberam junto com o plano completo.'},
@@ -6327,11 +6306,11 @@ function showScreen(name){
   const estavaNaSala=document.getElementById('screen-sala')?.classList.contains('active');
   if(estavaNaSala&&name!=='sala'&&typeof salaMapaPause==='function')salaMapaPause();
   if((name==='admin'||name==='mapaeditor')&&!isAdmin())name='dashboard'; // proteção extra, além do item ficar oculto no menu
-  // Repertório e Banco de Erros não têm botão próprio no menu — viraram abas dentro de
-  // Redação e Simulado Geral, respectivamente, desde a fusão das telas relacionadas, então
-  // o destaque do menu segue apontando pro botão "pai" de cada uma.
+  // Repertório não tem botão próprio no menu — virou aba dentro de Redação, desde a
+  // fusão das telas relacionadas, então o destaque do menu segue apontando pro botão
+  // "pai". Minhas Provas, Caderno e Acervo idem, dentro de Treinar.
   const navName=name==='repertorio'?'redacoes'
-    :((name==='erros'||name==='provas'||name==='caderno'||name==='banco')?'simgeral':name);
+    :((name==='provas'||name==='caderno'||name==='banco')?'simgeral':name);
   if(LOCKED_SCREENS.includes(name)&&!hasFullAccess()){
     document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -6364,7 +6343,6 @@ function showScreen(name){
   // continua intacto pra reativar numa versão futura (ver script tags do D3 comentadas
   // logo abaixo do <head>).
   if(name==='vale')renderValeMap();
-  if(name==='erros'){renderErrosScreen();updateErrosBadge();}
   if(name==='simgeral')renderSimGeralScreen();
 }
 
@@ -12805,6 +12783,18 @@ function treinoRodapeHTML(){
     <span>Simulados ficam em <b>Minhas Provas</b></span>
   </div>`;
 }
+function treinoErrosCardHTML(){
+  return`<div class="section-card" id="treino-erros-card">
+    <div class="sec-title" style="margin-bottom:2px">📕 Banco de Erros</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;font-weight:600">Questões que você errou nos simulados, reunidas aqui pra você bater de novo até acertar.</div>
+    <div class="filter-row">
+      <button class="chip${errFilter==='pending'?' active':''}" onclick="filterErros('pending',this)">🔴 Pendentes</button>
+      <button class="chip${errFilter==='reviewed'?' active':''}" onclick="filterErros('reviewed',this)">✅ Revisados</button>
+      <button class="chip${errFilter==='all'?' active':''}" onclick="filterErros('all',this)">📋 Todos</button>
+    </div>
+    <div id="erros-list"></div>
+  </div>`;
+}
 function treinarEntradaHTML(){
   const ativo=treinarPoolAtivo();
   const topo=`<div class="treino-topo-entrada">
@@ -12830,8 +12820,11 @@ function treinarEntradaHTML(){
       ${treinoDestaqueHTML()}
       ${treinoPlacarHTML()}
     </div>
-    ${treinoAssuntosPainelHTML()}
-    ${treinoDecksListaHTML(decks)}
+    <div class="treino-grid-2">
+      ${treinoAssuntosPainelHTML()}
+      ${treinoDecksListaHTML(decks)}
+    </div>
+    ${treinoErrosCardHTML()}
     ${treinoMontarBarHTML()}
     ${treinoRodapeHTML()}
   </div>`;
@@ -12861,6 +12854,7 @@ function renderSimGeralScreen(){
   }
   sgStopTimerTick();
   container.innerHTML=simAndamentoCardHTML()+treinarEntradaHTML();
+  renderErrosScreen();
   // sem isto, os contadores por chefao/reino e o custo do Tavily nasceriam
   // zerados mesmo com assuntos ja selecionados de uma visita anterior
   sgUpdateSummary();
@@ -18504,7 +18498,7 @@ function toggleQuestaoProblematica(subId,histId,qIdx){
 }
 function filterErros(f,el){
   errFilter=f;
-  document.querySelectorAll('#screen-erros .filter-row .chip').forEach(c=>c.classList.remove('active'));
+  document.querySelectorAll('#treino-erros-card .filter-row .chip').forEach(c=>c.classList.remove('active'));
   el.classList.add('active');
   renderErrosScreen();
 }

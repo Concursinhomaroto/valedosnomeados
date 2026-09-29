@@ -38,7 +38,7 @@ async def main():
         print('   ao lado do Acervo: %s · ativa: %r'%(r['vizinho'],(r['ativa'] or '').strip()))
         print('   saiu de Minhas Provas: %s · menu aceso: %s'%(r['foraDeProvas'],r['nav']))
         assert r['tem'] and r['campos'] and r['vizinho'] and r['foraDeProvas']
-        assert len(r['abas'])==5 and r['nav']=='nav-simgeral'
+        assert len(r['abas'])==4 and r['nav']=='nav-simgeral'   # Banco de Erros virou secao dentro de Treinar
         print('   OK\n')
 
         print('=== B) o caderno real: 120 itens, 25 grupos, 5 anulados ===')

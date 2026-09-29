@@ -21,7 +21,7 @@ async def main():
         print('=== A) a terceira aba existe nas tres telas ===')
         r=await page.evaluate("""()=>{
           const out={};
-          ['simgeral','provas','caderno','banco','erros'].forEach(t=>{
+          ['simgeral','provas','caderno','banco'].forEach(t=>{
             const el=document.getElementById('screen-'+t);
             const bs=[...el.querySelectorAll('.rd-conectivos-tabs button')];
             out[t]={n:bs.length,labels:bs.map(x=>x.innerText.trim()),
@@ -30,7 +30,7 @@ async def main():
           return out;}""")
         for k,v in r.items():
             print('   %-9s %s abas · ativa: %r'%(k,v['n'],(v['ativa'] or '').strip()))
-            assert v['n']==5, v   # entraram "Caderno da Banca" e "Banco de Questões"
+            assert v['n']==4, v   # entraram "Caderno da Banca" e "Banco de Questões"; Banco de Erros virou secao em Treinar
             assert any('Minhas Provas' in l for l in v['labels']), v['labels']
         assert 'Minhas Provas' in (r['provas']['ativa'] or '')
         print('   OK\n')
