@@ -975,6 +975,16 @@ nav{
 .treino-foco-barra{height:6px;border-radius:999px;background:var(--border);overflow:hidden;}
 .treino-foco-barra span{display:block;height:100%;}
 .treino-foco-pct{font-size:11px;font-weight:800;text-align:right;}
+.treino-assuntos-controles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.treino-assuntos-controles input[type="search"]{flex:1;min-width:160px;padding:7px 10px;font-size:12px;}
+.treino-assuntos-controles select{width:auto;padding:7px 8px;font-size:12px;}
+.treino-assuntos-lista{max-height:460px;overflow-y:auto;margin:0 -4px;padding:0 4px;}
+.treino-assunto-linha{display:grid;grid-template-columns:18px 24px 1fr 90px 34px auto;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);border-radius:8px;}
+.treino-assunto-linha:last-child{border-bottom:none;}
+.treino-assunto-linha-sel{background:var(--panel2);}
+.treino-assunto-fixar{background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:2px;}
+.treino-assunto-fixar.ativo{color:var(--orange-t);}
+.treino-assuntos-barra{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);font-weight:700;}
 .treino-deck-linha{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);cursor:pointer;}
 .treino-deck-linha:last-child{border-bottom:none;}
 .treino-deck-linha:hover{background:var(--panel2);}
@@ -12542,30 +12552,131 @@ function treinoPlacarHTML(){
     </div>
   </div>`;
 }
-// "O que focar" (minimo pra parte 1, ja no lugar certo): pior % por assunto, amostra
-// minima de 3 pra um erro isolado nao acusar um assunto inteiro.
-function treinoFocoLista(){
+// ===== Assuntos: controle completo (achado do usuario ao ver os 3 mockups de estilo —
+// "preciso que organize, os espacos vazios, a falta de controle dos assuntos") =====
+// "O que focar" so mostrava os 4 piores. Isto e o painel de verdade: TODO assunto que voce
+// ja respondeu (nao so os piores), busca por nome, filtro por materia, ordenar por
+// pct/quantidade/nome, fixar os que importam pra sempre no topo, e treinar VARIOS assuntos
+// juntos numa sessao so — as quatro coisas que ele pediu, nessa ordem.
+// Cheio por natureza (lista completa, nao um recorte de 4) — e o que tira o espaco vazio
+// da coluna sem precisar simular altura artificial.
+let treinoAssuntoUI={busca:'',materia:'',ordenar:'pior',selecionados:new Set()};
+function treinoAssuntoStats(){
   const porSub={};
   (db.acervo||[]).forEach(q=>{
     if((q.status||'ativa')!=='ativa'||!q.subId||!q.vezesRespondida)return;
     const s=porSub[q.subId]=porSub[q.subId]||{subId:q.subId,subName:q.subName||'',kingdomName:q.kingdomName||'',vezes:0,acertos:0};
     s.vezes+=q.vezesRespondida; s.acertos+=q.acertos||0;
   });
-  return Object.values(porSub).filter(s=>s.vezes>=3)
-    .map(s=>({...s,pct:Math.round(s.acertos/s.vezes*100)}))
-    .sort((a,b)=>a.pct-b.pct).slice(0,4);
+  return Object.values(porSub).map(s=>({...s,pct:Math.round(s.acertos/s.vezes*100),
+    fixado:(db.treinoAssuntosFixados||[]).includes(s.subId)}));
 }
-function treinoFocoHTML(){
-  const lista=treinoFocoLista();
+// Recomendacao do destaque continua exigindo amostra minima (3) pra um erro isolado nao
+// acusar um assunto inteiro — o painel completo, abaixo, mostra TUDO sem esse filtro,
+// porque "ver todos" foi pedido explicito.
+function treinoPiorAssunto(){
+  const lista=treinoAssuntoStats().filter(s=>s.vezes>=3);
+  return lista.length?lista.sort((a,b)=>a.pct-b.pct)[0]:null;
+}
+function treinoAssuntoOpcoesMaterias(){
+  const nomes=new Set();
+  treinoAssuntoStats().forEach(s=>{if(s.kingdomName)nomes.add(s.kingdomName);});
+  return[...nomes].sort((a,b)=>a.localeCompare(b));
+}
+const TREINO_ASSUNTO_ORDENS={
+  pior:(a,b)=>a.pct-b.pct, melhor:(a,b)=>b.pct-a.pct,
+  mais:(a,b)=>b.vezes-a.vezes, nome:(a,b)=>a.subName.localeCompare(b.subName)
+};
+function treinoAssuntoFiltrados(){
+  const termo=normalizeForDedup(treinoAssuntoUI.busca||'');
+  const lista=treinoAssuntoStats().filter(s=>{
+    if(treinoAssuntoUI.materia&&s.kingdomName!==treinoAssuntoUI.materia)return false;
+    if(termo&&!normalizeForDedup(s.subName).includes(termo))return false;
+    return true;
+  });
+  lista.sort(TREINO_ASSUNTO_ORDENS[treinoAssuntoUI.ordenar]||TREINO_ASSUNTO_ORDENS.pior);
+  // Fixados sempre no topo, sem embaralhar a ordenacao escolhida dentro de cada grupo —
+  // sort e estavel (Array#sort no motor moderno), entao um segundo sort so por fixado
+  // preserva a ordem relativa de dentro de cada bloco.
+  lista.sort((a,b)=>(b.fixado?1:0)-(a.fixado?1:0));
+  return lista;
+}
+function treinoAssuntoAtualizarLista(){
+  const lista=document.getElementById('treino-assuntos-lista');
+  if(lista)lista.innerHTML=treinoAssuntoListaHTML();
+  const barra=document.getElementById('treino-assuntos-barra');
+  if(barra)barra.outerHTML=treinoAssuntoBarraHTML();
+}
+function treinoAssuntoBuscar(valor){treinoAssuntoUI.busca=valor;treinoAssuntoAtualizarLista();}
+function treinoAssuntoMudouMateria(valor){treinoAssuntoUI.materia=valor;treinoAssuntoAtualizarLista();}
+function treinoAssuntoMudouOrdem(valor){treinoAssuntoUI.ordenar=valor;treinoAssuntoAtualizarLista();}
+function treinoAssuntoToggleFixado(subId){
+  db.treinoAssuntosFixados=db.treinoAssuntosFixados||[];
+  const i=db.treinoAssuntosFixados.indexOf(subId);
+  if(i>=0)db.treinoAssuntosFixados.splice(i,1); else db.treinoAssuntosFixados.push(subId);
+  saveDB();
+  treinoAssuntoAtualizarLista();
+}
+function treinoAssuntoToggleSelecionado(subId){
+  const sel=treinoAssuntoUI.selecionados;
+  if(sel.has(subId))sel.delete(subId); else sel.add(subId);
+  const barra=document.getElementById('treino-assuntos-barra');
+  if(barra)barra.outerHTML=treinoAssuntoBarraHTML();
+}
+function treinoAssuntoTreinarSelecionados(){
+  const sel=treinoAssuntoUI.selecionados;
+  if(!sel.size)return;
+  const pool=treinoPoolCompleto().filter(q=>sel.has(q.subId));
+  const nomes=[...sel].map(id=>{const s=simFindSub(id);return s?s.name:null;}).filter(Boolean);
+  const titulo=sel.size===1?(nomes[0]||'Assunto'):`${sel.size} assuntos`;
+  if(!treinoIniciar(pool,{titulo}))return;
+  treinoAssuntoUI.selecionados=new Set();
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+}
+function treinoAssuntoLinhaHTML(s){
+  const sel=treinoAssuntoUI.selecionados.has(s.subId);
+  return`<div class="treino-assunto-linha${sel?' treino-assunto-linha-sel':''}">
+    <input type="checkbox" ${sel?'checked':''} onchange="treinoAssuntoToggleSelecionado('${s.subId}')" aria-label="Selecionar ${escapeHtml(s.subName)} pra treinar junto com outros">
+    <button class="treino-assunto-fixar${s.fixado?' ativo':''}" onclick="treinoAssuntoToggleFixado('${s.subId}')" title="${s.fixado?'Desafixar':'Fixar no topo'}" aria-label="${s.fixado?'Desafixar':'Fixar'} ${escapeHtml(s.subName)}"><i class="fa fa-thumbtack"></i></button>
+    <div class="treino-foco-nome"><b>${escapeHtml(s.subName)}</b><span>${escapeHtml(s.kingdomName)} · ${s.vezes} resposta${s.vezes>1?'s':''}</span></div>
+    <div class="treino-foco-barra"><span style="width:${s.pct}%;background:${s.pct<50?'var(--red-t)':(s.pct<70?'var(--orange-t)':'var(--accent2)')}"></span></div>
+    <span class="treino-foco-pct">${s.pct}%</span>
+    <button class="btn btn-xs btn-primary" onclick="treinoTreinarAssunto('${s.subId}')">Treinar</button>
+  </div>`;
+}
+function treinoAssuntoListaHTML(){
+  const lista=treinoAssuntoFiltrados();
+  if(!lista.length)return`<div class="empty-mini">Nenhum assunto ${treinoAssuntoUI.busca||treinoAssuntoUI.materia?'bate com esse filtro':'respondido ainda'}.</div>`;
+  return lista.map(treinoAssuntoLinhaHTML).join('');
+}
+function treinoAssuntoBarraHTML(){
+  const n=treinoAssuntoUI.selecionados.size;
+  return`<div class="treino-assuntos-barra" id="treino-assuntos-barra">
+    <span>${n?`${n} assunto${n>1?'s':''} selecionado${n>1?'s':''}`:'marque assuntos pra treinar vários juntos'}</span>
+    <button class="btn btn-sm btn-primary" onclick="treinoAssuntoTreinarSelecionados()" ${n?'':'disabled'}>Treinar selecionados</button>
+  </div>`;
+}
+function treinoAssuntosPainelHTML(){
+  const materias=treinoAssuntoOpcoesMaterias();
   return`<div class="section-card">
-    <div class="sec-title" style="margin-bottom:2px">O que focar</div>
-    <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:10px">onde você está perdendo ponto</div>
-    ${lista.length?lista.map(s=>`<div class="treino-foco-linha" onclick="treinoTreinarAssunto('${s.subId}')">
-      <div class="treino-foco-nome"><b>${escapeHtml(s.subName)}</b><span>${escapeHtml(s.kingdomName)} · ${s.vezes} respostas</span></div>
-      <div class="treino-foco-barra"><span style="width:${s.pct}%;background:${s.pct<50?'var(--red-t)':(s.pct<70?'var(--orange-t)':'var(--accent2)')}"></span></div>
-      <span class="treino-foco-pct">${s.pct}%</span>
-      <button class="btn btn-xs btn-primary" onclick="event.stopPropagation();treinoTreinarAssunto('${s.subId}')">Treinar</button>
-    </div>`).join(''):`<div class="empty-mini">Responda mais questões pra eu achar onde focar.</div>`}
+    <div class="sec-title" style="margin-bottom:2px">Assuntos</div>
+    <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:12px">todo assunto que você já respondeu — fixe os que importam, treine vários juntos</div>
+    <div class="treino-assuntos-controles">
+      <input class="inp" type="search" placeholder="Buscar assunto..." oninput="treinoAssuntoBuscar(this.value)" value="${escapeHtml(treinoAssuntoUI.busca)}" aria-label="Buscar assunto">
+      <select class="inp" onchange="treinoAssuntoMudouMateria(this.value)" aria-label="Filtrar por matéria">
+        <option value="">Toda matéria</option>
+        ${materias.map(m=>`<option value="${escapeHtml(m)}"${treinoAssuntoUI.materia===m?' selected':''}>${escapeHtml(m)}</option>`).join('')}
+      </select>
+      <select class="inp" onchange="treinoAssuntoMudouOrdem(this.value)" aria-label="Ordenar assuntos">
+        <option value="pior"${treinoAssuntoUI.ordenar==='pior'?' selected':''}>Pior % primeiro</option>
+        <option value="melhor"${treinoAssuntoUI.ordenar==='melhor'?' selected':''}>Melhor % primeiro</option>
+        <option value="mais"${treinoAssuntoUI.ordenar==='mais'?' selected':''}>Mais respondidas</option>
+        <option value="nome"${treinoAssuntoUI.ordenar==='nome'?' selected':''}>A-Z</option>
+      </select>
+    </div>
+    <div class="treino-assuntos-lista" id="treino-assuntos-lista">${treinoAssuntoListaHTML()}</div>
+    ${treinoAssuntoBarraHTML()}
   </div>`;
 }
 function treinoTreinarAssunto(subId){
@@ -12588,7 +12699,7 @@ function treinoDecksListaHTML(decks){
   </div>`;
 }
 function treinoDestaqueHTML(){
-  const foco=treinoFocoLista()[0];
+  const foco=treinoPiorAssunto();
   const nuncavistas=treinarDecks().find(d=>d.id==='nuncavistas');
   const usaFoco=!!foco;
   const titulo=usaFoco?'Comece pelo que mais te derruba':'Comece agora';
@@ -12719,25 +12830,30 @@ function treinarEntradaHTML(){
       ${treinoDestaqueHTML()}
       ${treinoPlacarHTML()}
     </div>
-    <div class="treino-grid-2">
-      ${treinoFocoHTML()}
-      ${treinoDecksListaHTML(decks)}
-    </div>
+    ${treinoAssuntosPainelHTML()}
+    ${treinoDecksListaHTML(decks)}
     ${treinoMontarBarHTML()}
     ${treinoRodapeHTML()}
   </div>`;
 }
 function renderSimGeralScreen(){
+  // Sessao de treino e o resumo dela ANTES de tudo, e SEM tocar nas outras 3 abas: achado
+  // ao vivo (usuario sentiu "delay" em todo toque durante o treino) — cada resposta chama
+  // isto, e renderBancoScreen/renderProvasScreen recalculam a lista inteira do Acervo/
+  // Minhas Provas por baixo do pano, mesmo as duas abas nao estando visiveis. Numa conta
+  // com milhares de questoes isso sozinho custava mais que o proprio clique. As tres telas
+  // continuam se atualizando sozinhas quando voce de fato abre cada uma (showScreen ja
+  // chama o render proprio de cada uma).
+  if(treinoSessao||treinoResumo){
+    const alvo=document.getElementById('simgeral-content');
+    if(alvo)alvo.innerHTML=treinoSessao?treinoSessaoHTML():treinoResumoHTML();
+    return;
+  }
   renderProvasScreen();
   renderCadernoScreen();
   renderBancoScreen();
   const container=document.getElementById('simgeral-content');
   if(!container)return;
-  // Sessao de treino e o resumo dela vem ANTES de simGeralActive: os dois estados sao
-  // mutuamente exclusivos (nada na tela cria os dois ao mesmo tempo), mas se algum dia
-  // coexistirem, o Modo Treino e o mais recente e ganha.
-  if(treinoSessao){container.innerHTML=treinoSessaoHTML();return;}
-  if(treinoResumo){container.innerHTML=treinoResumoHTML();return;}
   if(simGeralActive){
     container.innerHTML=simGeralActive.corrected?simGeralResultsHTML():simGeralExamHTML();
     if(!simGeralActive.corrected)sgStartTimerTick();else sgStopTimerTick();

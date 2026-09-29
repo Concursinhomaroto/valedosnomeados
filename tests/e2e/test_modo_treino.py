@@ -246,6 +246,75 @@ async def main():
         assert r['ordenadoIntacto'], 'ordenado:true (Refazer) tinha que preservar a ordem de proposito'
         print('   OK\n')
 
+        print('=== M) responder durante o treino NAO recalcula Minhas Provas/Caderno/Acervo (achado: "delay" a cada toque) ===')
+        r=await page.evaluate("""()=>{
+          const qs=QS('sub-mt1','Choque Séptico',3,'Perf');
+          treinoIniciar(qs,{titulo:'Perf'});
+          let provas=0,caderno=0,banco=0;
+          const provasReal=renderProvasScreen, cadernoReal=renderCadernoScreen, bancoReal=renderBancoScreen;
+          renderProvasScreen=()=>{provas++;return provasReal();};
+          renderCadernoScreen=()=>{caderno++;return cadernoReal();};
+          renderBancoScreen=()=>{banco++;return bancoReal();};
+          treinoResponder(treinoSessao.itens[0].correta);
+          treinoProxima();
+          treinoPular();
+          renderProvasScreen=provasReal; renderCadernoScreen=cadernoReal; renderBancoScreen=bancoReal;
+          return {provas,caderno,banco};}""")
+        print('   %s'%r)
+        assert r['provas']==0 and r['caderno']==0 and r['banco']==0, 'treino nao pode recalcular as outras abas a cada toque'
+        print('   OK\n')
+
+        print('=== N) painel de Assuntos: lista TODOS (nao só os 4 piores), busca, ordena, fixa e treina vários juntos ===')
+        # Pedido do usuario depois de ver os 3 mockups de estilo: "a falta de controle dos
+        # assuntos" — ver todos, buscar, escolher varios, fixar os que importam.
+        r=await page.evaluate("""()=>{
+          db.acervo=[];db.provas=[];db.provasArquivo=[];db.treinoAssuntosFixados=[];
+          treinoAssuntoUI={busca:'',materia:'',ordenar:'pior',selecionados:new Set()};
+          const feito=(subId,subName,n,pct)=>{
+            QS(subId,subName,n,'X').forEach((q,i)=>{
+              const acertou=i<Math.round(n*pct);
+              db.acervo.push({...q,_chaveForte:acervoChave2(q),tags:[],favorita:false,status:'ativa',
+                vezesRespondida:1,acertos:acertou?1:0,erros:acertou?0:1,ultimaVezEm:new Date().toISOString(),
+                ultimoResultado:acertou?'C':'X',dificuldadeAferida:acertou?'facil':'dificil',
+                certezaAcertos:0,certezaErros:0,duvidaAcertos:0,duvidaErros:0,chuteAcertos:0,chuteErros:0,
+                criacao:new Date().toISOString(),origem:'ia'});
+            });
+          };
+          feito('sub-mt1','Choque Séptico',10,0.3);   // pior
+          feito('sub-mt2','Trauma',10,0.9);            // melhor
+          const todos=treinoAssuntoStats();
+          return {totalAssuntos:todos.length,
+                  piorPrimeiro:treinoAssuntoFiltrados()[0].subId==='sub-mt1'};}""")
+        print('   %s'%r)
+        assert r['totalAssuntos']==2, 'painel tem que listar TODO assunto respondido, nao so os piores'
+        assert r['piorPrimeiro'], 'ordenacao padrao e pelo pior %'
+        print('   OK\n')
+
+        r=await page.evaluate("""()=>{
+          treinoAssuntoBuscar('trauma');
+          const comBusca=treinoAssuntoFiltrados().map(s=>s.subId);
+          treinoAssuntoBuscar('');
+          treinoAssuntoToggleFixado('sub-mt2');
+          const fixadoPrimeiro=treinoAssuntoFiltrados()[0].subId==='sub-mt2';   // mesmo sendo o melhor %
+          return {comBusca,fixadoPrimeiro,persistiu:(db.treinoAssuntosFixados||[]).includes('sub-mt2')};}""")
+        print('   %s'%r)
+        assert r['comBusca']==['sub-mt2'], 'busca por nome tinha que filtrar'
+        assert r['fixadoPrimeiro'], 'assunto fixado vem primeiro mesmo fora da ordenacao normal'
+        assert r['persistiu']
+        print('   OK\n')
+
+        r=await page.evaluate("""()=>{
+          treinoAssuntoToggleSelecionado('sub-mt1');
+          treinoAssuntoToggleSelecionado('sub-mt2');
+          treinoAssuntoTreinarSelecionados();
+          return {itens:treinoSessao?treinoSessao.itens.length:0,
+                  doisAssuntos:treinoSessao?new Set(treinoSessao.itens.map(q=>q.subId)).size:0,
+                  selecaoLimpou:treinoAssuntoUI.selecionados.size===0};}""")
+        print('   %s'%r)
+        assert r['itens']==20 and r['doisAssuntos']==2, 'treinar selecionados tinha que juntar os DOIS assuntos numa sessao so'
+        assert r['selecaoLimpou']
+        print('   OK\n')
+
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))
         assert not graves, graves
