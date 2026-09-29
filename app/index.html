@@ -996,6 +996,7 @@ nav{
 .treino-deck-linha-txt span{font-size:10px;color:var(--muted);font-weight:600;}
 .treino-deck-linha-num{font-size:15px;font-weight:900;}
 .treino-deck-linha-ambar .treino-deck-linha-num{color:var(--orange-t);}
+.treino-erros-painel{margin-top:6px;padding-top:12px;border-top:1px solid var(--border);}
 .treino-deck-linha i.fa-chevron-right{color:var(--muted);font-size:11px;}
 .treino-montar-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--panel2);
   border:1px solid var(--border);border-radius:12px;padding:10px 14px;}
@@ -5617,6 +5618,7 @@ let sgTimerInterval=null;
 let revFilter='fila';
 let mbFilter='all';
 let errFilter='pending';
+let treinoErrosAberto=false;
 
 // ===== INIT =====
 // Só roda depois que o gate de autenticação (ver bloco "AUTENTICAÇÃO" acima) confirma que
@@ -12664,8 +12666,13 @@ function treinoTreinarAssunto(subId){
   renderSimGeralScreen();
   window.scrollTo(0,0);
 }
+function treinoErrosToggle(){
+  treinoErrosAberto=!treinoErrosAberto;
+  renderSimGeralScreen();
+}
 function treinoDecksListaHTML(decks){
   const visiveis=decks.filter(d=>d.itens.length||d.id==='nuncavistas'||d.id==='refazer');
+  const pendentes=getErrorBank().filter(i=>!i.revisado&&!i.problematico).length;
   return`<div class="section-card">
     <div class="sec-title" style="margin-bottom:8px">Decks</div>
     ${visiveis.map(d=>`<div class="treino-deck-linha${d.ambar?' treino-deck-linha-ambar':''}${d.itens.length?'':' treino-deck-linha-vazio'}" ${d.itens.length?`onclick="treinarComDeck('${d.id}')"`:''}>
@@ -12674,6 +12681,13 @@ function treinoDecksListaHTML(decks){
       <span class="treino-deck-linha-num">${d.itens.length}</span>
       <i class="fa fa-chevron-right"></i>
     </div>`).join('')}
+    <div class="treino-deck-linha${pendentes?' treino-deck-linha-ambar':''}" onclick="treinoErrosToggle()">
+      <span class="treino-deck-linha-icon">📕</span>
+      <div class="treino-deck-linha-txt"><b>Banco de Erros</b><span>Questões que você errou nos simulados</span></div>
+      <span class="treino-deck-linha-num">${pendentes}</span>
+      <i class="fa fa-chevron-${treinoErrosAberto?'down':'right'}"></i>
+    </div>
+    ${treinoErrosAberto?treinoErrosPainelHTML():''}
   </div>`;
 }
 function treinoDestaqueHTML(){
@@ -12783,10 +12797,8 @@ function treinoRodapeHTML(){
     <span>Simulados ficam em <b>Minhas Provas</b></span>
   </div>`;
 }
-function treinoErrosCardHTML(){
-  return`<div class="section-card" id="treino-erros-card">
-    <div class="sec-title" style="margin-bottom:2px">📕 Banco de Erros</div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;font-weight:600">Questões que você errou nos simulados, reunidas aqui pra você bater de novo até acertar.</div>
+function treinoErrosPainelHTML(){
+  return`<div class="treino-erros-painel" id="treino-erros-card">
     <div class="filter-row">
       <button class="chip${errFilter==='pending'?' active':''}" onclick="filterErros('pending',this)">🔴 Pendentes</button>
       <button class="chip${errFilter==='reviewed'?' active':''}" onclick="filterErros('reviewed',this)">✅ Revisados</button>
@@ -12824,7 +12836,6 @@ function treinarEntradaHTML(){
       ${treinoAssuntosPainelHTML()}
       ${treinoDecksListaHTML(decks)}
     </div>
-    ${treinoErrosCardHTML()}
     ${treinoMontarBarHTML()}
     ${treinoRodapeHTML()}
   </div>`;
