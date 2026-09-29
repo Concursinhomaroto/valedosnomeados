@@ -16,21 +16,21 @@ async def main():
         r=await page.evaluate("""()=>{
           const barras=[...document.querySelectorAll('.screen .rd-conectivos-tabs')]
             .filter(t=>t.parentElement.id.startsWith('screen-')&&
-                       ['screen-simgeral','screen-provas','screen-caderno','screen-banco','screen-erros']
+                       ['screen-simgeral','screen-provas','screen-caderno','screen-banco']
                          .includes(t.parentElement.id));
           const ordem=[...barras[0].querySelectorAll('button')].map(x=>x.textContent.trim());
           return {telas:barras.map(t=>t.parentElement.id),
                   ordem,
-                  todasTem5:barras.every(t=>t.querySelectorAll('button').length===5),
+                  todasTem4:barras.every(t=>t.querySelectorAll('button').length===4),
                   cadaUmaTemUmAtivo:barras.every(t=>t.querySelectorAll('button.active').length===1),
                   existeATela:!!document.getElementById('screen-banco'),
                   existeOAlvo:!!document.getElementById('banco-content')};}""")
         print('   abas: %s'%' | '.join(r['ordem']))
         print('   telas com a barra: %s'%len(r['telas']))
-        assert r['todasTem5'] and r['cadaUmaTemUmAtivo'], (r['todasTem5'],r['cadaUmaTemUmAtivo'])
+        assert r['todasTem4'] and r['cadaUmaTemUmAtivo'], (r['todasTem4'],r['cadaUmaTemUmAtivo'])
         assert r['ordem'][3].endswith('Acervo')   # renomeado no passo 8.3 do redesenho
         assert r['existeATela'] and r['existeOAlvo']
-        print('   entrou antes do Banco de Erros, nas 5 telas, sem duplicar o "ativo"')
+        print('   entrou nas 4 telas (Banco de Erros virou secao dentro de Treinar), sem duplicar o "ativo"')
         print('   OK\n')
 
         print('=== B) a tela vazia explica, em vez de ficar em branco ===')
@@ -102,9 +102,9 @@ async def main():
         assert r['foiPraProvas'] and r['naLista']
         print('   OK\n')
 
-        print('=== F) navegar entre as 5 abas nao quebra nada ===')
+        print('=== F) navegar entre as 4 abas nao quebra nada ===')
         r=await page.evaluate("""()=>{
-          const telas=['simgeral','provas','caderno','banco','erros','banco','provas','banco'];
+          const telas=['simgeral','provas','caderno','banco','banco','provas','banco'];
           const vistos=[];
           telas.forEach(t=>{showScreen(t);
             vistos.push(document.querySelectorAll('.screen.active').length);});
