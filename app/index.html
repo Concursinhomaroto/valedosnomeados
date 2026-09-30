@@ -978,6 +978,8 @@ nav{
 .treino-assuntos-controles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
 .treino-assuntos-controles input[type="search"]{flex:1;min-width:160px;padding:7px 10px;font-size:12px;}
 .treino-assuntos-controles select{width:auto;padding:7px 8px;font-size:12px;}
+.treino-assuntos-acoes{font-size:11px;color:var(--muted);font-weight:700;margin-bottom:8px;}
+.treino-assuntos-acoes label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;}
 .treino-assuntos-lista{max-height:460px;overflow-y:auto;margin:0 -4px;padding:0 4px;}
 .treino-assunto-linha{display:grid;grid-template-columns:18px 24px 1fr 90px 34px auto;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);border-radius:8px;}
 .treino-assunto-linha:last-child{border-bottom:none;}
@@ -12540,8 +12542,16 @@ function treinoPlacarHTML(){
 // juntos numa sessao so — as quatro coisas que ele pediu, nessa ordem.
 // Cheio por natureza (lista completa, nao um recorte de 4) — e o que tira o espaco vazio
 // da coluna sem precisar simular altura artificial.
-let treinoAssuntoUI={busca:'',materia:'',ordenar:'pior',selecionados:new Set()};
+let treinoAssuntoUI={busca:'',materia:'',ordenar:'pior',filtro:'pendentes',selecionados:new Set()};
 function treinoAssuntoStats(){
+  // total: quantas questoes o assunto TEM no acervo, respondidas ou nao — sem isso a
+  // linha so mostrava "1 resposta" e parecia que era tudo que existia daquele assunto,
+  // escondendo que ha mais questoes nunca vistas esperando (achado ao vivo).
+  const totalPorSub={};
+  treinoPoolCompleto().forEach(q=>{
+    if(!q.subId)return;
+    totalPorSub[q.subId]=(totalPorSub[q.subId]||0)+1;
+  });
   const porSub={};
   (db.acervo||[]).forEach(q=>{
     if((q.status||'ativa')!=='ativa'||!q.subId||!q.vezesRespondida)return;
@@ -12549,6 +12559,7 @@ function treinoAssuntoStats(){
     s.vezes+=q.vezesRespondida; s.acertos+=q.acertos||0;
   });
   return Object.values(porSub).map(s=>({...s,pct:Math.round(s.acertos/s.vezes*100),
+    total:totalPorSub[s.subId]||s.vezes,
     fixado:(db.treinoAssuntosFixados||[]).includes(s.subId)}));
 }
 // Recomendacao do destaque continua exigindo amostra minima (3) pra um erro isolado nao
@@ -12572,6 +12583,11 @@ function treinoAssuntoFiltrados(){
   const lista=treinoAssuntoStats().filter(s=>{
     if(treinoAssuntoUI.materia&&s.kingdomName!==treinoAssuntoUI.materia)return false;
     if(termo&&!normalizeForDedup(s.subName).includes(termo))return false;
+    // "Pendentes" e o padrao: assunto com 70%+ de acerto ja esta bom o bastante, nao
+    // precisa aparecer aqui toda vez — so os fracos/medianos, pra lista servir de fato
+    // pra decidir o que estudar. Fixado sempre aparece: fixar e um "sempre acompanhar
+    // este", nao so "esta fraco agora".
+    if(treinoAssuntoUI.filtro==='pendentes'&&s.pct>=70&&!s.fixado)return false;
     return true;
   });
   lista.sort(TREINO_ASSUNTO_ORDENS[treinoAssuntoUI.ordenar]||TREINO_ASSUNTO_ORDENS.pior);
@@ -12586,10 +12602,24 @@ function treinoAssuntoAtualizarLista(){
   if(lista)lista.innerHTML=treinoAssuntoListaHTML();
   const barra=document.getElementById('treino-assuntos-barra');
   if(barra)barra.outerHTML=treinoAssuntoBarraHTML();
+  const acoes=document.getElementById('treino-assuntos-acoes');
+  if(acoes)acoes.outerHTML=treinoAssuntoAcoesHTML();
 }
 function treinoAssuntoBuscar(valor){treinoAssuntoUI.busca=valor;treinoAssuntoAtualizarLista();}
 function treinoAssuntoMudouMateria(valor){treinoAssuntoUI.materia=valor;treinoAssuntoAtualizarLista();}
 function treinoAssuntoMudouOrdem(valor){treinoAssuntoUI.ordenar=valor;treinoAssuntoAtualizarLista();}
+function treinoAssuntoMudouFiltro(valor,el){
+  treinoAssuntoUI.filtro=valor;
+  document.querySelectorAll('#treino-assuntos-filtro .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  treinoAssuntoAtualizarLista();
+}
+function treinoAssuntoToggleTodos(cb){
+  const visiveis=treinoAssuntoFiltrados();
+  if(cb.checked)visiveis.forEach(s=>treinoAssuntoUI.selecionados.add(s.subId));
+  else visiveis.forEach(s=>treinoAssuntoUI.selecionados.delete(s.subId));
+  treinoAssuntoAtualizarLista();
+}
 function treinoAssuntoToggleFixado(subId){
   db.treinoAssuntosFixados=db.treinoAssuntosFixados||[];
   const i=db.treinoAssuntosFixados.indexOf(subId);
@@ -12602,6 +12632,8 @@ function treinoAssuntoToggleSelecionado(subId){
   if(sel.has(subId))sel.delete(subId); else sel.add(subId);
   const barra=document.getElementById('treino-assuntos-barra');
   if(barra)barra.outerHTML=treinoAssuntoBarraHTML();
+  const acoes=document.getElementById('treino-assuntos-acoes');
+  if(acoes)acoes.outerHTML=treinoAssuntoAcoesHTML();
 }
 function treinoAssuntoTreinarSelecionados(){
   const sel=treinoAssuntoUI.selecionados;
@@ -12619,7 +12651,7 @@ function treinoAssuntoLinhaHTML(s){
   return`<div class="treino-assunto-linha${sel?' treino-assunto-linha-sel':''}">
     <input type="checkbox" ${sel?'checked':''} onchange="treinoAssuntoToggleSelecionado('${s.subId}')" aria-label="Selecionar ${escapeHtml(s.subName)} pra treinar junto com outros">
     <button class="treino-assunto-fixar${s.fixado?' ativo':''}" onclick="treinoAssuntoToggleFixado('${s.subId}')" title="${s.fixado?'Desafixar':'Fixar no topo'}" aria-label="${s.fixado?'Desafixar':'Fixar'} ${escapeHtml(s.subName)}"><i class="fa fa-thumbtack"></i></button>
-    <div class="treino-foco-nome"><b>${escapeHtml(s.subName)}</b><span>${escapeHtml(s.kingdomName)} · ${s.vezes} resposta${s.vezes>1?'s':''}</span></div>
+    <div class="treino-foco-nome"><b>${escapeHtml(s.subName)}</b><span>${escapeHtml(s.kingdomName)} · ${s.vezes} de ${s.total} questõ${s.total===1?'ão':'es'} respondida${s.total===1?'':'s'}</span></div>
     <div class="treino-foco-barra"><span style="width:${s.pct}%;background:${s.pct<50?'var(--red-t)':(s.pct<70?'var(--orange-t)':'var(--accent2)')}"></span></div>
     <span class="treino-foco-pct">${s.pct}%</span>
     <button class="btn btn-xs btn-primary" onclick="treinoTreinarAssunto('${s.subId}')">Treinar</button>
@@ -12627,8 +12659,20 @@ function treinoAssuntoLinhaHTML(s){
 }
 function treinoAssuntoListaHTML(){
   const lista=treinoAssuntoFiltrados();
-  if(!lista.length)return`<div class="empty-mini">Nenhum assunto ${treinoAssuntoUI.busca||treinoAssuntoUI.materia?'bate com esse filtro':'respondido ainda'}.</div>`;
+  if(!lista.length){
+    const msg=treinoAssuntoUI.busca||treinoAssuntoUI.materia?'Nenhum assunto bate com esse filtro.'
+      :treinoAssuntoUI.filtro==='pendentes'?'Nenhum assunto pendente agora! 🎉 Troque pra "Todos" se quiser rever os que já domina.'
+      :'Nenhum assunto respondido ainda.';
+    return`<div class="empty-mini">${msg}</div>`;
+  }
   return lista.map(treinoAssuntoLinhaHTML).join('');
+}
+function treinoAssuntoAcoesHTML(){
+  const visiveis=treinoAssuntoFiltrados();
+  const todosSel=visiveis.length>0&&visiveis.every(s=>treinoAssuntoUI.selecionados.has(s.subId));
+  return`<div class="treino-assuntos-acoes" id="treino-assuntos-acoes">
+    <label><input type="checkbox" ${todosSel?'checked':''} ${visiveis.length?'':'disabled'} onchange="treinoAssuntoToggleTodos(this)"> Marcar todos (${visiveis.length})</label>
+  </div>`;
 }
 function treinoAssuntoBarraHTML(){
   const n=treinoAssuntoUI.selecionados.size;
@@ -12641,7 +12685,11 @@ function treinoAssuntosPainelHTML(){
   const materias=treinoAssuntoOpcoesMaterias();
   return`<div class="section-card">
     <div class="sec-title" style="margin-bottom:2px">Assuntos</div>
-    <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:12px">todo assunto que você já respondeu — fixe os que importam, treine vários juntos</div>
+    <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:12px">os que ainda precisam de atenção — fixe os que importam, treine vários juntos</div>
+    <div class="filter-row" id="treino-assuntos-filtro" style="margin-bottom:10px">
+      <button class="chip${treinoAssuntoUI.filtro==='pendentes'?' active':''}" onclick="treinoAssuntoMudouFiltro('pendentes',this)">🎯 Pendentes</button>
+      <button class="chip${treinoAssuntoUI.filtro==='todos'?' active':''}" onclick="treinoAssuntoMudouFiltro('todos',this)">📋 Todos</button>
+    </div>
     <div class="treino-assuntos-controles">
       <input class="inp" type="search" placeholder="Buscar assunto..." oninput="treinoAssuntoBuscar(this.value)" value="${escapeHtml(treinoAssuntoUI.busca)}" aria-label="Buscar assunto">
       <select class="inp" onchange="treinoAssuntoMudouMateria(this.value)" aria-label="Filtrar por matéria">
@@ -12655,6 +12703,7 @@ function treinoAssuntosPainelHTML(){
         <option value="nome"${treinoAssuntoUI.ordenar==='nome'?' selected':''}>A-Z</option>
       </select>
     </div>
+    ${treinoAssuntoAcoesHTML()}
     <div class="treino-assuntos-lista" id="treino-assuntos-lista">${treinoAssuntoListaHTML()}</div>
     ${treinoAssuntoBarraHTML()}
   </div>`;
