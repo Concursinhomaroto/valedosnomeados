@@ -16327,10 +16327,17 @@ function bancoCriarSalvar(){
   toast(r.novo?'✅ Questão criada e guardada no banco.':'✅ Já existia uma igual — os campos vazios foram preenchidos.','var(--green)');
 }
 function bancoImportarAbrir(){bancoImportando=true;bancoListaAberta=true;renderBancoScreen();}
-function bancoImportarCancelar(){bancoImportando=false;renderBancoScreen();}
+function bancoImportarCancelar(){bancoImportando=false;bancoImportarPendentes=[];renderBancoScreen();}
 // Mesmo parser da colagem de prova (extractAIJson + o resgate pra resposta cortada) e o
 // mesmo normalizador (simNormalizaQuestao) — o formato que a IA devolve e igual nos dois
 // casos, so o destino que muda: aqui vai direto pro banco, sem virar prova primeiro.
+//
+// Item cujo nome nao bate com NENHUM assunto cadastrado nao pode ser descartado calado —
+// achado ao vivo: "tem questões que não estão linkando, coloquei os assuntos de
+// legislação e ele não levou todos". Colar prova ja resolve isso com um passo manual por
+// nome (simColarMapa/simColarEscolher); aqui reaproveita a mesma ideia, mais simples (sem
+// grupo/sugestao), guardando os pendentes pra o usuario escolher o assunto certo.
+let bancoImportarPendentes=[];   // [{nome, itens:[questao normalizada,...]}]
 function bancoImportarProcessar(){
   const ta=document.getElementById('banco-importar-txt');
   if(!ta)return;
@@ -16353,19 +16360,23 @@ function bancoImportarProcessar(){
   // assuntos do chefão, sem precisar escolher um, e ele direcionar pro assunto".
   const ix=sub?null:simIndiceAssuntos();
   const cacheNome={};
-  let novas=0,fundidas=0,descartadas=0,semAssunto=0;
+  const pendentesPorNome={};
+  let novas=0,fundidas=0,descartadas=0;
   arr.forEach(item=>{
     if(!item||typeof item!=='object'){descartadas++;return;}
     const fmt=(item.alternativas&&Array.isArray(item.alternativas)&&item.alternativas.length>2)?'multipla':'certoerrado';
-    const norm=simNormalizaQuestao(item,fmt);
-    if(!norm){descartadas++;return;}
+    const bruto=simNormalizaQuestao(item,fmt);
+    if(!bruto){descartadas++;return;}
+    const{assunto,...norm}=bruto;   // "assunto" (numero cru da IA) so serve pra achar o alvo, nao fica gravado
     let alvoSub,alvoKingdom,alvoTopicName;
     if(sub){
       alvoSub=sub; alvoKingdom=kingdom; alvoTopicName=topicName;
     }else{
       const nome=String(item.assuntoNome||(/^\d+$/.test(String(item.assunto))?'':item.assunto)||'').trim();
-      const c=nome&&(cacheNome[nome]!==undefined?cacheNome[nome]:(cacheNome[nome]=simCasarAssunto(nome,ix)));
-      if(!c){semAssunto++;return;}
+      if(!nome){descartadas++;return;}
+      const ap=nome in cacheNome?null:simColarApelido(nome);
+      const c=nome in cacheNome?cacheNome[nome]:(cacheNome[nome]=(ap&&ix.find(x=>x.sub.id===ap))||simCasarAssunto(nome,ix));
+      if(!c){(pendentesPorNome[nome]=pendentesPorNome[nome]||[]).push(norm);return;}
       alvoSub=c.sub; alvoKingdom=c.kingdom; alvoTopicName=c.topic.name;
     }
     Object.assign(norm,{subId:alvoSub.id,subName:alvoSub.name,topicName:alvoTopicName,
@@ -16373,16 +16384,71 @@ function bancoImportarProcessar(){
     const r=bancoAdicionarOuFundir(norm,'importada');
     if(r.novo)novas++; else if(r.mudou)fundidas++;
   });
-  if(!novas&&!fundidas){
-    toast(semAssunto&&!sub
-      ?'❌ Não consegui casar nenhum item com um assunto pelo nome. Escolha o assunto/chefão manualmente ou revise o "assuntoNome" do JSON.'
-      :'❌ Nenhuma questão aproveitável nesse JSON.','var(--red)');
+  const pendNomes=Object.keys(pendentesPorNome);
+  bancoImportarPendentes=pendNomes.map(nome=>({nome,itens:pendentesPorNome[nome]}));
+  const totalPendente=bancoImportarPendentes.reduce((n,p)=>n+p.itens.length,0);
+  if(!novas&&!fundidas&&!pendNomes.length){
+    toast('❌ Nenhuma questão aproveitável nesse JSON.','var(--red)');
     return;
   }
   acervoAparar(); acervoSalvar();
-  ta.value=''; bancoImportando=false;
+  if(!pendNomes.length){ta.value=''; bancoImportando=false;}
   renderBancoScreen();
-  toast(`📥 ${novas} questão(ões) nova(s)${fundidas?` · ${fundidas} já existiam e ganharam o que faltava`:''}${descartadas?` · ${descartadas} descartada(s) (gabarito não bate com as alternativas)`:''}${semAssunto?` · ${semAssunto} sem assunto reconhecido pelo nome`:''}.`,'var(--green)');
+  toast(`📥 ${novas} questão(ões) nova(s)${fundidas?` · ${fundidas} já existiam e ganharam o que faltava`:''}${descartadas?` · ${descartadas} descartada(s) (gabarito não bate com as alternativas)`:''}${pendNomes.length?` · ${totalPendente} questão(ões) em ${pendNomes.length} assunto(s) sem correspondência — escolha abaixo`:''}.`,pendNomes.length?'var(--orange)':'var(--green)');
+}
+function bancoImportarPendenteEscolher(i,selectId){
+  const pend=bancoImportarPendentes[i];
+  const subId=(document.getElementById(selectId)||{}).value;
+  if(!pend||!subId)return;
+  const sub=simFindSub(subId);
+  if(!sub)return;
+  let kingdomId='',topicName='';
+  db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>{if((t.subtopics||[]).some(s=>s.id===subId)){kingdomId=k.id;topicName=t.name;}}));
+  const kingdom=db.kingdoms.find(k=>k.id===kingdomId);
+  let novas=0,fundidas=0;
+  pend.itens.forEach(norm=>{
+    Object.assign(norm,{subId:sub.id,subName:sub.name,topicName,
+      kingdomId,kingdomName:kingdom?kingdom.name:'',kingdomIcon:kingdom?kingdom.icon:''});
+    const r=bancoAdicionarOuFundir(norm,'importada');
+    if(r.novo)novas++; else if(r.mudou)fundidas++;
+  });
+  simColarGravarApelido(pend.nome,subId);   // proxima vez com esse nome resolve sozinho
+  bancoImportarPendentes.splice(i,1);
+  acervoAparar(); acervoSalvar();
+  if(!bancoImportarPendentes.length){
+    const ta=document.getElementById('banco-importar-txt');
+    if(ta)ta.value='';
+    bancoImportando=false;
+  }
+  renderBancoScreen();
+  toast(`📥 "${pend.nome}" → ${sub.name}: ${novas} nova(s)${fundidas?` · ${fundidas} já existiam`:''}.`,'var(--green)');
+}
+function bancoImportarPendenteDescartar(i){
+  const pend=bancoImportarPendentes[i];
+  if(!pend)return;
+  bancoImportarPendentes.splice(i,1);
+  if(!bancoImportarPendentes.length){
+    const ta=document.getElementById('banco-importar-txt');
+    if(ta)ta.value='';
+    bancoImportando=false;
+  }
+  renderBancoScreen();
+  toast(`🗑️ "${pend.nome}" descartado (${pend.itens.length} questão${pend.itens.length>1?'ões':''}).`,'var(--muted)');
+}
+function bancoImportarPendentesHTML(){
+  if(!bancoImportarPendentes.length)return'';
+  return`<div class="banco-item banco-item-editando" id="banco-importar-pendentes">
+    <div class="sec-title" style="margin-bottom:2px;font-size:13px">⚠️ ${bancoImportarPendentes.length} assunto(s) sem correspondência</div>
+    <div style="font-size:10.5px;color:var(--muted);margin-bottom:10px">O nome não bateu com nenhum assunto cadastrado. Escolha o assunto certo pra cada um — fica lembrado pra próxima vez com esse nome — ou descarte.</div>
+    ${bancoImportarPendentes.map((p,i)=>`<div class="banco-edit-linha" style="margin-top:6px">
+      <div style="flex:1;min-width:160px"><b>${escapeHtml(p.nome)}</b><span style="color:var(--muted);font-weight:600"> · ${p.itens.length} questão${p.itens.length>1?'ões':''}</span></div>
+      <select id="banco-importar-pend-${i}" class="inp" style="width:auto">
+        ${bancoAssuntoOpcoesHTML('','')}
+      </select>
+      <button class="btn btn-xs btn-primary" onclick="bancoImportarPendenteEscolher(${i},'banco-importar-pend-${i}')"><i class="fa fa-check"></i> Usar</button>
+      <button class="btn btn-xs btn-ghost" onclick="bancoImportarPendenteDescartar(${i})">Descartar</button>
+    </div>`).join('')}
+  </div>`;
 }
 // O bloco de busca+filtros+lista, plugado logo abaixo dos controles de montar. So os
 // quatro que ja funcionam sem o editor de questao (proximo passo): texto, formato, faixa
@@ -16446,6 +16512,7 @@ function bancoAssuntoLinhaHTML(id,selecionado){
 function bancoListaConteudoHTML(pool){
   return(bancoCriando?bancoEditorHTML(null,'criar')+bancoAssuntoLinhaHTML('banco-novo-assunto',''):'')
         +(bancoImportando?bancoImportarHTML():'')
+        +bancoImportarPendentesHTML()
         +(bancoListaAberta?bancoListaItensHTML(pool):'');
 }
 function bancoImportarHTML(){

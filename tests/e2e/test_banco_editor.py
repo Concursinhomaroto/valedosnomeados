@@ -175,9 +175,37 @@ async def main():
           document.getElementById('banco-importar-txt').value=JSON.stringify(lote);
           bancoImportarProcessar();
           return {total:db.acervo.length,
-                  subs:db.acervo.map(q=>q.subId).sort()};}""")
+                  subs:db.acervo.map(q=>q.subId).sort(),
+                  pendentes:bancoImportarPendentes.map(p=>({nome:p.nome,n:p.itens.length}))};}""")
         print('   %s'%r)
-        assert r['total']==3 and r['subs']==['sE1','sP1','sS1'], 'os 3 reconheciveis entram, o inventado fica de fora'
+        assert r['total']==3 and r['subs']==['sE1','sP1','sS1'], 'os 3 reconheciveis entram, o inventado nao (ainda)'
+        assert r['pendentes']==[{'nome':'Assunto que nao existe em lugar nenhum','n':1}], 'quem nao bateu vira pendencia, nao some calado'
+        print('   OK\n')
+
+        print('=== I) pendência resolvida manualmente entra no banco e vira apelido pra próxima vez ===')
+        # "tem questões que não estão linkando... ele não levou todos" — antes o item sem
+        # correspondência era descartado sem aviso; agora fica pendente ate o usuario
+        # escolher o assunto certo (ou descartar), e a escolha vira apelido lembrado.
+        r=await page.evaluate("""()=>{
+          const sel=document.getElementById('banco-importar-pend-0');
+          sel.value='sE2';   // PCR
+          bancoImportarPendenteEscolher(0,'banco-importar-pend-0');
+          return {total:db.acervo.length,
+                  pendentesRestantes:bancoImportarPendentes.length,
+                  novoItem:db.acervo.find(q=>q.subId==='sE2')};}""")
+        print('   %s'%r)
+        assert r['total']==4 and r['pendentesRestantes']==0
+        assert r['novoItem'] and r['novoItem']['subId']=='sE2'
+        print('   OK\n')
+
+        r=await page.evaluate("""()=>{
+          bancoImportarAbrir();
+          document.getElementById('banco-importar-txt').value=JSON.stringify(
+            [{assuntoNome:'Assunto que nao existe em lugar nenhum',afirmacao:'Outro item do mesmo nome.',gabarito:'C',explicacao:'x'}]);
+          bancoImportarProcessar();
+          return {total:db.acervo.length,pendentes:bancoImportarPendentes.length};}""")
+        print('   reimportando o mesmo nome (deve usar o apelido): %s'%r)
+        assert r['total']==5 and r['pendentes']==0, 'nome ja resolvido uma vez tem que casar sozinho da proxima'
         print('   OK\n')
 
         print('erros de JS: %s'%(real_errors(errs) or 'nenhum'))
