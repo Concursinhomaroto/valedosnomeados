@@ -950,7 +950,7 @@ nav{
 /* ===== Modo Treino completo — redesenho (prancha "5 · Treinar v2" / "6 · Sessão de treino") ===== */
 .treino-topo-entrada{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
 .treino-entrada{display:flex;flex-direction:column;gap:14px;}
-.treino-grid-2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;align-items:start;}
+.treino-grid-2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;align-items:stretch;}
 @media (max-width:900px){.treino-grid-2{grid-template-columns:1fr;}}
 .treino-destaque{background:var(--accent-deep,#1b1730);color:#fff;border-radius:16px;padding:22px 24px;display:flex;flex-direction:column;}
 .treino-destaque-eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.08em;opacity:.75;}
@@ -12542,7 +12542,7 @@ function treinoPlacarHTML(){
 // juntos numa sessao so — as quatro coisas que ele pediu, nessa ordem.
 // Cheio por natureza (lista completa, nao um recorte de 4) — e o que tira o espaco vazio
 // da coluna sem precisar simular altura artificial.
-let treinoAssuntoUI={busca:'',materia:'',ordenar:'pior',filtro:'pendentes',selecionados:new Set()};
+let treinoAssuntoUI={busca:'',materia:'',chefao:'',ordenar:'pior',filtro:'pendentes',selecionados:new Set()};
 function treinoAssuntoStats(){
   // total: quantas questoes o assunto TEM no acervo, respondidas ou nao — sem isso a
   // linha so mostrava "1 resposta" e parecia que era tudo que existia daquele assunto,
@@ -12555,7 +12555,7 @@ function treinoAssuntoStats(){
   const porSub={};
   (db.acervo||[]).forEach(q=>{
     if((q.status||'ativa')!=='ativa'||!q.subId||!q.vezesRespondida)return;
-    const s=porSub[q.subId]=porSub[q.subId]||{subId:q.subId,subName:q.subName||'',kingdomName:q.kingdomName||'',vezes:0,acertos:0};
+    const s=porSub[q.subId]=porSub[q.subId]||{subId:q.subId,subName:q.subName||'',kingdomName:q.kingdomName||'',topicName:q.topicName||'',vezes:0,acertos:0};
     s.vezes+=q.vezesRespondida; s.acertos+=q.acertos||0;
   });
   return Object.values(porSub).map(s=>({...s,pct:Math.round(s.acertos/s.vezes*100),
@@ -12574,6 +12574,17 @@ function treinoAssuntoOpcoesMaterias(){
   treinoAssuntoStats().forEach(s=>{if(s.kingdomName)nomes.add(s.kingdomName);});
   return[...nomes].sort((a,b)=>a.localeCompare(b));
 }
+// Chefao = topico do edital, um nivel acima do assunto (miniboss) e abaixo da materia
+// (reino) — "treinar por chefao" junta todos os assuntos daquele topico de uma vez,
+// sem precisar marcar um por um. So lista chefoes da materia escolhida (se houver).
+function treinoAssuntoOpcoesChefoes(){
+  const nomes=new Set();
+  treinoAssuntoStats().forEach(s=>{
+    if(treinoAssuntoUI.materia&&s.kingdomName!==treinoAssuntoUI.materia)return;
+    if(s.topicName)nomes.add(s.topicName);
+  });
+  return[...nomes].sort((a,b)=>a.localeCompare(b));
+}
 const TREINO_ASSUNTO_ORDENS={
   pior:(a,b)=>a.pct-b.pct, melhor:(a,b)=>b.pct-a.pct,
   mais:(a,b)=>b.vezes-a.vezes, nome:(a,b)=>a.subName.localeCompare(b.subName)
@@ -12582,6 +12593,7 @@ function treinoAssuntoFiltrados(){
   const termo=normalizeForDedup(treinoAssuntoUI.busca||'');
   const lista=treinoAssuntoStats().filter(s=>{
     if(treinoAssuntoUI.materia&&s.kingdomName!==treinoAssuntoUI.materia)return false;
+    if(treinoAssuntoUI.chefao&&s.topicName!==treinoAssuntoUI.chefao)return false;
     if(termo&&!normalizeForDedup(s.subName).includes(termo))return false;
     // "Pendentes" e o padrao: assunto com 70%+ de acerto ja esta bom o bastante, nao
     // precisa aparecer aqui toda vez — so os fracos/medianos, pra lista servir de fato
@@ -12606,7 +12618,14 @@ function treinoAssuntoAtualizarLista(){
   if(acoes)acoes.outerHTML=treinoAssuntoAcoesHTML();
 }
 function treinoAssuntoBuscar(valor){treinoAssuntoUI.busca=valor;treinoAssuntoAtualizarLista();}
-function treinoAssuntoMudouMateria(valor){treinoAssuntoUI.materia=valor;treinoAssuntoAtualizarLista();}
+function treinoAssuntoMudouMateria(valor){
+  treinoAssuntoUI.materia=valor;
+  treinoAssuntoUI.chefao='';   // chefoes disponiveis mudam com a materia
+  const controles=document.getElementById('treino-assuntos-controles');
+  if(controles)controles.outerHTML=treinoAssuntoControlesHTML();
+  treinoAssuntoAtualizarLista();
+}
+function treinoAssuntoMudouChefao(valor){treinoAssuntoUI.chefao=valor;treinoAssuntoAtualizarLista();}
 function treinoAssuntoMudouOrdem(valor){treinoAssuntoUI.ordenar=valor;treinoAssuntoAtualizarLista();}
 function treinoAssuntoMudouFiltro(valor,el){
   treinoAssuntoUI.filtro=valor;
@@ -12681,20 +12700,18 @@ function treinoAssuntoBarraHTML(){
     <button class="btn btn-sm btn-primary" onclick="treinoAssuntoTreinarSelecionados()" ${n?'':'disabled'}>Treinar selecionados</button>
   </div>`;
 }
-function treinoAssuntosPainelHTML(){
+function treinoAssuntoControlesHTML(){
   const materias=treinoAssuntoOpcoesMaterias();
-  return`<div class="section-card">
-    <div class="sec-title" style="margin-bottom:2px">Assuntos</div>
-    <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:12px">os que ainda precisam de atenção — fixe os que importam, treine vários juntos</div>
-    <div class="filter-row" id="treino-assuntos-filtro" style="margin-bottom:10px">
-      <button class="chip${treinoAssuntoUI.filtro==='pendentes'?' active':''}" onclick="treinoAssuntoMudouFiltro('pendentes',this)">🎯 Pendentes</button>
-      <button class="chip${treinoAssuntoUI.filtro==='todos'?' active':''}" onclick="treinoAssuntoMudouFiltro('todos',this)">📋 Todos</button>
-    </div>
-    <div class="treino-assuntos-controles">
+  const chefoes=treinoAssuntoOpcoesChefoes();
+  return`<div class="treino-assuntos-controles" id="treino-assuntos-controles">
       <input class="inp" type="search" placeholder="Buscar assunto..." oninput="treinoAssuntoBuscar(this.value)" value="${escapeHtml(treinoAssuntoUI.busca)}" aria-label="Buscar assunto">
       <select class="inp" onchange="treinoAssuntoMudouMateria(this.value)" aria-label="Filtrar por matéria">
         <option value="">Toda matéria</option>
         ${materias.map(m=>`<option value="${escapeHtml(m)}"${treinoAssuntoUI.materia===m?' selected':''}>${escapeHtml(m)}</option>`).join('')}
+      </select>
+      <select class="inp" onchange="treinoAssuntoMudouChefao(this.value)" aria-label="Filtrar por chefão">
+        <option value="">Todo chefão</option>
+        ${chefoes.map(c=>`<option value="${escapeHtml(c)}"${treinoAssuntoUI.chefao===c?' selected':''}>${escapeHtml(c)}</option>`).join('')}
       </select>
       <select class="inp" onchange="treinoAssuntoMudouOrdem(this.value)" aria-label="Ordenar assuntos">
         <option value="pior"${treinoAssuntoUI.ordenar==='pior'?' selected':''}>Pior % primeiro</option>
@@ -12702,7 +12719,17 @@ function treinoAssuntosPainelHTML(){
         <option value="mais"${treinoAssuntoUI.ordenar==='mais'?' selected':''}>Mais respondidas</option>
         <option value="nome"${treinoAssuntoUI.ordenar==='nome'?' selected':''}>A-Z</option>
       </select>
+    </div>`;
+}
+function treinoAssuntosPainelHTML(){
+  return`<div class="section-card">
+    <div class="sec-title" style="margin-bottom:2px">Assuntos</div>
+    <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:12px">os que ainda precisam de atenção — fixe os que importam, treine vários juntos ou por chefão inteiro</div>
+    <div class="filter-row" id="treino-assuntos-filtro" style="margin-bottom:10px">
+      <button class="chip${treinoAssuntoUI.filtro==='pendentes'?' active':''}" onclick="treinoAssuntoMudouFiltro('pendentes',this)">🎯 Pendentes</button>
+      <button class="chip${treinoAssuntoUI.filtro==='todos'?' active':''}" onclick="treinoAssuntoMudouFiltro('todos',this)">📋 Todos</button>
     </div>
+    ${treinoAssuntoControlesHTML()}
     ${treinoAssuntoAcoesHTML()}
     <div class="treino-assuntos-lista" id="treino-assuntos-lista">${treinoAssuntoListaHTML()}</div>
     ${treinoAssuntoBarraHTML()}
