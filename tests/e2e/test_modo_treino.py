@@ -377,6 +377,100 @@ async def main():
         assert r['vezes']==1 and r['total']==15, 'tem que mostrar 1 respondida de 15 no total, nao só "1 resposta"'
         print('   OK\n')
 
+        print('=== Q) filtro por chefão junta os assuntos daquele tópico numa sessão só ===')
+        # "preciso treinar por chefão" — matéria > chefão > assunto: escolher um chefão
+        # tinha que restringir a lista aos assuntos dele, e "marcar todos" + "treinar
+        # selecionados" junta as questões de todos eles numa sessão só.
+        r=await page.evaluate("""()=>{
+          treinoSessao=null;treinoResumo=null;
+          db.acervo=[];db.provas=[];db.provasArquivo=[];db.treinoAssuntosFixados=[];
+          treinoAssuntoUI={busca:'',materia:'',chefao:'',ordenar:'pior',filtro:'todos',selecionados:new Set()};
+          const feito=(subId,subName,topicName,n)=>{
+            QS(subId,subName,n,'X').forEach(q=>{
+              db.acervo.push({...q,topicName,_chaveForte:acervoChave2(q),tags:[],favorita:false,status:'ativa',
+                vezesRespondida:1,acertos:1,erros:0,ultimaVezEm:new Date().toISOString(),
+                ultimoResultado:'C',dificuldadeAferida:'facil',certezaAcertos:0,certezaErros:0,
+                duvidaAcertos:0,duvidaErros:0,chuteAcertos:0,chuteErros:0,
+                criacao:new Date().toISOString(),origem:'ia'});
+            });
+          };
+          feito('sub-x1','Assunto X1','Chefão X',3);
+          feito('sub-x2','Assunto X2','Chefão X',4);
+          feito('sub-y1','Assunto Y1','Chefão Y',5);
+          renderSimGeralScreen();
+          const chefoesOpts=treinoAssuntoOpcoesChefoes();
+          treinoAssuntoUI.chefao='Chefão X';
+          const soChefaoX=treinoAssuntoFiltrados().map(s=>s.subId).sort();
+          return {chefoesOpts,soChefaoX};}""")
+        print('   %s'%r)
+        assert set(r['chefoesOpts'])=={'Chefão X','Chefão Y'}
+        assert r['soChefaoX']==['sub-x1','sub-x2'], 'filtro por chefao tinha que restringir aos assuntos daquele topico'
+        print('   OK\n')
+
+        r=await page.evaluate("""()=>{
+          treinoAssuntoAtualizarLista();
+          const cb=document.querySelector('#treino-assuntos-acoes input[type=checkbox]');
+          cb.click();
+          treinoAssuntoTreinarSelecionados();
+          return {itens:treinoSessao?treinoSessao.itens.length:0,
+                  assuntos:treinoSessao?new Set(treinoSessao.itens.map(q=>q.subId)).size:0};}""")
+        print('   %s'%r)
+        assert r['itens']==7 and r['assuntos']==2, 'treinar o chefao inteiro tinha que juntar os DOIS assuntos dele (3+4=7 questoes)'
+        print('   OK\n')
+
+        print('=== R) coluna lateral da sessão: progresso + assuntos, só em tela larga ===')
+        # "olha o tamanho desse espaço que fica vago" — em tela larga a sessão virava um
+        # cartão estreito boiando num vazio; a lateral usa esse espaço pra progresso da
+        # sessão e desempenho por assunto (sem virar pontinho-por-questão: sessão pode
+        # ter centenas de itens).
+        r=await page.evaluate("""()=>{
+          treinoSessao=null;treinoResumo=null;
+          db.acervo=[];db.provas=[];db.provasArquivo=[];db.treinoAssuntosFixados=[];
+          const push=(subId,subName,topicName,n)=>{
+            QS(subId,subName,n,'X').forEach(q=>{
+              db.acervo.push({...q,topicName,_chaveForte:acervoChave2(q),tags:[],favorita:false,status:'ativa',
+                criacao:new Date().toISOString(),origem:'ia'});
+            });
+          };
+          push('sub-x1','Assunto X1','Chefão X',4);
+          push('sub-y1','Assunto Y1','Chefão Y',4);
+          const pool=treinoPoolCompleto();
+          treinoIniciar(pool,{titulo:'Teste lateral'});
+          renderSimGeralScreen();
+          return {larguraPadraoMostraLateral:
+            getComputedStyle(document.querySelector('.treino-sessao-lateral')).display!=='none'};}""")
+        print('   %s'%r)
+        assert r['larguraPadraoMostraLateral'], 'viewport de teste (1200px) já é largo o bastante pra mostrar a lateral'
+        print('   OK\n')
+
+        r=await page.evaluate("""()=>{
+          // acha um item de cada assunto (a sessao embaralha, entao nao da pra contar
+          // com a ordem) e responde um certo, outro errado
+          treinoSessao.idx=treinoSessao.itens.findIndex(q=>q.subId==='sub-x1');
+          const item=treinoSessao.itens[treinoSessao.idx];
+          treinoSelecionar(item.correta);
+          treinoConfirmarResposta();
+          treinoSessao.idx=treinoSessao.itens.findIndex(q=>q.subId==='sub-y1');
+          const item2=treinoSessao.itens[treinoSessao.idx];
+          const errada=item2.alternativas.find(a=>a.letra!==item2.correta).letra;
+          treinoSelecionar(errada);
+          treinoConfirmarResposta();
+          const legenda=document.querySelector('.treino-progresso-legenda').textContent;
+          const porAssunto=[...document.querySelectorAll('.treino-lateral-assunto')].map(e=>e.textContent.trim());
+          return {temCertas:legenda.includes('1 certas'),temErradas:legenda.includes('1 erradas'),
+                  temRestantes:legenda.includes('6 restantes'),porAssunto};}""")
+        print('   %s'%r)
+        assert r['temCertas'] and r['temErradas'] and r['temRestantes'], 'barra de progresso tem que refletir certas/erradas/restantes ao vivo'
+        assert len(r['porAssunto'])==2, 'os dois assuntos respondidos ate agora tem que aparecer'
+        print('   OK\n')
+
+        await page.set_viewport_size({'width':900,'height':900})
+        r=await page.evaluate("""()=>getComputedStyle(document.querySelector('.treino-sessao-lateral')).display""")
+        print('   lateral escondida em 900px: %s'%(r=='none'))
+        assert r=='none', 'em tela estreita (celular/tablet) a lateral nao pode aparecer'
+        await page.set_viewport_size({'width':1200,'height':900})
+        print('   OK\n')
+
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))
         assert not graves, graves

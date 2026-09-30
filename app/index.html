@@ -950,7 +950,7 @@ nav{
 /* ===== Modo Treino completo — redesenho (prancha "5 · Treinar v2" / "6 · Sessão de treino") ===== */
 .treino-topo-entrada{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
 .treino-entrada{display:flex;flex-direction:column;gap:14px;}
-.treino-grid-2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;align-items:start;}
+.treino-grid-2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;align-items:stretch;}
 @media (max-width:900px){.treino-grid-2{grid-template-columns:1fr;}}
 .treino-destaque{background:var(--accent-deep,#1b1730);color:#fff;border-radius:16px;padding:22px 24px;display:flex;flex-direction:column;}
 .treino-destaque-eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.08em;opacity:.75;}
@@ -1006,7 +1006,27 @@ nav{
 .treino-montar-bar select{width:auto;padding:6px 8px;font-size:11.5px;}
 .treino-montar-count{font-size:11px;color:var(--muted);font-weight:700;margin-left:auto;}
 .treino-rodape-linha{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--muted);font-weight:600;padding:2px 2px;}
-.treino-sessao{max-width:900px;margin:0 auto;}
+.treino-sessao-wrap{display:flex;gap:16px;justify-content:center;align-items:flex-start;}
+.treino-sessao{max-width:900px;margin:0;flex:1 1 auto;}
+.treino-sessao-lateral{display:none;width:260px;flex:0 0 260px;flex-direction:column;gap:14px;}
+/* Achado ao vivo: em tela larga a sessao ficava um cartao estreito boiando num mar de
+   fundo vazio. Em vez de esticar a pergunta (pior pra leitura), a largura sobrando vira
+   uma coluna de contexto — mapa de progresso e desempenho por assunto desta sessao. So
+   aparece quando ha espaco de verdade pros dois lado a lado sem apertar a pergunta. */
+@media (min-width:1180px){.treino-sessao-lateral{display:flex;}}
+.treino-lateral-bloco{background:var(--panel);border:1.5px solid var(--border);border-radius:14px;padding:14px;}
+.treino-lateral-titulo{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px;}
+.treino-progresso-barra{display:flex;height:10px;border-radius:99px;overflow:hidden;background:var(--border);margin-bottom:10px;}
+.treino-progresso-barra span{height:100%;}
+.treino-progresso-legenda{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--text2);font-weight:600;}
+.treino-progresso-legenda span{display:flex;align-items:center;gap:7px;}
+.treino-progresso-legenda i{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 auto;}
+.treino-lateral-assunto{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:11px;border-bottom:1px solid var(--border);}
+.treino-lateral-assunto:last-child{border-bottom:none;}
+.treino-lateral-assunto-nome{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;}
+.treino-lateral-assunto-barra{width:56px;height:6px;border-radius:99px;background:var(--border);overflow:hidden;flex:0 0 auto;}
+.treino-lateral-assunto-barra span{display:block;height:100%;}
+.treino-lateral-assunto-pct{flex:0 0 auto;color:var(--muted);font-weight:700;font-size:10.5px;}
 .treino-topo{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
 .treino-topo-titulo{display:flex;flex-direction:column;align-items:center;text-align:center;}
 .treino-topo-titulo span{font-size:9.5px;color:var(--muted);text-transform:uppercase;font-weight:800;letter-spacing:.06em;}
@@ -12450,24 +12470,82 @@ function fonteApoioTreinoHTML(item){
     </div>`).join('')}
   </div>`;
 }
+// Mapa de progresso da sessao: uma barra so (certas/erradas/puladas/restantes), nao um
+// pontinho por questao — sessoes de centenas de itens (ex: "6 assuntos" combinados)
+// tornariam pontinho por pontinho ilegivel. So aparece na coluna lateral (tela larga).
+function treinoSessaoProgressoHTML(){
+  const s=treinoSessao;
+  const total=s.itens.length||1;
+  const puladas=s.puladas.size;
+  const restantes=Math.max(0,total-s.respondidas-puladas);
+  const pct=n=>Math.round(n/total*100);
+  return`<div class="treino-lateral-bloco">
+    <div class="treino-lateral-titulo">Progresso da sessão</div>
+    <div class="treino-progresso-barra">
+      <span style="width:${pct(s.certas)}%;background:var(--accent2)"></span>
+      <span style="width:${pct(s.erradas)}%;background:var(--red-t)"></span>
+      <span style="width:${pct(puladas)}%;background:var(--muted)"></span>
+    </div>
+    <div class="treino-progresso-legenda">
+      <span><i style="background:var(--accent2)"></i>${s.certas} certas</span>
+      <span><i style="background:var(--red-t)"></i>${s.erradas} erradas</span>
+      ${puladas?`<span><i style="background:var(--muted)"></i>${puladas} pulada${puladas>1?'s':''}</span>`:''}
+      <span><i style="background:var(--border)"></i>${restantes} restante${restantes===1?'':'s'}</span>
+    </div>
+  </div>`;
+}
+// Desempenho por assunto DESTA sessao (nao a vida toda do assunto) — olha so pros
+// indices que a sessao mesma respondeu, pra bater com "como eu tô indo agora" e nao
+// misturar com o historico antigo do assunto (que o painel de Assuntos ja mostra).
+function treinoSessaoAssuntosHTML(){
+  const s=treinoSessao;
+  const porSub={};
+  s.respondidasSet.forEach(i=>{
+    const item=s.itens[i];
+    if(!item||!item.subId)return;
+    const g=porSub[item.subId]=porSub[item.subId]||{nome:item.subName||'',vezes:0,acertos:0};
+    g.vezes++;
+    if(item.userAnswer===item.correta)g.acertos++;
+  });
+  const lista=Object.values(porSub).sort((a,b)=>(a.acertos/a.vezes)-(b.acertos/b.vezes));
+  return`<div class="treino-lateral-bloco">
+    <div class="treino-lateral-titulo">Assuntos desta sessão</div>
+    ${lista.length?lista.map(g=>{
+      const pct=Math.round(g.acertos/g.vezes*100);
+      return`<div class="treino-lateral-assunto">
+        <span class="treino-lateral-assunto-nome" title="${escapeHtml(g.nome)}">${escapeHtml(g.nome)}</span>
+        <span class="treino-lateral-assunto-barra"><span style="width:${pct}%;background:${pct<50?'var(--red-t)':(pct<70?'var(--orange-t)':'var(--accent2)')}"></span></span>
+        <span class="treino-lateral-assunto-pct">${g.acertos}/${g.vezes}</span>
+      </div>`;}).join(''):`<div class="empty-mini">Responda a primeira pra ver aqui.</div>`}
+  </div>`;
+}
+function treinoSessaoLateralHTML(){
+  return`<div class="treino-sessao-lateral">
+    ${treinoSessaoProgressoHTML()}
+    ${treinoSessaoAssuntosHTML()}
+  </div>`;
+}
 function treinoSessaoHTML(){
   const s=treinoSessao;
   const liquida=s.certas-s.erradas;
-  return`<div class="section-card treino-sessao">
-    <div class="treino-topo">
-      <button class="btn btn-sm btn-ghost" onclick="treinoEncerrar()"><i class="fa fa-arrow-left"></i> Encerrar</button>
-      <div class="treino-topo-titulo"><span>treinando</span><b>${escapeHtml(s.titulo)} · questão ${s.idx+1} de ${s.itens.length}</b></div>
-      <div class="treino-placar-sessao">
-        <span>${s.respondidas} respondidas</span><span class="pill-ok">${s.certas} certas</span>
-        <span class="pill-bad">${s.erradas} erradas</span><span class="pill-neutro">líquida ${liquida>0?'+':''}${liquida}</span>
+  return`<div class="treino-sessao-wrap">
+    <div class="section-card treino-sessao">
+      <div class="treino-topo">
+        <button class="btn btn-sm btn-ghost" onclick="treinoEncerrar()"><i class="fa fa-arrow-left"></i> Encerrar</button>
+        <div class="treino-topo-titulo"><span>treinando</span><b>${escapeHtml(s.titulo)} · questão ${s.idx+1} de ${s.itens.length}</b></div>
+        <div class="treino-placar-sessao">
+          <span>${s.respondidas} respondidas</span><span class="pill-ok">${s.certas} certas</span>
+          <span class="pill-bad">${s.erradas} erradas</span><span class="pill-neutro">líquida ${liquida>0?'+':''}${liquida}</span>
+        </div>
+      </div>
+      ${treinoQuestaoHTML()}
+      <div class="treino-rodape">
+        <button class="btn btn-sm btn-ghost" onclick="treinoAnterior()" ${s.idx<=0?'disabled':''}><i class="fa fa-arrow-left"></i> Anterior</button>
+        <span class="treino-atalhos">${s.itens[s.idx].formato==='certoerrado'?'C / E':'A–E'} seleciona · Enter confirma/avança · B deixa em branco</span>
+        <button class="btn btn-sm btn-primary" onclick="treinoProxima()">${s.idx>=s.itens.length-1?'Encerrar':'Próxima'} <i class="fa fa-arrow-right"></i></button>
       </div>
     </div>
-    ${treinoQuestaoHTML()}
-    <div class="treino-rodape">
-      <button class="btn btn-sm btn-ghost" onclick="treinoAnterior()" ${s.idx<=0?'disabled':''}><i class="fa fa-arrow-left"></i> Anterior</button>
-      <span class="treino-atalhos">${s.itens[s.idx].formato==='certoerrado'?'C / E':'A–E'} seleciona · Enter confirma/avança · B deixa em branco</span>
-      <button class="btn btn-sm btn-primary" onclick="treinoProxima()">${s.idx>=s.itens.length-1?'Encerrar':'Próxima'} <i class="fa fa-arrow-right"></i></button>
-    </div>
+    ${treinoSessaoLateralHTML()}
   </div>`;
 }
 function treinoResumoHTML(){
@@ -12542,7 +12620,7 @@ function treinoPlacarHTML(){
 // juntos numa sessao so — as quatro coisas que ele pediu, nessa ordem.
 // Cheio por natureza (lista completa, nao um recorte de 4) — e o que tira o espaco vazio
 // da coluna sem precisar simular altura artificial.
-let treinoAssuntoUI={busca:'',materia:'',ordenar:'pior',filtro:'pendentes',selecionados:new Set()};
+let treinoAssuntoUI={busca:'',materia:'',chefao:'',ordenar:'pior',filtro:'pendentes',selecionados:new Set()};
 function treinoAssuntoStats(){
   // total: quantas questoes o assunto TEM no acervo, respondidas ou nao — sem isso a
   // linha so mostrava "1 resposta" e parecia que era tudo que existia daquele assunto,
@@ -12555,7 +12633,7 @@ function treinoAssuntoStats(){
   const porSub={};
   (db.acervo||[]).forEach(q=>{
     if((q.status||'ativa')!=='ativa'||!q.subId||!q.vezesRespondida)return;
-    const s=porSub[q.subId]=porSub[q.subId]||{subId:q.subId,subName:q.subName||'',kingdomName:q.kingdomName||'',vezes:0,acertos:0};
+    const s=porSub[q.subId]=porSub[q.subId]||{subId:q.subId,subName:q.subName||'',kingdomName:q.kingdomName||'',topicName:q.topicName||'',vezes:0,acertos:0};
     s.vezes+=q.vezesRespondida; s.acertos+=q.acertos||0;
   });
   return Object.values(porSub).map(s=>({...s,pct:Math.round(s.acertos/s.vezes*100),
@@ -12574,6 +12652,17 @@ function treinoAssuntoOpcoesMaterias(){
   treinoAssuntoStats().forEach(s=>{if(s.kingdomName)nomes.add(s.kingdomName);});
   return[...nomes].sort((a,b)=>a.localeCompare(b));
 }
+// Chefao = topico do edital, um nivel acima do assunto (miniboss) e abaixo da materia
+// (reino) — "treinar por chefao" junta todos os assuntos daquele topico de uma vez,
+// sem precisar marcar um por um. So lista chefoes da materia escolhida (se houver).
+function treinoAssuntoOpcoesChefoes(){
+  const nomes=new Set();
+  treinoAssuntoStats().forEach(s=>{
+    if(treinoAssuntoUI.materia&&s.kingdomName!==treinoAssuntoUI.materia)return;
+    if(s.topicName)nomes.add(s.topicName);
+  });
+  return[...nomes].sort((a,b)=>a.localeCompare(b));
+}
 const TREINO_ASSUNTO_ORDENS={
   pior:(a,b)=>a.pct-b.pct, melhor:(a,b)=>b.pct-a.pct,
   mais:(a,b)=>b.vezes-a.vezes, nome:(a,b)=>a.subName.localeCompare(b.subName)
@@ -12582,6 +12671,7 @@ function treinoAssuntoFiltrados(){
   const termo=normalizeForDedup(treinoAssuntoUI.busca||'');
   const lista=treinoAssuntoStats().filter(s=>{
     if(treinoAssuntoUI.materia&&s.kingdomName!==treinoAssuntoUI.materia)return false;
+    if(treinoAssuntoUI.chefao&&s.topicName!==treinoAssuntoUI.chefao)return false;
     if(termo&&!normalizeForDedup(s.subName).includes(termo))return false;
     // "Pendentes" e o padrao: assunto com 70%+ de acerto ja esta bom o bastante, nao
     // precisa aparecer aqui toda vez — so os fracos/medianos, pra lista servir de fato
@@ -12606,7 +12696,14 @@ function treinoAssuntoAtualizarLista(){
   if(acoes)acoes.outerHTML=treinoAssuntoAcoesHTML();
 }
 function treinoAssuntoBuscar(valor){treinoAssuntoUI.busca=valor;treinoAssuntoAtualizarLista();}
-function treinoAssuntoMudouMateria(valor){treinoAssuntoUI.materia=valor;treinoAssuntoAtualizarLista();}
+function treinoAssuntoMudouMateria(valor){
+  treinoAssuntoUI.materia=valor;
+  treinoAssuntoUI.chefao='';   // chefoes disponiveis mudam com a materia
+  const controles=document.getElementById('treino-assuntos-controles');
+  if(controles)controles.outerHTML=treinoAssuntoControlesHTML();
+  treinoAssuntoAtualizarLista();
+}
+function treinoAssuntoMudouChefao(valor){treinoAssuntoUI.chefao=valor;treinoAssuntoAtualizarLista();}
 function treinoAssuntoMudouOrdem(valor){treinoAssuntoUI.ordenar=valor;treinoAssuntoAtualizarLista();}
 function treinoAssuntoMudouFiltro(valor,el){
   treinoAssuntoUI.filtro=valor;
@@ -12681,20 +12778,18 @@ function treinoAssuntoBarraHTML(){
     <button class="btn btn-sm btn-primary" onclick="treinoAssuntoTreinarSelecionados()" ${n?'':'disabled'}>Treinar selecionados</button>
   </div>`;
 }
-function treinoAssuntosPainelHTML(){
+function treinoAssuntoControlesHTML(){
   const materias=treinoAssuntoOpcoesMaterias();
-  return`<div class="section-card">
-    <div class="sec-title" style="margin-bottom:2px">Assuntos</div>
-    <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:12px">os que ainda precisam de atenção — fixe os que importam, treine vários juntos</div>
-    <div class="filter-row" id="treino-assuntos-filtro" style="margin-bottom:10px">
-      <button class="chip${treinoAssuntoUI.filtro==='pendentes'?' active':''}" onclick="treinoAssuntoMudouFiltro('pendentes',this)">🎯 Pendentes</button>
-      <button class="chip${treinoAssuntoUI.filtro==='todos'?' active':''}" onclick="treinoAssuntoMudouFiltro('todos',this)">📋 Todos</button>
-    </div>
-    <div class="treino-assuntos-controles">
+  const chefoes=treinoAssuntoOpcoesChefoes();
+  return`<div class="treino-assuntos-controles" id="treino-assuntos-controles">
       <input class="inp" type="search" placeholder="Buscar assunto..." oninput="treinoAssuntoBuscar(this.value)" value="${escapeHtml(treinoAssuntoUI.busca)}" aria-label="Buscar assunto">
       <select class="inp" onchange="treinoAssuntoMudouMateria(this.value)" aria-label="Filtrar por matéria">
         <option value="">Toda matéria</option>
         ${materias.map(m=>`<option value="${escapeHtml(m)}"${treinoAssuntoUI.materia===m?' selected':''}>${escapeHtml(m)}</option>`).join('')}
+      </select>
+      <select class="inp" onchange="treinoAssuntoMudouChefao(this.value)" aria-label="Filtrar por chefão">
+        <option value="">Todo chefão</option>
+        ${chefoes.map(c=>`<option value="${escapeHtml(c)}"${treinoAssuntoUI.chefao===c?' selected':''}>${escapeHtml(c)}</option>`).join('')}
       </select>
       <select class="inp" onchange="treinoAssuntoMudouOrdem(this.value)" aria-label="Ordenar assuntos">
         <option value="pior"${treinoAssuntoUI.ordenar==='pior'?' selected':''}>Pior % primeiro</option>
@@ -12702,7 +12797,17 @@ function treinoAssuntosPainelHTML(){
         <option value="mais"${treinoAssuntoUI.ordenar==='mais'?' selected':''}>Mais respondidas</option>
         <option value="nome"${treinoAssuntoUI.ordenar==='nome'?' selected':''}>A-Z</option>
       </select>
+    </div>`;
+}
+function treinoAssuntosPainelHTML(){
+  return`<div class="section-card">
+    <div class="sec-title" style="margin-bottom:2px">Assuntos</div>
+    <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:12px">os que ainda precisam de atenção — fixe os que importam, treine vários juntos ou por chefão inteiro</div>
+    <div class="filter-row" id="treino-assuntos-filtro" style="margin-bottom:10px">
+      <button class="chip${treinoAssuntoUI.filtro==='pendentes'?' active':''}" onclick="treinoAssuntoMudouFiltro('pendentes',this)">🎯 Pendentes</button>
+      <button class="chip${treinoAssuntoUI.filtro==='todos'?' active':''}" onclick="treinoAssuntoMudouFiltro('todos',this)">📋 Todos</button>
     </div>
+    ${treinoAssuntoControlesHTML()}
     ${treinoAssuntoAcoesHTML()}
     <div class="treino-assuntos-lista" id="treino-assuntos-lista">${treinoAssuntoListaHTML()}</div>
     ${treinoAssuntoBarraHTML()}
@@ -16231,49 +16336,104 @@ function bancoImportarProcessar(){
   if(!ta)return;
   const subId=(document.getElementById('banco-importar-assunto')||{}).value;
   const sub=subId&&simFindSub(subId);
-  if(!sub){toast('⚠️ Escolha o assunto que estas questões pertencem.','var(--red)');return;}
   const bruto=(ta.value||'').trim();
   if(!bruto){toast('⚠️ Cole o JSON primeiro.','var(--red)');return;}
   let arr=null;
   try{arr=extractAIJson(bruto);}catch(e){arr=simColarResgatar(bruto);}
   if(!Array.isArray(arr)){toast('❌ Não achei uma lista de questões nesse texto. Cole um array JSON, do [ até o ].','var(--red)');return;}
-  let kingdomId='',topicName='';
-  db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>{if((t.subtopics||[]).some(s=>s.id===subId)){kingdomId=k.id;topicName=t.name;}}));
-  const kingdom=db.kingdoms.find(k=>k.id===kingdomId);
-  let novas=0,fundidas=0,descartadas=0;
+  let kingdomId='',topicName='',kingdom=null;
+  if(sub){
+    db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>{if((t.subtopics||[]).some(s=>s.id===subId)){kingdomId=k.id;topicName=t.name;}}));
+    kingdom=db.kingdoms.find(k=>k.id===kingdomId);
+  }
+  // Sem assunto escolhido: o lote cobre varios assuntos do chefao (ou de va-
+  // rios chefoes) de uma vez, um JSON so — cada item traz o proprio "assunto"/
+  // "assuntoNome" (mesmo formato que a IA ja usa em Colar prova) e a gente acha
+  // o miniboss pelo nome, achado ao vivo: "preciso enviar o json com todos os
+  // assuntos do chefão, sem precisar escolher um, e ele direcionar pro assunto".
+  const ix=sub?null:simIndiceAssuntos();
+  const cacheNome={};
+  let novas=0,fundidas=0,descartadas=0,semAssunto=0;
   arr.forEach(item=>{
     if(!item||typeof item!=='object'){descartadas++;return;}
     const fmt=(item.alternativas&&Array.isArray(item.alternativas)&&item.alternativas.length>2)?'multipla':'certoerrado';
     const norm=simNormalizaQuestao(item,fmt);
     if(!norm){descartadas++;return;}
-    Object.assign(norm,{subId:sub.id,subName:sub.name,topicName,
-      kingdomId,kingdomName:kingdom?kingdom.name:'',kingdomIcon:kingdom?kingdom.icon:''});
+    let alvoSub,alvoKingdom,alvoTopicName;
+    if(sub){
+      alvoSub=sub; alvoKingdom=kingdom; alvoTopicName=topicName;
+    }else{
+      const nome=String(item.assuntoNome||(/^\d+$/.test(String(item.assunto))?'':item.assunto)||'').trim();
+      const c=nome&&(cacheNome[nome]!==undefined?cacheNome[nome]:(cacheNome[nome]=simCasarAssunto(nome,ix)));
+      if(!c){semAssunto++;return;}
+      alvoSub=c.sub; alvoKingdom=c.kingdom; alvoTopicName=c.topic.name;
+    }
+    Object.assign(norm,{subId:alvoSub.id,subName:alvoSub.name,topicName:alvoTopicName,
+      kingdomId:alvoKingdom.id,kingdomName:alvoKingdom.name,kingdomIcon:alvoKingdom.icon});
     const r=bancoAdicionarOuFundir(norm,'importada');
     if(r.novo)novas++; else if(r.mudou)fundidas++;
   });
-  if(!novas&&!fundidas){toast('❌ Nenhuma questão aproveitável nesse JSON.','var(--red)');return;}
+  if(!novas&&!fundidas){
+    toast(semAssunto&&!sub
+      ?'❌ Não consegui casar nenhum item com um assunto pelo nome. Escolha o assunto/chefão manualmente ou revise o "assuntoNome" do JSON.'
+      :'❌ Nenhuma questão aproveitável nesse JSON.','var(--red)');
+    return;
+  }
   acervoAparar(); acervoSalvar();
   ta.value=''; bancoImportando=false;
   renderBancoScreen();
-  toast(`📥 ${novas} questão(ões) nova(s)${fundidas?` · ${fundidas} já existiam e ganharam o que faltava`:''}${descartadas?` · ${descartadas} descartada(s) (gabarito não bate com as alternativas)`:''}.`,'var(--green)');
+  toast(`📥 ${novas} questão(ões) nova(s)${fundidas?` · ${fundidas} já existiam e ganharam o que faltava`:''}${descartadas?` · ${descartadas} descartada(s) (gabarito não bate com as alternativas)`:''}${semAssunto?` · ${semAssunto} sem assunto reconhecido pelo nome`:''}.`,'var(--green)');
 }
 // O bloco de busca+filtros+lista, plugado logo abaixo dos controles de montar. So os
 // quatro que ja funcionam sem o editor de questao (proximo passo): texto, formato, faixa
 // de acerto, nunca respondida. status/favorita/tags sobem junto com o editor.
-function bancoAssuntoSelectHTML(id,selecionado){
+// Chefao = topico do edital (reino > chefao > assunto). Com dezenas de assuntos numa
+// materia so, o select de assunto virava uma lista longa demais pra achar o certo —
+// escolher o chefao primeiro estreita a lista pro que interessa (achado ao vivo:
+// "aqui pra importar eu preciso escolher o chefão").
+function bancoAssuntoOpcoesChefoes(){
   const ix=simIndiceAssuntos();
+  const vistos=new Set();
+  const out=[];
+  ix.forEach(c=>{
+    const chave=c.kingdom.id+'|'+c.topic.id;
+    if(vistos.has(chave))return;
+    vistos.add(chave);
+    out.push({kingdomName:c.kingdom.name,topicId:c.topic.id,topicName:c.topic.name});
+  });
+  return out;
+}
+function bancoAssuntoOpcoesHTML(chefaoValor,selecionado){
+  const ix=simIndiceAssuntos();
+  const filtrado=chefaoValor?ix.filter(c=>c.topic.id===chefaoValor):ix;
   const porReino={};
-  ix.forEach(c=>{(porReino[c.kingdom.id]=porReino[c.kingdom.id]||{nome:c.kingdom.name,itens:[]}).itens.push(c);});
-  return`<select id="${id}" class="inp" style="width:auto">
-    <option value="">Escolha o assunto...</option>
+  filtrado.forEach(c=>{(porReino[c.kingdom.id]=porReino[c.kingdom.id]||{nome:c.kingdom.name,itens:[]}).itens.push(c);});
+  return`<option value="">Escolha o assunto...</option>
     ${Object.values(porReino).map(g=>`<optgroup label="${escapeHtml(g.nome)}">
       ${g.itens.map(c=>`<option value="${c.sub.id}"${selecionado===c.sub.id?' selected':''}>${escapeHtml(c.sub.name)}</option>`).join('')}
-    </optgroup>`).join('')}
+    </optgroup>`).join('')}`;
+}
+function bancoAssuntoMudouChefao(assuntoId,chefaoId){
+  const sel=document.getElementById(assuntoId);
+  const chefaoSel=document.getElementById(chefaoId);
+  if(sel&&chefaoSel)sel.innerHTML=bancoAssuntoOpcoesHTML(chefaoSel.value,'');
+}
+function bancoAssuntoSelectHTML(id,selecionado){
+  const chefaoId=id+'-chefao';
+  const chefoes=bancoAssuntoOpcoesChefoes();
+  let chefaoAtual='';
+  if(selecionado){
+    const achado=simIndiceAssuntos().find(c=>c.sub.id===selecionado);
+    if(achado)chefaoAtual=achado.topic.id;
+  }
+  return`<select id="${chefaoId}" class="inp" style="width:auto" onchange="bancoAssuntoMudouChefao('${id}','${chefaoId}')" aria-label="Filtrar por chefão">
+    <option value="">Todo chefão</option>
+    ${chefoes.map(c=>`<option value="${c.topicId}"${chefaoAtual===c.topicId?' selected':''}>${escapeHtml(c.kingdomName)} — ${escapeHtml(c.topicName)}</option>`).join('')}
+  </select>
+  <select id="${id}" class="inp" style="width:auto" aria-label="Escolher assunto">
+    ${bancoAssuntoOpcoesHTML(chefaoAtual,selecionado)}
   </select>`;
 }
-// So um select (agrupado por reino via optgroup) — nao precisa de um segundo select so
-// pro reino: kingdomId/topicName sao derivados do subId escolhido, do mesmo jeito que
-// bancoImportarProcessar ja faz.
 function bancoAssuntoLinhaHTML(id,selecionado){
   return`<div class="banco-edit-linha" style="margin-top:6px">
     <label style="font-size:10.5px;color:var(--muted);font-weight:700">Assunto:</label>
@@ -16291,6 +16451,7 @@ function bancoListaConteudoHTML(pool){
 function bancoImportarHTML(){
   return`<div class="banco-item banco-item-editando" id="banco-card-importar">
     ${bancoAssuntoLinhaHTML('banco-importar-assunto','')}
+    <div style="font-size:10.5px;color:var(--muted);margin-top:4px">Escolheu um assunto acima: todo o lote entra nele. Deixou em "Escolha o assunto...": cada item precisa trazer <code>assuntoNome</code> (ou <code>assunto</code> com o nome) — a gente acha o assunto certo pra cada questão pelo nome, sem travar tudo num só.</div>
     <textarea id="banco-importar-txt" class="inp" spellcheck="false"
       placeholder="Cole aqui o array JSON de questões (do [ até o ])..."
       style="width:100%;min-height:120px;font-size:11.5px;font-family:monospace;margin-top:6px"></textarea>
