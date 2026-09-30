@@ -140,6 +140,24 @@ async def main():
         assert r['total']==1
         print('   OK\n')
 
+        print('=== G) escolher o chefão estreita o select de assunto — achado ao vivo ===')
+        # "aqui pra importar eu preciso escolher o chefão" — com varios assuntos por
+        # materia, o select unico virava uma lista longa demais pra achar o certo.
+        r=await page.evaluate("""()=>{
+          bancoImportarAbrir();
+          const chefaoSel=document.getElementById('banco-importar-assunto-chefao');
+          const assuntoSel=document.getElementById('banco-importar-assunto');
+          const antes=[...assuntoSel.options].filter(o=>o.value).map(o=>o.value).sort();
+          const opt=[...chefaoSel.options].find(o=>o.textContent.includes('Urgencia'));
+          chefaoSel.value=opt.value;
+          chefaoSel.dispatchEvent(new Event('change'));
+          const depois=[...assuntoSel.options].filter(o=>o.value).map(o=>o.value).sort();
+          return {antes,depois};}""")
+        print('   %s'%r)
+        assert r['antes']==['sE1','sE2','sP1','sS1'], 'sem filtro, todos os assuntos de todas as materias'
+        assert r['depois']==['sE1','sE2'], 'com o chefao "Urgencia", so os assuntos dele'
+        print('   OK\n')
+
         print('erros de JS: %s'%(real_errors(errs) or 'nenhum'))
         assert not real_errors(errs)
         await b.close()

@@ -16287,20 +16287,53 @@ function bancoImportarProcessar(){
 // O bloco de busca+filtros+lista, plugado logo abaixo dos controles de montar. So os
 // quatro que ja funcionam sem o editor de questao (proximo passo): texto, formato, faixa
 // de acerto, nunca respondida. status/favorita/tags sobem junto com o editor.
-function bancoAssuntoSelectHTML(id,selecionado){
+// Chefao = topico do edital (reino > chefao > assunto). Com dezenas de assuntos numa
+// materia so, o select de assunto virava uma lista longa demais pra achar o certo —
+// escolher o chefao primeiro estreita a lista pro que interessa (achado ao vivo:
+// "aqui pra importar eu preciso escolher o chefão").
+function bancoAssuntoOpcoesChefoes(){
   const ix=simIndiceAssuntos();
+  const vistos=new Set();
+  const out=[];
+  ix.forEach(c=>{
+    const chave=c.kingdom.id+'|'+c.topic.id;
+    if(vistos.has(chave))return;
+    vistos.add(chave);
+    out.push({kingdomName:c.kingdom.name,topicId:c.topic.id,topicName:c.topic.name});
+  });
+  return out;
+}
+function bancoAssuntoOpcoesHTML(chefaoValor,selecionado){
+  const ix=simIndiceAssuntos();
+  const filtrado=chefaoValor?ix.filter(c=>c.topic.id===chefaoValor):ix;
   const porReino={};
-  ix.forEach(c=>{(porReino[c.kingdom.id]=porReino[c.kingdom.id]||{nome:c.kingdom.name,itens:[]}).itens.push(c);});
-  return`<select id="${id}" class="inp" style="width:auto">
-    <option value="">Escolha o assunto...</option>
+  filtrado.forEach(c=>{(porReino[c.kingdom.id]=porReino[c.kingdom.id]||{nome:c.kingdom.name,itens:[]}).itens.push(c);});
+  return`<option value="">Escolha o assunto...</option>
     ${Object.values(porReino).map(g=>`<optgroup label="${escapeHtml(g.nome)}">
       ${g.itens.map(c=>`<option value="${c.sub.id}"${selecionado===c.sub.id?' selected':''}>${escapeHtml(c.sub.name)}</option>`).join('')}
-    </optgroup>`).join('')}
+    </optgroup>`).join('')}`;
+}
+function bancoAssuntoMudouChefao(assuntoId,chefaoId){
+  const sel=document.getElementById(assuntoId);
+  const chefaoSel=document.getElementById(chefaoId);
+  if(sel&&chefaoSel)sel.innerHTML=bancoAssuntoOpcoesHTML(chefaoSel.value,'');
+}
+function bancoAssuntoSelectHTML(id,selecionado){
+  const chefaoId=id+'-chefao';
+  const chefoes=bancoAssuntoOpcoesChefoes();
+  let chefaoAtual='';
+  if(selecionado){
+    const achado=simIndiceAssuntos().find(c=>c.sub.id===selecionado);
+    if(achado)chefaoAtual=achado.topic.id;
+  }
+  return`<select id="${chefaoId}" class="inp" style="width:auto" onchange="bancoAssuntoMudouChefao('${id}','${chefaoId}')" aria-label="Filtrar por chefão">
+    <option value="">Todo chefão</option>
+    ${chefoes.map(c=>`<option value="${c.topicId}"${chefaoAtual===c.topicId?' selected':''}>${escapeHtml(c.kingdomName)} — ${escapeHtml(c.topicName)}</option>`).join('')}
+  </select>
+  <select id="${id}" class="inp" style="width:auto" aria-label="Escolher assunto">
+    ${bancoAssuntoOpcoesHTML(chefaoAtual,selecionado)}
   </select>`;
 }
-// So um select (agrupado por reino via optgroup) — nao precisa de um segundo select so
-// pro reino: kingdomId/topicName sao derivados do subId escolhido, do mesmo jeito que
-// bancoImportarProcessar ja faz.
 function bancoAssuntoLinhaHTML(id,selecionado){
   return`<div class="banco-edit-linha" style="margin-top:6px">
     <label style="font-size:10.5px;color:var(--muted);font-weight:700">Assunto:</label>
