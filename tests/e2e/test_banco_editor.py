@@ -158,6 +158,28 @@ async def main():
         assert r['depois']==['sE1','sE2'], 'com o chefao "Urgencia", so os assuntos dele'
         print('   OK\n')
 
+        print('=== H) lote com VARIOS assuntos, sem escolher nenhum — acha cada um pelo nome ===')
+        # "eu preciso enviar o json com todos os assuntos do chefão, sem precisar escolher
+        # um, e ele direcionar para o assunto" — cada item do JSON ja traz o proprio
+        # "assunto"/"assuntoNome" (mesmo formato usado em Colar prova).
+        r=await page.evaluate("""()=>{
+          db.provas=[];db.provasArquivo=[];db.acervo=[];
+          bancoImportarAbrir();
+          // Assunto fica em branco de proposito — "Escolha o assunto..."
+          const lote=[
+            {assunto:1,assuntoNome:'Choque septico',afirmacao:'Item sobre choque.',gabarito:'C',explicacao:'x'},
+            {assunto:2,assuntoNome:'Lei 8080',afirmacao:'Item sobre a lei.',gabarito:'E',explicacao:'x'},
+            {assunto:3,assuntoNome:'Crase',afirmacao:'Item sobre crase.',gabarito:'C',explicacao:'x'},
+            {assunto:9,assuntoNome:'Assunto que nao existe em lugar nenhum',afirmacao:'Nao deveria casar.',gabarito:'E'}
+          ];
+          document.getElementById('banco-importar-txt').value=JSON.stringify(lote);
+          bancoImportarProcessar();
+          return {total:db.acervo.length,
+                  subs:db.acervo.map(q=>q.subId).sort()};}""")
+        print('   %s'%r)
+        assert r['total']==3 and r['subs']==['sE1','sP1','sS1'], 'os 3 reconheciveis entram, o inventado fica de fora'
+        print('   OK\n')
+
         print('erros de JS: %s'%(real_errors(errs) or 'nenhum'))
         assert not real_errors(errs)
         await b.close()

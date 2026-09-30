@@ -16258,31 +16258,53 @@ function bancoImportarProcessar(){
   if(!ta)return;
   const subId=(document.getElementById('banco-importar-assunto')||{}).value;
   const sub=subId&&simFindSub(subId);
-  if(!sub){toast('⚠️ Escolha o assunto que estas questões pertencem.','var(--red)');return;}
   const bruto=(ta.value||'').trim();
   if(!bruto){toast('⚠️ Cole o JSON primeiro.','var(--red)');return;}
   let arr=null;
   try{arr=extractAIJson(bruto);}catch(e){arr=simColarResgatar(bruto);}
   if(!Array.isArray(arr)){toast('❌ Não achei uma lista de questões nesse texto. Cole um array JSON, do [ até o ].','var(--red)');return;}
-  let kingdomId='',topicName='';
-  db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>{if((t.subtopics||[]).some(s=>s.id===subId)){kingdomId=k.id;topicName=t.name;}}));
-  const kingdom=db.kingdoms.find(k=>k.id===kingdomId);
-  let novas=0,fundidas=0,descartadas=0;
+  let kingdomId='',topicName='',kingdom=null;
+  if(sub){
+    db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>{if((t.subtopics||[]).some(s=>s.id===subId)){kingdomId=k.id;topicName=t.name;}}));
+    kingdom=db.kingdoms.find(k=>k.id===kingdomId);
+  }
+  // Sem assunto escolhido: o lote cobre varios assuntos do chefao (ou de va-
+  // rios chefoes) de uma vez, um JSON so — cada item traz o proprio "assunto"/
+  // "assuntoNome" (mesmo formato que a IA ja usa em Colar prova) e a gente acha
+  // o miniboss pelo nome, achado ao vivo: "preciso enviar o json com todos os
+  // assuntos do chefão, sem precisar escolher um, e ele direcionar pro assunto".
+  const ix=sub?null:simIndiceAssuntos();
+  const cacheNome={};
+  let novas=0,fundidas=0,descartadas=0,semAssunto=0;
   arr.forEach(item=>{
     if(!item||typeof item!=='object'){descartadas++;return;}
     const fmt=(item.alternativas&&Array.isArray(item.alternativas)&&item.alternativas.length>2)?'multipla':'certoerrado';
     const norm=simNormalizaQuestao(item,fmt);
     if(!norm){descartadas++;return;}
-    Object.assign(norm,{subId:sub.id,subName:sub.name,topicName,
-      kingdomId,kingdomName:kingdom?kingdom.name:'',kingdomIcon:kingdom?kingdom.icon:''});
+    let alvoSub,alvoKingdom,alvoTopicName;
+    if(sub){
+      alvoSub=sub; alvoKingdom=kingdom; alvoTopicName=topicName;
+    }else{
+      const nome=String(item.assuntoNome||(/^\d+$/.test(String(item.assunto))?'':item.assunto)||'').trim();
+      const c=nome&&(cacheNome[nome]!==undefined?cacheNome[nome]:(cacheNome[nome]=simCasarAssunto(nome,ix)));
+      if(!c){semAssunto++;return;}
+      alvoSub=c.sub; alvoKingdom=c.kingdom; alvoTopicName=c.topic.name;
+    }
+    Object.assign(norm,{subId:alvoSub.id,subName:alvoSub.name,topicName:alvoTopicName,
+      kingdomId:alvoKingdom.id,kingdomName:alvoKingdom.name,kingdomIcon:alvoKingdom.icon});
     const r=bancoAdicionarOuFundir(norm,'importada');
     if(r.novo)novas++; else if(r.mudou)fundidas++;
   });
-  if(!novas&&!fundidas){toast('❌ Nenhuma questão aproveitável nesse JSON.','var(--red)');return;}
+  if(!novas&&!fundidas){
+    toast(semAssunto&&!sub
+      ?'❌ Não consegui casar nenhum item com um assunto pelo nome. Escolha o assunto/chefão manualmente ou revise o "assuntoNome" do JSON.'
+      :'❌ Nenhuma questão aproveitável nesse JSON.','var(--red)');
+    return;
+  }
   acervoAparar(); acervoSalvar();
   ta.value=''; bancoImportando=false;
   renderBancoScreen();
-  toast(`📥 ${novas} questão(ões) nova(s)${fundidas?` · ${fundidas} já existiam e ganharam o que faltava`:''}${descartadas?` · ${descartadas} descartada(s) (gabarito não bate com as alternativas)`:''}.`,'var(--green)');
+  toast(`📥 ${novas} questão(ões) nova(s)${fundidas?` · ${fundidas} já existiam e ganharam o que faltava`:''}${descartadas?` · ${descartadas} descartada(s) (gabarito não bate com as alternativas)`:''}${semAssunto?` · ${semAssunto} sem assunto reconhecido pelo nome`:''}.`,'var(--green)');
 }
 // O bloco de busca+filtros+lista, plugado logo abaixo dos controles de montar. So os
 // quatro que ja funcionam sem o editor de questao (proximo passo): texto, formato, faixa
@@ -16351,6 +16373,7 @@ function bancoListaConteudoHTML(pool){
 function bancoImportarHTML(){
   return`<div class="banco-item banco-item-editando" id="banco-card-importar">
     ${bancoAssuntoLinhaHTML('banco-importar-assunto','')}
+    <div style="font-size:10.5px;color:var(--muted);margin-top:4px">Escolheu um assunto acima: todo o lote entra nele. Deixou em "Escolha o assunto...": cada item precisa trazer <code>assuntoNome</code> (ou <code>assunto</code> com o nome) — a gente acha o assunto certo pra cada questão pelo nome, sem travar tudo num só.</div>
     <textarea id="banco-importar-txt" class="inp" spellcheck="false"
       placeholder="Cole aqui o array JSON de questões (do [ até o ])..."
       style="width:100%;min-height:120px;font-size:11.5px;font-family:monospace;margin-top:6px"></textarea>
