@@ -269,7 +269,7 @@ async def main():
         # assuntos" — ver todos, buscar, escolher varios, fixar os que importam.
         r=await page.evaluate("""()=>{
           db.acervo=[];db.provas=[];db.provasArquivo=[];db.treinoAssuntosFixados=[];
-          treinoAssuntoUI={busca:'',materia:'',ordenar:'pior',selecionados:new Set()};
+          treinoAssuntoUI={busca:'',materia:'',ordenar:'pior',filtro:'todos',selecionados:new Set()};
           const feito=(subId,subName,n,pct)=>{
             QS(subId,subName,n,'X').forEach((q,i)=>{
               const acertou=i<Math.round(n*pct);
@@ -313,6 +313,47 @@ async def main():
         print('   %s'%r)
         assert r['itens']==20 and r['doisAssuntos']==2, 'treinar selecionados tinha que juntar os DOIS assuntos numa sessao so'
         assert r['selecaoLimpou']
+        print('   OK\n')
+
+        print('=== O) filtro "Pendentes" (padrão): some quem já domina, fixado sempre aparece, "marcar todos" so pega quem ta na tela ===')
+        # Achado ao vivo: com o painel mostrando TUDO (passo N) e A-Z, virava uma lista de
+        # assuntos 100% dominados sem servir pra decidir o que estudar — "isso aqui nao e
+        # pra ser assuntos pendentes?" Agora Pendentes (<70%) e o padrao; fixado ignora o
+        # limite (fixar e "sempre acompanhar", nao "esta fraco agora").
+        r=await page.evaluate("""()=>{
+          treinoSessao=null;treinoResumo=null;   // sessao O)-anterior (N treinou selecionados) ficou aberta
+          db.acervo=[];db.provas=[];db.provasArquivo=[];db.treinoAssuntosFixados=[];
+          treinoAssuntoUI={busca:'',materia:'',ordenar:'pior',filtro:'pendentes',selecionados:new Set()};
+          const feito=(subId,subName,n,pct)=>{
+            QS(subId,subName,n,'X').forEach((q,i)=>{
+              const acertou=i<Math.round(n*pct);
+              db.acervo.push({...q,_chaveForte:acervoChave2(q),tags:[],favorita:false,status:'ativa',
+                vezesRespondida:1,acertos:acertou?1:0,erros:acertou?0:1,ultimaVezEm:new Date().toISOString(),
+                ultimoResultado:acertou?'C':'X',dificuldadeAferida:acertou?'facil':'dificil',
+                certezaAcertos:0,certezaErros:0,duvidaAcertos:0,duvidaErros:0,chuteAcertos:0,chuteErros:0,
+                criacao:new Date().toISOString(),origem:'ia'});
+            });
+          };
+          feito('sub-mt1','Choque Séptico',10,0.3);   // pendente (30%)
+          feito('sub-mt2','Trauma',10,0.9);            // dominado (90%)
+          renderSimGeralScreen();   // painel precisa estar no DOM pro passo seguinte (checkbox)
+          const soPendentes=treinoAssuntoFiltrados().map(s=>s.subId);
+          treinoAssuntoToggleFixado('sub-mt2');        // fixa o dominado
+          const comFixado=treinoAssuntoFiltrados().map(s=>s.subId);
+          return {soPendentes,comFixado};}""")
+        print('   %s'%r)
+        assert r['soPendentes']==['sub-mt1'], 'por padrao, so quem ta abaixo de 70%% deveria aparecer'
+        assert set(r['comFixado'])=={'sub-mt1','sub-mt2'}, 'fixado tem que aparecer mesmo dominado'
+        print('   OK\n')
+
+        r=await page.evaluate("""()=>{
+          treinoAssuntoUI.materia='';treinoAssuntoUI.busca='';treinoAssuntoAtualizarLista();
+          const cb=document.querySelector('#treino-assuntos-acoes input[type=checkbox]');
+          cb.click();   // marcar todos os visiveis (sub-mt1 + sub-mt2 fixado — so os dois)
+          const marcados=[...treinoAssuntoUI.selecionados];
+          return {marcados};}""")
+        print('   %s'%r)
+        assert set(r['marcados'])=={'sub-mt1','sub-mt2'}, '"marcar todos" tinha que pegar so quem tava na tela, nem mais nem menos'
         print('   OK\n')
 
         graves=real_errors(errs)
