@@ -356,6 +356,27 @@ async def main():
         assert set(r['marcados'])=={'sub-mt1','sub-mt2'}, '"marcar todos" tinha que pegar so quem tava na tela, nem mais nem menos'
         print('   OK\n')
 
+        print('=== P) a linha do assunto mostra o TOTAL de questões, nao só as respondidas ===')
+        # "você percebeu que não tem todas as questões daquele assunto? só tem as que eu
+        # respondi eu acho" — a linha dizia só "1 resposta", escondendo que o assunto tem
+        # 15 questões no acervo e 14 nunca foram vistas.
+        r=await page.evaluate("""()=>{
+          db.acervo=[];db.provas=[];db.provasArquivo=[];db.treinoAssuntosFixados=[];
+          QS('sub-mt1','Choque Séptico',15,'X').forEach((q,i)=>{
+            const base={...q,_chaveForte:acervoChave2(q),tags:[],favorita:false,status:'ativa',
+              criacao:new Date().toISOString(),origem:'ia'};
+            db.acervo.push(i===0
+              ?{...base,vezesRespondida:1,acertos:1,erros:0,ultimaVezEm:new Date().toISOString(),
+                 ultimoResultado:'C',dificuldadeAferida:'facil',certezaAcertos:0,certezaErros:0,
+                 duvidaAcertos:0,duvidaErros:0,chuteAcertos:0,chuteErros:0}
+              :base);   // as outras 14 nunca foram respondidas
+          });
+          const s=treinoAssuntoStats()[0];
+          return {vezes:s.vezes,total:s.total};}""")
+        print('   %s'%r)
+        assert r['vezes']==1 and r['total']==15, 'tem que mostrar 1 respondida de 15 no total, nao só "1 resposta"'
+        print('   OK\n')
+
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))
         assert not graves, graves
