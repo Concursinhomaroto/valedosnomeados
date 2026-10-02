@@ -16544,6 +16544,11 @@ function bancoMoverAssuntoHTML(){
   return`<div class="banco-item banco-item-editando" id="banco-mover-assunto">
     <div class="sec-title" style="margin-bottom:2px;font-size:13px">🔀 Mover questões de um assunto pra outro</div>
     <div style="font-size:10.5px;color:var(--muted);margin-bottom:10px">Pra quando um lote entrou no assunto errado (ex.: casamento automático por nome pegou um assunto parecido por engano). Escolhe de onde e pra onde, confere a contagem antes de confirmar.</div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:10.5px;color:var(--muted);font-weight:700;display:block;margin-bottom:4px">Não sabe o nome de onde elas pararam? Cole um trecho de uma das questões:</label>
+      <input id="banco-mover-busca" class="inp" type="search" style="width:100%" placeholder="Ex.: um pedaço do enunciado de uma das questões presas..." oninput="bancoMoverAssuntoBuscarAtualizar(this.value)">
+      <div id="banco-mover-busca-resultado"></div>
+    </div>
     <div class="banco-edit-linha">
       <label style="font-size:10.5px;color:var(--muted);font-weight:700">De:</label>
       ${bancoAssuntoSelectHTML('banco-mover-de','')}
@@ -16557,6 +16562,31 @@ function bancoMoverAssuntoHTML(){
       <button class="btn btn-sm btn-ghost" onclick="bancoMoverAssuntoFechar()">Fechar</button>
     </div>
   </div>`;
+}
+// Achado ao vivo: o usuario nao tinha como saber em QUAL assunto a importacao tinha
+// errado — o nome pretendido nunca chegou a existir, so o enunciado da questao e
+// reconhecivel. Busca por trecho do enunciado e mostra o assunto ATUAL de cada achado,
+// com um botao que ja preenche o "De:" sozinho.
+function bancoMoverAssuntoBuscarAtualizar(termo){
+  const el=document.getElementById('banco-mover-busca-resultado');
+  if(!el)return;
+  const t=normalizeForDedup(termo||'');
+  if(t.length<4){el.innerHTML='';return;}
+  const achadas=(db.acervo||[]).filter(q=>normalizeForDedup(q.questao||'').includes(t)).slice(0,6);
+  if(!achadas.length){el.innerHTML='<div class="empty-mini">Nenhuma questão encontrada com esse trecho.</div>';return;}
+  const vistos=new Set();
+  el.innerHTML=achadas.map(q=>{
+    const rep=vistos.has(q.subId);
+    vistos.add(q.subId);
+    return`<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:10.5px">
+      <div style="color:var(--muted);margin-bottom:3px">${escapeHtml((q.questao||'').slice(0,100))}${(q.questao||'').length>100?'…':''}</div>
+      <button class="btn btn-xs ${rep?'btn-ghost':'btn-primary'}" onclick="bancoMoverAssuntoUsarDe('${q.subId}')"><i class="fa fa-arrow-left"></i> está em "${escapeHtml(q.subName||'—')}" — usar como De:</button>
+    </div>`;
+  }).join('');
+}
+function bancoMoverAssuntoUsarDe(subId){
+  const sel=document.getElementById('banco-mover-de');
+  if(sel)sel.value=subId;
 }
 function bancoMoverAssuntoExecutar(){
   const deId=(document.getElementById('banco-mover-de')||{}).value;
