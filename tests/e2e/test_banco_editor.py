@@ -208,6 +208,28 @@ async def main():
         assert r['total']==5 and r['pendentes']==0, 'nome ja resolvido uma vez tem que casar sozinho da proxima'
         print('   OK\n')
 
+        print('=== J) "Mover assunto" corrige em massa um lote que caiu no assunto errado ===')
+        # "coloquei os assuntos de legislação e ele não levou todos" — quando um lote
+        # acaba no assunto errado (ex.: casamento por nome pegou um parecido por
+        # engano), a correção não pode exigir editar questão por questão.
+        r=await page.evaluate("""()=>{
+          db.acervo=[];db.provas=[];db.provasArquivo=[];
+          QS('kEnf','Enfermagem','💉','sE1','Choque septico',4,'X').forEach(q=>{
+            db.acervo.push({...q,_chaveForte:acervoChave2(q),tags:[],favorita:false,status:'ativa',
+              vezesRespondida:0,acertos:0,criacao:new Date().toISOString(),origem:'ia'});
+          });
+          showScreen('banco');
+          bancoMoverAssuntoAbrir();
+          document.getElementById('banco-mover-de').value='sE1';
+          document.getElementById('banco-mover-para').value='sE2';
+          bancoMoverAssuntoExecutar();
+          return {
+            deRestante: db.acervo.filter(q=>q.subId==='sE1').length,
+            paraAgora: db.acervo.filter(q=>q.subId==='sE2').map(q=>q.subName)};}""")
+        print('   %s'%r)
+        assert r['deRestante']==0 and len(r['paraAgora'])==4 and all(n=='PCR' for n in r['paraAgora'])
+        print('   OK\n')
+
         print('erros de JS: %s'%(real_errors(errs) or 'nenhum'))
         assert not real_errors(errs)
         await b.close()

@@ -11121,7 +11121,17 @@ function simCasarAssunto(nome,ix){
   if(!n)return null;
   let achado=ix.find(c=>c.norm===n);
   if(achado)return achado;
-  const contidos=ix.filter(c=>c.norm&&(n.includes(c.norm)||c.norm.includes(n)));
+  // Contencao (um nome e substring do outro) so conta quando os dois tem tamanho
+  // parecido — achado ao vivo: um assunto curto e generico ja cadastrado ("Texto")
+  // "engolia" qualquer assunto novo e bem mais longo que so citasse a mesma palavra de
+  // passagem ("Compreensão e interpretação de textos (fidelidade ao texto)"), sumindo
+  // calado pra dentro do assunto errado em vez de aparecer com nome proprio ou virar
+  // pendencia pra confirmar.
+  const contidos=ix.filter(c=>{
+    if(!c.norm||!(n.includes(c.norm)||c.norm.includes(n)))return false;
+    const maior=Math.max(n.length,c.norm.length),menor=Math.min(n.length,c.norm.length);
+    return menor/maior>=0.45;
+  });
   if(contidos.length===1)return contidos[0];
   if(contidos.length>1){
     contidos.sort((a,b)=>b.norm.length-a.norm.length);
@@ -11132,11 +11142,17 @@ function simCasarAssunto(nome,ix){
   let melhor=null,melhorV=0,segundo=0;
   ix.forEach(c=>{
     if(!c.toks.length)return;
-    const v=c.toks.filter(t=>alvo.has(t)).length/c.toks.length;
+    const inter=c.toks.filter(t=>alvo.has(t)).length;
+    if(!inter)return;
+    // Dice (2×intersecao / soma dos dois tamanhos), nao so "quanto do candidato bate" —
+    // essa conta sozinha deixava um candidato de uma palavra so (ex: "Texto") vencer
+    // por coincidencia contra qualquer assunto novo e bem mais longo que so citasse a
+    // mesma palavra de passagem, mesmo sem aquele ser de fato o assunto da questao.
+    const v=2*inter/(c.toks.length+alvo.size);
     if(v>melhorV){segundo=melhorV;melhorV=v;melhor=c;}
     else if(v>segundo)segundo=v;
   });
-  return (melhorV>=0.6&&melhorV>=segundo*1.3)?melhor:null;
+  return (melhorV>=0.37&&melhorV>=segundo*1.3)?melhor:null;
 }
 // Lote acumulado entre colagens: 120 itens em JSON passam de 40 mil caracteres e o chat
 // corta. Colar em partes e somar e a diferenca entre importar a prova e perde-la.
@@ -16061,6 +16077,7 @@ function bancoFiltroContaHTML(pool){
 let bancoEditando=new Set();      // chaves fortes em edicao
 let bancoCriando=false;
 let bancoImportando=false;
+let bancoMovendoAssunto=false;
 function bancoItemPorChaveForte(cf){
   return (db.acervo||[]).find(q=>q._chaveForte===cf)||null;
 }
@@ -16513,7 +16530,55 @@ function bancoListaConteudoHTML(pool){
   return(bancoCriando?bancoEditorHTML(null,'criar')+bancoAssuntoLinhaHTML('banco-novo-assunto',''):'')
         +(bancoImportando?bancoImportarHTML():'')
         +bancoImportarPendentesHTML()
+        +(bancoMovendoAssunto?bancoMoverAssuntoHTML():'')
         +(bancoListaAberta?bancoListaItensHTML(pool):'');
+}
+// Corrige em massa um lote que entrou no assunto errado (ex.: casamento por nome
+// pegou um assunto genérico parecido por engano — achado ao vivo: "coloquei os
+// assuntos de legislação e ele não levou todos", itens foram parar silenciosamente
+// dentro de um assunto curto e genérico já cadastrado). Sem isto, a única saída era
+// editar questão por questão.
+function bancoMoverAssuntoAbrir(){bancoMovendoAssunto=true;bancoListaAberta=true;renderBancoScreen();}
+function bancoMoverAssuntoFechar(){bancoMovendoAssunto=false;renderBancoScreen();}
+function bancoMoverAssuntoHTML(){
+  return`<div class="banco-item banco-item-editando" id="banco-mover-assunto">
+    <div class="sec-title" style="margin-bottom:2px;font-size:13px">🔀 Mover questões de um assunto pra outro</div>
+    <div style="font-size:10.5px;color:var(--muted);margin-bottom:10px">Pra quando um lote entrou no assunto errado (ex.: casamento automático por nome pegou um assunto parecido por engano). Escolhe de onde e pra onde, confere a contagem antes de confirmar.</div>
+    <div class="banco-edit-linha">
+      <label style="font-size:10.5px;color:var(--muted);font-weight:700">De:</label>
+      ${bancoAssuntoSelectHTML('banco-mover-de','')}
+    </div>
+    <div class="banco-edit-linha" style="margin-top:6px">
+      <label style="font-size:10.5px;color:var(--muted);font-weight:700">Para:</label>
+      ${bancoAssuntoSelectHTML('banco-mover-para','')}
+    </div>
+    <div class="banco-edit-linha" style="margin-top:10px">
+      <button class="btn btn-sm btn-primary" onclick="bancoMoverAssuntoExecutar()"><i class="fa fa-right-left"></i> Mover</button>
+      <button class="btn btn-sm btn-ghost" onclick="bancoMoverAssuntoFechar()">Fechar</button>
+    </div>
+  </div>`;
+}
+function bancoMoverAssuntoExecutar(){
+  const deId=(document.getElementById('banco-mover-de')||{}).value;
+  const paraId=(document.getElementById('banco-mover-para')||{}).value;
+  if(!deId||!paraId){toast('⚠️ Escolha os dois assuntos.','var(--red)');return;}
+  if(deId===paraId){toast('⚠️ Os dois assuntos são o mesmo.','var(--red)');return;}
+  const de=simFindSub(deId),para=simFindSub(paraId);
+  if(!de||!para)return;
+  const itens=(db.acervo||[]).filter(q=>q.subId===deId);
+  if(!itens.length){toast(`Nenhuma questão em "${de.name}" agora.`,'var(--muted)');return;}
+  if(!confirm(`Mover ${itens.length} questão(ões) de "${de.name}" pra "${para.name}"? Vale pra sempre — as estatísticas por assunto de ambos mudam.`))return;
+  let kingdomId='',topicName='';
+  db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>{if((t.subtopics||[]).some(s=>s.id===paraId)){kingdomId=k.id;topicName=t.name;}}));
+  const kingdom=db.kingdoms.find(k=>k.id===kingdomId);
+  itens.forEach(q=>{
+    Object.assign(q,{subId:para.id,subName:para.name,topicName,
+      kingdomId,kingdomName:kingdom?kingdom.name:'',kingdomIcon:kingdom?kingdom.icon:''});
+  });
+  acervoSalvar();
+  bancoMovendoAssunto=false;
+  renderBancoScreen();
+  toast(`🔀 ${itens.length} questão(ões) movida(s) de "${de.name}" pra "${para.name}".`,'var(--green)');
 }
 function bancoImportarHTML(){
   return`<div class="banco-item banco-item-editando" id="banco-card-importar">
@@ -16640,6 +16705,7 @@ function bancoFiltrosHTML(){
       <span style="flex:1"></span>
       <button class="btn btn-xs btn-ghost" onclick="bancoCriarAbrir()"><i class="fa fa-plus"></i> Nova questão</button>
       <button class="btn btn-xs btn-ghost" onclick="bancoImportarAbrir()"><i class="fa fa-file-import"></i> Importar em lote</button>
+      <button class="btn btn-xs btn-ghost" onclick="bancoMoverAssuntoAbrir()"><i class="fa fa-right-left"></i> Mover assunto</button>
     </div>
     <div id="banco-filtro-lista" class="banco-lista">
       ${bancoListaConteudoHTML(pool)}
