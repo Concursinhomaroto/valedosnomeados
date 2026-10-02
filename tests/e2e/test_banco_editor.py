@@ -230,6 +230,44 @@ async def main():
         assert r['deRestante']==0 and len(r['paraAgora'])==4 and all(n=='PCR' for n in r['paraAgora'])
         print('   OK\n')
 
+        print('=== K) "Mover assunto" acha pelo trecho da questão quem não sabe o nome de onde parou ===')
+        # "na verdade aparece, só não tem assunto / ou questão pendente" — o painel
+        # aparece, mas o usuário não sabia QUAL assunto já existente engoliu as questões
+        # presas (o nome pretendido nunca chegou a existir). Busca por um pedaço do
+        # enunciado tem que achar a questão e mostrar o assunto ATUAL dela.
+        r=await page.evaluate("""()=>{
+          db.acervo=[];db.provas=[];db.provasArquivo=[];
+          QS('kEnf','Enfermagem','💉','sE1','Choque septico',2,'K').forEach(q=>{
+            db.acervo.push({...q,_chaveForte:acervoChave2(q),tags:[],favorita:false,status:'ativa',
+              vezesRespondida:0,acertos:0,criacao:new Date().toISOString(),origem:'ia'});
+          });
+          db.acervo[0].subId='sE2';db.acervo[0].subName='PCR';
+          showScreen('banco');
+          bancoMoverAssuntoAbrir();
+          return {curto:(()=>{bancoMoverAssuntoBuscarAtualizar('cho');
+            return document.getElementById('banco-mover-busca-resultado').innerHTML;})(),
+            vazio:(()=>{bancoMoverAssuntoBuscarAtualizar('zzz nao existe isso');
+              return document.getElementById('banco-mover-busca-resultado').innerText;})()};}""")
+        print('   termo curto (<4 chars) não busca: %s'%('' if not r['curto'] else 'ACHOU HTML (errado)'))
+        print('   termo sem achado: %s'%r['vazio'])
+        assert r['curto']=='', 'termo com menos de 4 chars nao deveria disparar busca'
+        assert 'Nenhuma' in r['vazio']
+        print('   OK\n')
+
+        r=await page.evaluate("""()=>{
+          const q0=db.acervo.find(x=>x.subId==='sE2');
+          const trecho=q0.questao.slice(5,25);
+          bancoMoverAssuntoBuscarAtualizar(trecho);
+          const html=document.getElementById('banco-mover-busca-resultado').innerHTML;
+          const achouSubName=html.indexOf('PCR')>=0;
+          const m=html.match(/bancoMoverAssuntoUsarDe\\('([^']+)'\\)/);
+          if(m)bancoMoverAssuntoUsarDe(m[1]);
+          return {achouSubName,deAgora:document.getElementById('banco-mover-de').value};}""")
+        print('   achou "PCR" (assunto atual real) no resultado: %s · clique preencheu De: %s'
+              %(r['achouSubName'],r['deAgora']))
+        assert r['achouSubName'] and r['deAgora']=='sE2'
+        print('   OK\n')
+
         print('erros de JS: %s'%(real_errors(errs) or 'nenhum'))
         assert not real_errors(errs)
         await b.close()
