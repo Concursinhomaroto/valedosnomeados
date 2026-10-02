@@ -17,7 +17,7 @@ def seed():
         'k1':[{'id':'t1','name':'Legislacao','icon':'⚔️','subtopics':subs(
                  ['Lei 7.498/1986','Codigo de Etica'],'e')}],
         'k2':[{'id':'t2','name':'Gramatica','icon':'⚔️','subtopics':subs(
-                 ['Regencia','Crase','Pontuacao','Concordancia'],'p')}]}})
+                 ['Regencia','Crase','Pontuacao','Concordancia','Texto'],'p')}]}})
 
 def item(nome,txt):
     return {"assunto":999,"assuntoNome":nome,"textoApoio":"","afirmacao":txt,
@@ -121,6 +121,21 @@ async def main():
           json.dumps([item('Assunto fantasma','Item orfao.')],ensure_ascii=False))
         print('   lote %s · pendencias %s (cai no seletor, nao quebra)'%(r['n'],r['pend']))
         assert r['n']==1 and r['pend']==1
+        print('   OK\n')
+
+        print('=== G) assunto curto e genérico não "engole" um assunto novo bem mais longo ===')
+        # Achado ao vivo: "coloquei os assuntos de legislação e ele não levou todos" — um
+        # assunto curto ja cadastrado ("Texto") casava, por conter a mesma palavra de
+        # passagem, com qualquer assunto novo e bem mais longo e especifico que so
+        # citasse "texto" de passagem — a questão ia parar silenciosamente dentro do
+        # assunto errado, sem aparecer com nome próprio nem virar pendência.
+        r=await page.evaluate("""()=>{
+          const ix=simIndiceAssuntos();
+          const nome='Compreensão e interpretação de textos (fidelidade ao texto)';
+          const c=simCasarAssunto(nome,ix);
+          return {casou:c?c.sub.name:null};}""")
+        print('   %s'%r)
+        assert r['casou']is None, 'assunto generico curto nao pode vencer por coincidencia contra um nome bem mais longo e especifico'
         print('   OK\n')
 
         graves=[e for e in errs if 'selectedPixTier' not in e]
