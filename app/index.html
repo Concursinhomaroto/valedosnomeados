@@ -2803,6 +2803,102 @@ body.missao-ligada #dash-overdue-revs{display:none;}
   .dash-fold.dash-mais-grid{grid-template-columns:minmax(0,1fr);}
 }
 
+/* ===== PAINEL (rodada 2): densidade, sem vão vazio =====
+   "Hoje" e Diagnóstico com a mesma altura; a Agenda sai da coluna e vira uma faixa de
+   7 colunas na largura inteira; "Hoje" ganha duas colunas por dentro. */
+.dash-fold.dash-v2{grid-template-areas:"faixa faixa" "hoje diag" "agenda agenda";align-items:stretch;}
+.dash-v2 .dash-faixa{align-self:start;}
+.dash-diag{position:static;}
+.dash-col-hoje>.dash-hoje{flex:1 1 auto;}
+.dash-hoje{padding:14px 16px;container-type:inline-size;}
+.dash-hoje>.dash-head{flex-wrap:wrap;gap:4px 12px;margin-bottom:10px;}
+.dash-hoje>.dash-head .sec-title{margin:0;}
+.dash-hoje #fila-conta{margin:0;flex:1 1 260px;min-width:0;font-size:12px;}
+.dash-hoje-grade{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:16px;align-items:start;}
+.dash-hoje-missao,.dash-hoje-agora{min-width:0;}
+.dash-hoje .dash-hoje-sub{margin:0 0 6px;}
+.missao-cta-btn{min-height:48px;max-height:56px;padding:8px 14px;margin:0;justify-content:center;}
+.missao-cta-btn span{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.missao-chips{display:flex;flex-wrap:wrap;gap:4px 6px;margin:8px 0 10px;}
+.missao-chips span{font-size:12px;font-weight:800;color:var(--text2);background:var(--panel2);border:1px solid var(--border);
+  border-radius:999px;padding:2px 9px;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.dash-hoje .div-barra{height:6px;margin-bottom:6px;}
+.dash-hoje .div-leg{font-size:12px;gap:4px 10px;margin-bottom:4px;}
+/* Com a Missão ligada, o número grande repetia a faixa e a linha do cabeçalho; sai.
+   "Abrir a fila de hoje" vira link de texto (mesmo botão, mesmo clique). */
+body.missao-ligada .dash-v2 .div-topo{display:none;}
+body.missao-ligada .dash-v2 .div-btn{background:none;border:0;box-shadow:none;padding:4px 0;margin:2px 0 0;width:auto;
+  text-align:left;font-size:13px;font-weight:800;color:var(--accent);border-radius:6px;}
+body.missao-ligada .dash-v2 .div-btn:hover{text-decoration:underline;filter:none;}
+/* "O que fazer agora": linhas de ~40px, nome e reino na mesma linha, selo à direita. */
+.dash-hoje .next-step-item{min-height:40px;padding:3px 10px;margin-bottom:3px;gap:8px;flex-wrap:nowrap;}
+.dash-hoje .next-step-info{display:flex;align-items:baseline;gap:8px;min-width:0;}
+.dash-hoje .next-step-name{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;}
+.dash-hoje .next-step-sub{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dash-hoje .next-step-rank{width:22px;height:22px;font-size:12px;}
+.dash-hoje .fila-chip{font-size:12px;flex-shrink:0;}
+/* Diagnóstico: "Certo/Errado" cortado — a linha quebra: nome e números em cima, barra embaixo. */
+.dash-diag .sim-fmt-row{flex-wrap:wrap;row-gap:4px;}
+.dash-diag .sim-fmt-nome{flex:1 1 auto;overflow:visible;}
+.dash-diag .sim-fmt-row .faixa-trilho{order:5;flex:1 1 100%;}
+.dash-diag .sim-fmt-extra{order:6;flex:1 1 100%;white-space:normal;}
+.sim-kb-extra{display:none;}
+.sim-kb-aberto .sim-kb-extra{display:flex;}
+.sim-kb-vertodos{display:inline-block;margin-top:6px;font-size:12px;}
+/* Agenda: 7 colunas na largura inteira; o nome quebra em até três linhas em vez de ser
+   cortado (coluna de ~140px em 1366px). Abaixo disso a faixa rola de lado. */
+.dash-v2 .dash-agenda{grid-area:agenda;margin:0;}
+.dash-v2 .dash-agenda>.dash-head{margin-bottom:8px;}
+.dash-v2 #weekly-plan{overflow-x:auto;}
+.dash-fold.dash-v2 .week-plan-grid{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(136px,1fr);
+  grid-template-columns:none;gap:8px;overflow:visible;}
+.dash-fold.dash-v2 .day-col{display:flex;flex-direction:column;gap:6px;padding:8px;min-height:150px;position:relative;align-items:stretch;}
+.dash-fold.dash-v2 .day-header{font-size:12px;padding-right:26px;white-space:nowrap;justify-content:flex-start;text-align:left;gap:6px;margin:0;}
+.dash-fold.dash-v2 .day-when{flex-direction:column;align-items:flex-start;gap:0;}
+.dash-fold.dash-v2 .day-when-date{font-size:12px;}
+.dash-fold.dash-v2 .day-today-pill{font-size:12px;padding:1px 6px;}
+.dash-fold.dash-v2 .plan-add-btn{top:8px;right:8px;transform:none;width:22px;height:22px;font-size:14px!important;}
+.dash-fold.dash-v2 .day-items{flex:1 1 auto;min-width:0;}
+.dash-fold.dash-v2 .plan-item-text{white-space:normal;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;
+  -webkit-line-clamp:3;overflow-wrap:anywhere;}
+.dash-fold.dash-v2 .plan-empty-day{margin-top:0;padding:10px 4px;border:1.5px dashed var(--border);border-radius:8px;color:var(--muted);}
+/* Mais números: cartões da mesma linha com a mesma altura; ranking compacto; totais
+   numa faixa fina; exportar dentro do cartão. */
+.dash-fold.dash-mais-grid{align-items:stretch;}
+.dash-card-tempo .dash-head-tools{flex-wrap:wrap!important;row-gap:6px;}
+.dash-mais-grid .rank-row{min-height:40px;padding:5px 10px;margin-bottom:4px;gap:8px;}
+.dash-mais-grid .rank-row .rank-pos{font-size:12px;min-width:22px;}
+.dash-mais-grid .rank-row span{font-size:15px!important;}
+.dash-mais-grid .rank-info{display:flex;align-items:baseline;gap:8px;min-width:0;}
+.dash-mais-grid .rank-nome{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;}
+.dash-mais-grid .rank-conta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 0;min-width:0;}
+.dash-mais-grid .rank-tempo{display:flex;align-items:baseline;gap:4px;white-space:nowrap;}
+.dash-mais-grid .rank-tempo>div:first-child{font-size:13px!important;}
+#dash-stats.stats-grid{display:flex!important;flex-wrap:wrap;gap:6px 18px!important;padding:8px 14px;border:1.5px solid var(--border);
+  border-radius:12px;background:var(--panel);}
+#dash-stats .stat-card{flex-direction:row;align-items:baseline;gap:6px;padding:0;border:0;background:none;box-shadow:none;animation:none;}
+#dash-stats .stat-icon{font-size:14px;margin:0;}
+#dash-stats .stat-val{font-size:15px;}
+#dash-stats .stat-lbl{font-size:12px;text-transform:none;letter-spacing:0;}
+.dash-motive{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:12px;padding:8px 4px;cursor:pointer;
+  border-top:1px solid var(--border);font-size:13px;color:var(--text2);}
+.dash-motive-lbl{font-size:12px;font-weight:800;color:var(--accent);white-space:nowrap;}
+#motive-text{flex:1 1 300px;font-style:italic;font-weight:600;}
+.dash-motive-dica{font-size:12px;color:var(--muted);}
+.dash-motive:hover .dash-motive-dica{color:var(--accent);}
+@media(max-width:1000px){
+  .dash-fold.dash-v2{grid-template-areas:"faixa" "hoje" "diag" "agenda";}
+}
+/* Abaixo do notebook a semana já rola de lado: colunas mais largas, pro nome caber. */
+@media(max-width:1300px){
+  .dash-fold.dash-v2 .week-plan-grid{grid-auto-columns:minmax(176px,1fr);}
+}
+/* Duas colunas só quando o cartão é largo; num cartão estreito (iPad, coluna de ~500px)
+   a lista "O que fazer agora" espremia o nome em 40px. */
+@container (max-width:600px){
+  .dash-hoje-grade{grid-template-columns:minmax(0,1fr);}
+}
+
 </style>
 <script>
 // Aplica o tema salvo antes do primeiro paint, pra não "piscar" o tema errado.
@@ -3115,26 +3211,24 @@ body.missao-ligada #dash-overdue-revs{display:none;}
       <div class="section-card dash-hoje">
         <div class="dash-head">
           <div class="sec-title dash-sec">☀️ Hoje</div>
+          <div class="dash-conta" id="fila-conta"></div>
           <button id="notif-permission-btn" class="btn btn-xs btn-ghost" style="display:none" onclick="requestNotifPermission()" title="Receber um aviso quando houver revisões atrasadas">🔔 Lembretes</button>
         </div>
-        <div class="dash-conta" id="fila-conta"></div>
-        <div id="missao-cta"></div>
-        <div id="divida-resumo"></div>
-        <div class="dash-scroll" id="dash-overdue-revs"></div>
-        <div class="sec-title dash-sec dash-hoje-sub">🧭 O que fazer agora</div>
-        <div id="next-steps-list"></div>
-      </div>
-
-      <div class="section-card dash-agenda">
-        <div class="dash-head">
-          <div class="sec-title dash-sec">📅 Agenda semanal de estudos</div>
-          <div class="dash-head-tools">
-            <button class="btn btn-xs btn-ghost" onclick="planoRetaFinal()" title="Preenche os 7 dias com os blocos da reta final. Não apaga nada do que você já marcou."><i class="fa fa-bolt"></i> Reta final</button>
-            <span class="dash-foot dash-foot-inline">Clique num dia para adicionar</span>
+        <!-- Rodada 2: duas colunas por dentro — à esquerda a Missão (botão, composição,
+             barra por reino, link pra fila); à direita a lista "O que fazer agora". -->
+        <div class="dash-hoje-grade">
+          <div class="dash-hoje-missao">
+            <div id="missao-cta"></div>
+            <div id="divida-resumo"></div>
+            <div class="dash-scroll" id="dash-overdue-revs"></div>
+          </div>
+          <div class="dash-hoje-agora">
+            <div class="sec-title dash-sec dash-hoje-sub">🧭 O que fazer agora</div>
+            <div id="next-steps-list"></div>
           </div>
         </div>
-        <div class="dash-scroll dash-grow" id="weekly-plan"></div>
       </div>
+
     </div>
 
     <div class="section-card dash-diag">
@@ -3162,9 +3256,20 @@ body.missao-ligada #dash-overdue-revs{display:none;}
       </div>
     </div>
 
+    <div class="section-card dash-agenda">
+      <div class="dash-head">
+        <div class="sec-title dash-sec">📅 Agenda semanal de estudos</div>
+        <div class="dash-head-tools">
+          <button class="btn btn-xs btn-ghost" onclick="planoRetaFinal()" title="Preenche os 7 dias com os blocos da reta final. Não apaga nada do que você já marcou."><i class="fa fa-bolt"></i> Reta final</button>
+          <span class="dash-foot dash-foot-inline">Clique num dia para adicionar</span>
+        </div>
+      </div>
+      <div class="dash-scroll dash-grow" id="weekly-plan"></div>
+    </div>
+
   </div>
 
-  <details class="dash-mais" id="dash-mais" open>
+  <details class="dash-mais" id="dash-mais">
     <summary><span>📊 Mais números</span><span class="dash-mais-dica">conquistas, tempo, flashcards, ranking, totais</span></summary>
     <div class="dash-fold dash-mais-grid">
       <div class="section-card gamify-badges dash-mais-largo">
@@ -3204,14 +3309,15 @@ body.missao-ligada #dash-overdue-revs{display:none;}
 
       <div class="stats-grid dash-mais-largo" id="dash-stats" style="grid-template-columns:repeat(6,1fr);gap:8px"></div>
 
-      <!-- Frase motivacional -->
-      <div id="motive-card" class="dash-mais-largo" onclick="rotatePhrase()" style="background:linear-gradient(135deg,var(--accent),#4f46e5);border-radius:18px;padding:22px 28px;text-align:center;margin-bottom:18px;box-shadow:0 6px 28px rgba(108,71,255,0.25);cursor:pointer;transition:transform 0.2s" title="Clique para outra frase">
-        <div style="font-size:11px;color:rgba(255,255,255,0.65);letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:8px">✨ MENSAGEM DO DIA</div>
-        <div id="motive-text" style="font-size:16px;font-weight:800;color:#fff;line-height:1.5;max-width:600px;margin:0 auto"></div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:10px">clique para trocar a frase</div>
-      </div>
     </div>
   </details>
+
+  <!-- Frase motivacional: uma linha no rodapé do Painel (mesmo id e mesmo clique). -->
+  <div id="motive-card" class="dash-motive" onclick="rotatePhrase()" title="Clique para outra frase">
+    <span class="dash-motive-lbl">✨ Mensagem do dia</span>
+    <span id="motive-text"></span>
+    <span class="dash-motive-dica">trocar ↻</span>
+  </div>
 </div>
 
 <!-- ===== EDITAIS ===== -->
@@ -6714,7 +6820,8 @@ document.body.classList.toggle('missao-ligada',missaoLigada());
 (function(){
   const d=document.getElementById('dash-mais');
   if(!d)return;
-  try{if(localStorage.getItem('vdn_dash_mais')==='0')d.open=false;}catch(e){}
+  // Rodada 2: começa recolhido; quem abriu uma vez continua vendo aberto.
+  try{if(localStorage.getItem('vdn_dash_mais')==='1')d.open=true;}catch(e){}
   d.addEventListener('toggle',()=>{try{localStorage.setItem('vdn_dash_mais',d.open?'1':'0');}catch(e){}});
 })();
 function showScreen(name){
@@ -19640,15 +19747,15 @@ function renderSimKingdomBreakdown(){
   if(!el)return;
   const rows=computeSimuladoStatsByKingdom();
   if(rows.length<2){el.innerHTML='';return;}
-  el.innerHTML=`<div class="sim-kb-title">📚 DESEMPENHO POR REINO</div>`+rows.map(r=>{
+  el.innerHTML=`<div class="sim-kb-title">📚 DESEMPENHO POR REINO</div>`+rows.map((r,i)=>{
     const color=faixaCor(r.pct);
-    return `<div class="sim-kb-row">
+    return `<div class="sim-kb-row${i>=4?' sim-kb-extra':''}">
       <div class="sim-kb-kingdom">${iconeReino(r.kingdom.icon)} ${escapeHtml(r.kingdom.name)}</div>
       <div class="sim-kb-bar-wrap"><div class="sim-kb-bar" style="width:${r.pct}%;background:${color}"></div></div>
       <div class="sim-kb-pct" style="color:${color}" title="${r.bruto!==r.pct?`Bruto ${r.bruto}% — o valor mostrado desconta o acerto por acaso dos itens certo/errado.`:'Aproveitamento bruto'}">${r.pct}%</div>
       <div class="sim-kb-qtd">${r.acertos}/${r.questoes}</div>
     </div>`;
-  }).join('');
+  }).join('')+(rows.length>4?`<span class="dash-verlink sim-kb-vertodos" onclick="this.parentElement.classList.toggle('sim-kb-aberto');this.textContent=this.parentElement.classList.contains('sim-kb-aberto')?'ver só os 4 piores':'ver todos (${rows.length})'">ver todos (${rows.length})</span>`:'');
 }
 function renderNextSteps(){
   const el=document.getElementById('next-steps-list');
@@ -19660,7 +19767,7 @@ function renderNextSteps(){
     if(conta)conta.innerHTML='';
     return;
   }
-  const items=todos.slice(0,6);   // as 6 primeiras; "ver a fila" leva pra lista inteira
+  const items=todos.slice(0,7);   // as 7 primeiras (linhas compactas); "ver a fila" leva pra lista inteira
   const foco=edFocoIndice();
   const nd=numerosDoDia(),nRev=nd.naVez;
   const nNovo=todos.filter(x=>x.tipo==='novo').length;
@@ -20958,7 +21065,7 @@ function renderDashboard(){
       </div>
       <div class="div-barra">${reinos.map(r=>`<i style="width:${(r.n/total*100).toFixed(1)}%;background:${r.cor}" title="${r.nome}: ${r.n}"></i>`).join('')}</div>
       <div class="div-leg">${reinos.slice(0,4).map(r=>`<span><i class="div-pt" style="background:${r.cor}"></i>${escapeHtml(r.nome)} ${r.n}</span>`).join('')}</div>
-      <button class="div-btn" onclick="abrirRevisoesAtrasadas()">Abrir a fila de hoje →</button>`;
+      <button class="div-btn" onclick="abrirRevisoesAtrasadas()">${missaoLigada()?'ver a fila completa →':'Abrir a fila de hoje →'}</button>`;
     // Amostra dos dois primeiros, com as mesmas ações da fila: revisar de verdade ou
     // marcar que revisou. "Já reestudei" saiu — quem recomeça o agendamento hoje é a
     // própria escada de prazos.
@@ -20985,13 +21092,13 @@ function renderDashboard(){
     <div class="rank-row" onclick="openKingdom(db.kingdoms.find(x=>x.id==='${k.id}'))">
       <div class="rank-pos">${i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`}</div>
       <span style="font-size:22px">${k.icon||'🏰'}</span>
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:900;color:${k.color}">${k.name}</div>
-        <div style="font-size:12px;color:var(--muted);font-weight:600">${k.bosses} chefões · ${k.minis} minibosses</div>
+      <div class="rank-info" style="flex:1">
+        <div class="rank-nome" style="font-size:13px;font-weight:900;color:${k.color}">${k.name}</div>
+        <div class="rank-conta" style="font-size:12px;color:var(--muted);font-weight:600">${k.bosses} chefões · ${k.minis} minibosses</div>
       </div>
-      <div style="text-align:right">
+      <div class="rank-tempo" style="text-align:right">
         <div style="font-size:14px;font-weight:900;color:var(--cyan-t)">${fmtTime(k.time)}</div>
-        <div style="font-size:12px;color:var(--muted)">estudados</div>
+        <div class="rank-tempo-lbl" style="font-size:12px;color:var(--muted)">estudados</div>
       </div>
     </div>`).join('');
   initPhrase();
@@ -21274,8 +21381,13 @@ function missaoCtaRender(){
   if(!e.total){txt='✨ Tudo em dia — treinar';sub='nada na vez hoje';}
   else if(e.acabou){txt='🏁 Missão cumprida — ver resumo';sub=`${e.feitos} de ${e.total} itens`;}
   else if(m.iniciada){txt='▶ Continuar a missão do dia';sub=`${e.feitos} de ${e.total} itens · ~${m.orc} min`;}
-  else{txt='🎯 Começar a missão do dia';sub=`${e.total} itens · ~${m.orc} min${m.curta?' · meta já batida':''}`;}
-  el.innerHTML=`<button type="button" class="missao-cta-btn" onclick="missaoAbrir()"><span>${txt}</span><small>${sub}</small></button>`;
+  else{txt='🎯 Começar a missão do dia';sub=`${e.total} itens${m.curta?' · meta já batida':''}`;}
+  // Composição em chips: o que a missão tem (dados do próprio plano, nenhuma conta nova).
+  const nRev=m.itens.filter(i=>i.tipo==='rev').length;
+  const nCards=m.itens.filter(i=>i.tipo==='fc').reduce((a,i)=>a+(i.alvo||0),0);
+  const nQ=m.itens.filter(i=>i.tipo==='q').reduce((a,i)=>a+(i.alvo||0),0);
+  const chips=e.total&&!e.acabou?`<div class="missao-chips">${nRev?`<span>🔁 ${nRev} revis${nRev===1?'ão':'ões'}</span>`:''}${nCards?`<span>🃏 ${nCards} cards</span>`:''}${nQ?`<span>🎯 ${nQ} questões</span>`:''}<span>⏱ ~${m.orc} min</span></div>`:'';
+  el.innerHTML=`<button type="button" class="missao-cta-btn" onclick="missaoAbrir()"><span>${txt}</span><small>${sub}</small></button>${chips}`;
   if(m.iniciada&&!m.concluida&&!m.dispensada){missaoBarraRender();missaoTickIniciar();}
 }
 // Atrasadas como meta: histórico diário só neste aparelho, pra mostrar a tendência.

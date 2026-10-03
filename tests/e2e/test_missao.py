@@ -146,7 +146,7 @@ async def main():
           return {atr:n.atrasadas,cota:n.cabemHoje,naVez:n.naVez,badge:document.getElementById('rev-badge').textContent,
             title:document.getElementById('rev-badge').title,faixa:document.getElementById('dash-atrasadas-val').textContent,
             faixaSub:document.getElementById('dash-atrasadas-sub').textContent,
-            stats:[...document.querySelectorAll('#dash-stats .stat-card')].map(c=>c.innerText.replace(/\\s+/g,' ')),
+            stats:[...document.querySelectorAll('#dash-stats .stat-card')].map(c=>c.querySelector('.stat-val').textContent+' '+c.querySelector('.stat-lbl').textContent),
             revTela:/ASSUNTOS NA VEZ/i.test(barra)&&/CABEM HOJE/i.test(barra)};}""")
         print('   %s'%r)
         assert r['badge']==str(r['cota']) and r['faixa']==str(r['cota'])

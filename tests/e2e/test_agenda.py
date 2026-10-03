@@ -45,30 +45,26 @@ async def main():
         assert not r['img'] and not r['x'] and '<img' in r['texto']
         print('   OK\n')
 
-        print('=== C) nome comprido NAO vaza pra fora da linha do dia ===')
+        print('=== C) nome comprido NAO vaza pra fora da coluna do dia ===')
         r=await page.evaluate("""(hoje)=>{
-          document.querySelector('#weekly-plan').closest('.section-card').classList.add('dash-fold');
-          const wrap=document.getElementById('weekly-plan').parentElement;
           db.weeklyPlan={};db.weeklyPlan[hoje]=[
             {subId:'s1',name:'%s',topic:'Fundamentos',kingdom:'Enfermagem',kColor:'#e11d48'}];
           renderWeeklyPlan();
           const cols=[...document.querySelectorAll('#weekly-plan .day-col')];
           const item=cols[0].querySelector('.plan-item');
           const c=cols[0].getBoundingClientRect(), i=item.getBoundingClientRect();
-          // os dias sao empilhados: o vizinho fica ABAIXO, nao ao lado
+          // rodada 2: os dias ficam lado a lado (7 colunas) — o vizinho fica A DIREITA
           const viz=cols[1].getBoundingClientRect();
           return {colDir:Math.round(c.right),itemDir:Math.round(i.right),
-                  vizEsq:Math.round(viz.left),
-                  vaza:i.right>c.right+1,
-                  invade:i.bottom>viz.top+1,
-                  linhas:Math.round(item.querySelector('.plan-item-text').getBoundingClientRect().height)};}"""%LONGO,hoje)
-        print('   linha do dia termina em %spx · cartão termina em %spx'
+                  vaza:i.right>c.right+1||i.left<c.left-1,
+                  invade:i.right>viz.left+1};}"""%LONGO,hoje)
+        print('   coluna do dia termina em %spx · cartão termina em %spx'
               %(r['colDir'],r['itemDir']))
-        print('   vaza da linha: %s · invade o dia de baixo: %s'%(r['vaza'],r['invade']))
+        print('   vaza da coluna: %s · invade o dia ao lado: %s'%(r['vaza'],r['invade']))
         assert not r['vaza'] and not r['invade']
         print('   OK\n')
 
-        print('=== D) no modo apertado o nome fica numa linha, com reticências ===')
+        print('=== D) na coluna estreita o nome quebra (até 3 linhas) em vez de virar "Teo…" ===')
         r=await page.evaluate("""()=>{
           const t=document.querySelector('#weekly-plan .plan-item-text');
           const st=getComputedStyle(t);
@@ -77,14 +73,11 @@ async def main():
                   linha:parseFloat(st.lineHeight)};}""")
         linhas=round(r['alturaPx']/r['linha']) if r['linha'] else 0
         print('   white-space=%s · line-clamp=%s · ocupa ~%s linha(s)'%(r['wrap'],r['clamp'],linhas))
-        # com os dias empilhados sobra largura: uma linha so, cortada com reticencias,
-        # mantem a semana inteira visivel sem rolar. Nada de -webkit-line-clamp.
-        assert r['wrap']=='nowrap' and str(r['clamp']) in ('none','') and linhas==1
+        assert r['wrap']!='nowrap' and str(r['clamp'])=='3' and 1<=linhas<=3
         print('   OK\n')
 
         print('=== E) a grade normal (sem aperto) tambem nao estoura ===')
         r=await page.evaluate("""()=>{
-          document.querySelector('#weekly-plan').closest('.section-card').classList.remove('dash-fold');
           renderWeeklyPlan();
           const col=document.querySelector('#weekly-plan .day-col');
           const item=col.querySelector('.plan-item');
