@@ -19444,19 +19444,15 @@ function edFocoIndice(){
 // caixa tinha régua e ordem próprias e começava por um assunto diferente da tela Revisões.
 function computeStudyRecommendations(){
   const foco=edFocoIndice();
-  const revisoes=revCandidatos().map(c=>{
-    const noEdital=foco&&foco.idx[c.sub.id];
-    return {subId:c.sub.id,subName:c.sub.name,topicName:c.topic.name,
-      kingdomName:c.kingdom.name,kingdomIcon:c.kingdom.icon,priority:c.sub.priority,
-      tipo:'revisao',reason:(c.atraso||0)>0?`venceu há ${c.atraso}d`:'na vez hoje',reasonIcon:'🔁',
-      edital:noEdital?foco.edital.icon:null};
-  });
-  const naFila=new Set(revisoes.map(x=>x.subId));
-  const outros=[];
+  // Revisão aqui é o mesmo conjunto dos "atrasados" do selo e da Câmara (revCandidatos
+  // com prazo vencido): reino desligado, dominado e "revisado hoje" já saem de lá.
+  const atrasados={};
+  revCandidatos().forEach(c=>{if((c.atraso||0)>0)atrasados[c.sub.id]=c;});
+  const items=[];
   db.kingdoms.forEach(k=>{
     (db.topics[k.id]||[]).forEach(t=>{
       (t.subtopics||[]).forEach(s=>{
-        if(naFila.has(s.id))return;
+        const rev=atrasados[s.id];
         const notStudied=!s.studied;
         let weakPct=null;
         if(s.simStats&&s.simStats.questoesTotal>0){
@@ -19465,19 +19461,28 @@ function computeStudyRecommendations(){
           weakPct=simPctEfetivo(s.simStats).corrigido;
         }
         const isWeak=weakPct!==null&&weakPct<60;
-        if(!notStudied&&!isWeak)return;
+        if(!rev&&!notStudied&&!isWeak)return;
+
         let reason,reasonIcon,reasonBonus,tipo;
-        if(notStudied){
+        if(rev){
+          // Mesma linguagem e mesma urgência da Câmara: o chip diz há quanto tempo o
+          // PRAZO venceu, e o bônus sai da urgência real da fila.
+          tipo='revisao';
+          reason=`venceu há ${rev.atraso}d`;
+          reasonIcon='🔁';
+          reasonBonus=300+Math.min(500,Math.round(rev.urg));
+        }else if(notStudied){
           tipo='novo';reason='nunca estudado';reasonIcon='✨';reasonBonus=200;
         }else{
           tipo='fraco';reason=`fraco · ${weakPct}%`;reasonIcon='🎯';reasonBonus=100+(60-weakPct);
         }
+
         // Com um edital em foco, o que cai nele sobe — e sobe na medida do peso
         // que o proprio edital da (questoes da disciplina x prevalencia que voce
         // marcou). O que nao cai continua na fila, so depois.
         const noEdital=foco&&foco.idx[s.id];
         const bonusEdital=noEdital?100000+noEdital.peso*noEdital.prev*100:0;
-        outros.push({
+        items.push({
           subId:s.id,subName:s.name,topicName:t.name,
           kingdomName:k.name,kingdomIcon:k.icon,priority:s.priority,
           reason,reasonIcon,tipo,
@@ -19487,10 +19492,10 @@ function computeStudyRecommendations(){
       });
     });
   });
-  outros.sort((a,b)=>b.score-a.score);
+  items.sort((a,b)=>b.score-a.score);
   // Devolve a lista inteira: quem corta e quem desenha, pra o cabecalho poder
   // dizer "6 de 43" em vez de esconder a escala atras do rolador.
-  return revisoes.concat(outros);
+  return items;
 }
 // Agrega s.simStats de todos os minibosses pra questões/acertos (esses somam certinho,
 // cada questão pertence a um assunto só). "Simulados feitos" NÃO pode vir dessa mesma
@@ -19617,10 +19622,10 @@ function renderNextSteps(){
   }
   const items=todos.slice(0,6);   // as 6 primeiras; "ver a fila" leva pra lista inteira
   const foco=edFocoIndice();
-  const nRev=todos.filter(x=>x.tipo==='revisao').length;
+  const nd=numerosDoDia(),nRev=nd.naVez;
   const nNovo=todos.filter(x=>x.tipo==='novo').length;
   if(conta)conta.innerHTML=`${foco?`<span title="Priorizando ${escapeHtml(foco.edital.nome)}">${foco.edital.icon} ${escapeHtml(foco.edital.nome)}</span> · `:''}`
-    +`<b>${nRev}</b> revis${nRev===1?'ão':'ões'} na vez · <b>${Math.min(revPorDia(),nRev)}</b> cabe${Math.min(revPorDia(),nRev)===1?'':'m'} hoje · <b>${nNovo}</b> por estudar`
+    +`<b>${nRev}</b> revis${nRev===1?'ão':'ões'} na vez · <b>${nd.cabemHoje}</b> cabe${nd.cabemHoje===1?'':'m'} hoje · <b>${nNovo}</b> por estudar`
     +` · <span class="dash-verlink" onclick="abrirRevisoesAtrasadas()">ver a fila</span>`;
   const cls={revisao:'fila-rev',novo:'fila-novo',fraco:'fila-fraco'};
   // Revisão abre a TELA de revisão (resumo + fluxograma); o resto abre o miniboss.
