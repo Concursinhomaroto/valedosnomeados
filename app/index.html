@@ -2588,6 +2588,67 @@ nav{
   .days-pill .d-when{display:none;}
 }
 
+/* ===== PAINEL (redesign, fase A3) =====
+   Antes: 14 cartões do mesmo peso numa grade de altura fixa, cada um rolando por
+   dentro. Agora: faixa de hoje, um cartão "Hoje" grande à esquerda, Diagnóstico em
+   abas à direita e o resto recolhível embaixo. Sem rolagem escondida. */
+.dash-fold.dash-v2{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);grid-template-rows:none;
+  grid-template-areas:"faixa faixa" "hoje diag";align-items:start;gap:16px;}
+.dash-v2 .dash-scroll,.dash-mais-grid .dash-scroll{overflow:visible;-webkit-mask-image:none;mask-image:none;max-height:none;padding-right:0;}
+.dash-faixa{grid-area:faixa;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+.dash-faixa>.section-card{margin:0;min-width:0;}
+button.dash-faixa-atrasadas{font:inherit;color:inherit;text-align:left;cursor:pointer;width:100%;}
+button.dash-faixa-atrasadas:hover{border-color:var(--st-atrasado);}
+.dash-faixa-atrasadas .gamify-val{color:var(--st-atrasado);}
+.dash-faixa-atrasadas.dash-faixa-zerado .gamify-val{color:var(--st-emdia);}
+.dash-faixa-prova[data-urg="reta"] .gamify-val{color:var(--st-atrasado);}
+.dash-faixa-prova[data-urg="perto"] .gamify-val{color:var(--st-pendente);}
+.dash-faixa-prova[data-urg="passou"] .gamify-val{color:var(--st-emdia);}
+
+.dash-col-hoje{grid-area:hoje;display:flex;flex-direction:column;gap:16px;min-width:0;}
+.dash-hoje{padding:18px 20px;border:2px solid var(--border2);}
+.dash-hoje .dash-sec{font-size:15px;}
+.dash-hoje #fila-conta{margin:2px 0 12px;}
+.dash-v2 .div-btn{display:block;width:100%;padding:14px 18px;font-size:15px;font-weight:900;border-radius:12px;
+  margin-top:12px;border:0;background:var(--st-acao-fill);color:#fff;box-shadow:0 6px 18px rgba(124,58,237,0.3);cursor:pointer;}
+.dash-v2 .div-btn:hover{filter:brightness(1.08);}
+.dash-v2 #dash-overdue-revs{margin-top:12px;}
+.dash-hoje .dash-hoje-sub{font-size:11px;font-weight:900;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:16px 0 6px;}
+/* As 6 primeiras; "ver a fila" no topo do cartão leva pra lista inteira. */
+.dash-hoje #next-steps-list .next-step-item:nth-child(n+7){display:none;}
+
+.dash-diag{grid-area:diag;min-width:0;position:sticky;top:16px;}  /* acompanha a coluna Hoje na rolagem */
+.dd-radio{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}
+.dd-abas{display:flex;gap:6px;margin:4px 0 12px;flex-wrap:wrap;}
+.dd-abas label{padding:6px 12px;border-radius:999px;border:1.5px solid var(--border);font-size:12px;font-weight:800;
+  color:var(--text2);cursor:pointer;background:var(--panel2);min-height:32px;display:inline-flex;align-items:center;}
+#dd-sim:checked~.dd-abas label[for=dd-sim],#dd-reinos:checked~.dd-abas label[for=dd-reinos],
+#dd-erros:checked~.dd-abas label[for=dd-erros]{background:var(--st-acao-fill);border-color:var(--st-acao-fill);color:#fff;}
+#dd-sim:focus-visible~.dd-abas label[for=dd-sim],#dd-reinos:focus-visible~.dd-abas label[for=dd-reinos],
+#dd-erros:focus-visible~.dd-abas label[for=dd-erros]{outline:2px solid var(--foco);outline-offset:2px;}
+.dd-painel{display:none;}
+#dd-sim:checked~.dd-p-sim,#dd-reinos:checked~.dd-p-reinos,#dd-erros:checked~.dd-p-erros{display:block;}
+.dash-vazio-linha{font-size:12px;color:var(--muted);padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;line-height:1.5;}
+.dash-vazio-linha b{color:var(--text2);}
+
+.dash-mais{margin-top:18px;}
+.dash-mais>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  padding:10px 4px;font-size:13px;font-weight:900;color:var(--text2);letter-spacing:.5px;}
+.dash-mais>summary::-webkit-details-marker{display:none;}
+.dash-mais>summary::before{content:'▸';display:inline-block;transition:transform .2s;}
+.dash-mais[open]>summary::before{transform:rotate(90deg);}
+.dash-mais-dica{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:0;}
+.dash-fold.dash-mais-grid{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:none;align-items:start;margin-top:6px;}
+.dash-mais-largo{grid-column:1/-1;}
+.dash-mais-card{min-width:0;display:flex;flex-direction:column;}
+.dash-mais-grid #motive-card{margin-bottom:0!important;}
+@media(max-width:1000px){
+  .dash-fold.dash-v2{grid-template-columns:minmax(0,1fr);grid-template-areas:"faixa" "hoje" "diag";}
+  .dash-diag{position:static;}
+  .dash-faixa{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .dash-fold.dash-mais-grid{grid-template-columns:minmax(0,1fr);}
+}
+
 </style>
 <script>
 // Aplica o tema salvo antes do primeiro paint, pra não "piscar" o tema errado.
@@ -2849,26 +2910,22 @@ nav{
     <button class="btn btn-ghost btn-xs rb-btn" id="renewal-banner-btn" style="background:rgba(255,255,255,0.2);color:#fff;border-color:rgba(255,255,255,0.4)" onclick="openRenewalScreen(renewalBannerReason)">Renovar agora</button>
   </div>
 
-  <!-- Streak + Meta diária + Conquistas, na mesma linha (quebra sozinha em telas
-       estreitas, já que a badges-card tem largura mínima de 420px) — essa linha já
-       fica antes de "Desempenho em Simulados"/"O que estudar agora" logo abaixo. -->
-  <!-- ===== PRIMEIRA DOBRA =====
-       Dez seções numa tela só, sem rolagem. Grade de 6 colunas iguais: as duas
-       faixas do meio usam 2 colunas por cartão (três cartões) e a de baixo usa 3
-       (dois cartões), então a borda de todo cartão cai na mesma régua vertical.
-       Cada cartão rola por dentro quando o conteúdo passa da altura da faixa —
-       a rolagem some da página e fica dentro da caixa.
-       A ordem é a da pergunta "o que eu faço hoje?": o que estudar agora e as
-       revisões atrasadas ocupam o canto superior esquerdo, onde o olho cai
-       primeiro; o que é acompanhamento (simulados, flashcards, tempo) vem depois. -->
-  <div class="dash-fold">
+  <!-- ===== PAINEL (redesign, fase A3) =====
+       Quatro partes, na ordem da pergunta "o que eu faço hoje?":
+       1. faixa de hoje (dias pra prova, meta, sequência, atrasadas);
+       2. Hoje, grande à esquerda: a fila resumida com UM botão primário, os primeiros
+          passos e a agenda — sem rolagem escondida;
+       3. Diagnóstico à direita, em abas (só mostram/escondem os mesmos contêineres);
+       4. Mais números, recolhível.
+       Todo contêiner onde o JS escreve continua com o mesmo id — só mudou de lugar. -->
+  <div class="dash-fold dash-v2">
 
-    <div class="dash-r1">
-      <div class="section-card gamify-card" id="streak-card">
-        <div class="gamify-icon streak-flame" id="streak-flame">🔥</div>
+    <div class="dash-faixa">
+      <div class="section-card gamify-card dash-faixa-prova" id="dash-prova-card" data-urg="">
+        <div class="gamify-icon">📅</div>
         <div class="gamify-info">
-          <div class="gamify-val" id="streak-val">0</div>
-          <div class="gamify-lbl" id="streak-lbl">dias seguidos</div>
+          <div class="gamify-val" id="dash-prova-dias">—</div>
+          <div class="gamify-lbl" id="dash-prova-lbl">dias para a prova</div>
         </div>
       </div>
       <div class="section-card gamify-card gamify-goal" id="goal-card" onclick="openDailyGoalModal()" title="Clique para ajustar sua meta diária">
@@ -2878,99 +2935,122 @@ nav{
           <div class="gamify-lbl" id="goal-lbl">0 / 60 min</div>
         </div>
       </div>
-      <div class="section-card gamify-badges">
+      <div class="section-card gamify-card" id="streak-card">
+        <div class="gamify-icon streak-flame" id="streak-flame">🔥</div>
+        <div class="gamify-info">
+          <div class="gamify-val" id="streak-val">0</div>
+          <div class="gamify-lbl" id="streak-lbl">dias seguidos</div>
+        </div>
+      </div>
+      <button type="button" class="section-card gamify-card dash-faixa-atrasadas" id="dash-atrasadas-card" onclick="abrirRevisoesAtrasadas()" title="Abrir a fila de hoje">
+        <div class="gamify-icon">⏰</div>
+        <div class="gamify-info">
+          <div class="gamify-val" id="dash-atrasadas-val">0</div>
+          <div class="gamify-lbl">assuntos atrasados</div>
+        </div>
+      </button>
+    </div>
+
+    <div class="dash-col-hoje">
+      <div class="section-card dash-hoje">
+        <div class="dash-head">
+          <div class="sec-title dash-sec">☀️ Hoje</div>
+          <button id="notif-permission-btn" class="btn btn-xs btn-ghost" style="display:none" onclick="requestNotifPermission()" title="Receber um aviso quando houver revisões atrasadas">🔔 Lembretes</button>
+        </div>
+        <div class="dash-conta" id="fila-conta"></div>
+        <div id="divida-resumo"></div>
+        <div class="dash-scroll" id="dash-overdue-revs"></div>
+        <div class="sec-title dash-sec dash-hoje-sub">🧭 O que fazer agora</div>
+        <div id="next-steps-list"></div>
+      </div>
+
+      <div class="section-card dash-agenda">
+        <div class="dash-head">
+          <div class="sec-title dash-sec">📅 Agenda semanal de estudos</div>
+          <div class="dash-head-tools">
+            <button class="btn btn-xs btn-ghost" onclick="planoRetaFinal()" title="Preenche os 7 dias com os blocos da reta final. Não apaga nada do que você já marcou."><i class="fa fa-bolt"></i> Reta final</button>
+            <span class="dash-foot dash-foot-inline">Clique num dia para adicionar</span>
+          </div>
+        </div>
+        <div class="dash-scroll dash-grow" id="weekly-plan"></div>
+      </div>
+    </div>
+
+    <div class="section-card dash-diag">
+      <div class="sec-title dash-sec">🔬 Diagnóstico</div>
+      <input type="radio" name="dash-diag" id="dd-sim" class="dd-radio" checked>
+      <input type="radio" name="dash-diag" id="dd-reinos" class="dd-radio">
+      <input type="radio" name="dash-diag" id="dd-erros" class="dd-radio">
+      <div class="dd-abas">
+        <label for="dd-sim">🎯 Simulados</label>
+        <label for="dd-reinos">⚠️ Reinos</label>
+        <label for="dd-erros">🔬 Erros</label>
+      </div>
+      <div class="dd-painel dd-p-sim">
+        <div id="sim-global-stats" class="sim-global-grid"></div>
+        <div id="sim-por-formato"></div>
+        <div id="sim-kingdom-breakdown"></div>
+      </div>
+      <div class="dd-painel dd-p-reinos">
+        <div class="atencao-legenda">Revisões atrasadas e <b>% de acerto nos flashcards desde sempre</b> — não é quanto do reino você já estudou.</div>
+        <div id="avg-time-list"></div>
+      </div>
+      <div class="dd-painel dd-p-erros">
+        <div id="controle-erros"></div>
+        <div id="controle-erros-foot" class="dash-foot"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <details class="dash-mais" id="dash-mais" open>
+    <summary><span>📊 Mais números</span><span class="dash-mais-dica">conquistas, tempo, flashcards, ranking, totais</span></summary>
+    <div class="dash-fold dash-mais-grid">
+      <div class="section-card gamify-badges dash-mais-largo">
         <div class="gamify-badges-title">🏅 CONQUISTAS</div>
         <span id="dash-badges-summary" class="gamify-badges-summary"></span>
         <div class="badges-row" id="dash-badges"></div>
         <a class="dash-verlink" onclick="showScreen('conquistas')">ver todas →</a>
       </div>
-    </div>
 
-    <div class="section-card dash-card">
-      <div class="dash-head">
-        <div class="sec-title dash-sec">🧭 O que fazer agora</div>
-        <div class="dash-conta" id="fila-conta"></div>
+      <div class="section-card dash-card-tempo dash-mais-card">
+        <div class="dash-head">
+          <div class="sec-title dash-sec">📊 Tempo estudado</div>
+          <div class="dash-head-tools">
+            <span id="study-chart-total" class="dash-foot dash-foot-inline"></span>
+            <div class="chart-tabs">
+              <button class="chart-tab active" id="ct-day" onclick="setChartTab('day',this)">Diário</button>
+              <button class="chart-tab" id="ct-week" onclick="setChartTab('week',this)">Semanal</button>
+              <button class="chart-tab" id="ct-month" onclick="setChartTab('month',this)">Mensal</button>
+            </div>
+            <button class="btn btn-xs btn-ghost" onclick="exportStudyCSV()" title="Baixar histórico de estudos em CSV"><i class="fa fa-download"></i></button>
+            <button class="btn btn-xs btn-ghost" onclick="exportHistoryPDF()" title="Gerar PDF do histórico de estudos e desempenho"><i class="fa fa-file-pdf"></i></button>
+          </div>
+        </div>
+        <div class="chart-svg-wrap dash-grow" id="study-chart-wrap"></div>
       </div>
-      <div class="dash-scroll"><div id="next-steps-list"></div></div>
-    </div>
 
-    <div class="section-card dash-card">
-      <div class="dash-head">
-        <div class="sec-title dash-sec">🔁 Revisão — na vez</div>
-        <button id="notif-permission-btn" class="btn btn-xs btn-ghost" style="display:none" onclick="requestNotifPermission()" title="Receber um aviso quando houver revisões atrasadas">🔔 Lembretes</button>
+      <div class="section-card dash-mais-card">
+        <div class="sec-title dash-sec">📈 Aproveitamento nos flashcards</div>
+        <div id="fc-trend-chart"></div>
+        <div id="fc-trend-total" class="dash-foot"></div>
       </div>
-      <div id="divida-resumo"></div>
-      <div class="dash-scroll" id="dash-overdue-revs"></div>
-    </div>
 
-    <div class="section-card dash-card">
-      <div class="sec-title dash-sec">🎯 Desempenho em simulados</div>
-      <div id="sim-global-stats" class="sim-global-grid"></div>
-      <div class="dash-scroll">
-        <div id="sim-por-formato"></div>
-        <div id="sim-kingdom-breakdown"></div>
-        <div class="sec-title dash-sec dash-sec-sub">🏅 Ranking de reinos</div>
+      <div class="section-card dash-mais-card">
+        <div class="sec-title dash-sec">🏅 Ranking de reinos</div>
         <div id="kingdom-ranking"></div>
       </div>
-    </div>
 
-    <div class="section-card dash-card">
-      <div class="sec-title dash-sec">🔬 Controle de erros</div>
-      <div class="dash-scroll" id="controle-erros"></div>
-      <div id="controle-erros-foot" class="dash-foot"></div>
-    </div>
+      <div class="stats-grid dash-mais-largo" id="dash-stats" style="grid-template-columns:repeat(6,1fr);gap:8px"></div>
 
-    <div class="section-card dash-card">
-      <div class="sec-title dash-sec">📈 Aproveitamento nos flashcards</div>
-      <div class="dash-scroll" id="fc-trend-chart"></div>
-      <div id="fc-trend-total" class="dash-foot"></div>
-    </div>
-
-    <div class="section-card dash-card">
-      <div class="sec-title dash-sec">⚠️ Reinos que precisam de atenção</div>
-      <div class="atencao-legenda">Revisões atrasadas e <b>% de acerto nos flashcards desde sempre</b> — não é quanto do reino você já estudou.</div>
-      <div class="dash-scroll" id="avg-time-list"></div>
-    </div>
-
-    <div class="section-card dash-card dash-card-tempo">
-      <div class="dash-head">
-        <div class="sec-title dash-sec">📊 Tempo estudado</div>
-        <div class="dash-head-tools">
-          <span id="study-chart-total" class="dash-foot dash-foot-inline"></span>
-          <div class="chart-tabs">
-            <button class="chart-tab active" id="ct-day" onclick="setChartTab('day',this)">Diário</button>
-            <button class="chart-tab" id="ct-week" onclick="setChartTab('week',this)">Semanal</button>
-            <button class="chart-tab" id="ct-month" onclick="setChartTab('month',this)">Mensal</button>
-          </div>
-          <button class="btn btn-xs btn-ghost" onclick="exportStudyCSV()" title="Baixar histórico de estudos em CSV"><i class="fa fa-download"></i></button>
-          <button class="btn btn-xs btn-ghost" onclick="exportHistoryPDF()" title="Gerar PDF do histórico de estudos e desempenho"><i class="fa fa-file-pdf"></i></button>
-        </div>
+      <!-- Frase motivacional -->
+      <div id="motive-card" class="dash-mais-largo" onclick="rotatePhrase()" style="background:linear-gradient(135deg,var(--accent),#4f46e5);border-radius:18px;padding:22px 28px;text-align:center;margin-bottom:18px;box-shadow:0 6px 28px rgba(108,71,255,0.25);cursor:pointer;transition:transform 0.2s" title="Clique para outra frase">
+        <div style="font-size:11px;color:rgba(255,255,255,0.65);letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:8px">✨ MENSAGEM DO DIA</div>
+        <div id="motive-text" style="font-size:16px;font-weight:800;color:#fff;line-height:1.5;max-width:600px;margin:0 auto"></div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:10px">clique para trocar a frase</div>
       </div>
-      <div class="chart-svg-wrap dash-grow" id="study-chart-wrap"></div>
     </div>
-
-    <div class="section-card dash-card dash-x4">
-      <div class="dash-head">
-        <div class="sec-title dash-sec">📅 Agenda semanal de estudos</div>
-        <div class="dash-head-tools">
-          <button class="btn btn-xs btn-ghost" onclick="planoRetaFinal()" title="Preenche os 7 dias com os blocos da reta final. Não apaga nada do que você já marcou."><i class="fa fa-bolt"></i> Reta final</button>
-          <span class="dash-foot dash-foot-inline">Clique num dia para adicionar</span>
-        </div>
-      </div>
-      <div class="dash-scroll dash-grow" id="weekly-plan"></div>
-    </div>
-
-  </div>
-
-  <!-- Abaixo da dobra: o resto continua existindo, só sai da primeira tela -->
-  <div class="stats-grid" id="dash-stats" style="grid-template-columns:repeat(6,1fr);gap:8px"></div>
-
-  <!-- Frase motivacional -->
-  <div id="motive-card" onclick="rotatePhrase()" style="background:linear-gradient(135deg,var(--accent),#4f46e5);border-radius:18px;padding:22px 28px;text-align:center;margin-bottom:18px;box-shadow:0 6px 28px rgba(108,71,255,0.25);cursor:pointer;transition:transform 0.2s" title="Clique para outra frase">
-    <div style="font-size:11px;color:rgba(255,255,255,0.65);letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:8px">✨ MENSAGEM DO DIA</div>
-    <div id="motive-text" style="font-size:16px;font-weight:800;color:#fff;line-height:1.5;max-width:600px;margin:0 auto"></div>
-    <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:10px">clique para trocar a frase</div>
-  </div>
+  </details>
 </div>
 
 <!-- ===== EDITAIS ===== -->
@@ -5850,6 +5930,7 @@ function updateDaysLeft(){
     else if(d<=60)pill.setAttribute('data-urg','perto');
     else pill.removeAttribute('data-urg');
   }
+  dashFaixaHojeRender();
 }
 function isAfterExam(dateStr){return db.examDate&&dateStr>db.examDate;}
 
@@ -6465,6 +6546,14 @@ document.addEventListener('click',e=>{
   if(e.target.closest&&e.target.closest('#nav-mais'))return;
   navMaisAlternar(false);
 });
+// "Mais números" do Painel: lembra se ficou aberto ou fechado neste aparelho (só
+// preferência de tela, localStorage; começa aberto).
+(function(){
+  const d=document.getElementById('dash-mais');
+  if(!d)return;
+  try{if(localStorage.getItem('vdn_dash_mais')==='0')d.open=false;}catch(e){}
+  d.addEventListener('toggle',()=>{try{localStorage.setItem('vdn_dash_mais',d.open?'1':'0');}catch(e){}});
+})();
 function showScreen(name){
   // sair da tela de flashcards desliga o modo de foco do celular
   if(name!=='flashcards')document.body.classList.remove('fc-estudando');
@@ -20407,7 +20496,9 @@ function renderRevisions(){
 
 // Conta só o que já passou do prazo (mesma regra da aba "Atrasadas") — não mistura
 // com o que vence hoje, pra o alarme da barra lateral bater com o que a tela mostra.
-function updateRevBadge(){
+// Contagem separada do desenho só pra o selo do menu e a faixa do Painel usarem a MESMA
+// conta (mesma regra de sempre — a unificação dos números é da Parte B do redesign).
+function revAtrasadasContagem(){
   const today=todayStr();let cnt=0;
   db.kingdoms.forEach(k=>{(db.topics[k.id]||[]).forEach(t=>{(t.subtopics||[]).forEach(s=>{
     if(!s.studied)return;
@@ -20417,8 +20508,35 @@ function updateRevBadge(){
       if(!r.completed&&prevDone&&r.date<today)cnt++;
     });
   });});});
+  return cnt;
+}
+function updateRevBadge(){
+  const cnt=revAtrasadasContagem();
   const b=document.getElementById('rev-badge');
   if(cnt>0){b.textContent=cnt;b.style.display='inline';}else{b.style.display='none';}
+  dashFaixaHojeRender();
+}
+// Faixa de hoje do Painel (redesign A3): só lê e escreve na tela, não grava nada.
+function dashFaixaHojeRender(){
+  const dEl=document.getElementById('dash-prova-dias');
+  if(dEl){
+    const card=document.getElementById('dash-prova-card');
+    const lbl=document.getElementById('dash-prova-lbl');
+    if(!db.examDate){dEl.textContent='—';if(lbl)lbl.textContent='defina a data da prova';if(card)card.setAttribute('data-urg','');}
+    else{
+      const d=daysDiff(todayStr(),db.examDate);
+      dEl.textContent=d>=0?d:'✓';
+      if(lbl)lbl.textContent=d<0?'prova realizada':(d===1?'dia para a prova':'dias para a prova');
+      if(card)card.setAttribute('data-urg',d<0?'passou':d<=30?'reta':d<=60?'perto':'');
+    }
+  }
+  const aEl=document.getElementById('dash-atrasadas-val');
+  if(aEl){
+    const n=revAtrasadasContagem();
+    aEl.textContent=n;
+    const c=document.getElementById('dash-atrasadas-card');
+    if(c)c.classList.toggle('dash-faixa-zerado',!n);
+  }
 }
 
 // ===== DASHBOARD =====
@@ -20433,11 +20551,9 @@ function renderControleErros(){
   if(!el)return;
   const {tot,porAssunto,classificadas,erradas}=motivosAgregado();
   if(!classificadas){
-    el.innerHTML=`<div class="ce-vazio">
-      <b>Nenhum erro classificado ainda.</b>
-      <div>Ao corrigir uma prova, cada questão tem os botões <b>Não sabia · Li errado · Chutei</b>.
-      Um clique em cada erro e este painel te diz onde está o seu gargalo — que quase nunca é só conteúdo.
-      Tem também <b>Item desatualizado</b>, pra quando o erro foi da questão e não seu.</div>
+    // Estado vazio em uma linha (redesign A3); a explicação inteira fica no title.
+    el.innerHTML=`<div class="ce-vazio dash-vazio-linha" title="Ao corrigir uma prova, cada questão tem os botões Não sabia · Li errado · Chutei. Um clique em cada erro e este painel te diz onde está o seu gargalo — que quase nunca é só conteúdo. Tem também Item desatualizado, pra quando o erro foi da questão e não seu.">
+      <b>Nenhum erro classificado ainda.</b> Ao corrigir uma prova, marque cada erro em <b>Não sabia · Li errado · Chutei</b>.
     </div>`;
     if(foot)foot.textContent=erradas?`${erradas} erro(s) esperando classificação`:'';
     return;
@@ -20535,6 +20651,7 @@ function renderRenewalBanner(){
 function renderDashboard(){
   renderBackupBadge(); // o dia pode ter virado com a aba aberta
   renderRenewalBanner();
+  dashFaixaHojeRender();
   const today=todayStr();
   let totBoss=0,totMini=0,totRevDone=0,totRevOver=0,p30=0,p70=0,p100=0;
   const kingdoms=[];
