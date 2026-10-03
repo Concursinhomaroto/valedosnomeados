@@ -2831,6 +2831,42 @@ body.missao-ligada #dash-overdue-revs{display:none;}
   .treino-topo-simulado{flex:1 1 100%;margin:0;justify-content:center;}
 }
 
+/* ===== ACERVO (rodada 2) ===== */
+.banco-acoes{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;}
+.banco-chips-faixa{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;}
+.banco-chips-faixa .banco-chip-grupo{margin:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.banco-chips-faixa .banco-chip-rotulo{margin:0;}
+.banco-chips-faixa .banco-chip-nota{display:none;}
+.banco-lista-mais{display:block;margin:10px auto 0;}
+.banco-lista-mais span{color:var(--muted);font-weight:600;}
+.banco-raso{margin:16px 0 0;padding:14px 16px;}
+.banco-raso-cab{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+.banco-raso-sub{font-size:12px;color:var(--muted);font-weight:600;margin-top:2px;}
+.banco-raso-lista{display:flex;flex-direction:column;}
+.banco-raso-linha{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1.6fr) 86px 70px;gap:10px;align-items:center;
+  padding:7px 8px;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer;border-radius:6px;}
+.banco-raso-linha:hover{background:var(--st-acao-bg);}
+.banco-raso-th{cursor:default;font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+.banco-raso-th:hover{background:none;}
+.banco-raso-nome,.banco-raso-chefao{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.banco-raso-nome{font-weight:800;color:var(--text);}
+.banco-raso-chefao{color:var(--muted);}
+.banco-raso-n,.banco-raso-pct{text-align:right;font-weight:900;font-variant-numeric:tabular-nums;}
+.banco-raso-todos{display:inline-block;margin-top:8px;font-size:12px;}
+.banco-cobertura{margin-top:14px;}
+.banco-cobertura>summary{cursor:pointer;list-style:none;font-size:13px;font-weight:900;color:var(--text2);padding:8px 2px;
+  display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+.banco-cobertura>summary::-webkit-details-marker{display:none;}
+.banco-cobertura>summary::before{content:'▸';transition:transform .2s;}
+.banco-cobertura[open]>summary::before{transform:rotate(90deg);}
+.banco-cobertura>summary span{font-size:12px;font-weight:600;color:var(--muted);}
+.banco-cobertura>.section-card{margin-top:4px!important;}
+@media(max-width:600px){
+  .banco-raso-linha{grid-template-columns:minmax(0,1fr) 54px 54px;}
+  .banco-raso-chefao{display:none;}
+  .banco-acoes{margin-left:0;}
+}
+
 /* ===== PAINEL (rodada 2): densidade, sem vão vazio =====
    "Hoje" e Diagnóstico com a mesma altura; a Agenda sai da coluna e vira uma faixa de
    7 colunas na largura inteira; "Hoje" ganha duas colunas por dentro. */
@@ -16627,7 +16663,7 @@ function bancoFiltroToggleTagChip(tag){
   if(el)el.outerHTML=bancoChipsTagsHTML();
   bancoListaRefrescar();
 }
-function bancoListaToggle(){bancoListaAberta=!bancoListaAberta;bancoListaRefrescar();}
+function bancoListaToggle(){bancoListaAberta=!bancoListaAberta;bancoListaLimite=BANCO_LISTA_PASSO;bancoListaRefrescar();}
 // Refresca SO a contagem e a lista — nunca os controles de filtro. E o que deixa digitar
 // no campo de busca sem perder o foco a cada letra: um innerHTML da tela inteira reseta
 // cursor e recomeça o campo do zero.
@@ -16858,9 +16894,16 @@ function bancoFormatoTrocou(prefixo){
   const gabEl=document.getElementById(prefixo+'gabarito');
   if(gabEl)gabEl.innerHTML=bancoGabaritoOpcoesHTML(formato,[],'');
 }
+// A lista mostra 30 por vez; "carregar mais" soma mais 30 (antes parava nas 30 primeiras
+// sem jeito de ver o resto, a não ser filtrando).
+const BANCO_LISTA_PASSO=30;
+let bancoListaLimite=BANCO_LISTA_PASSO;
+function bancoListaMais(){bancoListaLimite+=BANCO_LISTA_PASSO;bancoListaRefrescar();}
 function bancoListaItensHTML(pool){
   if(!pool.length)return'<div class="empty" style="padding:14px 0"><p style="font-size:12px">Nada com esse filtro.</p></div>';
-  return pool.slice(0,30).map(bancoCardHTML).join('');
+  const resto=pool.length-bancoListaLimite;
+  return pool.slice(0,bancoListaLimite).map(bancoCardHTML).join('')
+    +(resto>0?`<button class="btn btn-sm btn-ghost banco-lista-mais" onclick="bancoListaMais()">carregar mais ${Math.min(resto,BANCO_LISTA_PASSO)} <span>(faltam ${resto})</span></button>`:'');
 }
 function bancoEditarAbrir(cf){
   bancoEditando=new Set([cf]);   // um por vez: dois forms abertos juntos e's confuso pra digitar
@@ -17274,7 +17317,45 @@ function bancoMapaCalorHTML(){
           onclick="bancoMapaAbrirAssunto('${d.subId}')"><span>${d.n}</span></div>`;
       }).join('')}
     </div>
-    <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-top:12px" onclick="bancoMapaGerarOndeRaso()"><i class="fa fa-wand-magic-sparkles"></i> Gerar questões onde o banco é raso</button>
+  </div>`;
+}
+// Rodada 2: o mosaico não some — vai pro fim da tela, recolhido. O que fica à vista é a
+// lista que serve pra decidir: os assuntos rasos, do menor pro maior. Os números saem de
+// bancoMapaDados() (o mesmo cálculo do mosaico); o chefão vem da árvore de assuntos.
+let bancoCoberturaAberta=false;
+let bancoRasoTodos=false;
+const BANCO_RASO_MOSTRA=10;
+function bancoCoberturaHTML(){
+  const mapa=bancoMapaCalorHTML();
+  if(!mapa)return'';
+  return`<details class="banco-cobertura"${bancoCoberturaAberta?' open':''} ontoggle="bancoCoberturaAberta=this.open">
+    <summary>🗺️ Cobertura do banco <span>mosaico por assunto: tamanho = questões, cor = acerto</span></summary>
+    ${mapa}
+  </details>`;
+}
+function bancoRasoHTML(){
+  const rasos=bancoMapaDados().filter(d=>d.raso).sort((a,b)=>a.n-b.n||(a.pct??101)-(b.pct??101));
+  if(!bancoMapaDados().length)return'';
+  const chefao={};
+  simIndiceAssuntos().forEach(c=>{chefao[c.sub.id]=c.topic&&c.topic.name;});
+  const vis=bancoRasoTodos?rasos:rasos.slice(0,BANCO_RASO_MOSTRA);
+  return`<div class="section-card banco-raso" id="banco-raso">
+    <div class="banco-raso-cab">
+      <div><div class="sec-title" style="margin:0">🌾 Onde o banco está raso</div>
+        <div class="banco-raso-sub">assuntos com menos de ${BANCO_MAPA_RASO} questões, do menor pro maior — clique pra ver as questões</div></div>
+      <button class="btn btn-sm btn-ghost" onclick="bancoMapaGerarOndeRaso()"><i class="fa fa-wand-magic-sparkles"></i> Gerar questões onde o banco é raso</button>
+    </div>
+    ${rasos.length?`<div class="banco-raso-lista">
+      <div class="banco-raso-linha banco-raso-th"><span>Assunto</span><span>Chefão</span><span>Questões</span><span>Acerto</span></div>
+      ${vis.map(d=>`<div class="banco-raso-linha" onclick="bancoMapaAbrirAssunto('${d.subId}')" title="Ver as questões de ${escapeHtml(d.nome)}">
+        <span class="banco-raso-nome">${escapeHtml(d.nome)}</span>
+        <span class="banco-raso-chefao">${escapeHtml(chefao[d.subId]||'—')}</span>
+        <span class="banco-raso-n">${d.n}</span>
+        <span class="banco-raso-pct" style="color:${d.pct==null?'var(--muted)':faixaCor(d.pct)}">${d.pct==null?'—':d.pct+'%'}</span>
+      </div>`).join('')}
+    </div>
+    ${rasos.length>BANCO_RASO_MOSTRA?`<span class="dash-verlink banco-raso-todos" onclick="bancoRasoTodos=!bancoRasoTodos;const e=document.getElementById('banco-raso');if(e)e.outerHTML=bancoRasoHTML();">${bancoRasoTodos?'ver só os 10 primeiros':`ver todos (${rasos.length})`}</span>`:''}`
+    :`<div class="banco-raso-sub" style="margin-top:8px">Nenhum assunto com menos de ${BANCO_MAPA_RASO} questões — o banco está bem distribuído.</div>`}
   </div>`;
 }
 // Clicar na celula abre a lista ja filtrada por aquele assunto — reusa o modo "assunto"
@@ -17324,33 +17405,37 @@ function bancoFiltrosHTML(){
       </select>
       <label class="banco-check"><input type="checkbox" ${f.favorita?'checked':''}
         onchange="bancoFiltroMudouFavorita(this)"> ⭐ favorita</label>
-      ${bancoFiltroTemAlgo()?`<button class="btn btn-xs btn-ghost" onclick="bancoFiltroLimpar();renderSimGeralScreen()" style="margin-left:auto">Limpar filtro</button>`:''}
+      ${bancoFiltroTemAlgo()?`<button class="btn btn-xs btn-ghost" onclick="bancoFiltroLimpar();renderSimGeralScreen()">Limpar filtro</button>`:''}
+      <span class="banco-acoes">
+        <button class="btn btn-xs btn-ghost" onclick="bancoCriarAbrir()"><i class="fa fa-plus"></i> Nova questão</button>
+        <button class="btn btn-xs btn-ghost" onclick="bancoImportarAbrir()"><i class="fa fa-file-import"></i> Importar em lote</button>
+        <button class="btn btn-xs btn-ghost" onclick="bancoMoverAssuntoAbrir()"><i class="fa fa-right-left"></i> Mover assunto</button>
+      </span>
     </div>
-    <div class="banco-chip-grupo">
-      <span class="banco-chip-rotulo">Estado</span>
-      ${bancoChipsEstadoHTML()}
+    <div class="banco-chips-faixa">
+      <div class="banco-chip-grupo">
+        <span class="banco-chip-rotulo">Estado</span>
+        ${bancoChipsEstadoHTML()}
+      </div>
+      <div class="banco-chip-grupo" title="Nível aferido pelo seu acerto, não declarado pela IA">
+        <span class="banco-chip-rotulo">Nível</span>
+        <span class="banco-chip-nota">aferido pelo seu acerto, não declarado pela IA</span>
+        ${bancoChipsNivelHTML()}
+      </div>
+      ${tags.length?`<div class="banco-chip-grupo">
+        <span class="banco-chip-rotulo">Natureza</span>
+        ${bancoChipsTagsHTML()}
+      </div>`:''}
     </div>
-    <div class="banco-chip-grupo">
-      <span class="banco-chip-rotulo">Nível</span>
-      <span class="banco-chip-nota">aferido pelo seu acerto, não declarado pela IA</span>
-      ${bancoChipsNivelHTML()}
-    </div>
-    ${tags.length?`<div class="banco-chip-grupo">
-      <span class="banco-chip-rotulo">Natureza</span>
-      ${bancoChipsTagsHTML()}
-    </div>`:''}
     <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
       <span id="banco-filtro-conta" style="font-size:12px;font-weight:700;color:var(--muted)">${bancoFiltroContaHTML(pool)}</span>
       <button id="banco-filtro-ver" class="sg-mais" onclick="bancoListaToggle()" style="margin:0">${bancoListaAberta?'▴ esconder':`▾ ver (${Math.min(pool.length,30)}${pool.length>30?' de '+pool.length:''})`}</button>
-      <span style="flex:1"></span>
-      <button class="btn btn-xs btn-ghost" onclick="bancoCriarAbrir()"><i class="fa fa-plus"></i> Nova questão</button>
-      <button class="btn btn-xs btn-ghost" onclick="bancoImportarAbrir()"><i class="fa fa-file-import"></i> Importar em lote</button>
-      <button class="btn btn-xs btn-ghost" onclick="bancoMoverAssuntoAbrir()"><i class="fa fa-right-left"></i> Mover assunto</button>
     </div>
     <div id="banco-filtro-lista" class="banco-lista">
       ${bancoListaConteudoHTML(pool)}
     </div>
-    ${bancoMapaCalorHTML()}
+    ${bancoRasoHTML()}
+    ${bancoCoberturaHTML()}
   </div>`;
 }
 // A aba inteira. montarHTML continua devolvendo '' quando nao ha questao nenhuma — o
