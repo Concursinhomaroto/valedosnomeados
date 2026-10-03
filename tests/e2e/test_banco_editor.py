@@ -268,6 +268,49 @@ async def main():
         assert r['achouSubName'] and r['deAgora']=='sE2'
         print('   OK\n')
 
+        print('=== L) "Mover assunto" tambem resolve questao ÓRFÃ (subId apagado/inexistente) ===')
+        # "tem muitas questões sem assunto vinculado, seu dispositivo serviu de nada" —
+        # o "De:" so listava assuntos que EXISTEM; questao com subId apagado (ou vazio)
+        # nao aparecia em lugar nenhum do seletor, entao nao dava pra corrigir em massa.
+        r=await page.evaluate("""()=>{
+          db.acervo=[];db.provas=[];db.provasArquivo=[];
+          QS('kEnf','Enfermagem','💉','sE1','Choque septico',4,'L').forEach(q=>{
+            db.acervo.push({...q,_chaveForte:acervoChave2(q),tags:[],favorita:false,status:'ativa',
+              vezesRespondida:0,acertos:0,criacao:new Date().toISOString(),origem:'ia'});
+          });
+          db.acervo[0].subId='id-apagado-faz-tempo';
+          db.acervo[1].subId='';
+          showScreen('banco');
+          bancoMoverAssuntoAbrir();
+          const opcoes=[...document.getElementById('banco-mover-de').options].map(o=>o.value);
+          return {temOpcaoOrfas:opcoes.includes('__orfas__')};}""")
+        print('   select "De:" oferece "__orfas__": %s'%r['temOpcaoOrfas'])
+        assert r['temOpcaoOrfas']
+        print('   OK\n')
+
+        r=await page.evaluate("""()=>{
+          // a busca por trecho tambem precisa achar a orfa e apontar "__orfas__", nao o
+          // subId dela (que nao existe como <option> nenhuma)
+          const q0=db.acervo.find(x=>x.subId==='id-apagado-faz-tempo');
+          bancoMoverAssuntoBuscarAtualizar(q0.questao.slice(5,25));
+          const html=document.getElementById('banco-mover-busca-resultado').innerHTML;
+          const m=html.match(/bancoMoverAssuntoUsarDe\\('([^']*)'\\)/);
+          if(m)bancoMoverAssuntoUsarDe(m[1]);
+          return {deAgora:document.getElementById('banco-mover-de').value};}""")
+        print('   busca por trecho de uma órfã preencheu De: %s'%r['deAgora'])
+        assert r['deAgora']=='__orfas__'
+        print('   OK\n')
+
+        r=await page.evaluate("""()=>{
+          document.getElementById('banco-mover-de').value='__orfas__';
+          document.getElementById('banco-mover-para').value='sE1';
+          bancoMoverAssuntoExecutar();
+          return {semAssuntoRestante:db.acervo.filter(q=>!simFindSub(q.subId)).length,
+                  agoraEmSE1:db.acervo.filter(q=>q.subId==='sE1').length};}""")
+        print('   %s'%r)
+        assert r['semAssuntoRestante']==0 and r['agoraEmSE1']==4
+        print('   OK\n')
+
         print('erros de JS: %s'%(real_errors(errs) or 'nenhum'))
         assert not real_errors(errs)
         await b.close()

@@ -135,6 +135,36 @@ async def main():
         assert r['tela'] and r['provas']>=1 and r['treino']
         print('   OK\n')
 
+        print('=== H) deck "Sem assunto vinculado" junta questão com subId apagado/inexistente ===')
+        # achado ao vivo: "tem muitas questões sem assunto vinculado" — o filtro por
+        # Assunto so lista assunto que existe, entao item com subId orfao nunca aparecia
+        # em lugar nenhum (so contava no total geral). Aqui pelo menos vira visivel.
+        r=await page.evaluate("""()=>{
+          db.acervo=[];db.provas=[];
+          const qs=QS('kEnf','Enfermagem','💉','sE1','Choque septico',5,'H');
+          qs.forEach(q=>{q._chaveForte=acervoChave2(q);Object.assign(q,acervoCamposNovos('ia'));});
+          qs[0].subId='id-que-foi-apagado';
+          qs[1].subId='';
+          db.acervo=qs;
+          renderSimGeralScreen();
+          const nums={};
+          document.querySelectorAll('.treino-deck-linha').forEach(el=>{
+            nums[el.querySelector('.treino-deck-linha-txt b').textContent]=el.querySelector('.treino-deck-linha-num').textContent;
+          });
+          return nums;}""")
+        print('   %s'%r)
+        assert r.get('Sem assunto vinculado')=='2'
+        print('   OK\n')
+
+        print('=== H.1) sem nenhum orfao, o deck nem aparece ===')
+        r=await page.evaluate("""()=>{
+          db.acervo.forEach(q=>{q.subId='sE1';});
+          renderSimGeralScreen();
+          return [...document.querySelectorAll('.treino-deck-linha-txt b')].map(e=>e.textContent);}""")
+        print('   decks: %s'%r)
+        assert 'Sem assunto vinculado' not in r
+        print('   OK\n')
+
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))
         assert not graves, graves
