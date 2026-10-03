@@ -3,3 +3,5 @@
 tests/e2e/_out/
 __pycache__/
 *.pyc
+tests/e2e/agenda_reta.png
+tests/e2e/resumo_novo.png
