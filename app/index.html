@@ -14673,6 +14673,9 @@ async function acervoCarregar(){
     toast(`📚 Acervo recuperado: ${partes.join(' + ')}.`,'var(--accent)');
   }
   renderSimGeralScreen();
+  // A prévia da Missão foi montada antes do acervo chegar (sem o bloco de questões):
+  // o botão do Painel recalcula agora, pra contagem bater com a missão de verdade.
+  try{missaoCtaRender();}catch(e){}
   return db.acervo.length;
 }
 
@@ -17351,7 +17354,7 @@ function bancoRasoHTML(){
         <span class="banco-raso-nome">${escapeHtml(d.nome)}</span>
         <span class="banco-raso-chefao">${escapeHtml(chefao[d.subId]||'—')}</span>
         <span class="banco-raso-n">${d.n}</span>
-        <span class="banco-raso-pct" style="color:${d.pct==null?'var(--muted)':faixaCor(d.pct)}">${d.pct==null?'—':d.pct+'%'}</span>
+        <span class="banco-raso-pct" style="color:${d.pct==null?'var(--muted)':faixaCorTexto(d.pct)}">${d.pct==null?'—':d.pct+'%'}</span>
       </div>`).join('')}
     </div>
     ${rasos.length>BANCO_RASO_MOSTRA?`<span class="dash-verlink banco-raso-todos" onclick="bancoRasoTodos=!bancoRasoTodos;const e=document.getElementById('banco-raso');if(e)e.outerHTML=bancoRasoHTML();">${bancoRasoTodos?'ver só os 10 primeiros':`ver todos (${rasos.length})`}</span>`:''}`
@@ -21321,13 +21324,34 @@ function missaoMontar(){
     itens.push({tipo:'q',subId:pior.subId,nome:pior.subName,sub:pior.kingdomName||'',alvo,
       base:missaoQFeitasHoje(pior.subId),min:Math.round(alvo*MISSAO_MIN_POR_QUESTAO)});
   }
-  return {v:1,data:hoje,criadaEm:Date.now(),orc,curta,itens,pulados:[],feitos:[],
+  return {v:1,data:hoje,criadaEm:Date.now(),orc,curta,itens:missaoIntercalar(itens),ordem:'intercalada',pulados:[],feitos:[],
     iniciada:false,dispensada:false,concluida:false,
     xpInicio:db.xp||0,xpRef:db.xp||0,minInicio:feito,atrasadasInicio:n.atrasadas};
+}
+// Rodada 2: muda só a ORDEM final dos itens — blocos de até 5 revisões alternados com os
+// outros tipos (5 revisões → flashcards → 5 revisões → questões → o resto das revisões).
+// Quantidades e regra de escolha continuam as de missaoMontar(). Função pura.
+const MISSAO_BLOCO_REV=5;
+function missaoIntercalar(itens){
+  const rev=itens.filter(i=>i.tipo==='rev');
+  const blocos=['fc','q'].map(t=>itens.filter(i=>i.tipo===t)).filter(b=>b.length);
+  const outros=itens.filter(i=>!['rev','fc','q'].includes(i.tipo));
+  const out=[];
+  let r=0;
+  while(r<rev.length||blocos.length){
+    out.push(...rev.slice(r,r+MISSAO_BLOCO_REV));r+=MISSAO_BLOCO_REV;
+    if(blocos.length)out.push(...blocos.shift());
+  }
+  return out.concat(outros);
 }
 function missaoGarantir(){
   let m=missaoAtual();
   if(!m){m=missaoMontar();missaoGuardar(m);}
+  // Plano guardado com a ordem antiga e AINDA NÃO INICIADO (nada feito, nada pulado):
+  // reordena os mesmos itens. Missão já iniciada nunca é remontada.
+  else if(m.ordem!=='intercalada'&&!m.iniciada&&!(m.feitos||[]).length&&!(m.pulados||[]).length){
+    m.itens=missaoIntercalar(m.itens);m.ordem='intercalada';missaoGuardar(m);
+  }
   return m;
 }
 function missaoItemFeito(it){
@@ -21362,8 +21386,22 @@ function missaoBarraProgresso(feitos,total){
 }
 
 // Camada da missão (reaproveita o modal do app).
+// Ao fechar a janela da Missão (por qualquer caminho: X, fundo, Esc, botão), o botão do
+// Painel se redesenha — o observador só lê a classe do modal.
+let missaoModalObs=null,missaoModalAberto=false;
+function missaoVigiarModal(){
+  missaoModalAberto=true;
+  if(missaoModalObs)return;
+  const modal=document.getElementById('modal');
+  if(!modal||typeof MutationObserver==='undefined')return;
+  missaoModalObs=new MutationObserver(()=>{
+    if(missaoModalAberto&&!modal.classList.contains('open')){missaoModalAberto=false;missaoCtaRender();}
+  });
+  missaoModalObs.observe(modal,{attributes:true,attributeFilter:['class']});
+}
 function missaoAbrir(){
   if(!missaoLigada()){abrirRevisoesAtrasadas();return;}
+  missaoVigiarModal();
   const m=missaoGarantir();
   const e=missaoEstado(m);
   document.getElementById('modal').classList.remove('modal-wide');
@@ -21500,7 +21538,7 @@ function missaoCtaRender(){
   if(!e.total){txt='✨ Tudo em dia — treinar';sub='nada na vez hoje';}
   else if(e.acabou){txt='🏁 Missão cumprida — ver resumo';sub=`${e.feitos} de ${e.total} itens`;}
   else if(m.iniciada){txt='▶ Continuar a missão do dia';sub=`${e.feitos} de ${e.total} itens · ~${m.orc} min`;}
-  else{txt='🎯 Começar a missão do dia';sub=`${e.total} itens${m.curta?' · meta já batida':''}`;}
+  else{txt='🎯 Começar a missão do dia';sub=`${e.total} ${e.total===1?'item':'itens'}${m.curta?' · meta já batida':''}`;}
   // Composição em chips: o que a missão tem (dados do próprio plano, nenhuma conta nova).
   const nRev=m.itens.filter(i=>i.tipo==='rev').length;
   const nCards=m.itens.filter(i=>i.tipo==='fc').reduce((a,i)=>a+(i.alvo||0),0);
