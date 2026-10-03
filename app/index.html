@@ -12104,6 +12104,11 @@ function treinarDecks(){
      itens:ativo.filter(q=>q.dificuldadeAferida==='dificil')},
     {id:'favoritas',nome:'Favoritas',desc:'Você marcou pra guardar por perto',icon:'⭐',
      itens:ativo.filter(q=>q.favorita)},
+    // achado ao vivo: "tem muitas questões sem assunto vinculado" — itens cujo subId foi
+    // apagado ou nunca existiu ficam invisiveis no filtro por Assunto (nao tem como listar
+    // um assunto que nao existe). Aqui pelo menos aparecem, e o texto aponta o conserto.
+    {id:'semassunto',nome:'Sem assunto vinculado',desc:'Resolva em Banco de Questões → Mover assunto (use a busca por trecho)',icon:'❓',ambar:true,
+     itens:ativo.filter(q=>!simFindSub(q.subId))},
   ];
   // "Cai em Alagoas" do mockup e generico: aqui e o edital que voce mesmo marcou em foco,
   // qualquer que seja — reaproveita o mesmo indice que "marcar so o que cai nele" usa.
@@ -16486,12 +16491,13 @@ function bancoAssuntoOpcoesChefoes(){
   });
   return out;
 }
-function bancoAssuntoOpcoesHTML(chefaoValor,selecionado){
+function bancoAssuntoOpcoesHTML(chefaoValor,selecionado,comOrfas){
   const ix=simIndiceAssuntos();
   const filtrado=chefaoValor?ix.filter(c=>c.topic.id===chefaoValor):ix;
   const porReino={};
   filtrado.forEach(c=>{(porReino[c.kingdom.id]=porReino[c.kingdom.id]||{nome:c.kingdom.name,itens:[]}).itens.push(c);});
   return`<option value="">Escolha o assunto...</option>
+    ${comOrfas&&!chefaoValor?`<option value="__orfas__"${selecionado==='__orfas__'?' selected':''}>⚠️ Sem assunto vinculado (órfãs)</option>`:''}
     ${Object.values(porReino).map(g=>`<optgroup label="${escapeHtml(g.nome)}">
       ${g.itens.map(c=>`<option value="${c.sub.id}"${selecionado===c.sub.id?' selected':''}>${escapeHtml(c.sub.name)}</option>`).join('')}
     </optgroup>`).join('')}`;
@@ -16499,13 +16505,16 @@ function bancoAssuntoOpcoesHTML(chefaoValor,selecionado){
 function bancoAssuntoMudouChefao(assuntoId,chefaoId){
   const sel=document.getElementById(assuntoId);
   const chefaoSel=document.getElementById(chefaoId);
-  if(sel&&chefaoSel)sel.innerHTML=bancoAssuntoOpcoesHTML(chefaoSel.value,'');
+  if(sel&&chefaoSel)sel.innerHTML=bancoAssuntoOpcoesHTML(chefaoSel.value,'',sel.dataset.orfas==='1');
 }
-function bancoAssuntoSelectHTML(id,selecionado){
+// comOrfas: so faz sentido no "De:" de Mover assunto — questoes cujo subId nao bate com
+// NENHUM assunto cadastrado (apagado ou nunca existiu) nao aparecem no indice normal,
+// entao sem esta opcao extra elas eram impossiveis de selecionar pra corrigir em massa.
+function bancoAssuntoSelectHTML(id,selecionado,comOrfas){
   const chefaoId=id+'-chefao';
   const chefoes=bancoAssuntoOpcoesChefoes();
   let chefaoAtual='';
-  if(selecionado){
+  if(selecionado&&selecionado!=='__orfas__'){
     const achado=simIndiceAssuntos().find(c=>c.sub.id===selecionado);
     if(achado)chefaoAtual=achado.topic.id;
   }
@@ -16513,8 +16522,8 @@ function bancoAssuntoSelectHTML(id,selecionado){
     <option value="">Todo chefão</option>
     ${chefoes.map(c=>`<option value="${c.topicId}"${chefaoAtual===c.topicId?' selected':''}>${escapeHtml(c.kingdomName)} — ${escapeHtml(c.topicName)}</option>`).join('')}
   </select>
-  <select id="${id}" class="inp" style="width:auto" aria-label="Escolher assunto">
-    ${bancoAssuntoOpcoesHTML(chefaoAtual,selecionado)}
+  <select id="${id}" class="inp" style="width:auto" aria-label="Escolher assunto"${comOrfas?' data-orfas="1"':''}>
+    ${bancoAssuntoOpcoesHTML(chefaoAtual,selecionado,comOrfas)}
   </select>`;
 }
 function bancoAssuntoLinhaHTML(id,selecionado){
@@ -16551,7 +16560,7 @@ function bancoMoverAssuntoHTML(){
     </div>
     <div class="banco-edit-linha">
       <label style="font-size:10.5px;color:var(--muted);font-weight:700">De:</label>
-      ${bancoAssuntoSelectHTML('banco-mover-de','')}
+      ${bancoAssuntoSelectHTML('banco-mover-de','',true)}
     </div>
     <div class="banco-edit-linha" style="margin-top:6px">
       <label style="font-size:10.5px;color:var(--muted);font-weight:700">Para:</label>
@@ -16586,18 +16595,25 @@ function bancoMoverAssuntoBuscarAtualizar(termo){
 }
 function bancoMoverAssuntoUsarDe(subId){
   const sel=document.getElementById('banco-mover-de');
-  if(sel)sel.value=subId;
+  if(!sel)return;
+  // a questao achada pode ser orfa (subId que nao bate com nada cadastrado) — nesse caso
+  // o proprio subId dela nao existe como <option>, tem que cair no sentinela "__orfas__"
+  sel.value=simFindSub(subId)?subId:'__orfas__';
 }
 function bancoMoverAssuntoExecutar(){
   const deId=(document.getElementById('banco-mover-de')||{}).value;
   const paraId=(document.getElementById('banco-mover-para')||{}).value;
   if(!deId||!paraId){toast('⚠️ Escolha os dois assuntos.','var(--red)');return;}
   if(deId===paraId){toast('⚠️ Os dois assuntos são o mesmo.','var(--red)');return;}
-  const de=simFindSub(deId),para=simFindSub(paraId);
-  if(!de||!para)return;
-  const itens=(db.acervo||[]).filter(q=>q.subId===deId);
-  if(!itens.length){toast(`Nenhuma questão em "${de.name}" agora.`,'var(--muted)');return;}
-  if(!confirm(`Mover ${itens.length} questão(ões) de "${de.name}" pra "${para.name}"? Vale pra sempre — as estatísticas por assunto de ambos mudam.`))return;
+  const para=simFindSub(paraId);
+  if(!para)return;
+  const orfas=deId==='__orfas__';
+  const de=orfas?null:simFindSub(deId);
+  if(!orfas&&!de)return;
+  const nomeDe=orfas?'Sem assunto vinculado (órfãs)':de.name;
+  const itens=orfas?(db.acervo||[]).filter(q=>!simFindSub(q.subId)):(db.acervo||[]).filter(q=>q.subId===deId);
+  if(!itens.length){toast(`Nenhuma questão em "${nomeDe}" agora.`,'var(--muted)');return;}
+  if(!confirm(`Mover ${itens.length} questão(ões) de "${nomeDe}" pra "${para.name}"? Vale pra sempre — as estatísticas por assunto de ambos mudam.`))return;
   let kingdomId='',topicName='';
   db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>{if((t.subtopics||[]).some(s=>s.id===paraId)){kingdomId=k.id;topicName=t.name;}}));
   const kingdom=db.kingdoms.find(k=>k.id===kingdomId);
@@ -16608,7 +16624,7 @@ function bancoMoverAssuntoExecutar(){
   acervoSalvar();
   bancoMovendoAssunto=false;
   renderBancoScreen();
-  toast(`🔀 ${itens.length} questão(ões) movida(s) de "${de.name}" pra "${para.name}".`,'var(--green)');
+  toast(`🔀 ${itens.length} questão(ões) movida(s) de "${nomeDe}" pra "${para.name}".`,'var(--green)');
 }
 function bancoImportarHTML(){
   return`<div class="banco-item banco-item-editando" id="banco-card-importar">
