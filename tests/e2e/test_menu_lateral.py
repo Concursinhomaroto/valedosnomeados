@@ -53,9 +53,11 @@ async def main():
         print('=== E) selo de Revisoes vermelho (atrasado), Treinar/Editais laranja (pendente) ===')
         r=await page.evaluate("""()=>{const c=id=>{const e=document.getElementById(id);e.style.display='inline';
             const v=getComputedStyle(e).backgroundColor;e.style.display='none';return v;};
-          return {rev:c('rev-badge'),erros:c('erros-badge'),editais:c('editais-badge')};}""")
+          return {rev:c('rev-badge'),erros:c('erros-badge'),editais:c('editais-badge'),atrasadas:numerosDoDia().atrasadas};}""")
         print('   %s'%r)
-        assert r['rev']=='rgb(220, 38, 38)' and r['erros']=='rgb(194, 65, 12)' and r['editais']=='rgb(194, 65, 12)'
+        # Parte B: o selo de Revisões é vermelho quando há atraso; sem atraso, laranja (só a cota)
+        assert r['rev']==('rgb(220, 38, 38)' if r['atrasadas'] else 'rgb(194, 65, 12)')
+        assert r['erros']=='rgb(194, 65, 12)' and r['editais']=='rgb(194, 65, 12)'
         print('   OK\n')
 
         print('=== F) texto do menu nao corta mais ("MAPA DOS REIN...") ===')

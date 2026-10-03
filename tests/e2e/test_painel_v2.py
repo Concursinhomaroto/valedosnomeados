@@ -23,9 +23,13 @@ async def main():
         r=await page.evaluate("""()=>({dias:document.getElementById('dash-prova-dias').textContent,
           esperado:String(daysDiff(todayStr(),db.examDate)),
           atrasadas:document.getElementById('dash-atrasadas-val').textContent,
+          sub:document.getElementById('dash-atrasadas-sub').textContent,
+          cota:String(numerosDoDia().cabemHoje),
           menu:document.getElementById('rev-badge').textContent})""")
         print('   %s'%r)
-        assert r['dias']==r['esperado'] and r['atrasadas']=='2' and r['menu']=='2'
+        # Parte B: com a Missão ligada, faixa e menu destacam a cota de hoje; as 2 atrasadas
+        # aparecem como informação secundária
+        assert r['dias']==r['esperado'] and r['atrasadas']==r['cota']==r['menu'] and '2 atrasados' in r['sub']
         print('   OK\n')
 
         print('=== B) cartao de atrasadas e o botao grande abrem a fila de hoje ===')

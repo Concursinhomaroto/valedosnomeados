@@ -2619,8 +2619,6 @@ button.dash-faixa-atrasadas:hover{border-color:var(--st-atrasado);}
 .dash-v2 .div-btn:hover{filter:brightness(1.08);}
 .dash-v2 #dash-overdue-revs{margin-top:12px;}
 .dash-hoje .dash-hoje-sub{font-size:11px;font-weight:900;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:16px 0 6px;}
-/* As 6 primeiras; "ver a fila" no topo do cartão leva pra lista inteira. */
-.dash-hoje #next-steps-list .next-step-item:nth-child(n+7){display:none;}
 
 .dash-diag{grid-area:diag;min-width:0;position:sticky;top:16px;}  /* acompanha a coluna Hoje na rolagem */
 .dd-radio{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}
@@ -2661,6 +2659,65 @@ button.dash-faixa-atrasadas:hover{border-color:var(--st-atrasado);}
   .filter-row{-webkit-mask-image:linear-gradient(90deg,#000 86%,transparent);mask-image:linear-gradient(90deg,#000 86%,transparent);padding-right:28px;}
   /* Ferramentas do "Tempo estudado" (abas + exportar) passavam 33px da borda. */
   .dash-fold .dash-head-tools,.dash-fold .dash-card-tempo .dash-head-tools{flex-wrap:wrap;justify-content:flex-start;}
+}
+
+/* ===== MISSÃO DO DIA (redesign, Parte B) ===== */
+.missao-cta-btn{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;margin:4px 0 4px;padding:14px 18px;
+  border:0;border-radius:14px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#7c3aed,#6d28d9);
+  box-shadow:0 8px 22px rgba(124,58,237,0.32);font:inherit;}
+.missao-cta-btn span{font-size:16px;font-weight:900;}
+.missao-cta-btn small{font-size:12px;font-weight:700;opacity:.85;}
+.missao-cta-btn:hover{filter:brightness(1.08);transform:translateY(-1px);}
+.missao-religar{display:inline-block;margin:2px 0 6px;font-size:12px;}
+/* Com a missão ligada, "Abrir a fila de hoje" vira ação secundária e a amostra de 2
+   revisões (que repetia o topo da lista logo abaixo) sai de cena — a missão a substitui. */
+body.missao-ligada .dash-v2 .div-btn{background:none;color:var(--accent);box-shadow:none;border:1.5px solid var(--border2);
+  padding:8px 14px;font-size:13px;margin-top:10px;}
+body.missao-ligada #dash-overdue-revs{display:none;}
+.gamify-sub{font-size:11px;font-weight:700;color:var(--muted);margin-top:2px;}
+.missao{display:flex;flex-direction:column;gap:12px;}
+.missao-cab{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:12px;color:var(--muted);font-weight:700;}
+.missao-cab b{font-size:15px;color:var(--text);font-variant-numeric:tabular-nums;}
+.missao-progresso{height:8px;border-radius:99px;background:var(--border);overflow:hidden;}
+.missao-progresso span{display:block;height:100%;background:linear-gradient(90deg,#8b5cf6,#16a34a);transition:width .5s ease;}
+.missao-atual{border:2px solid var(--border2);border-radius:14px;padding:14px 16px;background:var(--panel2);}
+.missao-atual-tipo{font-size:11px;font-weight:900;letter-spacing:1px;text-transform:uppercase;color:var(--accent);}
+.missao-atual-nome{font-size:17px;font-weight:900;color:var(--text);margin-top:4px;}
+.missao-atual-sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.missao-atual-acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center;}
+.missao-prox{font-size:12px;color:var(--text2);}
+.missao-prox span{color:var(--muted);}
+.missao-lista summary{cursor:pointer;font-size:12px;font-weight:800;color:var(--accent);}
+.missao-lista ul{list-style:none;margin-top:8px;display:flex;flex-direction:column;gap:4px;}
+.missao-li{display:grid;grid-template-columns:22px minmax(0,1fr);column-gap:6px;font-size:12px;padding:6px 8px;border-radius:8px;}
+.missao-li small{grid-column:2;color:var(--muted);}
+.missao-li b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.missao-li.atual{background:var(--st-acao-bg);}
+.missao-li.feito{opacity:.6;}
+.missao-li.feito>span{color:var(--st-emdia);font-weight:900;}
+.missao-li.pulado{opacity:.5;text-decoration:line-through;}
+.missao-rodape{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;}
+.missao-vazia,.missao-fim{text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center;}
+.missao-vazia p{font-size:13px;color:var(--muted);}
+.missao-fim-grade{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;width:100%;}
+.missao-fim-grade div{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:10px 6px;display:flex;flex-direction:column;}
+.missao-fim-grade b{font-size:22px;font-weight:900;color:var(--accent);font-variant-numeric:tabular-nums;}
+.missao-fim-grade span{font-size:11px;color:var(--muted);font-weight:700;}
+.missao-barra{position:fixed;left:calc(50% + 110px);bottom:16px;transform:translateX(-50%);z-index:220;display:flex;align-items:center;gap:4px;
+  background:var(--panel);border:1.5px solid var(--border2);border-radius:999px;padding:4px 6px 4px 4px;box-shadow:var(--shadow2);}
+.missao-barra-abrir{display:flex;align-items:center;gap:10px;border:0;background:none;cursor:pointer;font:inherit;font-size:13px;
+  color:var(--text);padding:8px 12px;border-radius:999px;}
+.missao-barra-abrir:hover{background:var(--st-acao-bg);}
+.missao-barra-abrir .missao-progresso{width:90px;height:6px;}
+.missao-barra-abrir span{color:var(--accent);font-weight:800;font-size:12px;}
+.missao-barra-x{border:0;background:none;cursor:pointer;color:var(--muted);font-size:13px;padding:6px 10px;border-radius:999px;}
+@media(max-width:768px){
+  /* À esquerda, numa linha, sem a barrinha — os botões flutuantes ficam na direita. */
+  .missao-barra{left:12px;right:60px;transform:none;bottom:calc(var(--mobile-navbar-h) + 10px);}
+  .missao-barra-abrir{flex:1;min-width:0;white-space:nowrap;font-size:12px;padding:8px 10px;gap:6px;justify-content:space-between;}
+  .missao-barra-abrir .missao-progresso{display:none;}
+  body.nav-mais-aberto .missao-barra{display:none;}
+  .missao-fim-grade{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 
 /* ===== TELAS DE ESTUDO (redesign, fase A4) ===== */
@@ -3008,7 +3065,8 @@ button.dash-faixa-atrasadas:hover{border-color:var(--st-atrasado);}
         <div class="gamify-icon">⏰</div>
         <div class="gamify-info">
           <div class="gamify-val" id="dash-atrasadas-val">0</div>
-          <div class="gamify-lbl">assuntos atrasados</div>
+          <div class="gamify-lbl" id="dash-atrasadas-lbl">assuntos atrasados</div>
+          <div class="gamify-sub" id="dash-atrasadas-sub"></div>
         </div>
       </button>
     </div>
@@ -3020,6 +3078,7 @@ button.dash-faixa-atrasadas:hover{border-color:var(--st-atrasado);}
           <button id="notif-permission-btn" class="btn btn-xs btn-ghost" style="display:none" onclick="requestNotifPermission()" title="Receber um aviso quando houver revisões atrasadas">🔔 Lembretes</button>
         </div>
         <div class="dash-conta" id="fila-conta"></div>
+        <div id="missao-cta"></div>
         <div id="divida-resumo"></div>
         <div class="dash-scroll" id="dash-overdue-revs"></div>
         <div class="sec-title dash-sec dash-hoje-sub">🧭 O que fazer agora</div>
@@ -6608,6 +6667,8 @@ document.addEventListener('click',e=>{
   if(e.target.closest&&e.target.closest('#nav-mais'))return;
   navMaisAlternar(false);
 });
+// Chave da Missão do dia (Parte B): a classe no body troca o Painel entre o botão novo e o antigo.
+document.body.classList.toggle('missao-ligada',missaoLigada());
 // "Mais números" do Painel: lembra se ficou aberto ou fechado neste aparelho (só
 // preferência de tela, localStorage; começa aberto).
 (function(){
@@ -6670,12 +6731,13 @@ function renderMap(){
   const cont=document.getElementById('kingdoms-container');
   cont.innerHTML='';
   let totKing=db.kingdoms.length,totBoss=0,totMini=0;
+  const atrasadosMapa=numerosDoDia().atrasadosIds;
   db.kingdoms.forEach(k=>{
     const topics=db.topics[k.id]||[];
     const subs=topics.flatMap(t=>t.subtopics||[]);
     totBoss+=topics.length;totMini+=subs.length;
     const studied=subs.filter(s=>s.studied).length;
-    const pending=subs.reduce((n,s)=>n+countOverdue(s,todayStr()),0);
+    const pending=subs.filter(s=>atrasadosMapa.has(s.id)).length;   // assuntos atrasados (régua única)
     const time=(db.kingdomSeconds&&db.kingdomSeconds[k.id])||0;
     const pct=subs.length?Math.round(studied/subs.length*100):0;
     const card=document.createElement('div');
@@ -6688,7 +6750,7 @@ function renderMap(){
       <div class="territory-stats">
         <div class="t-stat"><div class="tv" style="color:${k.color}">${topics.length}</div><div class="tl">⚔️ Chefões</div></div>
         <div class="t-stat"><div class="tv" style="color:var(--accent)">${subs.length}</div><div class="tl">👾 Miniboss</div></div>
-        <div class="t-stat"><div class="tv" style="color:${pending>0?'var(--red-t)':'var(--green-t)'}">${pending}</div><div class="tl">🔔 Atrasadas</div></div>
+        <div class="t-stat"><div class="tv" style="color:${pending>0?'var(--red-t)':'var(--green-t)'}">${pending}</div><div class="tl" title="assuntos com revisão atrasada">🔔 Atrasados</div></div>
         <div class="t-stat"><div class="tv" style="color:var(--cyan-t)">${fmtTime(time)}</div><div class="tl">⏱️ Estudado</div></div>
       </div>
       <div class="territory-progress">
@@ -6882,7 +6944,8 @@ function valeKingdomStats(k){
     acertos+=(c.acertos||0);erros+=(c.erros||0);
     if(c.ultimaRevisao&&(!lastVisit||c.ultimaRevisao>lastVisit))lastVisit=c.ultimaRevisao;
   });
-  const atrasadas=topics.reduce((n,t)=>n+(t.subtopics||[]).reduce((m,s)=>m+countOverdue(s,todayStr()),0),0);
+  const atrIds=numerosDoDia().atrasadosIds;
+  const atrasadas=topics.reduce((n,t)=>n+(t.subtopics||[]).filter(s=>atrIds.has(s.id)).length,0);
   return {
     total,studied,matured,state,chefoes,
     defeated:chefoes.filter(c=>c.defeated).length,
@@ -7672,10 +7735,11 @@ function renderTopics(){
     return;
   }
   list.innerHTML='';
+  const atrasadosTopicos=numerosDoDia().atrasadosIds;
   topics.forEach(topic=>{
     // copia antes de ordenar: sort() mexeria na lista gravada de minibosses
     const subs=[...(topic.subtopics||[])].sort((a,b)=>b.priority-a.priority);
-    const pending=subs.reduce((n,s)=>n+countOverdue(s,todayStr()),0);
+    const pending=subs.filter(s=>atrasadosTopicos.has(s.id)).length;
     // db.times so recebe o cronometro POR MINIBOSS. Quem estuda pelo cronometro livre
     // (que e a maior parte do tempo) nunca via esse numero sair de 0m, mesmo com horas
     // no chefao. Agora soma os dois.
@@ -7694,7 +7758,7 @@ function renderTopics(){
         <div class="topic-meta">
           <span>👾 ${subs.length}</span>
           <span class="time-chip"><i class="fa fa-clock"></i> ${fmtTime(studied)}</span>
-          ${pending>0?`<span style="background:rgba(220,38,38,0.1);color:var(--red-t);border:1.5px solid rgba(220,38,38,0.3);border-radius:8px;padding:2px 7px;font-size:10px;font-weight:900">${pending} atrasadas!</span>`:''}
+          ${pending>0?`<span style="background:rgba(220,38,38,0.1);color:var(--red-t);border:1.5px solid rgba(220,38,38,0.3);border-radius:8px;padding:2px 7px;font-size:10px;font-weight:900">${pending} atrasado${pending===1?'':'s'}</span>`:''}
         </div>
         <button class="btn btn-sm" title="Puxa para HOJE a revisão de todos os minibosses já estudados deste chefão. Quem tinha revisão marcada para a frente é antecipado; quem não tinha ganha uma. Não cria revisão para miniboss que você ainda não estudou." style="background:linear-gradient(135deg,rgba(108,71,255,0.12),rgba(79,70,229,0.12));border:1.5px solid var(--border2);color:var(--accent);font-size:12px" onclick="event.stopPropagation();intensiveTraining('${topic.id}')"><i class="fa fa-fire" style="color:var(--orange-t)"></i> Revisar hoje</button>
         <button class="btn btn-xs" onclick="event.stopPropagation();renameTopic('${topic.id}')" title="Renomear chefão"><i class="fa fa-pen"></i></button>
@@ -18823,11 +18887,12 @@ function renderKingdomsNeedingAttention(){
   const el=document.getElementById('avg-time-list');
   if(!el)return;
   const today=todayStr();
+  const atrIds=numerosDoDia().atrasadosIds;
   const rows=[];
   db.kingdoms.forEach(k=>{
     let overdue=0,acertos=0,erros=0;
     (db.topics[k.id]||[]).forEach(t=>{
-      (t.subtopics||[]).forEach(s=>{overdue+=countOverdue(s,today);});
+      (t.subtopics||[]).forEach(s=>{if(atrIds.has(s.id))overdue++;});
       getAllFCForTopic(t.id).forEach(c=>{acertos+=(c.acertos||0);erros+=(c.erros||0);});
     });
     const total=acertos+erros;
@@ -19373,22 +19438,25 @@ function edFocoIndice(){
   return Object.keys(idx).length?{edital:e,idx}:null;
 }
 
+// Parte B do redesign — UMA fila, numa ordem só: as revisões vêm da fila oficial
+// (revCandidatos, a mesma da tela Revisões, na mesma ordem); depois entra o que é estudo
+// (nunca estudado) e treino (fraco em questões), na ordem de sempre deles. Antes esta
+// caixa tinha régua e ordem próprias e começava por um assunto diferente da tela Revisões.
 function computeStudyRecommendations(){
-  const today=todayStr();
   const foco=edFocoIndice();
-  const items=[];
+  const revisoes=revCandidatos().map(c=>{
+    const noEdital=foco&&foco.idx[c.sub.id];
+    return {subId:c.sub.id,subName:c.sub.name,topicName:c.topic.name,
+      kingdomName:c.kingdom.name,kingdomIcon:c.kingdom.icon,priority:c.sub.priority,
+      tipo:'revisao',reason:(c.atraso||0)>0?`venceu há ${c.atraso}d`:'na vez hoje',reasonIcon:'🔁',
+      edital:noEdital?foco.edital.icon:null};
+  });
+  const naFila=new Set(revisoes.map(x=>x.subId));
+  const outros=[];
   db.kingdoms.forEach(k=>{
     (db.topics[k.id]||[]).forEach(t=>{
       (t.subtopics||[]).forEach(s=>{
-        // Mesma régua da Câmara: assunto dominado ou de reino desligado não pode ser
-        // recomendado como revisão — você tirou ele da fila de propósito.
-        const revivel=s.studied&&!s.revDominado&&!revReinoFora(k.id);
-        const revs=db.revisions[s.id]||[];
-        let overdueCount=0;
-        if(revivel)revs.forEach((r,i)=>{
-          const prevDone=revs.slice(0,i).every(p=>p.completed);
-          if(!r.completed&&prevDone&&r.date<today)overdueCount++;
-        });
+        if(naFila.has(s.id))return;
         const notStudied=!s.studied;
         let weakPct=null;
         if(s.simStats&&s.simStats.questoesTotal>0){
@@ -19397,30 +19465,19 @@ function computeStudyRecommendations(){
           weakPct=simPctEfetivo(s.simStats).corrigido;
         }
         const isWeak=weakPct!==null&&weakPct<60;
-        if(!overdueCount&&!notStudied&&!isWeak)return;
-
+        if(!notStudied&&!isWeak)return;
         let reason,reasonIcon,reasonBonus,tipo;
-        if(overdueCount>0){
-          // Mesma linguagem e mesma ordem da Câmara: o chip diz há quanto tempo o PRAZO
-          // venceu (não "revisão · 2d", que não dizia de quê), e o bônus sai da urgência
-          // real, pra esta caixa e a fila não discordarem sobre o que vem primeiro.
-          const atraso=revDiasNaVez(s)||0;
-          tipo='revisao';
-          reason=atraso>0?`venceu há ${atraso}d`:'na vez hoje';
-          reasonIcon='🔁';
-          reasonBonus=300+Math.min(500,Math.round(revUrgencia(s,t.id)));
-        }else if(notStudied){
+        if(notStudied){
           tipo='novo';reason='nunca estudado';reasonIcon='✨';reasonBonus=200;
         }else{
           tipo='fraco';reason=`fraco · ${weakPct}%`;reasonIcon='🎯';reasonBonus=100+(60-weakPct);
         }
-
         // Com um edital em foco, o que cai nele sobe — e sobe na medida do peso
         // que o proprio edital da (questoes da disciplina x prevalencia que voce
         // marcou). O que nao cai continua na fila, so depois.
         const noEdital=foco&&foco.idx[s.id];
         const bonusEdital=noEdital?100000+noEdital.peso*noEdital.prev*100:0;
-        items.push({
+        outros.push({
           subId:s.id,subName:s.name,topicName:t.name,
           kingdomName:k.name,kingdomIcon:k.icon,priority:s.priority,
           reason,reasonIcon,tipo,
@@ -19430,10 +19487,10 @@ function computeStudyRecommendations(){
       });
     });
   });
-  items.sort((a,b)=>b.score-a.score);
+  outros.sort((a,b)=>b.score-a.score);
   // Devolve a lista inteira: quem corta e quem desenha, pra o cabecalho poder
   // dizer "6 de 43" em vez de esconder a escala atras do rolador.
-  return items;
+  return revisoes.concat(outros);
 }
 // Agrega s.simStats de todos os minibosses pra questões/acertos (esses somam certinho,
 // cada questão pertence a um assunto só). "Simulados feitos" NÃO pode vir dessa mesma
@@ -19558,12 +19615,12 @@ function renderNextSteps(){
     if(conta)conta.innerHTML='';
     return;
   }
-  const items=todos.slice(0,8);
+  const items=todos.slice(0,6);   // as 6 primeiras; "ver a fila" leva pra lista inteira
   const foco=edFocoIndice();
   const nRev=todos.filter(x=>x.tipo==='revisao').length;
   const nNovo=todos.filter(x=>x.tipo==='novo').length;
   if(conta)conta.innerHTML=`${foco?`<span title="Priorizando ${escapeHtml(foco.edital.nome)}">${foco.edital.icon} ${escapeHtml(foco.edital.nome)}</span> · `:''}`
-    +`<b>${nRev}</b> revis${nRev===1?'ão':'ões'} · <b>${nNovo}</b> por estudar`
+    +`<b>${nRev}</b> revis${nRev===1?'ão':'ões'} na vez · <b>${Math.min(revPorDia(),nRev)}</b> cabe${Math.min(revPorDia(),nRev)===1?'':'m'} hoje · <b>${nNovo}</b> por estudar`
     +` · <span class="dash-verlink" onclick="abrirRevisoesAtrasadas()">ver a fila</span>`;
   const cls={revisao:'fila-rev',novo:'fila-novo',fraco:'fila-fraco'};
   // Revisão abre a TELA de revisão (resumo + fluxograma); o resto abre o miniboss.
@@ -20211,6 +20268,30 @@ function revEstado(){
           dominados:revDominados().length,orcamento:revOrcamento(),custo:revCusto(),
           medido:revCustoMedido(),amostras:(db.revDuracoes||[]).length};
 }
+// ===== NÚMEROS DO DIA (redesign, Parte B) =====
+// Uma função só, SOMENTE LEITURA, pra todo número de pendência que aparece no app (menu,
+// Painel, Revisões, Mapa). A régua é a da fila oficial (revCandidatos): reino ligado, não
+// dominado, prazo chegado. O algoritmo que decide o prazo não mudou — só a contagem e a
+// apresentação, que antes usavam três réguas diferentes (167 no menu, 166 no Painel...).
+//   atrasadas  = assuntos com prazo vencido          (unidade: assuntos)
+//   naVez      = atrasadas + vencem hoje/sem prazo    (assuntos)
+//   cabemHoje  = quantos da vez cabem no tempo do dia (assuntos)
+//   cardsVencidos = flashcards vencidos               (cards)
+//   errosPendentes = erros de simulado sem revisar    (questões)
+function numerosDoDia(){
+  const fila=revCandidatos();
+  const atrasadosIds=new Set(fila.filter(c=>(c.atraso||0)>0).map(c=>c.sub.id));
+  const porDia=revPorDia();
+  return {fila,atrasadosIds,atrasadas:atrasadosIds.size,naVez:fila.length,porDia,
+    cabemHoje:Math.min(porDia,fila.length),cardsVencidos:fcVencidosContagem(),
+    errosPendentes:getErrorBank().filter(i=>!i.revisado&&!i.problematico).length};
+}
+function fcVencidosContagem(){
+  const validos=new Set();
+  db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>validos.add(t.id)));
+  const pausados=fcTopicosPausados();
+  return Object.values(db.flashcards||{}).filter(c=>validos.has(c.mbId)&&!pausados.has(c.mbId)&&fcStatus(c)==='due').length;
+}
 // Próximo intervalo quando você conclui: sai do CICLO, não de uma fórmula de memória.
 // Assunto com peso alto volta antes do ciclo médio; o que você domina volta depois.
 // Prazo sugerido, em degraus da escada — não mais uma divisão por peso, que é o que
@@ -20244,8 +20325,8 @@ function revBarraHTML(){
       ${mt([e.estudados,'assuntos'])}
       <div style="display:flex;flex-direction:column;gap:1px"><b style="font-size:24px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${corCiclo}">${e.ciclo||'—'}</b><span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">dias de ciclo</span></div>
       ${e.vencidos?`<div style="display:flex;flex-direction:column;gap:1px"><b style="font-size:24px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:var(--red-t)">${e.vencidos}</b><span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">com prazo vencido</span></div>`:''}
-      ${mt([Math.min(e.porDia,e.elegiveis),'na vez hoje'])}
-      ${mt([e.porDia,'cabem hoje'])}
+      ${mt([e.elegiveis,'assuntos na vez'])}
+      ${mt([Math.min(e.porDia,e.elegiveis),'cabem hoje'])}
       <div style="display:flex;flex-direction:column;gap:1px" title="${e.medido?'Mediana das suas últimas '+e.amostras+' revisões cronometradas.':'Ainda é uma estimativa — a tela de revisão cronometra sozinha e o número vira o seu depois de '+REV_AMOSTRAS_MIN+' revisões.'}">
         <b style="font-size:24px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${e.medido?'var(--cyan-t)':'var(--muted)'}">${e.custo}<span style="font-size:13px">min</span></b>
         <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">${e.medido?'por revisão · medido':'por revisão · estimado'}</span>
@@ -20567,28 +20648,26 @@ function renderRevisions(){
 
 // Conta só o que já passou do prazo (mesma regra da aba "Atrasadas") — não mistura
 // com o que vence hoje, pra o alarme da barra lateral bater com o que a tela mostra.
-// Contagem separada do desenho só pra o selo do menu e a faixa do Painel usarem a MESMA
-// conta (mesma regra de sempre — a unificação dos números é da Parte B do redesign).
-function revAtrasadasContagem(){
-  const today=todayStr();let cnt=0;
-  db.kingdoms.forEach(k=>{(db.topics[k.id]||[]).forEach(t=>{(t.subtopics||[]).forEach(s=>{
-    if(!s.studied)return;
-    const revs=db.revisions[s.id]||[];
-    revs.forEach((r,i)=>{
-      const prevDone=revs.slice(0,i).every(p=>p.completed);
-      if(!r.completed&&prevDone&&r.date<today)cnt++;
-    });
-  });});});
-  return cnt;
-}
+// Selo do menu (Parte B): mesma régua do Painel e da tela Revisões. Com a Missão do dia
+// ligada, o número em destaque é a COTA de hoje e as atrasadas viram informação secundária
+// (no title) — "atrasadas como meta, não como culpa". Desligada, mostra as atrasadas.
 function updateRevBadge(){
-  const cnt=revAtrasadasContagem();
+  const n=numerosDoDia();
+  missaoHistoricoAtrasadas(n.atrasadas);
   const b=document.getElementById('rev-badge');
-  if(cnt>0){b.textContent=cnt;b.style.display='inline';}else{b.style.display='none';}
-  dashFaixaHojeRender();
+  const cota=missaoLigada();
+  const val=cota?n.cabemHoje:n.atrasadas;
+  b.classList.toggle('nav-badge-atrasado',n.atrasadas>0);
+  b.classList.toggle('nav-badge-pendente',!n.atrasadas);
+  if(val>0){
+    b.textContent=val;b.style.display='inline';
+    b.title=cota?`cota de hoje: ${n.cabemHoje} assunto${n.cabemHoje===1?'':'s'} · ${n.atrasadas} atrasado${n.atrasadas===1?'':'s'}`
+               :`${n.atrasadas} assunto${n.atrasadas===1?'':'s'} com revisão atrasada`;
+  }else{b.style.display='none';}
+  dashFaixaHojeRender(n);
 }
 // Faixa de hoje do Painel (redesign A3): só lê e escreve na tela, não grava nada.
-function dashFaixaHojeRender(){
+function dashFaixaHojeRender(nPronto){
   const dEl=document.getElementById('dash-prova-dias');
   if(dEl){
     const card=document.getElementById('dash-prova-card');
@@ -20603,10 +20682,18 @@ function dashFaixaHojeRender(){
   }
   const aEl=document.getElementById('dash-atrasadas-val');
   if(aEl){
-    const n=revAtrasadasContagem();
-    aEl.textContent=n;
+    const n=nPronto||numerosDoDia();
+    const cota=missaoLigada();
+    aEl.textContent=cota?n.cabemHoje:n.atrasadas;
+    const lbl=document.getElementById('dash-atrasadas-lbl');
+    if(lbl)lbl.textContent=cota?'revisões pra hoje':(n.atrasadas===1?'assunto atrasado':'assuntos atrasados');
+    const sub=document.getElementById('dash-atrasadas-sub');
+    if(sub){
+      const t=missaoTendenciaAtrasadas(n.atrasadas);
+      sub.textContent=cota?`${n.atrasadas} atrasado${n.atrasadas===1?'':'s'}${t?' · '+t:''}`:(t||'');
+    }
     const c=document.getElementById('dash-atrasadas-card');
-    if(c)c.classList.toggle('dash-faixa-zerado',!n);
+    if(c)c.classList.toggle('dash-faixa-zerado',!n.atrasadas);
   }
 }
 
@@ -20775,6 +20862,8 @@ function renderDashboard(){
   const goalLblEl=document.getElementById('goal-lbl');
   if(goalLblEl)goalLblEl.textContent=`${todayMin} / ${goalMin} min hoje`;
 
+  missaoCtaRender();
+
   // Stats
   const dashLvl=xpLevelInfo(db.xp||0);
   document.getElementById('dash-stats').innerHTML=[
@@ -20782,7 +20871,7 @@ function renderDashboard(){
     {icon:'👾',val:totMini,lbl:'Minibosses',color:'var(--cyan)'},
     {icon:'⏱️',val:fmtTime(totTime),lbl:'Tempo total',color:'#8b5cf6'},
     {icon:'✅',val:totRevDone,lbl:'Revisões feitas',color:'var(--green)'},
-    {icon:'⚠️',val:totRevOver,lbl:'Rev. atrasadas',color:totRevOver>0?'var(--red)':'var(--green)'},
+    {icon:'⚠️',val:numerosDoDia().atrasadas,lbl:'Assuntos atrasados',color:numerosDoDia().atrasadas>0?'var(--red)':'var(--green)'},
     {icon:dashLvl.icon,val:(db.xp||0).toLocaleString(),lbl:`Nível ${dashLvl.level} · ${dashLvl.titulo}`,color:'var(--gold)'},
   ].map(s=>`<div class="stat-card"><span class="stat-icon">${s.icon}</span><div class="stat-val" style="color:${s.color}">${s.val}</div><div class="stat-lbl">${s.lbl}</div></div>`).join('');
 
@@ -20872,6 +20961,299 @@ function renderDashboard(){
 // pra resolver varias de uma vez — nao inventa um fluxo novo em cima do painel.
 // Abre a Câmara na Fila de hoje, que é onde o vencido agora aparece — a aba "Atrasadas"
 // que este botão procurava deixou de existir quando a fila passou a ordenar tudo junto.
+// ===== MISSÃO DO DIA (redesign, Parte B) =====
+// Monta e conduz a sessão do dia. NUNCA grava no banco: a missão mora no localStorage
+// (uma chave por data, pra ficar estável o dia todo) e o progresso é DERIVADO do que o app
+// já grava quando você estuda pelos caminhos de sempre — revisão registrada hoje, flashcard
+// com ultimaRevisao de hoje, questão com ultimaVezEm de hoje. Cada item só abre a tela que
+// já existe (revAbrirTela, estudo de flashcards do chefão, treino do assunto): a missão não
+// reimplementa revisar, virar card nem responder. Chave: localStorage['vdn_missao'] ('0'
+// desliga e devolve o botão antigo do Painel).
+const MISSAO_MAX_MIN=50;            // teto do orçamento de uma missão, em minutos
+const MISSAO_CURTA_MIN=15;          // meta do dia já batida: missão curta
+const MISSAO_PARTE={rev:0.60,fc:0.25,q:0.15};
+const MISSAO_MIN_POR_CARD=0.5;
+const MISSAO_MIN_POR_QUESTAO=1.5;
+let missaoMem=null;                 // cópia em memória pra quando o localStorage não existe
+let missaoTickId=null;
+
+function missaoLigada(){try{return localStorage.getItem('vdn_missao')!=='0';}catch(e){return true;}}
+function missaoLigar(on){
+  try{localStorage.setItem('vdn_missao',on?'1':'0');}catch(e){}
+  document.body.classList.toggle('missao-ligada',missaoLigada());
+  updateRevBadge();
+  if(document.getElementById('screen-dashboard')?.classList.contains('active'))renderDashboard();
+  missaoBarraRender();
+}
+function missaoChave(d){return 'vdn_missao_'+d;}
+function missaoAtual(){
+  const hoje=todayStr();
+  try{const v=localStorage.getItem(missaoChave(hoje));if(v)return JSON.parse(v);}catch(e){}
+  return missaoMem&&missaoMem.data===hoje?missaoMem:null;
+}
+function missaoGuardar(m){
+  missaoMem=m;
+  try{
+    localStorage.setItem(missaoChave(m.data),JSON.stringify(m));
+    for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);
+      if(k&&k.indexOf('vdn_missao_')===0&&k!==missaoChave(m.data))localStorage.removeItem(k);}
+  }catch(e){}
+}
+function missaoHojeStr(iso){return iso?localDateStrFromDate(new Date(iso)):'';}
+function missaoFcFeitosHoje(topicId){
+  const hoje=todayStr();
+  return getAllFCForTopic(topicId).filter(c=>missaoHojeStr(c.ultimaRevisao)===hoje).length;
+}
+function missaoQFeitasHoje(subId){
+  const hoje=todayStr();
+  return (db.acervo||[]).filter(q=>q.subId===subId&&missaoHojeStr(q.ultimaVezEm)===hoje).length;
+}
+
+// Montagem: função pura de leitura — calcula o plano, não grava nada (quem guarda é
+// missaoGarantir, e só no localStorage).
+function missaoMontar(){
+  const hoje=todayStr();
+  const meta=db.dailyGoalMinutes||60;
+  const feito=Math.round(todayStudiedSeconds()/60);
+  const curta=meta-feito<=0;
+  const orc=curta?MISSAO_CURTA_MIN:Math.max(5,Math.min(meta-feito,MISSAO_MAX_MIN));
+  const n=numerosDoDia();
+  const itens=[];
+  // 1) revisões da fila oficial, na ordem dela, até ~60% do orçamento
+  const custo=revCusto();
+  let nRev=Math.floor(orc*MISSAO_PARTE.rev/custo);
+  if(!nRev&&n.fila.length)nRev=1;
+  n.fila.slice(0,nRev).forEach(c=>itens.push({tipo:'rev',subId:c.sub.id,nome:c.sub.name,
+    sub:`${c.kingdom.name} · ${c.topic.name}`,min:custo,atraso:c.atraso||0}));
+  // 2) flashcards vencidos, ~25%, primeiro os do reino mais atrasado
+  let cards=Math.max(5,Math.floor(orc*MISSAO_PARTE.fc/MISSAO_MIN_POR_CARD));
+  const atrPorReino={};
+  n.fila.forEach(c=>{if((c.atraso||0)>0)atrPorReino[c.kingdom.id]=(atrPorReino[c.kingdom.id]||0)+1;});
+  const pausados=fcTopicosPausados();
+  const chefoes=[];
+  db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>{
+    if(pausados.has(t.id))return;
+    const due=getAllFCForTopic(t.id).filter(c=>fcStatus(c)==='due').length;
+    if(due)chefoes.push({k,t,due,atr:atrPorReino[k.id]||0});
+  }));
+  chefoes.sort((a,b)=>b.atr-a.atr||b.due-a.due);
+  chefoes.forEach(c=>{
+    if(cards<=0)return;
+    const alvo=Math.min(c.due,cards);cards-=alvo;
+    itens.push({tipo:'fc',topicId:c.t.id,nome:c.t.name,sub:c.k.name,alvo,
+      base:missaoFcFeitosHoje(c.t.id),min:Math.round(alvo*MISSAO_MIN_POR_CARD)});
+  });
+  // 3) questões do assunto que mais te derruba (mesma regra do cartão da tela Treinar), ~15%
+  const pior=treinoPiorAssunto();
+  if(pior){
+    const alvo=Math.max(3,Math.floor(orc*MISSAO_PARTE.q/MISSAO_MIN_POR_QUESTAO));
+    itens.push({tipo:'q',subId:pior.subId,nome:pior.subName,sub:pior.kingdomName||'',alvo,
+      base:missaoQFeitasHoje(pior.subId),min:Math.round(alvo*MISSAO_MIN_POR_QUESTAO)});
+  }
+  return {v:1,data:hoje,criadaEm:Date.now(),orc,curta,itens,pulados:[],feitos:[],
+    iniciada:false,dispensada:false,concluida:false,
+    xpInicio:db.xp||0,xpRef:db.xp||0,minInicio:feito,atrasadasInicio:n.atrasadas};
+}
+function missaoGarantir(){
+  let m=missaoAtual();
+  if(!m){m=missaoMontar();missaoGuardar(m);}
+  return m;
+}
+function missaoItemFeito(it){
+  const hoje=todayStr();
+  if(it.tipo==='rev'){
+    const s=simFindSub(it.subId);
+    if(!s)return true;
+    return !!s.revDominado||(revUltimoContato(s)===hoje&&revPassadas(s)>0);
+  }
+  if(it.tipo==='fc'){
+    const due=getAllFCForTopic(it.topicId).filter(c=>fcStatus(c)==='due').length;
+    return due===0||missaoFcFeitosHoje(it.topicId)-(it.base||0)>=it.alvo;
+  }
+  if(it.tipo==='q')return missaoQFeitasHoje(it.subId)-(it.base||0)>=it.alvo;
+  return false;
+}
+function missaoEstado(m){
+  const itens=m.itens.map((it,i)=>({it,i,feito:missaoItemFeito(it),pulado:m.pulados.includes(i)}));
+  const feitos=itens.filter(x=>x.feito).length;
+  const pendentes=itens.filter(x=>!x.feito&&!x.pulado);
+  return {itens,feitos,total:itens.length,atual:pendentes[0]||null,proximo:pendentes[1]||null,
+    acabou:!!itens.length&&!pendentes.length};
+}
+function missaoRotuloItem(it){
+  if(it.tipo==='rev')return{ic:'🔁',acao:'Revisar',det:`~${it.min} min${it.atraso?` · venceu há ${it.atraso}d`:''}`};
+  if(it.tipo==='fc')return{ic:'🃏',acao:'Flashcards',det:`${it.alvo} card${it.alvo===1?'':'s'} vencido${it.alvo===1?'':'s'}`};
+  return{ic:'🎯',acao:'Questões',det:`${it.alvo} questões — o assunto que mais te derruba`};
+}
+function missaoBarraProgresso(feitos,total){
+  const pct=total?Math.round(feitos/total*100):0;
+  return`<div class="missao-progresso" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${feitos}"><span style="width:${pct}%"></span></div>`;
+}
+
+// Camada da missão (reaproveita o modal do app).
+function missaoAbrir(){
+  if(!missaoLigada()){abrirRevisoesAtrasadas();return;}
+  const m=missaoGarantir();
+  const e=missaoEstado(m);
+  document.getElementById('modal').classList.remove('modal-wide');
+  if(!e.total){
+    openModal('🎯 Missão do dia',`<div class="missao-vazia"><div style="font-size:36px">✨</div>
+      <b>Tudo em dia.</b><p>Nenhuma revisão na vez, nenhum flashcard vencido, nenhum assunto fraco em questões.</p>
+      <button class="btn btn-primary" onclick="closeModal();showScreen('simgeral')">Ir pro Treinar</button></div>`);
+    return;
+  }
+  if(e.acabou){missaoResumo();return;}
+  const at=e.atual.it,r=missaoRotuloItem(at);
+  const prox=e.proximo?missaoRotuloItem(e.proximo.it):null;
+  const lista=e.itens.map(x=>{const rr=missaoRotuloItem(x.it);
+    return`<li class="missao-li${x.feito?' feito':''}${x.pulado&&!x.feito?' pulado':''}${e.atual&&x.i===e.atual.i?' atual':''}">
+      <span>${x.feito?'✓':x.pulado?'↷':rr.ic}</span><b>${escapeHtml(x.it.nome)}</b><small>${rr.acao} · ${escapeHtml(rr.det)}</small></li>`;}).join('');
+  openModal('🎯 Missão do dia',`<div class="missao">
+    <div class="missao-cab"><span>${m.curta?'Meta já batida — missão curta':'Cabe no seu tempo de hoje'} · ~${m.orc} min</span><b>${e.feitos} de ${e.total}</b></div>
+    ${missaoBarraProgresso(e.feitos,e.total)}
+    <div class="missao-atual">
+      <div class="missao-atual-tipo">${r.ic} ${r.acao}</div>
+      <div class="missao-atual-nome">${escapeHtml(at.nome)}</div>
+      <div class="missao-atual-sub">${escapeHtml(at.sub||'')} · ${escapeHtml(r.det)}</div>
+      <div class="missao-atual-acoes">
+        <button class="btn btn-primary" onclick="missaoComecarItem(${e.atual.i})">${m.iniciada?'▶ Continuar':'▶ Começar'}</button>
+        <button class="btn btn-sm btn-ghost" onclick="missaoPular(${e.atual.i})" title="Só nesta missão — não muda nada no seu estudo">↷ Pular hoje</button>
+      </div>
+    </div>
+    ${prox?`<div class="missao-prox">Depois: ${prox.ic} ${escapeHtml(e.proximo.it.nome)} <span>· ${escapeHtml(prox.det)}</span></div>`:''}
+    <details class="missao-lista"><summary>Ver a missão inteira (${e.total} itens)</summary><ul>${lista}</ul></details>
+    <div class="missao-rodape">
+      <span class="dash-verlink" onclick="closeModal();abrirRevisoesAtrasadas()">abrir a fila de revisões</span>
+      <span class="dash-verlink" onclick="missaoLigar(false);closeModal();toast('Missão do dia desligada — o Painel volta ao botão de antes.','var(--muted)')">desligar a Missão</span>
+    </div>
+  </div>`);
+}
+function missaoComecarItem(i){
+  const m=missaoGarantir();
+  const it=m.itens[i];
+  if(!it)return;
+  if(!m.iniciada){m.iniciada=true;m.xpRef=db.xp||0;}
+  m.dispensada=false;
+  missaoGuardar(m);
+  closeModal();
+  missaoBarraRender();
+  missaoTickIniciar();
+  // Mesmos caminhos dos botões de sempre — a missão só navega até eles.
+  if(it.tipo==='rev'){revAbrirTela(it.subId);return;}
+  if(it.tipo==='fc'){showScreen('flashcards');selectFCBoss(it.topicId);fcBossStudy('due');return;}
+  if(it.tipo==='q'){showScreen('simgeral');treinoTreinarAssunto(it.subId);}
+}
+function missaoPular(i){
+  const m=missaoGarantir();
+  if(!m.pulados.includes(i))m.pulados.push(i);
+  missaoGuardar(m);
+  missaoAbrir();
+  missaoBarraRender();
+}
+function missaoDispensar(){
+  const m=missaoAtual();
+  if(m){m.dispensada=true;missaoGuardar(m);}
+  missaoBarraRender();
+}
+function missaoResumo(){
+  const m=missaoGarantir();
+  const e=missaoEstado(m);
+  const xp=Math.max(0,(db.xp||0)-(m.xpInicio||0));
+  const min=Math.max(0,Math.round(todayStudiedSeconds()/60)-(m.minInicio||0));
+  const zeradas=Math.max(0,(m.atrasadasInicio||0)-numerosDoDia().atrasadas);
+  document.getElementById('modal').classList.remove('modal-wide');
+  openModal('🏁 Missão cumprida',`<div class="missao-fim">
+    <div class="missao-fim-grade">
+      <div><b>${e.feitos}</b><span>de ${e.total} itens</span></div>
+      <div><b>${min}</b><span>min estudados</span></div>
+      <div><b>+${xp}</b><span>XP</span></div>
+      <div><b>${zeradas}</b><span>atrasada${zeradas===1?'':'s'} zerada${zeradas===1?'':'s'}</span></div>
+    </div>
+    <p>🔥 ${computeStreak()} dia${computeStreak()===1?'':'s'} seguido${computeStreak()===1?'':'s'}.</p>
+    <div class="missao-atual-acoes">
+      <button class="btn btn-primary" onclick="closeModal();showScreen('simgeral')">Continuar estudando</button>
+      <button class="btn btn-ghost" onclick="closeModal();missaoDispensar()">Encerrar</button>
+    </div></div>`);
+}
+// Barra compacta: aparece depois de começar e fica até terminar ou ser dispensada.
+function missaoBarraRender(){
+  let el=document.getElementById('missao-barra');
+  const m=missaoLigada()?missaoAtual():null;
+  if(!m||!m.iniciada||m.dispensada||m.concluida){if(el)el.remove();return;}
+  const e=missaoEstado(m);
+  if(!el){el=document.createElement('div');el.id='missao-barra';el.className='missao-barra';document.body.appendChild(el);}
+  el.innerHTML=`<button type="button" class="missao-barra-abrir" onclick="missaoAbrir()">🎯 Missão: <b>${e.feitos} de ${e.total}</b>
+      ${missaoBarraProgresso(e.feitos,e.total)}<span>${e.acabou?'ver resumo':'continuar ›'}</span></button>
+    <button type="button" class="missao-barra-x" onclick="missaoDispensar()" title="Esconder a barra (a missão continua no Painel)" aria-label="Esconder a barra da missão">✕</button>`;
+}
+// Retorno imediato: a cada poucos segundos compara o que está feito com o que estava, e
+// avisa o item concluído com o XP ganho (diferença de db.xp — só leitura).
+function missaoTick(){
+  const m=missaoLigada()?missaoAtual():null;
+  if(!m||!m.iniciada||m.concluida){missaoTickParar();missaoBarraRender();return;}
+  const e=missaoEstado(m);
+  const agora=e.itens.filter(x=>x.feito).map(x=>x.i);
+  const novos=agora.filter(i=>!m.feitos.includes(i));
+  if(novos.length){
+    const xp=(db.xp||0)-(m.xpRef||0);
+    const nome=m.itens[novos[novos.length-1]].nome;
+    toast(`✓ ${nome}${xp>0?` · +${xp} XP`:''} · missão ${e.feitos} de ${e.total} · 🔥 ${computeStreak()}`,'var(--green)');
+    m.xpRef=db.xp||0;
+  }
+  m.feitos=agora;
+  if(e.acabou&&!m.concluida){
+    m.concluida=true;missaoGuardar(m);missaoTickParar();
+    if(!document.getElementById('modal').classList.contains('open'))missaoResumo();
+    missaoBarraRender();
+    return;
+  }
+  missaoGuardar(m);
+  missaoBarraRender();
+}
+function missaoTickIniciar(){if(!missaoTickId)missaoTickId=setInterval(missaoTick,2500);}
+function missaoTickParar(){if(missaoTickId){clearInterval(missaoTickId);missaoTickId=null;}}
+// Cartão "Hoje" do Painel: o botão primário inicia/continua a missão.
+function missaoCtaRender(){
+  const el=document.getElementById('missao-cta');
+  if(!el)return;
+  if(!missaoLigada()){
+    el.innerHTML=`<span class="dash-verlink missao-religar" onclick="missaoLigar(true)">ligar a Missão do dia</span>`;
+    return;
+  }
+  // Só PRÉVIA até você abrir a missão: no carregamento o acervo de questões ainda pode
+  // estar chegando da nuvem, e fixar o plano aqui o deixaria sem o bloco de questões o dia
+  // todo. O plano é guardado (e fica estável) quando a missão é aberta pela primeira vez.
+  const m=missaoAtual()||missaoMontar();
+  const e=missaoEstado(m);
+  let txt,sub;
+  if(!e.total){txt='✨ Tudo em dia — treinar';sub='nada na vez hoje';}
+  else if(e.acabou){txt='🏁 Missão cumprida — ver resumo';sub=`${e.feitos} de ${e.total} itens`;}
+  else if(m.iniciada){txt='▶ Continuar a missão do dia';sub=`${e.feitos} de ${e.total} itens · ~${m.orc} min`;}
+  else{txt='🎯 Começar a missão do dia';sub=`${e.total} itens · ~${m.orc} min${m.curta?' · meta já batida':''}`;}
+  el.innerHTML=`<button type="button" class="missao-cta-btn" onclick="missaoAbrir()"><span>${txt}</span><small>${sub}</small></button>`;
+  if(m.iniciada&&!m.concluida&&!m.dispensada){missaoBarraRender();missaoTickIniciar();}
+}
+// Atrasadas como meta: histórico diário só neste aparelho, pra mostrar a tendência.
+function missaoHistoricoAtrasadas(n){
+  try{
+    const k='vdn_atrasadas_hist',hoje=todayStr();
+    const h=JSON.parse(localStorage.getItem(k)||'{}');
+    if(h[hoje]===n)return;
+    h[hoje]=n;
+    Object.keys(h).sort().slice(0,-21).forEach(d=>delete h[d]);
+    localStorage.setItem(k,JSON.stringify(h));
+  }catch(e){}
+}
+function missaoTendenciaAtrasadas(n){
+  try{
+    const h=JSON.parse(localStorage.getItem('vdn_atrasadas_hist')||'{}');
+    const hoje=todayStr(),lim=addDays(hoje,-7);
+    const antigas=Object.keys(h).filter(d=>d<hoje&&d>=lim).sort();
+    if(!antigas.length)return'';
+    const d=n-h[antigas[0]];
+    return d<0?`▼ ${-d} esta semana`:d>0?`▲ ${d} esta semana`:'= esta semana';
+  }catch(e){return'';}
+}
 function abrirRevisoesAtrasadas(){
   showScreen('revisions');
   setTimeout(()=>{
@@ -24538,7 +24920,7 @@ function renderFCMain(){
           <div class="stat-card" style="cursor:pointer;background:rgba(220,38,38,0.04);border-color:rgba(220,38,38,0.15)" onclick="fcOverviewClick('due')">
             <span class="stat-icon">🔥</span>
             <div class="stat-val" style="color:var(--red-t)">${vencidos.length}</div>
-            <div class="stat-lbl" style="color:var(--red-t)">Revisar agora</div>
+            <div class="stat-lbl" style="color:var(--red-t)">Cards a revisar</div>
           </div>
           <div class="stat-card" style="cursor:pointer;background:rgba(108,71,255,0.04);border-color:rgba(108,71,255,0.15)" onclick="fcOverviewClick('new')">
             <span class="stat-icon">✨</span>
