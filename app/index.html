@@ -2642,6 +2642,42 @@ button.dash-faixa-atrasadas:hover{border-color:var(--st-atrasado);}
 .dash-mais-largo{grid-column:1/-1;}
 .dash-mais-card{min-width:0;display:flex;flex-direction:column;}
 .dash-mais-grid #motive-card{margin-bottom:0!important;}
+/* ===== TELAS DE ESTUDO (redesign, fase A4) ===== */
+/* Reino: "Novo chefão" abre o mesmo formulário de antes. */
+.reino-novo-chefao{margin-bottom:14px;}
+.reino-novo-chefao>summary{list-style:none;cursor:pointer;width:max-content;}
+.reino-novo-chefao>summary::-webkit-details-marker{display:none;}
+.reino-novo-chefao[open]>summary{margin-bottom:10px;opacity:.85;}
+.reino-novo-chefao .add-form{margin-bottom:0;}
+/* Linha do miniboss: "Estudar" é a ação; o resto vira uma fileira discreta de mesmo
+   peso, e renomear/excluir ficam atrás do "⋯" (clique errado em excluir custava caro).
+   O estilo vem do contêiner porque o JS reescreve a classe desses botões a cada ação. */
+.sub-actions{gap:8px;}
+.sub-actions>.btn:first-child{padding:8px 18px;font-size:13px;}
+.sub-acoes-sec{display:flex;flex-wrap:wrap;gap:5px;align-items:center;min-width:0;}
+.sub-acoes-sec>button{padding:4px 10px!important;font-size:12px!important;font-weight:700!important;border-radius:999px!important;
+  background:var(--panel2)!important;color:var(--text2)!important;border:1px solid var(--border)!important;box-shadow:none!important;}
+.sub-acoes-sec>button:hover{border-color:var(--accent)!important;color:var(--accent)!important;}
+/* Já tem conteúdo (anotação, resumo, flashcards, simulado, fluxograma): marca discreta em roxo. */
+.sub-acoes-sec>:is(.btn-gold,.btn-purple-s,.btn-pink,.resumo-badge-done,.fluxo-badge-done){
+  border-color:var(--accent)!important;color:var(--accent)!important;background:var(--st-acao-bg)!important;}
+.sub-acoes-mais{position:relative;margin-left:auto;}
+.sub-acoes-mais>summary{list-style:none;cursor:pointer;padding:3px 12px;border-radius:999px;border:1px solid var(--border);
+  font-weight:900;font-size:14px;line-height:1.4;color:var(--muted);background:var(--panel2);}
+.sub-acoes-mais>summary::-webkit-details-marker{display:none;}
+.sub-acoes-mais[open]>summary{color:var(--accent);border-color:var(--accent);}
+.sub-acoes-mais-menu{position:absolute;right:0;top:calc(100% + 4px);display:flex;gap:6px;padding:6px;z-index:30;
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow2);white-space:nowrap;}
+/* Revisões: "Revisar" é a ação; as outras três têm cor e ícone próprios pra não
+   serem confundidas (✓ verde = em dia, ↺ laranja = volta logo, 🏆 neutro = sai da fila). */
+.rev-acoes{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-end;margin-left:auto;}
+.rev-acoes-sec{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;}
+.rev-acoes .rev-acao-principal{order:2;}
+.rev-acao-principal{padding:7px 16px;font-size:13px;}
+.rev-acao-denovo{background:var(--st-pendente-bg);color:var(--st-pendente);border:1.5px solid rgba(234,88,12,0.35);}
+.rev-acao-dominado{background:var(--panel2);color:var(--gold-t);border:1.5px solid rgba(180,83,9,0.3);}
+@media(max-width:600px){.rev-acoes{align-items:stretch;width:100%;}.rev-acoes-sec{justify-content:flex-start;}}
+
 @media(max-width:1000px){
   .dash-fold.dash-v2{grid-template-columns:minmax(0,1fr);grid-template-areas:"faixa" "hoje" "diag";}
   .dash-diag{position:static;}
@@ -2789,6 +2825,10 @@ button.dash-faixa-atrasadas:hover{border-color:var(--st-atrasado);}
   <div class="sec-title" id="kingdom-title"></div>
   <div id="kingdom-externos"></div>
 
+  <!-- Redesign A4: o formulário ocupava o topo do reino em toda visita; vira um botão que
+       abre o MESMO formulário (mesmos campos e ids). <details> — sem JS. -->
+  <details class="reino-novo-chefao">
+  <summary class="btn btn-primary btn-sm"><i class="fa fa-plus"></i> Novo chefão</summary>
   <div class="add-form">
     <span style="font-size:18px">⚔️</span>
     <input class="inp" id="new-topic-name" placeholder="Nome do chefão (ex: Urgência e Emergência)">
@@ -2800,6 +2840,7 @@ button.dash-faixa-atrasadas:hover{border-color:var(--st-atrasado);}
     </div>
     <button class="btn btn-primary" onclick="addTopic()"><i class="fa fa-plus"></i> Criar Chefão</button>
   </div>
+  </details>
 
   <div class="busca-wrap">
     <i class="fa fa-magnifying-glass busca-ico"></i>
@@ -7723,6 +7764,7 @@ function subItemHTML(s,topicId){
     </div>
     <div class="sub-actions">
       <button class="btn btn-sm ${running?'btn-gold':'btn-primary'}" onclick="toggleTimer('${s.id}','${topicId}')"><i class="fa fa-${running?'pause':'play'}"></i> ${running?'Pausar':'Estudar'}</button>
+      <div class="sub-acoes-sec">
       <button class="btn btn-sm btn-cyan" onclick="showSubRevisions('${s.id}','${topicId}')"><i class="fa fa-calendar-check"></i> Revisões${revLocked?' 🔒':''}</button>
       <button class="btn btn-sm ${hasNote?'btn-gold':'btn-ghost'}" onclick="toggleNote('${s.id}')" id="note-btn-${s.id}"><i class="fa fa-note-sticky"></i> ${hasNote?'Anotação':'Anotar'}</button>
       <button class="${hasResumo?'resumo-badge-done':'resumo-badge-todo'}" onclick="toggleResumo('${s.id}')" id="resumo-btn-${s.id}" title="Anexe um arquivo pra IA gerar um resumo completo, com opção de ouvir">
@@ -7733,8 +7775,14 @@ function subItemHTML(s,topicId){
       <button class="${hasFluxo?'fluxo-badge-done':'fluxo-badge-todo'}" onclick="toggleFluxo('${s.id}')" id="fluxo-btn-${s.id}" title="Resumo visual em forma de fluxograma — a IA gera um rascunho e você pode editar depois">
         ${hasFluxo?'✅ Fluxograma':'🔀 Fluxograma'}
       </button>
-      <button class="btn btn-sm" onclick="renameSubtopic('${topicId}','${s.id}')" title="Renomear miniboss"><i class="fa fa-pen"></i></button>
-      <button class="btn btn-sm btn-danger" onclick="deleteSub('${topicId}','${s.id}')"><i class="fa fa-trash"></i></button>
+      </div>
+      <details class="sub-acoes-mais">
+        <summary title="Renomear ou excluir" aria-label="Mais ações do miniboss">⋯</summary>
+        <div class="sub-acoes-mais-menu">
+          <button class="btn btn-sm" onclick="renameSubtopic('${topicId}','${s.id}')" title="Renomear miniboss"><i class="fa fa-pen"></i> Renomear</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteSub('${topicId}','${s.id}')" title="Excluir miniboss"><i class="fa fa-trash"></i> Excluir</button>
+        </div>
+      </details>
     </div>
     <div class="resumo-wrap${openResumo.has(s.id)?' resumo-open':''}" id="resumo-${s.id}">${resumoPanelHTML(s)}</div>
     <div class="flash-wrap${openFlash.has(s.id)?' flash-open':''}" id="flash-${s.id}">${flashPanelHTML(s)}</div>
@@ -20237,11 +20285,13 @@ function renderFilaRevisao(container){
       </div>
       ${seloRet}
       ${selo}
-      <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
-        <button class="btn btn-xs btn-primary" onclick="revAbrirTela('${it.sub.id}')"><i class="fa fa-book-open"></i> Revisar</button>
-        <button class="btn btn-xs btn-green-s" onclick="revConcluirDaFila('${it.sub.id}',4)">✓ Revisei</button>
-        <button class="btn btn-xs btn-ghost" title="Não lembrava — volta logo e sobe na fila" onclick="revConcluirDaFila('${it.sub.id}',1)">Preciso ver de novo</button>
-        <button class="btn btn-xs btn-ghost" title="Sai da fila de revisão. Dá pra desfazer na aba Dominados." onclick="revDominar('${it.sub.id}',true)">🏆 Dominado</button>
+      <div class="rev-acoes">
+        <button class="btn btn-sm btn-primary rev-acao-principal" onclick="revAbrirTela('${it.sub.id}')"><i class="fa fa-book-open"></i> Revisar</button>
+        <div class="rev-acoes-sec">
+          <button class="btn btn-xs btn-green-s rev-acao-ok" title="Revisei agora — o próximo prazo é marcado sozinho" onclick="revConcluirDaFila('${it.sub.id}',4)">✓ Revisei</button>
+          <button class="btn btn-xs rev-acao-denovo" title="Não lembrava — volta logo e sobe na fila" onclick="revConcluirDaFila('${it.sub.id}',1)">↺ Preciso ver de novo</button>
+          <button class="btn btn-xs rev-acao-dominado" title="Sai da fila de revisão. Dá pra desfazer na aba Dominados." onclick="revDominar('${it.sub.id}',true)">🏆 Dominado</button>
+        </div>
       </div>
     </div>`;
   }).join('');
