@@ -471,6 +471,47 @@ async def main():
         await page.set_viewport_size({'width':1200,'height':900})
         print('   OK\n')
 
+        print('=== I) excluir a questão atual do treino some do banco de vez, sem travar a sessão ===')
+        # achado ao vivo: no meio do treino a questao que aparece esta de fato quebrada —
+        # esperar chegar no Banco pra excluir so perde o achado. Como esta questao nunca
+        # apareceu em nenhuma prova, a exclusao e segura (sem endereco orfao pra quebrar).
+        r=await page.evaluate("""()=>{
+          db.acervo=[];db.provas=[];db.provasArquivo=[];
+          QS('sub-mt1','Choque Séptico',3,'I').forEach(q=>{
+            db.acervo.push({...q,_chaveForte:acervoChave2(q),tags:[],favorita:false,status:'ativa',
+              vezesRespondida:0,acertos:0,criacao:new Date().toISOString(),origem:'ia'});});
+          treinoSessao=null;
+          treinarComDeck('nuncavistas');
+          const cfAntes=treinoSessao.itens[treinoSessao.idx]._chaveForte;
+          const idxAntes=treinoSessao.idx;
+          const totalAntes=db.acervo.length;
+          treinoExcluirQuestaoAtual();
+          return {idxAvancou:treinoSessao.idx!==idxAntes||treinoSessao.puladas.has(idxAntes),
+                  sumiuDoAcervo:!db.acervo.some(q=>q._chaveForte===cfAntes),
+                  totalDepois:db.acervo.length,totalAntes,
+                  itensDaSessaoIntactos:treinoSessao.itens.length===3,
+                  aindaRenderizaSemQuebrar:!!document.querySelector('.sim-q')};}""")
+        print('   %s'%r)
+        assert r['sumiuDoAcervo'] and r['totalDepois']==r['totalAntes']-1
+        assert r['idxAvancou'], 'excluir tem que avancar a sessao, igual deixar em branco'
+        assert r['itensDaSessaoIntactos'], 'nao pode renumerar s.itens (quebraria respondidasSet/puladas)'
+        assert r['aindaRenderizaSemQuebrar']
+        print('   OK\n')
+
+        print('=== I.1) questão já citada numa prova NÃO pode ser excluída (quebraria o histórico) ===')
+        r=await page.evaluate("""()=>{
+          db.acervo=[];db.provas=[];db.provasArquivo=[];
+          const q=QS('sub-mt1','Choque Séptico',1,'J')[0];
+          const item={...q,_chaveForte:acervoChave2(q),tags:[],favorita:false,status:'ativa',
+            vezesRespondida:1,acertos:1,criacao:new Date().toISOString(),origem:'ia'};
+          db.acervo=[item];
+          db.provasArquivo=[{id:'p1',chaves:[montarChaveQ(item)],chaves2:[item._chaveForte]}];
+          const resultado=acervoExcluirQuestao(item._chaveForte);
+          return {resultado,aindaNoAcervo:db.acervo.some(x=>x._chaveForte===item._chaveForte)};}""")
+        print('   %s'%r)
+        assert r['resultado'] is False and r['aindaNoAcervo'], 'questao referenciada numa prova arquivada nao pode sumir do acervo'
+        print('   OK\n')
+
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))
         assert not graves, graves

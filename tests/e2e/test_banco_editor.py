@@ -311,6 +311,36 @@ async def main():
         assert r['semAssuntoRestante']==0 and r['agoraEmSE1']==4
         print('   OK\n')
 
+        print('=== M) editor do Banco ganha "Excluir questão" — de vez, não só arquivar ===')
+        # "essa tá totalmente errada" — arquivar so esconde do Treinar; a pessoa quer que
+        # a questao quebrada suma do banco de vez. So e permitido quando ela nunca apareceu
+        # numa prova (senao o endereco gravado la fica orfao).
+        r=await page.evaluate("""()=>{
+          db.acervo=[];db.provas=[];db.provasArquivo=[];
+          QS('kEnf','Enfermagem','💉','sE1','Choque septico',2,'M').forEach(q=>{
+            db.acervo.push({...q,_chaveForte:acervoChave2(q),tags:[],favorita:false,status:'ativa',
+              vezesRespondida:0,acertos:0,criacao:new Date().toISOString(),origem:'ia'});
+          });
+          showScreen('banco');
+          const cf=db.acervo[0]._chaveForte;
+          bancoEditarAbrir(cf);
+          const temBotao=!!document.querySelector(`[onclick="bancoEditarExcluir('${cf}')"]`);
+          bancoEditarExcluir(cf);
+          return {temBotao,totalDepois:db.acervo.length,
+                  sumiu:!db.acervo.some(q=>q._chaveForte===cf),
+                  aindaEditando:bancoEditando.has(cf)};}""")
+        print('   %s'%r)
+        assert r['temBotao'] and r['sumiu'] and r['totalDepois']==1 and not r['aindaEditando']
+        print('   OK\n')
+
+        print('=== M.1) "criar" (ainda nao existe no banco) nao mostra botao de excluir ===')
+        r=await page.evaluate("""()=>{
+          bancoCriarAbrir();
+          return !!document.getElementById('banco-card-novo').innerHTML.includes('bancoEditarExcluir');}""")
+        print('   mostra excluir no modo criar: %s'%r)
+        assert not r
+        print('   OK\n')
+
         print('erros de JS: %s'%(real_errors(errs) or 'nenhum'))
         assert not real_errors(errs)
         await b.close()
