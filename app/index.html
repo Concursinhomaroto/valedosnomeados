@@ -985,8 +985,9 @@ nav{
 /* ===== Modo Treino completo — redesenho (prancha "5 · Treinar v2" / "6 · Sessão de treino") ===== */
 .treino-topo-entrada{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
 .treino-entrada{display:flex;flex-direction:column;gap:14px;}
-.treino-grid-2{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;align-items:stretch;}
-@media (max-width:900px){.treino-grid-2{grid-template-columns:1fr;}}
+.treino-grid-2{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px;align-items:stretch;}
+/* minmax(0,…): com 1fr puro o cartão não encolhia abaixo do conteúdo e passava 58px da tela no celular. */
+@media (max-width:900px){.treino-grid-2{grid-template-columns:minmax(0,1fr);}}
 .treino-destaque{background:var(--accent-deep,#1b1730);color:#fff;border-radius:16px;padding:22px 24px;display:flex;flex-direction:column;}
 .treino-destaque-eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.08em;opacity:.75;}
 .treino-destaque-titulo{font-size:22px;font-weight:900;margin-top:6px;line-height:1.2;}
@@ -1016,8 +1017,10 @@ nav{
 .treino-assuntos-acoes{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px;}
 .treino-assuntos-acoes label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;}
 .treino-assuntos-lista{max-height:460px;overflow-y:auto;margin:0 -4px;padding:0 4px;}
-.treino-assunto-linha{display:grid;grid-template-columns:18px 24px 1fr 90px 34px auto;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);border-radius:8px;}
+.treino-assunto-linha{display:grid;grid-template-columns:18px 24px minmax(0,1fr) 90px 34px auto;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);border-radius:8px;}
 .treino-assunto-linha:last-child{border-bottom:none;}
+/* Celular (redesign A5): a barrinha sai (o % continua) pra o botão Treinar caber. */
+@media(max-width:600px){.treino-assunto-linha{grid-template-columns:18px 22px minmax(0,1fr) 34px auto;gap:8px;}.treino-assunto-linha .treino-foco-barra{display:none;}}
 .treino-assunto-linha-sel{background:var(--panel2);}
 .treino-assunto-fixar{background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:2px;}
 .treino-assunto-fixar.ativo{color:var(--orange-t);}
@@ -2456,7 +2459,9 @@ nav{
 .fire-btn.active{border-color:var(--orange);background:rgba(234,88,12,0.12);box-shadow:0 2px 10px rgba(234,88,12,0.2);}
 
 /* ===== CARD ENTRANCE ANIMATION ===== */
-@keyframes cardIn{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+/* Redesign A5: entra a partir de um estado JÁ visível — nunca de opacity:0 (se a animação
+   não rodar, o cartão não pode ficar invisível). */
+@keyframes cardIn{from{opacity:.6;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
 .territory{animation:cardIn 0.35s ease both;}
 .topic-card{animation:cardIn 0.3s ease both;}
 .mb-card{animation:cardIn 0.3s ease both;}
@@ -2642,6 +2647,22 @@ button.dash-faixa-atrasadas:hover{border-color:var(--st-atrasado);}
 .dash-mais-largo{grid-column:1/-1;}
 .dash-mais-card{min-width:0;display:flex;flex-direction:column;}
 .dash-mais-grid #motive-card{margin-bottom:0!important;}
+/* ===== VIDA E ACABAMENTO (redesign, fase A5) — só CSS ===== */
+/* Brilho discreto na sequência ativa e na barra de nível; respeita prefers-reduced-motion
+   (a regra global da A1 zera a duração). */
+@keyframes brilhoSuave{0%,100%{box-shadow:0 4px 14px rgba(249,115,22,0.25);}50%{box-shadow:0 6px 24px rgba(249,115,22,0.5);}}
+#streak-card.streak-active{animation:brilhoSuave 3.2s ease-in-out infinite;}
+.xp-pill .xp-bar-fill{box-shadow:0 0 8px rgba(251,146,60,0.55);}
+/* Cartões clicáveis respondem ao ponteiro. */
+.gamify-goal,button.dash-faixa-atrasadas,.next-step-item,.rev-item,.treino-deck-linha,.sub-item{transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;}
+.gamify-goal:hover,button.dash-faixa-atrasadas:hover,.next-step-item:hover{transform:translateY(-1px);box-shadow:var(--shadow2);}
+@media(max-width:768px){
+  /* Fileira de filtros rola de lado: a borda esfumada avisa que tem mais. */
+  .filter-row{-webkit-mask-image:linear-gradient(90deg,#000 86%,transparent);mask-image:linear-gradient(90deg,#000 86%,transparent);padding-right:28px;}
+  /* Ferramentas do "Tempo estudado" (abas + exportar) passavam 33px da borda. */
+  .dash-fold .dash-head-tools,.dash-fold .dash-card-tempo .dash-head-tools{flex-wrap:wrap;justify-content:flex-start;}
+}
+
 /* ===== TELAS DE ESTUDO (redesign, fase A4) ===== */
 /* Reino: "Novo chefão" abre o mesmo formulário de antes. */
 .reino-novo-chefao{margin-bottom:14px;}
