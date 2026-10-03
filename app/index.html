@@ -1008,25 +1008,29 @@ nav{
 .treino-rodape-linha{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--muted);font-weight:600;padding:2px 2px;}
 .treino-sessao-wrap{display:flex;gap:16px;justify-content:center;align-items:flex-start;}
 .treino-sessao{max-width:900px;margin:0;flex:1 1 auto;}
-.treino-sessao-lateral{display:none;width:260px;flex:0 0 260px;flex-direction:column;gap:14px;}
+.treino-sessao-lateral{display:none;width:260px;flex:0 0 260px;flex-direction:column;gap:10px;}
 /* Achado ao vivo: em tela larga a sessao ficava um cartao estreito boiando num mar de
    fundo vazio. Em vez de esticar a pergunta (pior pra leitura), a largura sobrando vira
    uma coluna de contexto — mapa de progresso e desempenho por assunto desta sessao. So
    aparece quando ha espaco de verdade pros dois lado a lado sem apertar a pergunta. */
 @media (min-width:1180px){.treino-sessao-lateral{display:flex;}}
-.treino-lateral-bloco{background:var(--panel);border:1.5px solid var(--border);border-radius:14px;padding:14px;}
-.treino-lateral-titulo{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px;}
-.treino-progresso-barra{display:flex;height:10px;border-radius:99px;overflow:hidden;background:var(--border);margin-bottom:10px;}
+/* Achado ao vivo: "dá pra diminuir as palavras da lateral, igual foi feito das
+   superiores" — as etiquetas no topo da questão (.treino-etiquetas/.chip-sm) já são
+   pequenas e discretas; esta coluna usava fonte/peso maiores pro mesmo tipo de texto
+   (nome de assunto, contador), destacando mais do que devia. Alinhado pro mesmo peso. */
+.treino-lateral-bloco{background:var(--panel);border:1.5px solid var(--border);border-radius:14px;padding:12px;}
+.treino-lateral-titulo{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;}
+.treino-progresso-barra{display:flex;height:10px;border-radius:99px;overflow:hidden;background:var(--border);margin-bottom:8px;}
 .treino-progresso-barra span{height:100%;}
-.treino-progresso-legenda{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--text2);font-weight:600;}
+.treino-progresso-legenda{display:flex;flex-direction:column;gap:4px;font-size:10px;color:var(--text2);font-weight:600;}
 .treino-progresso-legenda span{display:flex;align-items:center;gap:7px;}
 .treino-progresso-legenda i{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 auto;}
-.treino-lateral-assunto{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:11px;border-bottom:1px solid var(--border);}
+.treino-lateral-assunto{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:10px;border-bottom:1px solid var(--border);}
 .treino-lateral-assunto:last-child{border-bottom:none;}
-.treino-lateral-assunto-nome{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;}
+.treino-lateral-assunto-nome{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}
 .treino-lateral-assunto-barra{width:56px;height:6px;border-radius:99px;background:var(--border);overflow:hidden;flex:0 0 auto;}
 .treino-lateral-assunto-barra span{display:block;height:100%;}
-.treino-lateral-assunto-pct{flex:0 0 auto;color:var(--muted);font-weight:700;font-size:10.5px;}
+.treino-lateral-assunto-pct{flex:0 0 auto;color:var(--muted);font-weight:700;font-size:9.5px;}
 .treino-topo{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
 .treino-topo-titulo{display:flex;flex-direction:column;align-items:center;text-align:center;}
 .treino-topo-titulo span{font-size:9.5px;color:var(--muted);text-transform:uppercase;font-weight:800;letter-spacing:.06em;}
@@ -12258,6 +12262,20 @@ function treinoPular(){
   s.puladas.add(s.idx);
   treinoProxima();
 }
+// Achado ao vivo: no meio do treino, a questao que aparece esta de fato quebrada/errada
+// (gabarito furado, enunciado sem sentido) — esperar chegar no Banco pra excluir so faz
+// perder o achado. Exclui do acervo de verdade (nao so "pula" esta sessao) e segue como
+// se tivesse deixado em branco, sem renumerar s.itens (indices de respondidasSet/puladas
+// continuam validos pro resto da sessao).
+function treinoExcluirQuestaoAtual(){
+  const s=treinoSessao;
+  if(!s)return;
+  const item=s.itens[s.idx];
+  if(!item||!item._chaveForte)return;
+  if(!acervoExcluirQuestao(item._chaveForte))return;
+  toast('🗑️ Questão excluída do banco.','var(--muted)');
+  treinoPular();
+}
 function treinoAnterior(){
   const s=treinoSessao;
   if(!s||s.idx<=0)return;
@@ -12441,7 +12459,10 @@ function treinoQuestaoHTML(){
     return`<div class="sim-alt${cls}"${onclick}><b>${alt.letra})</b> ${escapeHtml(alt.texto)}</div>`;
   }).join('');
   return`<div class="sim-q">
-    ${etiquetas}
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+      ${etiquetas}
+      <button class="btn btn-xs btn-ghost" style="flex-shrink:0;color:var(--red-t)" onclick="treinoExcluirQuestaoAtual()" title="Excluir esta questão do banco — ela está errada ou quebrada"><i class="fa fa-trash"></i></button>
+    </div>
     ${treinoHistoricoHTML(item)}
     ${textoApoioHTML(item)}
     <div class="sim-q-text" style="font-size:16px;margin-top:8px">${escapeHtml(item.questao)}</div>
@@ -14001,6 +14022,29 @@ function acervoUnir(...listas){
     vistos.add(k); junto.push(q);
   }));
   return junto;
+}
+// Exclusao DEFINITIVA (diferente de so marcar status:'arquivada'): so e segura quando a
+// questao nunca apareceu numa prova viva nem arquivada — provas guardam o ENDERECO da
+// questao (chaves/chaves2, ver provaArquivar) e resolvem ela contra o acervo na hora de
+// mostrar; apagar do acervo uma questao referenciada ali deixa aquele endereco orfao e
+// quebra o historico daquela prova. "Arquivada" existe exatamente pra esse caso — some do
+// Treinar sem derrubar nada que ja foi guardado.
+function acervoReferenciadaEmProva(chaveForte){
+  if(!chaveForte)return false;
+  if((db.provasArquivo||[]).some(a=>(a.chaves2||[]).includes(chaveForte)))return true;
+  return (db.provas||[]).some(p=>(p.chaves2||[]).includes(chaveForte));
+}
+function acervoExcluirQuestao(chaveForte){
+  const q=(db.acervo||[]).find(x=>x._chaveForte===chaveForte);
+  if(!q)return false;
+  if(acervoReferenciadaEmProva(chaveForte)){
+    toast('⚠️ Essa questão já apareceu numa prova e excluir quebraria aquele histórico. Em vez disso, mude o status pra "arquivada" — ela some do Treinar sem apagar nada.','var(--red)');
+    return false;
+  }
+  if(!confirm('Excluir esta questão de vez? Não tem como desfazer.'))return false;
+  db.acervo=db.acervo.filter(x=>x._chaveForte!==chaveForte);
+  acervoSalvar();
+  return true;
 }
 async function acervoCarregar(){
   ACERVO_REF=userRef('vdn_acervo');
@@ -16246,6 +16290,7 @@ function bancoEditorHTML(q,modo){
     <div class="banco-edit-linha" style="margin-top:8px">
       <button class="btn btn-sm btn-primary" onclick="${modo==='criar'?'bancoCriarSalvar()':`bancoEditarSalvar('${cf}')`}"><i class="fa fa-check"></i> Salvar</button>
       <button class="btn btn-sm btn-ghost" onclick="${modo==='criar'?'bancoCriarCancelar()':`bancoEditarCancelar('${cf}')`}">Cancelar</button>
+      ${modo==='criar'?'':`<button class="btn btn-sm btn-ghost" style="margin-left:auto;color:var(--red-t)" onclick="bancoEditarExcluir('${cf}')"><i class="fa fa-trash"></i> Excluir questão</button>`}
     </div>
   </div>`;
 }
@@ -16282,6 +16327,12 @@ function bancoEditarAbrir(cf){
 function bancoEditarCancelar(cf){
   bancoEditando.delete(cf);
   bancoListaRefrescar();
+}
+function bancoEditarExcluir(cf){
+  if(!acervoExcluirQuestao(cf))return;
+  bancoEditando.delete(cf);
+  bancoListaRefrescar();
+  toast('🗑️ Questão excluída.','var(--muted)');
 }
 function bancoEditarSalvar(cf){
   const item=bancoItemPorChaveForte(cf);
