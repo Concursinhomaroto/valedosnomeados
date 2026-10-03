@@ -2593,6 +2593,46 @@ nav{
   .days-pill .d-when{display:none;}
 }
 
+/* ===== MENU LATERAL (rodada 2) =====
+   Cabe inteiro em 1366×768: rótulos curtos (nome completo no title), itens de 38px,
+   topo em duas linhas. O menu vira coluna de três partes — topo e rodapé fixos, e só
+   a lista do meio rola, e só quando a janela for baixa demais (< ~640px). */
+.xp-pill .x-niv,.xp-pill .x-tit{white-space:nowrap;}
+@media(min-width:769px){
+  #sidebar{overflow:hidden;}
+  #nav-principal{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 10px 8px;gap:1px;}
+  #nav-principal::-webkit-scrollbar{width:3px;}
+  #nav-principal::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);}
+  .sidebar-logo{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 12px 10px;flex-shrink:0;}
+  .sidebar-logo .logo-dragon{font-size:22px;margin:0;line-height:1;}
+  .sidebar-logo h1{font-size:12px;letter-spacing:.8px;white-space:nowrap;}
+  .sidebar-logo small{display:none;}
+  .sidebar-info{flex-shrink:0;margin:8px 12px 2px;padding:8px 10px;display:grid;
+    grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px 8px;}
+  .days-pill,.days-pill[data-urg]{grid-column:1;grid-row:1;border:0;padding:0;gap:4px;flex-wrap:nowrap;}
+  .days-pill .d-num{font-size:18px;}
+  .days-pill .d-lbl{font-size:12px;letter-spacing:0;text-transform:lowercase;color:rgba(255,255,255,0.75);}
+  .exam-wrap{grid-column:2;grid-row:1;margin:0;justify-content:flex-end;}
+  .exam-wrap label{display:none;}
+  .exam-wrap input[type=date]{min-width:0;max-width:none;width:100%;font-size:12px;padding:3px 4px;}
+  .xp-pill{grid-column:1/-1;grid-row:2;margin:0;padding:6px 0 0;
+    grid-template-columns:auto minmax(0,1fr) auto;column-gap:8px;align-items:center;}
+  .xp-pill .x-lbl{grid-column:1;grid-row:1;font-size:12px;font-weight:800;}
+  .xp-pill .x-tit{display:none;}
+  .xp-pill .xp-bar{grid-column:2;grid-row:1;margin:0;height:5px;}
+  .xp-pill .x-num{grid-column:3;grid-row:1;margin:0;font-size:12px;}
+  .xp-pill .x-next{display:none;}
+  .nav-group{font-size:12px;letter-spacing:1px;padding:8px 12px 2px;}
+  .nav-group:first-child{padding-top:2px;}
+  .nav-btn{min-height:38px;padding:0 12px;font-size:12px;letter-spacing:.4px;gap:10px;}
+  .nav-icon{font-size:16px;line-height:1;}
+  .nav-badge{font-size:12px;}
+  .sidebar-bottom-row{flex-shrink:0;padding:8px 8px 10px;}
+  .sidebar-bottom-row>button{margin-bottom:18px;}
+  .sidebar-bottom-row>button::after{font-size:12px;}
+}
+/* Janela baixa: a lista do meio já rola sozinha; o rodapé segue fixo embaixo. */
+
 /* ===== PAINEL (redesign, fase A3) =====
    Antes: 14 cartões do mesmo peso numa grade de altura fixa, cada um rolando por
    dentro. Agora: faixa de hoje, um cartão "Hoje" grande à esquerda, Diagnóstico em
@@ -2794,7 +2834,7 @@ body.missao-ligada #dash-overdue-revs{display:none;}
     </div>
     <div class="days-pill" id="days-pill">
       <div class="d-num" id="days-left">—</div>
-      <div class="d-lbl">DIAS RESTANTES</div>
+      <div class="d-lbl">DIAS</div>
       <div class="d-when" id="days-when"></div>
     </div>
     <div class="xp-pill" id="xp-pill-btn" title="Ver a trilha de níveis">
@@ -2811,43 +2851,43 @@ body.missao-ligada #dash-overdue-revs{display:none;}
        Treinar, Mapa, Mais); os .nav-extra aparecem numa 2ª linha ao tocar em Mais. -->
   <nav id="nav-principal" aria-label="Menu principal">
     <div class="nav-group">Hoje</div>
-    <button class="nav-btn active" id="nav-dashboard">
-      <span class="nav-icon">🏆</span><span class="nav-label">PAINEL DO HERÓI</span>
+    <button class="nav-btn active" id="nav-dashboard" title="Painel do Herói">
+      <span class="nav-icon">🏆</span><span class="nav-label">Painel</span>
     </button>
-    <button class="nav-btn" id="nav-revisions">
-      <span class="nav-icon">🔔</span><span class="nav-label">REVISÕES</span>
+    <button class="nav-btn" id="nav-revisions" title="Revisões">
+      <span class="nav-icon">🔔</span><span class="nav-label">Revisões</span>
       <span class="nav-badge nav-badge-atrasado" id="rev-badge" style="display:none" title="assuntos com revisão atrasada">0</span>
     </button>
-    <button class="nav-btn" id="nav-simgeral">
-      <span class="nav-icon">🎯</span><span class="nav-label">TREINAR</span>
+    <button class="nav-btn" id="nav-simgeral" title="Treinar">
+      <span class="nav-icon">🎯</span><span class="nav-label">Treinar</span>
       <span class="nav-badge nav-badge-pendente" id="erros-badge" style="display:none" title="erros de simulado ainda não revisados">0</span>
     </button>
     <div class="nav-group">Estudar</div>
-    <button class="nav-btn" id="nav-map">
-      <span class="nav-icon">🗺️</span><span class="nav-label">MAPA DOS REINOS</span>
+    <button class="nav-btn" id="nav-map" title="Mapa dos Reinos">
+      <span class="nav-icon">🗺️</span><span class="nav-label">Mapa</span>
     </button>
     <!-- Botão MAPA DO VALE (D3+GeoJSON) suprimido daqui por enquanto — ver comentário
          perto das tags <script> do D3, junto do <head>, pra reativar no futuro. -->
-    <button class="nav-btn nav-extra" id="nav-sala">
-      <span class="nav-icon">👥</span><span class="nav-label">SALA DE ESTUDO</span>
+    <button class="nav-btn nav-extra" id="nav-sala" title="Sala de Estudo">
+      <span class="nav-icon">👥</span><span class="nav-label">Sala</span>
       <span id="nav-sala-dot" class="nav-sala-presenca" title="Você está visível na sala agora" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(21,128,61,.22);margin-left:auto;flex-shrink:0"></span>
     </button>
-    <button class="nav-btn nav-extra" id="nav-flashcards">
-      <span class="nav-icon">🃏</span><span class="nav-label">FLASHCARDS</span>
+    <button class="nav-btn nav-extra" id="nav-flashcards" title="Flashcards">
+      <span class="nav-icon">🃏</span><span class="nav-label">Flashcards</span>
     </button>
     <div class="nav-group">Acompanhar</div>
-    <button class="nav-btn nav-extra" id="nav-editais">
-      <span class="nav-icon">📋</span><span class="nav-label">EDITAIS</span>
+    <button class="nav-btn nav-extra" id="nav-editais" title="Editais">
+      <span class="nav-icon">📋</span><span class="nav-label">Editais</span>
       <span class="nav-badge nav-badge-pendente" id="editais-badge" style="display:none" title="editais com prova nos próximos 30 dias">0</span>
     </button>
-    <button class="nav-btn nav-extra" id="nav-conquistas">
-      <span class="nav-icon">🏅</span><span class="nav-label">CONQUISTAS</span>
+    <button class="nav-btn nav-extra" id="nav-conquistas" title="Conquistas">
+      <span class="nav-icon">🏅</span><span class="nav-label">Conquistas</span>
     </button>
-    <button class="nav-btn nav-extra" id="nav-redacoes">
-      <span class="nav-icon">📝</span><span class="nav-label">REDAÇÃO</span>
+    <button class="nav-btn nav-extra" id="nav-redacoes" title="Redação">
+      <span class="nav-icon">📝</span><span class="nav-label">Redação</span>
     </button>
     <button class="nav-btn nav-mais" id="nav-mais" type="button" onclick="navMaisAlternar()" aria-expanded="false" aria-label="Mais telas">
-      <span class="nav-icon">☰</span><span class="nav-label">MAIS</span>
+      <span class="nav-icon">☰</span><span class="nav-label">Mais</span>
     </button>
   </nav>
 
@@ -6039,7 +6079,7 @@ function updateDaysLeft(){
   const d=daysDiff(todayStr(),db.examDate);
   el.textContent=d>=0?d:'✓';
   const lbl=document.querySelector('#days-pill .d-lbl');
-  if(lbl)lbl.textContent=d<0?'PROVA REALIZADA':(d===1?'DIA RESTANTE':'DIAS RESTANTES');
+  if(lbl)lbl.textContent=d<0?'PROVA FEITA':(d===1?'DIA':'DIAS');
   if(when){
     // Data por extenso, no fuso local: "50" sozinho não diz quando é.
     const dt=new Date(db.examDate+'T00:00:00');
@@ -21533,7 +21573,7 @@ function updateXPDisplay(){
   const numEl=document.getElementById('total-xp');
   if(numEl)numEl.textContent=(db.xp||0).toLocaleString('pt-BR');
   const lvlEl=document.getElementById('xp-level-lbl');
-  if(lvlEl)lvlEl.textContent=`${info.icon} NÍVEL ${info.level} · ${info.titulo.toUpperCase()}`;
+  if(lvlEl){lvlEl.innerHTML=`<span class="x-niv">${info.icon} NÍVEL ${info.level}</span><span class="x-tit"> · ${escapeHtml(info.titulo.toUpperCase())}</span>`;lvlEl.title=`Nível ${info.level} · ${info.titulo}`;}
   // pct e xpFalta ja vinham de xpLevelInfo e eram descartados: a barra so mostra
   // o que a funcao ja calculava.
   const bar=document.getElementById('xp-bar-fill');
@@ -21542,6 +21582,9 @@ function updateXPDisplay(){
   if(next)next.textContent=info.xpFalta>0
     ?`faltam ${info.xpFalta.toLocaleString('pt-BR')} XP pro nível ${info.level+1}`
     :'nível máximo';
+  // No menu do computador a linha "faltam X XP" não cabe: vai pro title da barra.
+  const barra=bar&&bar.parentElement;
+  if(barra&&next)barra.title=next.textContent;
 }
 function gainXP(n){
   if(!n)return;

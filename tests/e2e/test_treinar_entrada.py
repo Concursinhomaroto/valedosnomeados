@@ -21,7 +21,7 @@ async def main():
         print('   abas: %s · sidebar: %r'%(r['tabs'],r['sidebar']))
         assert 'Treinar' in r['tabs'] and 'Acervo' in r['tabs']
         assert 'Simulado Geral' not in r['tabs'] and 'Banco de Questões' not in r['tabs']
-        assert 'TREINAR' in r['sidebar']
+        assert 'TREINAR' in r['sidebar'].upper()   # rodada 2: rótulo curto, maiúsculas via CSS
         print('   OK\n')
 
         print('=== B) acervo quase vazio: 1 cartão de onboarding, nunca 8 decks mortos ===')
