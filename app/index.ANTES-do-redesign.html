@@ -17722,38 +17722,7 @@ function logStudySeconds(seconds){
   if(seconds<=0)return;
   if(!db.sessions)db.sessions={};
   const td=todayStr();
-  // A sequencia so cai pra zero com o tempo passando, nunca por acao — este e o ultimo
-  // instante em que da pra ver que ela tinha caido antes do estudo de agora religa-la.
-  if(computeStreak()===0&&(db.longestStreak||0)>0&&!db.streakHadDrop)db.streakHadDrop=true;
   db.sessions[td]=(db.sessions[td]||0)+seconds;
-  // Depois de quem chamou terminar de gravar o resto da sessao (tempo do reino etc.).
-  setTimeout(marcosDoDiaVerificar,0);
-}
-// Saiu de renderDashboard: abrir o Painel gravava no banco (XP da meta, marco de sequencia,
-// recordes). Meta e sequencia so mudam quando entra tempo de estudo ou a meta e trocada,
-// entao e so nesses dois momentos que vale conferir — visualizar nao grava mais nada.
-function marcosDoDiaVerificar(){
-  const today=todayStr();
-  const streak=computeStreak();
-  const goalMin=db.dailyGoalMinutes||60;
-  const goalPct=Math.round(Math.min(100,(Math.round(todayStudiedSeconds()/60)/goalMin)*100));
-  let dirty=false;
-  if(streak>(db.longestStreak||0)){db.longestStreak=streak;dirty=true;}
-  if(goalPct>=100){
-    if(!db.goalHitDays)db.goalHitDays=[];
-    if(!db.goalHitDays.includes(today)){
-      db.goalHitDays.push(today);dirty=true;
-      gainXP(20);toast('🎯 Meta diária batida! +20 XP','var(--green)');
-    }
-  }
-  // Marco de streak a cada 7 dias seguidos — só uma vez por marco novo.
-  if(streak>0&&streak%7===0&&streak>(db.streakXpMilestone||0)){
-    db.streakXpMilestone=streak;dirty=true;
-    gainXP(50);toast(`🔥 ${streak} dias seguidos! +50 XP`,'var(--gold)');
-  }
-  // "Colecionador de Chamas": recuperar o streak até 30 depois de tê-lo perdido.
-  if(streak>=30&&db.streakHadDrop){db.streakHadDrop=false;db.streakRecoveries=(db.streakRecoveries||0)+1;dirty=true;}
-  if(dirty)saveDB();
 }
 
 // ===== STREAK / META DIÁRIA / CONQUISTAS =====
@@ -17804,7 +17773,6 @@ function saveDailyGoal(){
   if(!v||v<5){toast('Informe um valor válido (mínimo 5 minutos).','var(--red)');return;}
   db.dailyGoalMinutes=v;
   saveDB();
-  marcosDoDiaVerificar();
   closeModal();
   renderDashboard();
   toast('🎯 Meta diária atualizada!','var(--green)');
@@ -18161,19 +18129,10 @@ function checkAchievementUnlocks(){
   if(changed)saveDB();
 }
 
-// Desbloqueio (XP + saveDB) nao roda mais ao DESENHAR o Painel ou a tela de Conquistas —
-// visualizar nao grava. Roda logo depois de qualquer ganho de XP (gainXP), que e quando
-// os numeros que as conquistas medem mudaram de verdade. O nivel mostrado na tela ja e
-// calculado ao vivo por achievementStatus, entao a exibicao nao atrasa.
-let conquistasChecagemAgendada=false;
-function conquistasAgendarChecagem(){
-  if(conquistasChecagemAgendada)return;
-  conquistasChecagemAgendada=true;
-  setTimeout(()=>{conquistasChecagemAgendada=false;checkAchievementUnlocks();},0);
-}
 function renderBadges(){
   const el=document.getElementById('dash-badges');
   if(!el)return;
+  checkAchievementUnlocks();
   let unlockedTotal=0,maxTotal=0;
   const statuses=ACHIEVEMENTS_REGISTRY.map(a=>({a,st:achievementStatus(a)}));
   statuses.forEach(({st})=>{unlockedTotal+=st.tierIdx+1;maxTotal+=st.tierList.length;});
@@ -18206,6 +18165,7 @@ const CONQ_CAT_LABELS={all:'Todas as categorias',volume:'📦 Volume',consistenc
 function renderConquistasScreen(){
   const el=document.getElementById('conquistas-grid');
   if(!el)return;
+  checkAchievementUnlocks();
   let unlockedTotal=0,maxTotal=0,gamerscore=0;
   let list=ACHIEVEMENTS_REGISTRY.map(a=>({a,st:achievementStatus(a)}));
   list.forEach(({st})=>{unlockedTotal+=st.tierIdx+1;maxTotal+=st.tierList.length;gamerscore+=(st.tierIdx+1)*10;});
@@ -20447,6 +20407,28 @@ function renderDashboard(){
   const goalLblEl=document.getElementById('goal-lbl');
   if(goalLblEl)goalLblEl.textContent=`${todayMin} / ${goalMin} min hoje`;
 
+  // Recordes usados nas conquistas progressivas (não regridem quando a sequência
+  // atual cai ou o dia muda — marcam o melhor resultado já alcançado).
+  let achievementsDirty=false;
+  if(streak>(db.longestStreak||0)){db.longestStreak=streak;achievementsDirty=true;}
+  if(goalPct>=100){
+    if(!db.goalHitDays)db.goalHitDays=[];
+    if(!db.goalHitDays.includes(today)){
+      db.goalHitDays.push(today);achievementsDirty=true;
+      gainXP(20);toast('🎯 Meta diária batida! +20 XP','var(--green)');
+    }
+  }
+  // Marco de streak a cada 7 dias seguidos — só uma vez por marco novo (não regride
+  // se o streak cair e subir de novo até o mesmo número).
+  if(streak>0&&streak%7===0&&streak>(db.streakXpMilestone||0)){
+    db.streakXpMilestone=streak;achievementsDirty=true;
+    gainXP(50);toast(`🔥 ${streak} dias seguidos! +50 XP`,'var(--gold)');
+  }
+  // "Colecionador de Chamas": recuperar o streak até 30 depois de tê-lo perdido.
+  if(streak===0&&(db.longestStreak||0)>0&&!db.streakHadDrop){db.streakHadDrop=true;achievementsDirty=true;}
+  if(streak>=30&&db.streakHadDrop){db.streakHadDrop=false;db.streakRecoveries=(db.streakRecoveries||0)+1;achievementsDirty=true;}
+  if(achievementsDirty)saveDB();
+
   // Stats
   const dashLvl=xpLevelInfo(db.xp||0);
   document.getElementById('dash-stats').innerHTML=[
@@ -20838,7 +20820,6 @@ function gainXP(n){
   if(after.level>before){
     toast(`🎉 Subiu de nível! Agora você é ${after.icon} Nível ${after.level} · ${after.titulo}`,'var(--gold)');
   }
-  conquistasAgendarChecagem();
 }
 
 // ===== EDITAIS =====
