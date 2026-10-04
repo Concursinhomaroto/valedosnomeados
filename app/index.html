@@ -3038,6 +3038,19 @@ span.ti-meta{cursor:default;}
 .dash-maq-btn b{font-size:13px;font-weight:900;}
 .dash-maq-btn small{font-size:12px;color:var(--muted);font-weight:700;}
 
+/* ===== MÁQUINA v4: lista no passo 2, semana no desempenho ===== */
+.maq .ti-comp{flex-direction:column;flex-wrap:nowrap;gap:5px;}
+.maq .ti-comp span{display:flex;align-items:center;gap:8px;background:none;padding:0;border-radius:0;font-size:13px;font-weight:700;}
+.maq .ti-comp span i{font-style:normal;flex:0 0 24px;height:24px;border-radius:8px;background:rgba(255,255,255,.12);display:inline-flex;
+  align-items:center;justify-content:center;font-size:13px;}
+.maq .ti-comp span b{font-weight:900;min-width:18px;text-align:right;}
+.treino-semana{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:14px;}
+.treino-semana div{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:8px 6px;text-align:center;display:flex;flex-direction:column;}
+.treino-semana b{font-size:18px;font-weight:900;color:var(--text);font-variant-numeric:tabular-nums;}
+.treino-semana span{font-size:12px;color:var(--muted);font-weight:700;}
+@media(max-width:600px){.treino-semana{grid-template-columns:repeat(2,minmax(0,1fr));}}
+.dash-hoje-sub-dica{font-size:12px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--st-atrasado);margin-left:4px;}
+
 /* ===== PAINEL (rodada 2): densidade, sem vão vazio =====
    "Hoje" e Diagnóstico com a mesma altura; a Agenda sai da coluna e vira uma faixa de
    7 colunas na largura inteira; "Hoje" ganha duas colunas por dentro. */
@@ -3467,7 +3480,7 @@ body.missao-ligada .dash-v2 .div-btn:hover{text-decoration:underline;filter:none
             <div id="dash-maquina"></div>
           </div>
           <div class="dash-hoje-agora">
-            <div class="sec-title dash-sec dash-hoje-sub">🧭 O que fazer agora</div>
+            <div class="sec-title dash-sec dash-hoje-sub">🧭 O que fazer agora <span class="dash-hoje-sub-dica">os mais atrasados</span></div>
             <div id="next-steps-list"></div>
           </div>
         </div>
@@ -13469,14 +13482,26 @@ function treinoPlacarHTML(){
       <span><i style="background:var(--orange-t)"></i>em dívida ${c.divida}</span>
       <span><i style="background:var(--border)"></i>nunca vistas ${c.nuncaVistas}</span>
     </div>
+    ${treinoSemanaHTML()}
   </div>`;
 }
-// Questões por dia no próprio Treinar: os últimos 5 dias e o acumulado; o painel completo
+// Últimos 7 dias no cartão "Seu desempenho": feitas, acerto e média — o ritmo da semana.
+function treinoSemanaHTML(){
+  const hoje=todayStr();let n=0,c=0,ativos=0;
+  for(let i=0;i<7;i++){const r=questoesDiaDoRegistro(addDays(hoje,-i));n+=r.n;c+=r.c;if(r.n)ativos++;}
+  return`<div class="treino-semana">
+    <div><b>${n}</b><span>questões em 7 dias</span></div>
+    <div><b style="color:${n?faixaCorTexto(Math.round(c/n*100)):'var(--muted)'}">${n?Math.round(c/n*100)+'%':'—'}</b><span>acerto na semana</span></div>
+    <div><b>${Math.round(n/7)}</b><span>média por dia</span></div>
+    <div><b>${ativos}/7</b><span>dias com questões</span></div>
+  </div>`;
+}
+// Questões por dia no próprio Treinar: os últimos 6 dias e o acumulado; o painel completo
 // (14 dias, dia a dia, assuntos) abre no clique.
 function treinoPorDiaHTML(){
   const hist=questoesHistorico();
   const hoje=todayStr();
-  const dias=[];for(let i=0;i<5;i++){const d=addDays(hoje,-i);dias.push({d,...questoesDiaDoRegistro(d)});}
+  const dias=[];for(let i=0;i<6;i++){const d=addDays(hoje,-i);dias.push({d,...questoesDiaDoRegistro(d)});}
   const pct=(c,n)=>n?Math.round(c/n*100):0;
   const rot=d=>d===hoje?'hoje':new Date(d+'T00:00:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit'}).replace('.','');
   return`<div class="treino-pordia">
@@ -13797,21 +13822,11 @@ function metaQuestoesEditar(){
 // sugerida — você confere e registra; o registro é o mesmo revConcluirDaFila do "Revisei".
 const TREV_POR_ASSUNTO=4;
 const TREV_MIN_QUESTOES=2;
-// UMA ordem das revisões do dia pra todo o app: a do "O que fazer agora" do Painel
-// (prioridade do assunto, edital em foco e urgência real), seguida do resto da fila
-// oficial. Revisar por questões e a Missão usam esta mesma ordem — o que o Painel diz
-// pra revisar primeiro é o que o Treinar e a Missão revisam primeiro.
+// UMA ordem das revisões do dia pra todo o app: o MAIS ATRASADO primeiro (há quantos
+// dias o prazo venceu), empate pela urgência da fila. O "O que fazer agora" do Painel, a
+// revisão por questões e a Missão usam esta mesma ordem.
 function revOrdemDoDia(){
-  const fila=revCandidatos();
-  const porId=new Map(fila.map(c=>[c.sub.id,c]));
-  const out=[],vistos=new Set();
-  computeStudyRecommendations().forEach(r=>{
-    if(r.tipo!=='revisao'||vistos.has(r.subId))return;
-    const c=porId.get(r.subId);
-    if(c){vistos.add(r.subId);out.push(c);}
-  });
-  fila.forEach(c=>{if(!vistos.has(c.sub.id))out.push(c);});
-  return out;
+  return revCandidatos().slice().sort((a,b)=>(b.atraso||0)-(a.atraso||0)||(b.urg||0)-(a.urg||0));
 }
 // Os assuntos de hoje são os primeiros da ordem do dia até a cota. Os que têm questão
 // entram na sessão; os que não têm ficam listados pra revisar pelo resumo.
@@ -13908,10 +13923,10 @@ function treinoDestaqueHTML(){
   const hoje=questoesDiaResumo().n, meta=metaQuestoesDia();
   const pct=Math.min(100,Math.round(hoje/meta*100));
   const pior=treinoPiorAssunto();
-  const comp=TI_PARTES.filter(t=>m.partes[t.id]).map(t=>`<span>${t.ic} ${m.partes[t.id]} ${t.lbl}</span>`).join('');
+  const comp=TI_PARTES.filter(t=>m.partes[t.id]).map(t=>`<span><i>${t.ic}</i><b>${m.partes[t.id]}</b> ${t.lbl}</span>`).join('');
   const rv=trevMontar(), revHoje=trevFeitasHoje();
   const revPct=Math.min(100,Math.round(revHoje/Math.max(1,rv.cota)*100));
-  const prox=rv.assuntos.slice(0,3);
+  const prox=rv.assuntos.slice(0,5);
   return`<div class="treino-destaque maq">
     <div class="ti-topo">
       <div class="treino-destaque-eyebrow">⚡ MÁQUINA DE VENCER</div>
@@ -13928,7 +13943,7 @@ function treinoDestaqueHTML(){
         <div class="treino-destaque-sub">${rv.assuntos.length
           ?`${rv.assuntos.length} assunto${rv.assuntos.length===1?'':'s'} da fila de hoje · ${rv.itens.length} questões — no fim você registra a revisão de cada um`
           :(rv.semQuestao.length?'Os assuntos na vez hoje ainda não têm questões no banco.':'✓ Nada na vez hoje.')}</div>
-        ${prox.length?`<div class="maq-prox">${prox.map((a,i)=>`<span><i>${i+1}</i>${escapeHtml(a.nome)}</span>`).join('')}${rv.assuntos.length>3?`<span class="maq-mais">+${rv.assuntos.length-3} assuntos</span>`:''}</div>`:''}
+        ${prox.length?`<div class="maq-prox">${prox.map((a,i)=>`<span><i>${i+1}</i>${escapeHtml(a.nome)}</span>`).join('')}${rv.assuntos.length>5?`<span class="maq-mais">+${rv.assuntos.length-5} assuntos</span>`:''}</div>`:''}
         <div class="maq-acoes">
           <button class="btn treino-destaque-btn" onclick="trevComecar()" ${rv.itens.length?'':'disabled'}><i class="fa fa-rotate"></i> Revisar agora</button>
           ${rv.semQuestao.length?`<a class="ti-semq" onclick="trevSemQuestaoAbrir()">${rv.semQuestao.length} sem questões → revisar pelo resumo</a>`:''}
@@ -20469,11 +20484,17 @@ function dashMaquinaRender(){
   const el=document.getElementById('dash-maquina');
   if(!el)return;
   const rv=trevMontar(), ti=tiMontar(tiTamanho());
+  const nErros=(treinarDecks().find(d=>d.id==='feridas')||{itens:[]}).itens.length;
+  const nCards=fcVencidosContagem();
   el.innerHTML=`<div class="dash-maq-tit">⚡ Máquina de vencer</div>
     <button class="dash-maq-btn" onclick="showScreen('simgeral');trevComecar()" ${rv.itens.length?'':'disabled'}>
       <span>🔁</span><b>Revisar por questões</b><small>${rv.assuntos.length?`${rv.assuntos.length} assuntos · ${rv.itens.length} questões`:'nada com questão na vez'}</small></button>
     <button class="dash-maq-btn" onclick="showScreen('simgeral');tiComecar()" ${ti.total?'':'disabled'}>
-      <span>⚡</span><b>Treino inteligente</b><small>${ti.total} questões que mais rendem</small></button>`;
+      <span>⚡</span><b>Treino inteligente</b><small>${ti.total} que mais rendem</small></button>
+    <button class="dash-maq-btn" onclick="showScreen('simgeral');treinarComDeck('feridas')" ${nErros?'':'disabled'}>
+      <span>🩹</span><b>Consertar meus erros</b><small>${nErros?`${nErros} erradas pra refazer`:'nenhum erro em aberto'}</small></button>
+    <button class="dash-maq-btn" onclick="showScreen('flashcards')">
+      <span>🃏</span><b>Flashcards a revisar</b><small>${nCards?`${nCards} cards vencidos`:'nenhum card vencido'}</small></button>`;
 }
 function renderNextSteps(){
   try{dashMaquinaRender();}catch(e){console.warn('máquina no Painel:',e);}
@@ -20486,7 +20507,13 @@ function renderNextSteps(){
     if(conta)conta.innerHTML='';
     return;
   }
-  const items=todos.slice(0,7);   // as 7 primeiras (linhas compactas); "ver a fila" leva pra lista inteira
+  // Os 10 mais atrasados, na ordem do dia (a mesma da revisão por questões e da
+  // Missão). Se a fila tiver menos de 10, completa com o que está por estudar/fraco.
+  const DASH_AGORA_N=10;
+  const revs=revOrdemDoDia().slice(0,DASH_AGORA_N).map(c=>({subId:c.sub.id,subName:c.sub.name,topicName:c.topic.name,
+    kingdomName:c.kingdom.name,kingdomIcon:c.kingdom.icon,tipo:'revisao',reasonIcon:'🔁',
+    reason:(c.atraso||0)>0?`venceu há ${c.atraso}d`:'na vez hoje'}));
+  const items=revs.concat(todos.filter(x=>x.tipo!=='revisao').slice(0,Math.max(0,DASH_AGORA_N-revs.length)));
   const foco=edFocoIndice();
   const nd=numerosDoDia(),nRev=nd.naVez;
   const nNovo=todos.filter(x=>x.tipo==='novo').length;
