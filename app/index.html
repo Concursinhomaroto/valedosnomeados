@@ -3002,6 +3002,42 @@ span.ti-meta{cursor:default;}
 .treino-pordia .qd-tr{font-size:12px;padding:4px 2px;}
 .treino-resumo-tempo{margin-top:8px;font-size:13px;font-weight:800;color:var(--text2);}
 
+/* ===== MÁQUINA DE VENCER v3: dois passos lado a lado ===== */
+.treino-destaque.maq{padding:18px 20px;}
+.maq-passos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:12px;align-items:stretch;}
+.maq-passo{display:flex;flex-direction:column;align-items:stretch;text-align:left;gap:8px;padding:14px 16px;border-radius:14px;background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.14);margin:0;min-width:0;}
+.maq-cab{display:flex;align-items:center;gap:10px;font-size:17px;margin:0!important;}
+.maq-cab b{font-weight:900;}
+.maq .treino-destaque-sub{margin:0;}
+.maq-prox{display:flex;flex-direction:column;gap:4px;}
+.maq-prox span{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.92;}
+.maq-prox i{font-style:normal;flex:0 0 18px;height:18px;border-radius:50%;background:rgba(255,255,255,.16);display:inline-flex;align-items:center;justify-content:center;font-size:12px;}
+.maq-prox .maq-mais{opacity:.7;padding-left:26px;}
+.maq-acoes{display:flex;align-items:center;justify-content:flex-start;gap:12px;flex-wrap:wrap;margin-top:auto;padding-top:4px;}
+.maq-acoes .treino-destaque-btn{margin:0;}
+.maq .ti-comp{margin-top:0;}
+.maq .ti-semq{font-size:12px;color:#fff;opacity:.85;text-decoration:underline;cursor:pointer;margin:0;}
+.maq .ti-rodape{margin-top:0;}
+.treino-grid-iguais>.section-card{margin:0;height:100%;}
+.treino-grid-iguais .treino-pordia{margin:0;padding:0;border:0;}
+@media(max-width:900px){.maq-passos{grid-template-columns:minmax(0,1fr);}}
+.trev-semq-modal p{font-size:13px;color:var(--text2);margin-bottom:10px;}
+.trev-semq-item{display:flex;flex-direction:column;align-items:flex-start;width:100%;text-align:left;padding:8px 10px;margin-bottom:6px;
+  border:1px solid var(--border);border-radius:10px;background:var(--panel2);cursor:pointer;font:inherit;color:var(--text);}
+.trev-semq-item:hover{border-color:var(--accent);}
+.trev-semq-item b{font-size:13px;} .trev-semq-item span{font-size:12px;color:var(--muted);}
+/* Painel: atalhos da máquina na coluna da Missão */
+#dash-maquina{margin-top:12px;padding-top:10px;border-top:1px dashed var(--border);display:flex;flex-direction:column;gap:6px;}
+.dash-maq-tit{font-size:12px;font-weight:900;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);}
+.dash-maq-btn{display:grid;grid-template-columns:22px minmax(0,1fr);column-gap:8px;align-items:center;text-align:left;width:100%;
+  padding:8px 12px;border-radius:12px;border:1.5px solid var(--border2);background:var(--panel2);cursor:pointer;font:inherit;color:var(--text);}
+.dash-maq-btn:hover:not(:disabled){border-color:var(--accent);transform:translateY(-1px);}
+.dash-maq-btn:disabled{opacity:.55;cursor:default;}
+.dash-maq-btn span{grid-row:1/3;font-size:16px;}
+.dash-maq-btn b{font-size:13px;font-weight:900;}
+.dash-maq-btn small{font-size:12px;color:var(--muted);font-weight:700;}
+
 /* ===== PAINEL (rodada 2): densidade, sem vão vazio =====
    "Hoje" e Diagnóstico com a mesma altura; a Agenda sai da coluna e vira uma faixa de
    7 colunas na largura inteira; "Hoje" ganha duas colunas por dentro. */
@@ -3428,6 +3464,7 @@ body.missao-ligada .dash-v2 .div-btn:hover{text-decoration:underline;filter:none
             <div id="missao-cta"></div>
             <div id="divida-resumo"></div>
             <div class="dash-scroll" id="dash-overdue-revs"></div>
+            <div id="dash-maquina"></div>
           </div>
           <div class="dash-hoje-agora">
             <div class="sec-title dash-sec dash-hoje-sub">🧭 O que fazer agora</div>
@@ -13432,7 +13469,6 @@ function treinoPlacarHTML(){
       <span><i style="background:var(--orange-t)"></i>em dívida ${c.divida}</span>
       <span><i style="background:var(--border)"></i>nunca vistas ${c.nuncaVistas}</span>
     </div>
-    ${treinoPorDiaHTML()}
   </div>`;
 }
 // Questões por dia no próprio Treinar: os últimos 5 dias e o acumulado; o painel completo
@@ -13761,6 +13797,24 @@ function metaQuestoesEditar(){
 // sugerida — você confere e registra; o registro é o mesmo revConcluirDaFila do "Revisei".
 const TREV_POR_ASSUNTO=4;
 const TREV_MIN_QUESTOES=2;
+// UMA ordem das revisões do dia pra todo o app: a do "O que fazer agora" do Painel
+// (prioridade do assunto, edital em foco e urgência real), seguida do resto da fila
+// oficial. Revisar por questões e a Missão usam esta mesma ordem — o que o Painel diz
+// pra revisar primeiro é o que o Treinar e a Missão revisam primeiro.
+function revOrdemDoDia(){
+  const fila=revCandidatos();
+  const porId=new Map(fila.map(c=>[c.sub.id,c]));
+  const out=[],vistos=new Set();
+  computeStudyRecommendations().forEach(r=>{
+    if(r.tipo!=='revisao'||vistos.has(r.subId))return;
+    const c=porId.get(r.subId);
+    if(c){vistos.add(r.subId);out.push(c);}
+  });
+  fila.forEach(c=>{if(!vistos.has(c.sub.id))out.push(c);});
+  return out;
+}
+// Os assuntos de hoje são os primeiros da ordem do dia até a cota. Os que têm questão
+// entram na sessão; os que não têm ficam listados pra revisar pelo resumo.
 function trevMontar(){
   const nd=numerosDoDia();
   const cota=Math.max(1,nd.cabemHoje);
@@ -13770,14 +13824,21 @@ function trevMontar(){
   const ordem=q=>(q.ultimoResultado==='X'?0:!q.vezesRespondida?1:2);
   const quando=q=>q.ultimaVezEm?new Date(q.ultimaVezEm).getTime():0;
   const assuntos=[],semQuestao=[];
-  for(const c of nd.fila){
-    if(assuntos.length>=cota)break;
+  revOrdemDoDia().slice(0,cota).forEach(c=>{
     const qs=(porSub[c.sub.id]||[]).filter(q=>missaoHojeStr(q.ultimaVezEm)!==hoje);
-    if(qs.length<TREV_MIN_QUESTOES){if(semQuestao.length<5)semQuestao.push(c);continue;}
+    if(qs.length<TREV_MIN_QUESTOES){semQuestao.push(c);return;}
     const esc=qs.slice().sort((a,b)=>ordem(a)-ordem(b)||quando(a)-quando(b)).slice(0,TREV_POR_ASSUNTO);
     assuntos.push({subId:c.sub.id,nome:c.sub.name,atraso:c.atraso||0,itens:esc});
-  }
+  });
   return {assuntos,semQuestao,itens:assuntos.flatMap(a=>a.itens),cota,naVez:nd.naVez};
+}
+function trevSemQuestaoAbrir(){
+  const m=trevMontar();
+  document.getElementById('modal').classList.remove('modal-wide');
+  openModal('📖 Revisar pelo resumo',`<div class="trev-semq-modal">
+    <p>Estes assuntos estão na revisão de hoje, mas ainda não têm questões no banco (ou têm menos de ${TREV_MIN_QUESTOES}). Revise pelo resumo e fluxograma:</p>
+    ${m.semQuestao.map(c=>`<button class="trev-semq-item" onclick="revAbrirTela('${c.sub.id}')"><b>${escapeHtml(c.sub.name)}</b><span>${escapeHtml(c.kingdom.name)} · ${escapeHtml(c.topic.name)}</span></button>`).join('')}
+  </div>`);
 }
 function trevComecar(){
   const m=trevMontar();
@@ -13850,7 +13911,8 @@ function treinoDestaqueHTML(){
   const comp=TI_PARTES.filter(t=>m.partes[t.id]).map(t=>`<span>${t.ic} ${m.partes[t.id]} ${t.lbl}</span>`).join('');
   const rv=trevMontar(), revHoje=trevFeitasHoje();
   const revPct=Math.min(100,Math.round(revHoje/Math.max(1,rv.cota)*100));
-  return`<div class="treino-destaque">
+  const prox=rv.assuntos.slice(0,3);
+  return`<div class="treino-destaque maq">
     <div class="ti-topo">
       <div class="treino-destaque-eyebrow">⚡ MÁQUINA DE VENCER</div>
       <span class="ti-metas">
@@ -13860,26 +13922,29 @@ function treinoDestaqueHTML(){
           <span>🔁 ${revHoje}/${rv.cota} revisões</span><i><b style="width:${revPct}%"></b></i></span>
       </span>
     </div>
-    <div class="ti-passo">
-      <div class="ti-passo-n">1</div>
-      <div class="ti-passo-corpo">
-        <div class="ti-passo-tit">Revisar por questões</div>
+    <div class="maq-passos">
+      <div class="maq-passo ti-passo">
+        <div class="maq-cab"><span class="ti-passo-n">1</span><b>Revisar por questões</b></div>
         <div class="treino-destaque-sub">${rv.assuntos.length
           ?`${rv.assuntos.length} assunto${rv.assuntos.length===1?'':'s'} da fila de hoje · ${rv.itens.length} questões — no fim você registra a revisão de cada um`
           :(rv.semQuestao.length?'Os assuntos na vez hoje ainda não têm questões no banco.':'✓ Nada na vez hoje.')}</div>
-        ${rv.semQuestao.length?`<div class="ti-semq">sem questões: ${rv.semQuestao.map(c=>`<a onclick="revAbrirTela('${c.sub.id}')">${escapeHtml(c.sub.name)}</a>`).join(' · ')}</div>`:''}
+        ${prox.length?`<div class="maq-prox">${prox.map((a,i)=>`<span><i>${i+1}</i>${escapeHtml(a.nome)}</span>`).join('')}${rv.assuntos.length>3?`<span class="maq-mais">+${rv.assuntos.length-3} assuntos</span>`:''}</div>`:''}
+        <div class="maq-acoes">
+          <button class="btn treino-destaque-btn" onclick="trevComecar()" ${rv.itens.length?'':'disabled'}><i class="fa fa-rotate"></i> Revisar agora</button>
+          ${rv.semQuestao.length?`<a class="ti-semq" onclick="trevSemQuestaoAbrir()">${rv.semQuestao.length} sem questões → revisar pelo resumo</a>`:''}
+        </div>
       </div>
-      <button class="btn treino-destaque-btn ti-passo-btn" onclick="trevComecar()" ${rv.itens.length?'':'disabled'}><i class="fa fa-rotate"></i> Revisar agora</button>
+      <div class="maq-passo">
+        <div class="maq-cab ti-tit2"><span class="ti-passo-n">2</span><b>Treino inteligente</b></div>
+        <div class="treino-destaque-sub">${m.total?'O que mais rende ponto agora, na dose certa:':'Sem questões pra montar agora — importe ou gere no Acervo.'}</div>
+        ${m.total?`<div class="ti-comp">${comp}</div>`:''}
+        <div class="maq-acoes ti-acoes">
+          <button class="btn treino-destaque-btn" onclick="tiComecar()" ${m.total?'':'disabled'}><i class="fa fa-bolt"></i> Treinar ${m.total} agora</button>
+          <span class="ti-tam">${TI_TAMANHOS.map(t=>`<button class="${t===n?'on':''}" onclick="tiEscolherTamanho(${t})">${t}</button>`).join('')}</span>
+        </div>
+        ${pior?`<div class="treino-destaque-rodape ti-rodape">ou só o que mais te derruba: <a class="ti-pior" onclick="treinoTreinarAssunto('${pior.subId}')">${escapeHtml(pior.subName)} · ${pior.pct}%</a></div>`:''}
+      </div>
     </div>
-    <div class="treino-destaque-titulo ti-tit2"><span class="ti-passo-n">2</span> Treino inteligente</div>
-    <div class="treino-destaque-sub">${m.total?'O que mais rende ponto agora, na dose certa:':'Sem questões pra montar agora — importe ou gere no Acervo.'}</div>
-    ${m.total?`<div class="ti-comp">${comp}</div>`:''}
-    <div class="ti-acoes">
-      <button class="btn treino-destaque-btn" onclick="tiComecar()" ${m.total?'':'disabled'}><i class="fa fa-bolt"></i> Treinar ${m.total} agora</button>
-      <span class="ti-tam">${TI_TAMANHOS.map(t=>`<button class="${t===n?'on':''}" onclick="tiEscolherTamanho(${t})">${t}</button>`).join('')}</span>
-    </div>
-    ${pior?`<div class="treino-destaque-rodape ti-rodape">ou só o que mais te derruba: <a class="ti-pior" onclick="treinoTreinarAssunto('${pior.subId}')">${escapeHtml(pior.subName)} · ${pior.pct}%</a></div>`
-          :`<div class="treino-destaque-rodape"><i class="fa fa-circle-info"></i> Tudo o que você responder já conta.</div>`}
   </div>`;
 }
 // ===== Montar meu treino (secao 1.3) — filtros combinaveis, contagem ao vivo, sem prova =====
@@ -14007,9 +14072,10 @@ function treinarEntradaHTML(){
   // simulado" fica como ação secundária à direita, fora da barra (que se redesenha
   // sozinha a cada filtro).
   return`<div class="treino-entrada">
-    <div class="treino-grid-2">
-      ${treinoDestaqueHTML()}
+    ${treinoDestaqueHTML()}
+    <div class="treino-grid-2 treino-grid-iguais">
       ${treinoPlacarHTML()}
+      <div class="section-card">${treinoPorDiaHTML()}</div>
     </div>
     <div class="section-card treino-topo-montar">
       ${treinoMontarBarHTML()}
@@ -20397,7 +20463,20 @@ function renderSimKingdomBreakdown(){
     </div>`;
   }).join('')+(rows.length>4?`<span class="dash-verlink sim-kb-vertodos" onclick="this.parentElement.classList.toggle('sim-kb-aberto');this.textContent=this.parentElement.classList.contains('sim-kb-aberto')?'ver só os 4 piores':'ver todos (${rows.length})'">ver todos (${rows.length})</span>`:'');
 }
+// Atalhos da máquina de vencer no Painel: os mesmos dois passos do Treinar, com a mesma
+// conta (a revisão por questões começa pelos mesmos assuntos da lista ao lado).
+function dashMaquinaRender(){
+  const el=document.getElementById('dash-maquina');
+  if(!el)return;
+  const rv=trevMontar(), ti=tiMontar(tiTamanho());
+  el.innerHTML=`<div class="dash-maq-tit">⚡ Máquina de vencer</div>
+    <button class="dash-maq-btn" onclick="showScreen('simgeral');trevComecar()" ${rv.itens.length?'':'disabled'}>
+      <span>🔁</span><b>Revisar por questões</b><small>${rv.assuntos.length?`${rv.assuntos.length} assuntos · ${rv.itens.length} questões`:'nada com questão na vez'}</small></button>
+    <button class="dash-maq-btn" onclick="showScreen('simgeral');tiComecar()" ${ti.total?'':'disabled'}>
+      <span>⚡</span><b>Treino inteligente</b><small>${ti.total} questões que mais rendem</small></button>`;
+}
 function renderNextSteps(){
+  try{dashMaquinaRender();}catch(e){console.warn('máquina no Painel:',e);}
   const el=document.getElementById('next-steps-list');
   if(!el)return;
   const todos=computeStudyRecommendations();
@@ -21816,7 +21895,7 @@ function missaoMontar(){
   const custo=revCusto();
   let nRev=Math.floor(orc*MISSAO_PARTE.rev/custo);
   if(!nRev&&n.fila.length)nRev=1;
-  n.fila.slice(0,nRev).forEach(c=>itens.push({tipo:'rev',subId:c.sub.id,nome:c.sub.name,
+  revOrdemDoDia().slice(0,nRev).forEach(c=>itens.push({tipo:'rev',subId:c.sub.id,nome:c.sub.name,
     sub:`${c.kingdom.name} · ${c.topic.name}`,min:custo,atraso:c.atraso||0}));
   // 2) flashcards vencidos, ~25%, primeiro os do reino mais atrasado
   let cards=Math.max(5,Math.floor(orc*MISSAO_PARTE.fc/MISSAO_MIN_POR_CARD));

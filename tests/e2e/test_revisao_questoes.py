@@ -55,8 +55,10 @@ async def main():
             metas:[...c.querySelectorAll('.ti-meta span')].map(x=>x.textContent),
             primeiro:document.querySelector('.treino-entrada').firstElementChild.contains(c)};}""")
         print('   %s'%r)
-        assert r['passo'].startswith('2 assuntos da fila de hoje · 7 questões') and 'Assunto 2' in r['semq']
+        assert r['passo'].startswith('2 assuntos da fila de hoje · 7 questões') and r['semq'].startswith('1 sem questões')
         assert r['metas'][0].endswith('0/30 questões') and '0/' in r['metas'][1] and r['primeiro']
+        txt=await page.evaluate("""()=>{trevSemQuestaoAbrir();const t=document.getElementById('modal-body').innerText;closeModal();return t;}""")
+        assert 'Assunto 2' in txt
         print('   OK\n')
 
         print('=== C) sessão: responder NÃO grava revisão sozinho; o fim sugere a nota pelo acerto ===')
@@ -90,6 +92,23 @@ async def main():
             naFila:numerosDoDia().fila.map(c=>c.sub.id),feitas:trevFeitasHoje()};}""")
         print('   %s'%r)
         assert r['iguais'] and '2 revisões registradas' in r['ok'] and r['naFila']==['s2'] and r['feitas']==2
+        print('   OK\n')
+
+        print('=== E) uma ordem só: Painel ("O que fazer agora"), revisão por questões e Missão ===')
+        r=await page.evaluate("""()=>{
+          db.revisions={s0:[{date:addDays(todayStr(),-2),completed:false}],s1:[{date:addDays(todayStr(),-9),completed:false}],
+                        s3:[{date:addDays(todayStr(),-4),completed:false}]};
+          db.topics.k1[0].subtopics.find(x=>x.id==='s3').priority=90;   // prioridade alta sobe no Painel
+          const painel=computeStudyRecommendations().filter(x=>x.tipo==='revisao').map(x=>x.subId);
+          const treino=trevMontar().assuntos.map(a=>a.subId);
+          try{Object.keys(localStorage).filter(k=>k.indexOf('vdn_missao')===0).forEach(k=>localStorage.removeItem(k));}catch(e){}
+          missaoMem=null;
+          const missao=missaoMontar().itens.filter(i=>i.tipo==='rev').map(i=>i.subId);
+          return {painel,treino,missao,fila:revCandidatos().map(c=>c.sub.id)};}""")
+        print('   %s'%r)
+        assert r['painel'][0]=='s3', 'prioridade 90 vem primeiro no Painel'
+        assert r['treino']==[x for x in r['painel'] if x in r['treino']][:len(r['treino'])] and r['treino'][0]=='s3'
+        assert r['missao']==r['painel'][:len(r['missao'])]
         print('   OK\n')
 
         graves=real_errors(errs)
