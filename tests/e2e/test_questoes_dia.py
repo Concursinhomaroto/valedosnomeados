@@ -62,7 +62,8 @@ async def main():
           const sete=questoesDiaResumo().n;
           return {antes,seis,sete};}""",chaves[:1])
         print('   %s'%r)
-        assert r['antes']==0 and r['seis']==0 and r['sete']==1
+        # o registro do dia só soma quando a questão volta a contar (7 dias depois)
+        assert r['seis']==r['antes'] and r['sete']==r['antes']+1
         print('   OK\n')
 
         print('=== D) questão antiga (sem contadaEm) respondida há 3 dias não conta de novo hoje ===')
@@ -72,13 +73,27 @@ async def main():
         assert r is False
         print('   OK\n')
 
-        print('=== E) o detalhe abre com semana, assuntos e a regra ===')
+        print('=== E) o painel abre com hoje, acumulado, 14 dias, tabela, assuntos e a regra ===')
         r=await page.evaluate("""()=>{document.getElementById('dash-questoes-card').click();
           const b=document.getElementById('modal-body');
           const out={dias:b.querySelectorAll('.qd-dia').length,linhas:b.querySelectorAll('.qd-linha').length,
-            regra:b.querySelector('.qd-regra').textContent};closeModal();return out;}""")
+            tabela:b.querySelectorAll('.qd-tr').length,regra:b.querySelector('.qd-regra').textContent};closeModal();return out;}""")
         print('   %s'%r)
-        assert r['dias']==7 and r['linhas']>=1 and '7 dias' in r['regra']
+        assert r['dias']==14 and r['linhas']>=1 and r['tabela']>=3 and '7 dias' in r['regra']
+        print('   OK\n')
+
+        print('=== G) registro por dia: feitas/certas/erradas vão acumulando, inclusive dias antigos ===')
+        r=await page.evaluate("""()=>{const hoje=todayStr();const reg=db.questoesPorDia||{};
+          const h=JSON.parse(JSON.stringify(reg[hoje]||{}));
+          reg[addDays(hoje,-1)]={n:20,c:15,x:5};reg[addDays(hoje,-30)]={n:10,c:4,x:6};db.questoesPorDia=reg;
+          const hist=questoesHistorico();
+          questoesDiaAbrir();const b=document.getElementById('modal-body');
+          const tot=b.querySelector('.qd-tr-tot').textContent.replace(/\\s+/g,' ').trim();closeModal();
+          return {h,dias:hist.dias.map(x=>x.n),tot:hist.tot,media:hist.mediaDia,linhaTotal:tot};}""")
+        print('   %s'%r)
+        assert r['h']['n']==r['h']['c']+r['h']['x'] and r['h']['n']==5
+        assert r['dias']==[5,20,10] and r['tot']=={'n':35,'c':15+4+r['h']['c'],'x':5+6+r['h']['x']}
+        assert r['linhaTotal'].replace(' ','').startswith('Total35')
         print('   OK\n')
 
         print('=== F) abrir o Painel e o detalhe não grava nada ===')

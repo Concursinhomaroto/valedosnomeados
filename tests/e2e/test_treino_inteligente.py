@@ -62,15 +62,15 @@ async def main():
         print('=== D) cartão: composição, tamanho lembrado, meta do dia; Treinar inicia a sessão ===')
         r=await page.evaluate("""()=>{showScreen('simgeral');
           const card=document.querySelector('.treino-destaque');
-          const out={titulo:card.querySelector('.treino-destaque-titulo').textContent,comp:card.querySelectorAll('.ti-comp span').length,
-            meta:card.querySelector('.ti-meta span').textContent,btn:card.querySelector('.treino-destaque-btn').textContent.trim()};
+          const out={titulo:card.querySelector('.ti-tit2').textContent.trim(),comp:card.querySelectorAll('.ti-comp span').length,
+            meta:card.querySelector('.ti-meta span').textContent,btn:card.querySelector('[onclick="tiComecar()"]').textContent.trim()};
           tiEscolherTamanho(10);
-          out.btn10=document.querySelector('.treino-destaque .treino-destaque-btn').textContent.trim();
+          out.btn10=document.querySelector('.treino-destaque [onclick="tiComecar()"]').textContent.trim();
           let salvo=null;try{salvo=localStorage.getItem('vdn_ti_n');}catch(e){}out.salvo=salvo;
           tiComecar();out.sessao=treinoSessao?{n:treinoSessao.itens.length,titulo:treinoSessao.titulo}:null;
           return out;}""")
         print('   %s'%r)
-        assert r['titulo']=='Treino inteligente' and r['comp']==4 and r['meta']=='0/30 hoje'
+        assert r['titulo'].endswith('Treino inteligente') and r['comp']==4 and r['meta']=='📝 0/30 questões'
         assert r['btn']=='Treinar 20 agora' and r['btn10']=='Treinar 10 agora' and r['salvo']=='10'
         assert r['sessao']=={'n':10,'titulo':'⚡ Treino inteligente'}
         print('   OK\n')

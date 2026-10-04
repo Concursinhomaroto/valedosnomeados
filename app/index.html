@@ -2929,6 +2929,25 @@ button.dash-faixa-questoes:hover{border-color:var(--accent);}
 .qd-nome{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .qd-nome small{display:block;font-size:12px;color:var(--muted);font-weight:600;}
 .qd-vazio,.qd-regra{font-size:12px;color:var(--muted);text-align:center;}
+.qd-bloco-tit{font-size:12px;font-weight:900;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:-6px;
+  display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+.qd-bloco-tit small{text-transform:none;letter-spacing:0;font-weight:700;display:inline-flex;gap:6px;align-items:center;}
+.qd-acum b{color:var(--text);}
+.qd-14{grid-template-columns:repeat(14,minmax(0,1fr));gap:4px;height:120px;}
+.qd-barra{position:relative;display:flex!important;flex-direction:column-reverse;width:70%;min-height:2px;border-radius:5px 5px 2px 2px;
+  background:var(--green)!important;overflow:hidden;}
+.qd-barra b{display:block;width:100%;background:var(--red);}
+.qd-hoje .qd-barra{outline:2px solid var(--accent);outline-offset:1px;}
+.qd-pt{display:inline-block;width:9px;height:9px;border-radius:2px;}
+.qd-pt-ok{background:var(--green);} .qd-pt-x{background:var(--red);}
+.qd-ok{color:var(--green-t);} .qd-x{color:var(--red-t);}
+.qd-tabela{display:flex;flex-direction:column;}
+.qd-tr{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(4,minmax(0,1fr));gap:8px;padding:6px 4px;border-bottom:1px solid var(--border);
+  font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;}
+.qd-tr>span:not(:first-child){text-align:right;}
+.qd-th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+.qd-tr-hoje{background:var(--st-acao-bg);border-radius:6px;}
+.qd-tr-tot{border-top:2px solid var(--border2);border-bottom:0;}
 .treino-qhoje{color:var(--accent);cursor:pointer;}
 @media(max-width:1000px){.dash-faixa{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:600px){.qd-topo{grid-template-columns:repeat(2,minmax(0,1fr));}}
@@ -2948,6 +2967,40 @@ button.dash-faixa-questoes:hover{border-color:var(--accent);}
 .ti-tam button.on{background:rgba(255,255,255,.2);opacity:1;}
 .ti-pior{color:#fff;text-decoration:underline;cursor:pointer;font-weight:800;}
 .treino-destaque .ti-rodape{display:block;line-height:1.5;}
+
+/* ===== MÁQUINA DE VENCER v2 ===== */
+.ti-metas{display:flex;gap:6px;flex-wrap:wrap;}
+span.ti-meta{cursor:default;}
+.ti-passo{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;margin-top:12px;
+  padding:12px 14px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);}
+.ti-passo-n{width:26px;height:26px;border-radius:50%;background:#fff;color:var(--accent-deep,#1b1730);font-weight:900;
+  display:flex;align-items:center;justify-content:center;font-size:13px;}
+.ti-tit2{display:flex;align-items:center;gap:10px;margin-top:16px!important;font-size:17px!important;}
+.ti-passo-tit{font-size:17px;font-weight:900;}
+.ti-passo .treino-destaque-sub{margin-top:2px;}
+.ti-passo-btn{margin:0!important;}
+.ti-semq{font-size:12px;opacity:.85;margin-top:4px;}
+.ti-semq a{color:#fff;text-decoration:underline;cursor:pointer;}
+@media(max-width:600px){.ti-passo{grid-template-columns:auto minmax(0,1fr);}.ti-passo-btn{grid-column:1/-1;justify-self:start;}}
+.trev{margin-top:14px;border:1.5px solid var(--border2);border-radius:12px;padding:12px 14px;background:var(--panel2);}
+.trev-ok{font-size:13px;font-weight:800;color:var(--green-t);}
+.trev-tit{font-size:14px;font-weight:900;color:var(--text);}
+.trev-sub{font-size:12px;color:var(--muted);font-weight:600;margin:2px 0 8px;}
+.trev-linha{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:6px 0;
+  border-bottom:1px solid var(--border);cursor:pointer;}
+.trev-sem{opacity:.55;cursor:default;}
+.trev-nome{font-size:13px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.trev-placar{font-size:12px;font-weight:900;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.trev-nota{width:auto;padding:5px 8px;font-size:12px;}
+.trev-btn{margin-top:10px;}
+@media(max-width:600px){.trev-linha{grid-template-columns:auto minmax(0,1fr);}.trev-placar,.trev-nota{grid-column:2;}}
+
+/* ===== RELÓGIO DO TREINO ===== */
+.treino-relogio{font-weight:900;color:var(--accent);font-variant-numeric:tabular-nums;}
+.treino-pordia{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);}
+.treino-pordia-cab{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px;font-size:13px;}
+.treino-pordia .qd-tr{font-size:12px;padding:4px 2px;}
+.treino-resumo-tempo{margin-top:8px;font-size:13px;font-weight:800;color:var(--text2);}
 
 /* ===== PAINEL (rodada 2): densidade, sem vão vazio =====
    "Hoje" e Diagnóstico com a mesma altura; a Agenda sai da coluna e vira uma faixa de
@@ -12859,12 +12912,59 @@ function treinoIniciar(pool,meta){
   }
   const itens=base.map(treinoResolverItem).filter(Boolean);
   if(!itens.length){toast('❌ Não consegui montar.','var(--red)');return false;}
+  // Trocar de sessão no meio não perde o tempo da anterior.
+  if(treinoSessao){treinoTempoTick();treinoTempoDescarregar((treinoSessao.itens[treinoSessao.idx]||{}).subId);}
   acervoSalvar();
   treinoResumo=null;
   treinoSessao={itens,idx:0,titulo:(meta&&meta.titulo)||'Treino livre',
+    revisao:(meta&&meta.revisao)||null,
+    seg:0,segPend:0,segLancado:0,ultimoTick:Date.now(),
     iniciadoEm:Date.now(),respondidas:0,certas:0,erradas:0,
     puladas:new Set(),respondidasSet:new Set()};
+  treinoTempoLigar();
   return true;
+}
+// ===== RELÓGIO DO TREINO =====
+// Igual ao simulado: começa quando as questões abrem e só corre com o Treinar na tela e a
+// aba visível (sair da tela ou minimizar pausa). O tempo vai pro estudo do dia A CADA
+// RESPOSTA — no assunto daquela questão —, então conta na meta e na sequência na hora, e
+// fechar a aba no meio não perde nada. O tique só troca o texto do relógio: não redesenha.
+let treinoTempoIntervalo=null;
+function treinoTempoLigar(){
+  if(treinoTempoIntervalo)clearInterval(treinoTempoIntervalo);
+  treinoTempoIntervalo=setInterval(treinoTempoTick,1000);
+}
+function treinoTempoParar(){
+  if(treinoTempoIntervalo){clearInterval(treinoTempoIntervalo);treinoTempoIntervalo=null;}
+}
+function treinoTempoTick(){
+  const s=treinoSessao;
+  if(!s){treinoTempoParar();return;}
+  const agora=Date.now();
+  // Salto grande (aba em segundo plano, computador dormindo) não vira tempo de estudo.
+  const delta=Math.min(5,Math.max(0,(agora-(s.ultimoTick||agora))/1000));
+  s.ultimoTick=agora;
+  const tela=document.getElementById('screen-simgeral');
+  const ativa=!document.hidden&&!!tela&&tela.classList.contains('active');
+  if(ativa){s.seg+=delta;s.segPend+=delta;}
+  const el=document.getElementById('treino-relogio');
+  if(el)el.textContent='⏱ '+fmtHMS(Math.floor(s.seg));
+}
+function treinoTempoDescarregar(subId){
+  const s=treinoSessao;
+  if(!s)return 0;
+  const sec=Math.floor(s.segPend);
+  if(sec<=0)return 0;
+  s.segPend-=sec;s.segLancado+=sec;
+  logStudySeconds(sec);
+  db.lifetimeSeconds=(db.lifetimeSeconds||0)+sec;
+  if(subId){
+    if(!db.subTotalSeconds)db.subTotalSeconds={};
+    db.subTotalSeconds[subId]=(db.subTotalSeconds[subId]||0)+sec;
+    const ctx=simTopicKingdomDoSub(subId);
+    if(ctx&&ctx.kingdom){if(!db.kingdomSeconds)db.kingdomSeconds={};db.kingdomSeconds[ctx.kingdom.id]=(db.kingdomSeconds[ctx.kingdom.id]||0)+sec;}
+  }
+  return sec;
 }
 // Cada resposta conta NA HORA: item do Acervo, estatistica do assunto, Banco de Erros (se
 // errou, automatico, igual simCorrigir ja faz) e XP — os quatro juntos, sem esperar
@@ -12906,6 +13006,7 @@ function treinoResponder(letra){
   acervoAtualizarContadores(item,acertou?'C':'X',item.confianca,undefined,true);
   if(!acertou)criarFlashcardDeQuestaoErrada(item.subId,item);
   acervoSalvar();
+  treinoTempoTick();treinoTempoDescarregar(item.subId);
   gainXP(1+(acertou?2:0));
   renderSimGeralScreen();
 }
@@ -13042,9 +13143,21 @@ function treinoIrParaAssunto(){
 function treinoEncerrar(){
   const s=treinoSessao;
   if(!s)return;
+  treinoTempoTick();
+  treinoTempoDescarregar((s.itens[s.idx]||{}).subId);
+  treinoTempoParar();
+  if(s.segLancado>0){
+    if(!db.freeSessions)db.freeSessions=[];
+    db.freeSessions.push({tipo:'treino',reinoId:'',reinoName:'Treino',segundos:s.segLancado,data:todayStr(),
+      hora:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})});
+    histApararSessoes();
+    if(!s.respondidas)saveDB();   // com resposta, o histórico do treino (abaixo) já grava
+  }
   const itensErrados=s.itens.filter((it,i)=>s.respondidasSet.has(i)&&it.userAnswer&&it.userAnswer!==it.correta);
   treinoResumo={certas:s.certas,erradas:s.erradas,respondidas:s.respondidas,
-    total:s.itens.length,liquida:s.certas-s.erradas,itensErrados,titulo:s.titulo};
+    total:s.itens.length,liquida:s.certas-s.erradas,itensErrados,titulo:s.titulo,
+    tempoSec:s.segLancado,
+    revisao:s.revisao?trevResultado(s):null};
   if(s.respondidas>0)treinoRegistrarSessaoNoHistorico(treinoResumo);
   treinoSessao=null;
   renderSimGeralScreen();
@@ -13239,6 +13352,7 @@ function treinoSessaoHTML(){
         <button class="btn btn-sm btn-ghost" onclick="treinoEncerrar()"><i class="fa fa-arrow-left"></i> Encerrar</button>
         <div class="treino-topo-titulo"><span>treinando</span><b>${escapeHtml(s.titulo)} · questão ${s.idx+1} de ${s.itens.length}</b></div>
         <div class="treino-placar-sessao">
+          <span class="treino-relogio" id="treino-relogio" title="Tempo desta sessão — entra no seu estudo do dia">⏱ ${fmtHMS(Math.floor(s.seg||0))}</span>
           <span>${s.respondidas} respondidas</span><span class="pill-ok">${s.certas} certas</span>
           <span class="pill-bad">${s.erradas} erradas</span><span class="pill-neutro">líquida ${liquida>0?'+':''}${liquida}</span>
         </div>
@@ -13259,10 +13373,12 @@ function treinoResumoHTML(){
   return`<div class="section-card">
     <div class="sec-title">🏁 Sessão encerrada — ${escapeHtml(r.titulo)}</div>
     <div class="sim-score-banner ${pct>=60?'sim-good':'sim-bad'}">${r.certas}/${r.respondidas} acertos (${pct}%) · líquida ${r.liquida>0?'+':''}${r.liquida}</div>
+    ${r.tempoSec?`<div class="treino-resumo-tempo">⏱ ${fmtHMS(r.tempoSec)} de treino${r.respondidas?` · ${Math.round(r.tempoSec/r.respondidas)}s por questão`:''} — já somado ao seu estudo de hoje</div>`:''}
     ${r.itensErrados.length?`<div style="margin-top:10px;font-size:12px;color:var(--muted);font-weight:700">Errou ${r.itensErrados.length} questão${r.itensErrados.length>1?'ões':''}:</div>
       <ul style="margin:6px 0 0;padding-left:18px;font-size:12px">
         ${r.itensErrados.map(it=>`<li>${escapeHtml((it.questao||'').slice(0,110))}${(it.questao||'').length>110?'…':''}</li>`).join('')}
       </ul>`:''}
+    ${r.revisao?trevRegistroHTML(r.revisao):''}
     <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="treinoFecharResumo();tiComecar()"><i class="fa fa-bolt"></i> Mais uma rodada inteligente</button>
       ${r.itensErrados.length?`<button class="btn btn-ghost" onclick="treinoTreinarErradas()"><i class="fa fa-rotate"></i> Treinar só as que errei</button>`:''}
@@ -13316,6 +13432,24 @@ function treinoPlacarHTML(){
       <span><i style="background:var(--orange-t)"></i>em dívida ${c.divida}</span>
       <span><i style="background:var(--border)"></i>nunca vistas ${c.nuncaVistas}</span>
     </div>
+    ${treinoPorDiaHTML()}
+  </div>`;
+}
+// Questões por dia no próprio Treinar: os últimos 5 dias e o acumulado; o painel completo
+// (14 dias, dia a dia, assuntos) abre no clique.
+function treinoPorDiaHTML(){
+  const hist=questoesHistorico();
+  const hoje=todayStr();
+  const dias=[];for(let i=0;i<5;i++){const d=addDays(hoje,-i);dias.push({d,...questoesDiaDoRegistro(d)});}
+  const pct=(c,n)=>n?Math.round(c/n*100):0;
+  const rot=d=>d===hoje?'hoje':new Date(d+'T00:00:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit'}).replace('.','');
+  return`<div class="treino-pordia">
+    <div class="treino-pordia-cab"><b>📝 Questões por dia</b><span class="dash-verlink" onclick="questoesDiaAbrir()">ver dia a dia →</span></div>
+    <div class="qd-tr qd-th"><span>Dia</span><span>Feitas</span><span>Certas</span><span>Erradas</span><span>Acerto</span></div>
+    ${dias.map(x=>`<div class="qd-tr${x.d===hoje?' qd-tr-hoje':''}"><span>${rot(x.d)}</span><span>${x.n}</span><span class="qd-ok">${x.c}</span>
+      <span class="qd-x">${x.x}</span><span>${x.n?pct(x.c,x.n)+'%':'—'}</span></div>`).join('')}
+    <div class="qd-tr qd-tr-tot"><span>Acumulado</span><span>${hist.tot.n}</span><span class="qd-ok">${hist.tot.c}</span>
+      <span class="qd-x">${hist.tot.x}</span><span>${hist.tot.n?pct(hist.tot.c,hist.tot.n)+'%':'—'}</span></div>
   </div>`;
 }
 // ===== Assuntos: controle completo (achado do usuario ao ver os 3 mockups de estilo —
@@ -13619,6 +13753,94 @@ function metaQuestoesEditar(){
   db.metaQuestoesDia=n;saveDB();
   renderSimGeralScreen();
 }
+// ===== MÁQUINA DE VENCER v2: revisão por questões =====
+// Revisar respondendo questões do assunto, em vez de reler. Pega os assuntos da fila
+// oficial (revCandidatos, na ordem dela) até a cota de hoje, só os que têm questão no
+// banco, e monta até 4 de cada: primeiro as que você errou, depois as nunca vistas,
+// depois as mais antigas. No fim, cada assunto aparece com o seu acerto e uma nota
+// sugerida — você confere e registra; o registro é o mesmo revConcluirDaFila do "Revisei".
+const TREV_POR_ASSUNTO=4;
+const TREV_MIN_QUESTOES=2;
+function trevMontar(){
+  const nd=numerosDoDia();
+  const cota=Math.max(1,nd.cabemHoje);
+  const hoje=todayStr();
+  const porSub={};
+  treinarPoolAtivo().forEach(q=>{if(q.subId)(porSub[q.subId]=porSub[q.subId]||[]).push(q);});
+  const ordem=q=>(q.ultimoResultado==='X'?0:!q.vezesRespondida?1:2);
+  const quando=q=>q.ultimaVezEm?new Date(q.ultimaVezEm).getTime():0;
+  const assuntos=[],semQuestao=[];
+  for(const c of nd.fila){
+    if(assuntos.length>=cota)break;
+    const qs=(porSub[c.sub.id]||[]).filter(q=>missaoHojeStr(q.ultimaVezEm)!==hoje);
+    if(qs.length<TREV_MIN_QUESTOES){if(semQuestao.length<5)semQuestao.push(c);continue;}
+    const esc=qs.slice().sort((a,b)=>ordem(a)-ordem(b)||quando(a)-quando(b)).slice(0,TREV_POR_ASSUNTO);
+    assuntos.push({subId:c.sub.id,nome:c.sub.name,atraso:c.atraso||0,itens:esc});
+  }
+  return {assuntos,semQuestao,itens:assuntos.flatMap(a=>a.itens),cota,naVez:nd.naVez};
+}
+function trevComecar(){
+  const m=trevMontar();
+  if(!m.itens.length){toast('Nenhum assunto da fila de hoje tem questões no banco — revise pelo resumo na tela Revisões.','var(--muted)');return;}
+  if(!treinoIniciar(m.itens,{titulo:'🔁 Revisão por questões',
+    revisao:m.assuntos.map(a=>({subId:a.subId,nome:a.nome}))}))return;
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+}
+function trevNotaSugerida(c,n){
+  if(!n)return 0;
+  const pct=c/n*100;
+  return pct>=75?4:pct>=50?3:1;
+}
+function trevResultado(s){
+  return s.revisao.map(a=>{
+    let n=0,c=0;
+    s.itens.forEach((it,i)=>{if(it.subId===a.subId&&s.respondidasSet.has(i)){n++;if(it.userAnswer===it.correta)c++;}});
+    return {...a,n,c,nota:trevNotaSugerida(c,n)};
+  });
+}
+const TREV_NOTAS=[{v:4,lbl:'✓ Revisei'},{v:3,lbl:'😐 Com dificuldade'},{v:1,lbl:'↺ Preciso ver de novo'}];
+function trevRegistroHTML(lista){
+  if(treinoResumo&&treinoResumo.revisaoRegistrada)
+    return`<div class="trev trev-ok">✅ ${treinoResumo.revisaoRegistrada} revis${treinoResumo.revisaoRegistrada===1?'ão registrada':'ões registradas'} — já saíram da fila de hoje.</div>`;
+  const comResposta=lista.filter(a=>a.n);
+  return`<div class="trev">
+    <div class="trev-tit">🔁 Registrar as revisões</div>
+    <div class="trev-sub">Nota sugerida pelo seu acerto agora. Confira e registre: vai pro mesmo lugar do "Revisei" da fila.</div>
+    ${lista.map((a,i)=>`<label class="trev-linha${a.n?'':' trev-sem'}">
+      <input type="checkbox" class="trev-chk" data-i="${i}"${a.n?' checked':''}${a.n?'':' disabled'}>
+      <span class="trev-nome">${escapeHtml(a.nome)}</span>
+      <span class="trev-placar" style="color:${a.n?faixaCorTexto(Math.round(a.c/a.n*100)):'var(--muted)'}">${a.n?`${a.c}/${a.n} · ${Math.round(a.c/a.n*100)}%`:'não respondeu'}</span>
+      <select class="inp trev-nota" data-i="${i}"${a.n?'':' disabled'}>${TREV_NOTAS.map(o=>`<option value="${o.v}"${o.v===a.nota?' selected':''}>${o.lbl}</option>`).join('')}</select>
+    </label>`).join('')}
+    <button class="btn btn-green-s trev-btn" onclick="trevRegistrar()" ${comResposta.length?'':'disabled'}><i class="fa fa-check"></i> Registrar revisões</button>
+  </div>`;
+}
+function trevRegistrar(){
+  const r=treinoResumo;
+  if(!r||!r.revisao)return;
+  let feitas=0;
+  document.querySelectorAll('.trev-chk').forEach(chk=>{
+    if(!chk.checked)return;
+    const i=+chk.dataset.i, a=r.revisao[i];
+    const sel=document.querySelector(`.trev-nota[data-i="${i}"]`);
+    const nota=parseInt(sel&&sel.value,10)||a.nota||4;
+    if(!a||!a.n)return;
+    revConcluirDaFila(a.subId,nota);feitas++;
+  });
+  if(!feitas){toast('Nenhum assunto marcado.','var(--muted)');return;}
+  saveDB();
+  r.revisaoRegistrada=feitas;
+  try{updateRevBadge();}catch(e){}
+  renderSimGeralScreen();
+  toast(`🔁 ${feitas} revis${feitas===1?'ão registrada':'ões registradas'}.`,'var(--green)');
+}
+function trevFeitasHoje(){
+  const hoje=todayStr();let n=0;
+  db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>(t.subtopics||[]).forEach(s=>{
+    if(revUltimoContato(s)===hoje&&revPassadas(s)>0)n++;})));
+  return n;
+}
 function treinoDestaqueHTML(){
   const n=tiTamanho();
   const m=tiMontar(n);
@@ -13626,13 +13848,30 @@ function treinoDestaqueHTML(){
   const pct=Math.min(100,Math.round(hoje/meta*100));
   const pior=treinoPiorAssunto();
   const comp=TI_PARTES.filter(t=>m.partes[t.id]).map(t=>`<span>${t.ic} ${m.partes[t.id]} ${t.lbl}</span>`).join('');
+  const rv=trevMontar(), revHoje=trevFeitasHoje();
+  const revPct=Math.min(100,Math.round(revHoje/Math.max(1,rv.cota)*100));
   return`<div class="treino-destaque">
     <div class="ti-topo">
       <div class="treino-destaque-eyebrow">⚡ MÁQUINA DE VENCER</div>
-      <button class="ti-meta" onclick="metaQuestoesEditar()" title="Questões de hoje (cada uma conta uma vez a cada 7 dias) · clique pra mudar a meta">
-        <span>${hoje}/${meta} hoje</span><i><b style="width:${pct}%"></b></i></button>
+      <span class="ti-metas">
+        <button class="ti-meta" onclick="metaQuestoesEditar()" title="Questões de hoje (cada uma conta uma vez a cada 7 dias) · clique pra mudar a meta">
+          <span>📝 ${hoje}/${meta} questões</span><i><b style="width:${pct}%"></b></i></button>
+        <span class="ti-meta" title="Assuntos revisados hoje / cota de hoje">
+          <span>🔁 ${revHoje}/${rv.cota} revisões</span><i><b style="width:${revPct}%"></b></i></span>
+      </span>
     </div>
-    <div class="treino-destaque-titulo">Treino inteligente</div>
+    <div class="ti-passo">
+      <div class="ti-passo-n">1</div>
+      <div class="ti-passo-corpo">
+        <div class="ti-passo-tit">Revisar por questões</div>
+        <div class="treino-destaque-sub">${rv.assuntos.length
+          ?`${rv.assuntos.length} assunto${rv.assuntos.length===1?'':'s'} da fila de hoje · ${rv.itens.length} questões — no fim você registra a revisão de cada um`
+          :(rv.semQuestao.length?'Os assuntos na vez hoje ainda não têm questões no banco.':'✓ Nada na vez hoje.')}</div>
+        ${rv.semQuestao.length?`<div class="ti-semq">sem questões: ${rv.semQuestao.map(c=>`<a onclick="revAbrirTela('${c.sub.id}')">${escapeHtml(c.sub.name)}</a>`).join(' · ')}</div>`:''}
+      </div>
+      <button class="btn treino-destaque-btn ti-passo-btn" onclick="trevComecar()" ${rv.itens.length?'':'disabled'}><i class="fa fa-rotate"></i> Revisar agora</button>
+    </div>
+    <div class="treino-destaque-titulo ti-tit2"><span class="ti-passo-n">2</span> Treino inteligente</div>
     <div class="treino-destaque-sub">${m.total?'O que mais rende ponto agora, na dose certa:':'Sem questões pra montar agora — importe ou gere no Acervo.'}</div>
     ${m.total?`<div class="ti-comp">${comp}</div>`:''}
     <div class="ti-acoes">
@@ -13768,16 +14007,16 @@ function treinarEntradaHTML(){
   // simulado" fica como ação secundária à direita, fora da barra (que se redesenha
   // sozinha a cada filtro).
   return`<div class="treino-entrada">
+    <div class="treino-grid-2">
+      ${treinoDestaqueHTML()}
+      ${treinoPlacarHTML()}
+    </div>
     <div class="section-card treino-topo-montar">
       ${treinoMontarBarHTML()}
       <button class="btn btn-sm btn-ghost treino-topo-simulado" onclick="treinarAbrirAvancado()"><i class="fa fa-stopwatch"></i> Fazer simulado</button>
     </div>
     ${treinoRodapeHTML()}
     <div id="treinar-avancado" style="display:none">${simGeralConfigHTML()}</div>
-    <div class="treino-grid-2">
-      ${treinoDestaqueHTML()}
-      ${treinoPlacarHTML()}
-    </div>
     <div class="treino-grid-2 treino-grid-listas">
       ${treinoAssuntosPainelHTML()}
       ${treinoDecksListaHTML(decks)}
@@ -14655,7 +14894,27 @@ function questoesDiaContar(item,resultado){
   if(!questoesDiaDeveContar(item,hoje))return false;
   item.contadaEm=hoje;
   item.contadaResultado=resultado;
+  // Registro do dia que vai acumulando (fica no registro principal: um item pequeno por
+  // dia). contadaEm só sabe a ÚLTIMA vez de cada questão; o histórico mora aqui.
+  if(!db.questoesPorDia)db.questoesPorDia={};
+  const d=db.questoesPorDia[hoje]=db.questoesPorDia[hoje]||{n:0,c:0,x:0};
+  d.n++; if(resultado==='C')d.c++; else d.x++;
   return true;
+}
+// Dia do registro; se o dia não tiver registro (antes de existir), cai pra contagem das
+// questões com contadaEm naquele dia.
+function questoesDiaDoRegistro(d){
+  const r=(db.questoesPorDia||{})[d];
+  if(r)return {n:r.n||0,c:r.c||0,x:r.x||0};
+  const l=questoesDoDia(d);const c=l.filter(q=>q.contadaResultado==='C').length;
+  return {n:l.length,c,x:l.length-c};
+}
+function questoesHistorico(){
+  const reg=db.questoesPorDia||{};
+  const dias=Object.keys(reg).filter(d=>(reg[d].n||0)>0).sort().reverse()
+    .map(d=>({d,n:reg[d].n||0,c:reg[d].c||0,x:reg[d].x||0}));
+  const tot=dias.reduce((a,x)=>({n:a.n+x.n,c:a.c+x.c,x:a.x+x.x}),{n:0,c:0,x:0});
+  return {dias,tot,mediaDia:dias.length?Math.round(tot.n/dias.length):0};
 }
 function questoesDoDia(dia){
   const d=dia||todayStr();
@@ -14664,12 +14923,12 @@ function questoesDoDia(dia){
 function questoesDiaResumo(){
   const hoje=todayStr();
   const lista=questoesDoDia(hoje);
-  const certas=lista.filter(q=>q.contadaResultado==='C').length;
+  const h=questoesDiaDoRegistro(hoje);
   const semana=[];
-  for(let i=6;i>=0;i--){const d=addDays(hoje,-i);semana.push({d,n:i?questoesDoDia(d).length:lista.length});}
+  for(let i=6;i>=0;i--){const d=addDays(hoje,-i);const r=questoesDiaDoRegistro(d);semana.push({d,n:r.n,c:r.c,x:r.x});}
   const anteriores=semana.slice(0,6).map(x=>x.n);
   const media=Math.round(anteriores.reduce((a,b)=>a+b,0)/6);
-  return {n:lista.length,certas,erradas:lista.length-certas,lista,semana,media};
+  return {n:h.n,certas:h.c,erradas:h.x,lista,semana,media};
 }
 function questoesDiaRender(){
   const v=document.getElementById('dash-questoes-val');
@@ -14679,22 +14938,44 @@ function questoesDiaRender(){
   const sub=document.getElementById('dash-questoes-sub');
   if(sub)sub.textContent=r.n?`${r.certas} certas · ${r.n?Math.round(r.certas/r.n*100):0}%`:(r.media?`média ${r.media}/dia na semana`:'nenhuma ainda');
 }
+let questoesDiaTodos=false;
 function questoesDiaAbrir(){
   const r=questoesDiaResumo();
+  const hist=questoesHistorico();
+  const pct=(c,n)=>n?Math.round(c/n*100):0;
   const porAssunto={};
   r.lista.forEach(q=>{const k=q.subName||'Sem assunto';const a=porAssunto[k]=porAssunto[k]||{n:0,c:0,reino:q.kingdomName||''};a.n++;if(q.contadaResultado==='C')a.c++;});
   const linhas=Object.entries(porAssunto).sort((a,b)=>b[1].n-a[1].n);
-  const max=Math.max(1,...r.semana.map(x=>x.n));
-  const dia=d=>new Date(d+'T00:00:00').toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','');
-  document.getElementById('modal').classList.remove('modal-wide');
-  openModal('📝 Questões de hoje',`<div class="qd">
-    <div class="qd-topo"><div><b>${r.n}</b><span>questões hoje</span></div><div><b class="qd-ok">${r.certas}</b><span>certas</span></div>
-      <div><b class="qd-x">${r.erradas}</b><span>erradas</span></div><div><b>${r.media}</b><span>média/dia (6 dias antes)</span></div></div>
-    <div class="qd-semana">${r.semana.map((x,i)=>`<div class="qd-dia${i===6?' qd-hoje':''}" title="${x.d}: ${x.n} questões">
-      <span class="qd-n">${x.n}</span><i style="height:${Math.round(x.n/max*60)}px"></i><span>${i===6?'hoje':dia(x.d)}</span></div>`).join('')}</div>
-    ${linhas.length?`<div class="qd-lista">${linhas.map(([nome,a])=>`<div class="qd-linha"><span class="qd-nome">${escapeHtml(nome)}<small>${escapeHtml(a.reino)}</small></span>
-      <span>${a.n}</span><span style="color:${faixaCorTexto(Math.round(a.c/a.n*100))}">${Math.round(a.c/a.n*100)}%</span></div>`).join('')}</div>`
-      :'<p class="qd-vazio">Nenhuma questão respondida hoje ainda.</p>'}
+  const hoje=todayStr();
+  const quinze=[];for(let i=13;i>=0;i--){const d=addDays(hoje,-i);quinze.push({d,...questoesDiaDoRegistro(d)});}
+  const max=Math.max(1,...quinze.map(x=>x.n));
+  const dia=d=>new Date(d+'T00:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+  const sem=d=>new Date(d+'T00:00:00').toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','');
+  const tabela=questoesDiaTodos?hist.dias:hist.dias.slice(0,10);
+  document.getElementById('modal').classList.add('modal-wide');
+  openModal('📝 Questões por dia',`<div class="qd">
+    <div class="qd-bloco-tit">Hoje</div>
+    <div class="qd-topo"><div><b>${r.n}</b><span>feitas</span></div><div><b class="qd-ok">${r.certas}</b><span>certas</span></div>
+      <div><b class="qd-x">${r.erradas}</b><span>erradas</span></div><div><b>${pct(r.certas,r.n)}%</b><span>acerto</span></div></div>
+    <div class="qd-bloco-tit">Acumulado <small>${hist.dias.length} dia${hist.dias.length===1?'':'s'} com questões · média ${hist.mediaDia}/dia</small></div>
+    <div class="qd-topo qd-acum"><div><b>${hist.tot.n.toLocaleString('pt-BR')}</b><span>feitas</span></div><div><b class="qd-ok">${hist.tot.c.toLocaleString('pt-BR')}</b><span>certas</span></div>
+      <div><b class="qd-x">${hist.tot.x.toLocaleString('pt-BR')}</b><span>erradas</span></div><div><b>${pct(hist.tot.c,hist.tot.n)}%</b><span>acerto</span></div></div>
+    <div class="qd-bloco-tit">Últimos 14 dias <small><i class="qd-pt qd-pt-ok"></i>certas <i class="qd-pt qd-pt-x"></i>erradas</small></div>
+    <div class="qd-semana qd-14">${quinze.map((x,i)=>`<div class="qd-dia${i===13?' qd-hoje':''}" title="${dia(x.d)}: ${x.n} feitas · ${x.c} certas · ${x.x} erradas">
+      <span class="qd-n">${x.n||''}</span>
+      <i class="qd-barra" style="height:${Math.round(x.n/max*70)}px"><b style="height:${x.n?Math.round(x.x/x.n*100):0}%"></b></i>
+      <span>${i===13?'hoje':sem(x.d)}</span></div>`).join('')}</div>
+    <div class="qd-bloco-tit">Dia a dia</div>
+    ${hist.dias.length?`<div class="qd-tabela">
+      <div class="qd-tr qd-th"><span>Dia</span><span>Feitas</span><span>Certas</span><span>Erradas</span><span>Acerto</span></div>
+      ${tabela.map(x=>`<div class="qd-tr${x.d===hoje?' qd-tr-hoje':''}"><span>${x.d===hoje?'hoje':`${sem(x.d)} ${dia(x.d)}`}</span><span>${x.n}</span>
+        <span class="qd-ok">${x.c}</span><span class="qd-x">${x.x}</span><span style="color:${faixaCorTexto(pct(x.c,x.n))}">${pct(x.c,x.n)}%</span></div>`).join('')}
+      <div class="qd-tr qd-tr-tot"><span>Total</span><span>${hist.tot.n}</span><span class="qd-ok">${hist.tot.c}</span><span class="qd-x">${hist.tot.x}</span><span>${pct(hist.tot.c,hist.tot.n)}%</span></div>
+    </div>
+    ${hist.dias.length>10?`<span class="dash-verlink" onclick="questoesDiaTodos=!questoesDiaTodos;questoesDiaAbrir()">${questoesDiaTodos?'ver só os 10 últimos dias':`ver todos os ${hist.dias.length} dias`}</span>`:''}`
+      :'<p class="qd-vazio">O registro começa com a primeira questão que você responder.</p>'}
+    ${linhas.length?`<div class="qd-bloco-tit">Assuntos de hoje</div><div class="qd-lista">${linhas.map(([nome,a])=>`<div class="qd-linha"><span class="qd-nome">${escapeHtml(nome)}<small>${escapeHtml(a.reino)}</small></span>
+      <span>${a.n}</span><span style="color:${faixaCorTexto(pct(a.c,a.n))}">${pct(a.c,a.n)}%</span></div>`).join('')}</div>`:''}
     <p class="qd-regra">Cada questão conta uma vez. Responder de novo a mesma questão só volta a contar depois de ${QUESTOES_DIA_JANELA} dias.</p>
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="btn btn-primary" onclick="closeModal();showScreen('simgeral')">Ir treinar</button></div>
   </div>`);
