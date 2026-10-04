@@ -2907,6 +2907,32 @@ body.missao-ligada #dash-overdue-revs{display:none;}
   .dash-hoje #fila-conta{flex-basis:100%;white-space:normal;}
 }
 
+/* ===== QUESTÕES DE HOJE ===== */
+.dash-faixa{grid-template-columns:repeat(5,minmax(0,1fr));}
+button.dash-faixa-questoes{font:inherit;color:inherit;text-align:left;cursor:pointer;width:100%;}
+button.dash-faixa-questoes:hover{border-color:var(--accent);}
+.dash-faixa-questoes .gamify-val{color:var(--accent);}
+.qd{display:flex;flex-direction:column;gap:14px;}
+.qd-topo{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}
+.qd-topo div{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:10px 6px;text-align:center;display:flex;flex-direction:column;}
+.qd-topo b{font-size:22px;font-weight:900;color:var(--accent);font-variant-numeric:tabular-nums;}
+.qd-topo b.qd-ok{color:var(--green-t);} .qd-topo b.qd-x{color:var(--red-t);}
+.qd-topo span{font-size:12px;color:var(--muted);font-weight:700;}
+.qd-semana{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;align-items:end;height:110px;}
+.qd-dia{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;font-size:12px;color:var(--muted);font-weight:700;height:100%;}
+.qd-dia i{display:block;width:70%;min-height:2px;border-radius:5px 5px 2px 2px;background:var(--border2);}
+.qd-dia.qd-hoje i{background:var(--accent);} .qd-dia.qd-hoje{color:var(--accent);}
+.qd-n{font-variant-numeric:tabular-nums;color:var(--text2);}
+.qd-lista{display:flex;flex-direction:column;max-height:260px;overflow:auto;}
+.qd-linha{display:grid;grid-template-columns:minmax(0,1fr) 44px 48px;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--border);font-size:13px;font-weight:800;}
+.qd-linha>span:not(.qd-nome){text-align:right;font-variant-numeric:tabular-nums;}
+.qd-nome{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.qd-nome small{display:block;font-size:12px;color:var(--muted);font-weight:600;}
+.qd-vazio,.qd-regra{font-size:12px;color:var(--muted);text-align:center;}
+.treino-qhoje{color:var(--accent);cursor:pointer;}
+@media(max-width:1000px){.dash-faixa{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:600px){.qd-topo{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
 /* ===== PAINEL (rodada 2): densidade, sem vão vazio =====
    "Hoje" e Diagnóstico com a mesma altura; a Agenda sai da coluna e vira uma faixa de
    7 colunas na largura inteira; "Hoje" ganha duas colunas por dentro. */
@@ -3301,6 +3327,14 @@ body.missao-ligada .dash-v2 .div-btn:hover{text-decoration:underline;filter:none
           <div class="gamify-lbl" id="streak-lbl">dias seguidos</div>
         </div>
       </div>
+      <button type="button" class="section-card gamify-card dash-faixa-questoes" id="dash-questoes-card" onclick="questoesDiaAbrir()" title="Questões respondidas hoje — cada uma conta uma vez a cada 7 dias">
+        <div class="gamify-icon">📝</div>
+        <div class="gamify-info">
+          <div class="gamify-val" id="dash-questoes-val">0</div>
+          <div class="gamify-lbl">questões hoje</div>
+          <div class="gamify-sub" id="dash-questoes-sub"></div>
+        </div>
+      </button>
       <button type="button" class="section-card gamify-card dash-faixa-atrasadas" id="dash-atrasadas-card" onclick="abrirRevisoesAtrasadas()" title="Abrir a fila de hoje">
         <div class="gamify-icon">⏰</div>
         <div class="gamify-info">
@@ -12853,7 +12887,7 @@ function treinoResponder(letra){
   if(acertou)s.certas++; else s.erradas++;
   const sub=simFindSub(item.subId);
   if(sub)simAcumulaStats(sub,[item]);
-  acervoAtualizarContadores(item,acertou?'C':'X',item.confianca);
+  acervoAtualizarContadores(item,acertou?'C':'X',item.confianca,undefined,true);
   if(!acertou)criarFlashcardDeQuestaoErrada(item.subId,item);
   acervoSalvar();
   gainXP(1+(acertou?2:0));
@@ -13601,8 +13635,9 @@ function treinoRodapeHTML(){
   const txt=ult.length
     ?ult.map(h=>`${new Date(h.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} · ${h.respondidas} questões · ${h.respondidas?Math.round(h.certas/h.respondidas*100):0}%`).join(' &nbsp;|&nbsp; ')
     :'nenhum ainda';
+  const qHoje=questoesDiaResumo().n;
   return`<div class="treino-rodape-linha">
-    <span>Últimos treinos: ${txt}</span>
+    <span><b class="treino-qhoje" onclick="questoesDiaAbrir()" title="Cada questão conta uma vez a cada 7 dias">📝 Hoje: ${qHoje} quest${qHoje===1?'ão':'ões'}</b> · Últimos treinos: ${txt}</span>
     <span>Simulados ficam em <b>Minhas Provas</b></span>
   </div>`;
 }
@@ -14492,8 +14527,10 @@ function acervoDificuldade(acertos,vezes){
 // quando a tentativa dela era a mais antiga das duas. vezesRespondida/acertos/erros
 // continuam somando sempre, incondicional — so o "por ultimo escreve" que passa a
 // respeitar a data de verdade, nao a ordem de chamada.
-function acervoAtualizarContadores(item,resultado,confianca,quando){
+function acervoAtualizarContadores(item,resultado,confianca,quando,contarNoDia){
   if(!item||!resultado)return;
+  // Antes de mexer em ultimaVezEm: a regra dos 7 dias olha a resposta ANTERIOR.
+  if(contarNoDia)questoesDiaContar(item,resultado);
   item.vezesRespondida=(item.vezesRespondida||0)+1;
   if(resultado==='C')item.acertos=(item.acertos||0)+1;
   else item.erros=(item.erros||0)+1;
@@ -14507,6 +14544,66 @@ function acervoAtualizarContadores(item,resultado,confianca,quando){
     const campo=confianca+(resultado==='C'?'Acertos':'Erros');
     item[campo]=(item[campo]||0)+1;
   }
+}
+// ===== QUESTÕES DE HOJE =====
+// Quantas questões você respondeu no dia. Uma questão só entra na conta se nunca entrou
+// ou se a última vez que entrou foi há 7 dias ou mais: responder de novo no mesmo dia (ou
+// refazer dentro da semana) não infla o número. O campo contadaEm (dia da contagem) mora
+// na própria questão; o total do dia é quem tem contadaEm == hoje — sem contador à parte.
+// Questão antiga (de antes deste campo) usa a data da última resposta como referência.
+const QUESTOES_DIA_JANELA=7;
+function questoesDiaDeveContar(item,hoje){
+  const ultima=item.contadaEm||(item.ultimaVezEm?missaoHojeStr(item.ultimaVezEm):null);
+  return !ultima||daysDiff(ultima,hoje)>=QUESTOES_DIA_JANELA;
+}
+function questoesDiaContar(item,resultado){
+  const hoje=todayStr();
+  if(!questoesDiaDeveContar(item,hoje))return false;
+  item.contadaEm=hoje;
+  item.contadaResultado=resultado;
+  return true;
+}
+function questoesDoDia(dia){
+  const d=dia||todayStr();
+  return (db.acervo||[]).filter(q=>q.contadaEm===d);
+}
+function questoesDiaResumo(){
+  const hoje=todayStr();
+  const lista=questoesDoDia(hoje);
+  const certas=lista.filter(q=>q.contadaResultado==='C').length;
+  const semana=[];
+  for(let i=6;i>=0;i--){const d=addDays(hoje,-i);semana.push({d,n:i?questoesDoDia(d).length:lista.length});}
+  const anteriores=semana.slice(0,6).map(x=>x.n);
+  const media=Math.round(anteriores.reduce((a,b)=>a+b,0)/6);
+  return {n:lista.length,certas,erradas:lista.length-certas,lista,semana,media};
+}
+function questoesDiaRender(){
+  const v=document.getElementById('dash-questoes-val');
+  if(!v)return;
+  const r=questoesDiaResumo();
+  v.textContent=r.n;
+  const sub=document.getElementById('dash-questoes-sub');
+  if(sub)sub.textContent=r.n?`${r.certas} certas · ${r.n?Math.round(r.certas/r.n*100):0}%`:(r.media?`média ${r.media}/dia na semana`:'nenhuma ainda');
+}
+function questoesDiaAbrir(){
+  const r=questoesDiaResumo();
+  const porAssunto={};
+  r.lista.forEach(q=>{const k=q.subName||'Sem assunto';const a=porAssunto[k]=porAssunto[k]||{n:0,c:0,reino:q.kingdomName||''};a.n++;if(q.contadaResultado==='C')a.c++;});
+  const linhas=Object.entries(porAssunto).sort((a,b)=>b[1].n-a[1].n);
+  const max=Math.max(1,...r.semana.map(x=>x.n));
+  const dia=d=>new Date(d+'T00:00:00').toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','');
+  document.getElementById('modal').classList.remove('modal-wide');
+  openModal('📝 Questões de hoje',`<div class="qd">
+    <div class="qd-topo"><div><b>${r.n}</b><span>questões hoje</span></div><div><b class="qd-ok">${r.certas}</b><span>certas</span></div>
+      <div><b class="qd-x">${r.erradas}</b><span>erradas</span></div><div><b>${r.media}</b><span>média/dia (6 dias antes)</span></div></div>
+    <div class="qd-semana">${r.semana.map((x,i)=>`<div class="qd-dia${i===6?' qd-hoje':''}" title="${x.d}: ${x.n} questões">
+      <span class="qd-n">${x.n}</span><i style="height:${Math.round(x.n/max*60)}px"></i><span>${i===6?'hoje':dia(x.d)}</span></div>`).join('')}</div>
+    ${linhas.length?`<div class="qd-lista">${linhas.map(([nome,a])=>`<div class="qd-linha"><span class="qd-nome">${escapeHtml(nome)}<small>${escapeHtml(a.reino)}</small></span>
+      <span>${a.n}</span><span style="color:${faixaCorTexto(Math.round(a.c/a.n*100))}">${Math.round(a.c/a.n*100)}%</span></div>`).join('')}</div>`
+      :'<p class="qd-vazio">Nenhuma questão respondida hoje ainda.</p>'}
+    <p class="qd-regra">Cada questão conta uma vez. Responder de novo a mesma questão só volta a contar depois de ${QUESTOES_DIA_JANELA} dias.</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="btn btn-primary" onclick="closeModal();showScreen('simgeral')">Ir treinar</button></div>
+  </div>`);
 }
 // Campos que existem uma vez e nunca mudam depois de criados.
 function acervoCamposNovos(origem){
@@ -15012,7 +15109,7 @@ function provaRegistrarTentativaNoAcervo(prova,questoesAtivas,respostas){
                         dificuldade:item.dificuldadeAferida};
     const dada=(respostas||[])[i]||'';
     if(!dada)return;
-    acervoAtualizarContadores(item,dada===q.correta?'C':'X',q.confianca);
+    acervoAtualizarContadores(item,dada===q.correta?'C':'X',q.confianca,undefined,true);
     mudou=true;
   });
   if(mudou)acervoSalvar();
@@ -15158,7 +15255,9 @@ function simRegistrarHistoricoNoAcervo(sub,topic,kingdom,hist,quando,porChave2){
       mapa.set(chave,item);
     }
     if(!item)return;
-    acervoAtualizarContadores(item,dada===q.correta?'C':'X',q.confianca,quando);
+    // Simulado de miniboss corrigido agora (ou tentativa de hoje recuperada) entra nas
+    // questões de hoje; backfill de dia passado não.
+    acervoAtualizarContadores(item,dada===q.correta?'C':'X',q.confianca,quando,missaoHojeStr(quando||new Date().toISOString())===todayStr());
     contou=true;
   });
   hist._acervoBackfillEm=new Date().toISOString();
@@ -21013,6 +21112,7 @@ function dashFaixaHojeRender(nPronto){
     const c=document.getElementById('dash-atrasadas-card');
     if(c)c.classList.toggle('dash-faixa-zerado',!n.atrasadas);
   }
+  questoesDiaRender();
 }
 
 // ===== DASHBOARD =====
