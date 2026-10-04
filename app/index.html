@@ -2867,6 +2867,46 @@ body.missao-ligada #dash-overdue-revs{display:none;}
   .banco-acoes{margin-left:0;}
 }
 
+/* ===== TIPOGRAFIA E ACERTOS (rodada 2, item 8) =====
+   Mínimo de 12px no Painel, Treinar, Acervo e menu. */
+#screen-dashboard .gamify-lbl,#screen-dashboard .gamify-sub,#screen-dashboard .goal-ring-pct,
+#screen-dashboard .dash-hoje-sub,#screen-dashboard .gamify-badges-title,#screen-dashboard .gamify-badges-summary,
+#screen-dashboard .badge-name,#screen-dashboard .chart-tab,#backup-badge,
+.treino-destaque-eyebrow,.pill-ok,.pill-bad,.pill-neutro,.treinar-progresso-legenda span,
+#screen-simgeral .chip,.treino-foco-pct,.banco-chip-rotulo,.banco-chip,.banco-chip b{font-size:12px!important;}
+#screen-dashboard .gamify-lbl{letter-spacing:.2px;}
+/* Linha do miniboss: o "⋯" agora guarda Revisões, Anotar e Fluxograma (mesmos botões e
+   ids); um ponto avisa quando há anotação ou fluxograma lá dentro. */
+.sub-acoes-mais-menu{flex-direction:column;align-items:stretch;min-width:170px;}
+.sub-acoes-mais-menu>button{justify-content:flex-start;text-align:left;padding:6px 12px!important;font-size:12px!important;
+  font-weight:700!important;border-radius:8px!important;}
+.sub-acoes-mais-menu>button:not(.btn-danger){background:var(--panel2)!important;color:var(--text2)!important;
+  border:1px solid var(--border)!important;box-shadow:none!important;}
+.sub-acoes-mais>summary.sub-acoes-tem{position:relative;}
+.sub-acoes-mais>summary.sub-acoes-tem::after{content:'';position:absolute;top:2px;right:4px;width:7px;height:7px;
+  border-radius:50%;background:var(--accent);}
+/* Na tela do Reino, "Mapa" continua marcado no menu. */
+@media(min-width:769px){
+  body:has(#screen-kingdom.active) #nav-map{color:#fff;background:rgba(255,255,255,0.2);border-left-color:#fb923c;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.12);}
+}
+@media(max-width:768px){
+  body:has(#screen-kingdom.active) #nav-map{background:rgba(255,255,255,0.22);}
+}
+/* ===== CELULAR (rodada 2, item 7) =====
+   Os botões redondos (IA, tema, tempo, Admin, Sair) não flutuam mais sobre a tela: só
+   aparecem dentro do "Mais", como linha com nome. Rótulos da barra com 12px, sem cortar;
+   o selo fica no canto do ícone. */
+@media(max-width:768px){
+  body:not(.nav-mais-aberto) .sidebar-bottom-row{display:none!important;}
+  .nav-label{font-size:12px;text-transform:none;letter-spacing:0;}
+  .nav-btn .nav-badge{top:3px;right:auto;left:calc(50% + 7px);font-size:12px;padding:0 5px;line-height:16px;}
+  .days-pill .d-lbl{font-size:12px;}
+  body.nav-mais-aberto .sidebar-bottom-row>button::after{font-size:12px;}
+  .missao-barra{right:12px;}
+  .dash-hoje #fila-conta{flex-basis:100%;white-space:normal;}
+}
+
 /* ===== PAINEL (rodada 2): densidade, sem vão vazio =====
    "Hoje" e Diagnóstico com a mesma altura; a Agenda sai da coluna e vira uma faixa de
    7 colunas na largura inteira; "Hoje" ganha duas colunas por dentro. */
@@ -8061,20 +8101,20 @@ function subItemHTML(s,topicId){
     <div class="sub-actions">
       <button class="btn btn-sm ${running?'btn-gold':'btn-primary'}" onclick="toggleTimer('${s.id}','${topicId}')"><i class="fa fa-${running?'pause':'play'}"></i> ${running?'Pausar':'Estudar'}</button>
       <div class="sub-acoes-sec">
-      <button class="btn btn-sm btn-cyan" onclick="showSubRevisions('${s.id}','${topicId}')"><i class="fa fa-calendar-check"></i> Revisões${revLocked?' 🔒':''}</button>
-      <button class="btn btn-sm ${hasNote?'btn-gold':'btn-ghost'}" onclick="toggleNote('${s.id}')" id="note-btn-${s.id}"><i class="fa fa-note-sticky"></i> ${hasNote?'Anotação':'Anotar'}</button>
       <button class="${hasResumo?'resumo-badge-done':'resumo-badge-todo'}" onclick="toggleResumo('${s.id}')" id="resumo-btn-${s.id}" title="Anexe um arquivo pra IA gerar um resumo completo, com opção de ouvir">
         ${hasResumo?'✅ Resumo':'📄 Resumo'}
       </button>
       <button class="btn btn-sm ${flashCountSub(s.id)?'btn-purple-s':'btn-ghost'}" onclick="toggleFlash('${s.id}')" id="flash-btn-${s.id}"><i class="fa fa-layer-group"></i> Flashcards${flashCountSub(s.id)?` (${flashCountSub(s.id)})`:''}</button>
       <button class="btn btn-sm ${s.simStats?'btn-pink':'btn-ghost'}" onclick="toggleSim('${s.id}')" id="sim-btn-${s.id}"><i class="fa fa-list-check"></i> Simulado</button>
-      <button class="${hasFluxo?'fluxo-badge-done':'fluxo-badge-todo'}" onclick="toggleFluxo('${s.id}')" id="fluxo-btn-${s.id}" title="Resumo visual em forma de fluxograma — a IA gera um rascunho e você pode editar depois">
-        ${hasFluxo?'✅ Fluxograma':'🔀 Fluxograma'}
-      </button>
       </div>
       <details class="sub-acoes-mais">
-        <summary title="Renomear ou excluir" aria-label="Mais ações do miniboss">⋯</summary>
-        <div class="sub-acoes-mais-menu">
+        <summary class="${hasNote||hasFluxo?'sub-acoes-tem':''}" title="Revisões, anotação, fluxograma, renomear, excluir" aria-label="Mais ações do miniboss">⋯</summary>
+        <div class="sub-acoes-mais-menu" onclick="if(event.target.closest('button'))this.closest('details').open=false">
+          <button class="btn btn-sm btn-cyan" onclick="showSubRevisions('${s.id}','${topicId}')"><i class="fa fa-calendar-check"></i> Revisões${revLocked?' 🔒':''}</button>
+          <button class="btn btn-sm ${hasNote?'btn-gold':'btn-ghost'}" onclick="toggleNote('${s.id}')" id="note-btn-${s.id}"><i class="fa fa-note-sticky"></i> ${hasNote?'Anotação':'Anotar'}</button>
+          <button class="${hasFluxo?'fluxo-badge-done':'fluxo-badge-todo'}" onclick="toggleFluxo('${s.id}')" id="fluxo-btn-${s.id}" title="Resumo visual em forma de fluxograma — a IA gera um rascunho e você pode editar depois">
+            ${hasFluxo?'✅ Fluxograma':'🔀 Fluxograma'}
+          </button>
           <button class="btn btn-sm" onclick="renameSubtopic('${topicId}','${s.id}')" title="Renomear miniboss"><i class="fa fa-pen"></i> Renomear</button>
           <button class="btn btn-sm btn-danger" onclick="deleteSub('${topicId}','${s.id}')" title="Excluir miniboss"><i class="fa fa-trash"></i> Excluir</button>
         </div>
@@ -19028,7 +19068,7 @@ function renderStudyChart(){
   // borda e o overflow:hidden come os rotulos das datas.
   const H=Math.max(56,Math.min(260,Math.round(wrap.clientHeight||130)));
   const apertado=H<120;
-  const padL=4,padR=4,padT=apertado?13:18,padB=apertado?21:28;
+  const padL=4,padR=4,padT=apertado?16:20,padB=apertado?22:28;
   const bw=Math.floor((W-padL-padR)/bars.length);
   const gap=3;
   const barW=bw-gap;
@@ -19044,13 +19084,17 @@ function renderStudyChart(){
       onmouseover="document.getElementById('chart-tip').textContent='${b.label}: ${fmtTime(b.seconds)}';this.style.opacity='0.8'"
       onmouseout="document.getElementById('chart-tip').textContent='';this.style.opacity='1'"
       style="cursor:default;transition:opacity 0.15s"/>`;
-    if(b.seconds>0){
-      svgValues+=`<text x="${x+bw/2}" y="${y-3}" text-anchor="middle" font-size="8" fill="${b.isToday?'#6c47ff':'#9ca3af'}" font-weight="700">${fmtTime(b.seconds)}</text>`;
+    // Rodada 2: texto do gráfico com 12px. Em 12px não cabe um valor por barra: o valor
+    // aparece só nas duas últimas (ontem e hoje); o das outras fica no passar do mouse.
+    const ultimas=i>=bars.length-2;
+    if(b.seconds>0&&(ultimas||bw>=48)){
+      svgValues+=`<text x="${x+bw/2}" y="${y-3}" text-anchor="middle" font-size="12" fill="${b.isToday?'#6c47ff':'#6b7280'}" font-weight="700">${fmtTime(b.seconds)}</text>`;
     }
-    // Com o cartao em duas colunas nao cabe uma data por barra: mostra uma sim,
-    // uma nao quando a barra fica estreita (o "hoje" nunca some).
-    const cabe=bw>=34||b.isToday||i%2===0;
-    if(cabe)svgLabels+=`<text x="${x+bw/2}" y="${H-4}" text-anchor="middle" font-size="9" fill="${b.isToday?'#6c47ff':'#9ca3af'}" font-weight="${b.isToday?'900':'600'}">${b.label}</text>`;
+    // Uma data por barra quando cabe; senão uma sim, uma não (ou uma a cada três) — o
+    // "hoje" nunca some.
+    const passo=bw>=46?1:bw>=24?2:3;
+    const cabe=b.isToday||(bars.length-1-i)%passo===0;
+    if(cabe)svgLabels+=`<text x="${x+bw/2}" y="${H-4}" text-anchor="middle" font-size="12" fill="${b.isToday?'#6c47ff':'#6b7280'}" font-weight="${b.isToday?'900':'600'}">${b.label}</text>`;
   });
 
   wrap.innerHTML=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;overflow:visible">

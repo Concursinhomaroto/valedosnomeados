@@ -68,10 +68,12 @@ async def main():
             # ---- 4) sair da tela desliga o foco ----
             await page.evaluate("() => showScreen('dashboard')")
             await page.wait_for_timeout(300)
-            fora=await page.evaluate("() => ({classe:document.body.classList.contains('fc-estudando'),"
-                                     "flutuantes:getComputedStyle(document.querySelector('.sidebar-bottom-row')).display!=='none'})")
-            print('\n4) fora dos flashcards -> classe:',fora['classe'],'| flutuantes de volta:',fora['flutuantes'])
-            assert not fora['classe'] and fora['flutuantes']
+            # rodada 2: no celular os botões redondos não flutuam mais — moram no "Mais"
+            fora=await page.evaluate("() => {const v=()=>getComputedStyle(document.querySelector('.sidebar-bottom-row')).display!=='none';"
+                                     "const out={classe:document.body.classList.contains('fc-estudando'),soltos:v()};"
+                                     "navMaisAlternar(true);out.noMais=v();navMaisAlternar(false);return out;}")
+            print('\n4) fora dos flashcards -> classe:',fora['classe'],'| soltos na tela:',fora['soltos'],'| no Mais:',fora['noMais'])
+            assert not fora['classe'] and not fora['soltos'] and fora['noMais']
 
             # ---- 5) desktop nao pode mudar ----
             await page.set_viewport_size({'width':1440,'height':900})
