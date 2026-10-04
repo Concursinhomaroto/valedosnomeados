@@ -62,14 +62,14 @@ async def main():
         assert 'Nenhum erro classificado' in r, r
         print('   OK\n')
 
-        print('=== D) "Mais numeros" comeca aberto e lembra quando fecha ===')
+        print('=== D) "Mais numeros" comeca recolhido e lembra quando abre ===')
         r=await page.evaluate("""async()=>{const d=document.getElementById('dash-mais');const ini=d.open;
           d.querySelector('summary').click();await new Promise(r=>setTimeout(r,50));
           let salvo=null;try{salvo=localStorage.getItem('vdn_dash_mais');}catch(e){}
           d.querySelector('summary').click();await new Promise(r=>setTimeout(r,50));
           return {ini,salvo,depois:d.open};}""")
         print('   %s'%r)
-        assert r['ini'] and r['salvo']=='0' and r['depois']
+        assert not r['ini'] and r['salvo']=='1' and not r['depois']
         print('   OK\n')
 
         print('=== E) nada rola por dentro no cartao Hoje e no Diagnostico ===')

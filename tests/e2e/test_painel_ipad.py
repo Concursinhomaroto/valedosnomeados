@@ -12,8 +12,10 @@ MEDE = """() => {
     c.querySelectorAll('*').forEach(e=>{const r=e.getBoundingClientRect();
       if(r.width>0&&(r.right>cr.right+1||r.left<cr.left-1))vaza++;});
   });
+  // Rodada 2: o nome ocupa só o próprio tamanho (reino ao lado, na mesma linha) — curto
+  // não é espremido. Conta só o nome que foi CORTADO.
   const nomes=[...document.querySelectorAll('#screen-dashboard .next-step-name')]
-    .map(e=>Math.round(e.getBoundingClientRect().width));
+    .map(e=>e.scrollWidth>e.clientWidth+1?Math.round(e.getBoundingClientRect().width):999);
   const sem=[...document.querySelectorAll('#screen-dashboard .sem-info > div:first-child')]
     .map(e=>Math.round(e.getBoundingClientRect().width));
   return {vazaDoCartao:vaza, menorNomeFila:nomes.length?Math.min(...nomes):null,

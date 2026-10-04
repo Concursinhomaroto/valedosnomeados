@@ -1,6 +1,7 @@
-# "Ainda nao consigo ver o que eu faco." Sete colunas no cartao do painel dao ~130px
-# cada; "Teorias de Enfermagem - Resumo" precisa de ~190px. Empilhado, cada dia e uma
-# linha e o nome fica com a largura inteira do cartao.
+# "Ainda nao consigo ver o que eu faco." Sete colunas DENTRO da coluna do painel davam
+# ~130px e o nome era cortado. Rodada 2: a agenda ocupa a largura inteira do Painel, em 7
+# colunas, e o nome quebra em ate 3 linhas — nunca vira "Teo…". Do notebook (1366) pra
+# cima, sem rolagem lateral; no iPad e no celular a faixa rola de lado.
 import asyncio, sys
 sys.path.insert(0,'.')
 from test_sala import async_playwright, setup_page, make_seed
@@ -26,7 +27,7 @@ MEDE = """([hoje,nomes])=>{
   const cols=[...document.querySelectorAll('#weekly-plan .day-col')];
   const txts=[...cols[0].querySelectorAll('.plan-item-text')];
   const larg=n=>Math.round(n.getBoundingClientRect().width);
-  const cortado=n=>n.scrollWidth>n.clientWidth+1;
+  const cortado=n=>n.scrollWidth>n.clientWidth+1||n.scrollHeight>n.clientHeight+1;
   const f=getComputedStyle(txts[0]).font;
   const probe=document.createElement('span');
   probe.style.cssText='position:absolute;visibility:hidden;white-space:nowrap;font:'+f;
@@ -35,7 +36,7 @@ MEDE = """([hoje,nomes])=>{
   document.body.removeChild(probe);
   const r=grid.getBoundingClientRect();
   return {dias:cols.length,
-    empilhado:cols[0].getBoundingClientRect().bottom<=cols[1].getBoundingClientRect().top+1,
+    ladoALado:cols[1].getBoundingClientRect().left>=cols[0].getBoundingClientRect().right-1,
     larguraTexto:txts.map(larg),precisa,cortados:txts.map(cortado),
     textos:txts.map(n=>n.textContent),
     alturaGrade:Math.round(r.height),
@@ -48,19 +49,19 @@ async def main():
         await page.evaluate("()=>{showScreen('dashboard');return true;}")
         hoje=await page.evaluate("()=>todayStr()")
 
-        for larg,alt,rotulo in [(1194,834,'iPad paisagem'),(1560,900,'desktop'),(414,896,'celular')]:
+        for larg,alt,rotulo in [(1366,768,'notebook'),(1560,900,'desktop'),(1194,834,'iPad paisagem'),(414,896,'celular')]:
             await page.set_viewport_size({'width':larg,'height':alt})
             await page.wait_for_timeout(150)
             r=await page.evaluate(MEDE,[hoje,[N1,N2]])
             print('=== %s (%spx) ==='%(rotulo,larg))
-            print('   dias visíveis: %s · empilhados: %s · rola de lado: %s'
-                  %(r['dias'],r['empilhado'],r['rolaLado']))
+            print('   dias visíveis: %s · lado a lado: %s · rola de lado: %s'
+                  %(r['dias'],r['ladoALado'],r['rolaLado']))
             for i,t in enumerate(r['textos']):
                 print('   %-34r %spx de espaço · precisa %spx · cortado: %s'
                       %(t,r['larguraTexto'][i],r['precisa'][i],r['cortados'][i]))
-            assert r['dias']==7 and r['empilhado'] and not r['rolaLado']
-            if larg>=1194:
-                assert not any(r['cortados']), 'no iPad/desktop o nome tem que caber inteiro'
+            assert r['dias']==7 and r['ladoALado']
+            if larg>=1366: assert not r['rolaLado'], 'do notebook pra cima a semana cabe sem rolar de lado'
+            assert not any(r['cortados']), 'o nome tem que aparecer inteiro (quebrando linha)'
             print('   OK\n')
 
         print('=== altura: a semana inteira cabe sem virar rolagem infinita ===')
@@ -71,7 +72,7 @@ async def main():
           return {grade:Math.round(g.getBoundingClientRect().height),
                   linha:Math.round(cols[0].getBoundingClientRect().height)};}""",hoje)
         print('   semana vazia: %spx no total, %spx por dia'%(r['grade'],r['linha']))
-        assert r['linha']<=40
+        assert r['grade']<=170, 'a faixa da semana tem que ficar baixa (~200px com o título)'
         print('   OK\n')
 
         print('=== o dia continua identificado, com HOJE e o ＋ ===')

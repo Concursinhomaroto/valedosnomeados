@@ -146,7 +146,7 @@ async def main():
           return {atr:n.atrasadas,cota:n.cabemHoje,naVez:n.naVez,badge:document.getElementById('rev-badge').textContent,
             title:document.getElementById('rev-badge').title,faixa:document.getElementById('dash-atrasadas-val').textContent,
             faixaSub:document.getElementById('dash-atrasadas-sub').textContent,
-            stats:[...document.querySelectorAll('#dash-stats .stat-card')].map(c=>c.innerText.replace(/\\s+/g,' ')),
+            stats:[...document.querySelectorAll('#dash-stats .stat-card')].map(c=>c.querySelector('.stat-val').textContent+' '+c.querySelector('.stat-lbl').textContent),
             revTela:/ASSUNTOS NA VEZ/i.test(barra)&&/CABEM HOJE/i.test(barra)};}""")
         print('   %s'%r)
         assert r['badge']==str(r['cota']) and r['faixa']==str(r['cota'])
@@ -189,6 +189,52 @@ async def main():
           return {curta:curta.curta,orc:curta.orc,semLS,outroDia,vazio:vazio.indexOf('Tudo em dia')>=0};}""")
         print('   %s'%r)
         assert r['curta'] and r['orc']==15 and r['semLS']>0 and r['outroDia'] is None and r['vazio']
+        print('   OK\n')
+
+        print('=== L) rodada 2: ordem intercalada (5 rev → cards → 5 rev → questões → resto) ===')
+        r=await page.evaluate("""()=>{
+          const it=[];for(let i=1;i<=12;i++)it.push({tipo:'rev',subId:'r'+i});
+          it.push({tipo:'fc',topicId:'f1'},{tipo:'fc',topicId:'f2'},{tipo:'q',subId:'q1'});
+          const o=missaoIntercalar(it).map(x=>x.tipo==='rev'?x.subId:x.tipo);
+          const so3=missaoIntercalar(it.filter(x=>x.tipo!=='rev'||+x.subId.slice(1)<=3)).map(x=>x.tipo==='rev'?x.subId:x.tipo);
+          const semRev=missaoIntercalar(it.filter(x=>x.tipo!=='rev')).map(x=>x.tipo);
+          return {o,so3,semRev,mesmos:missaoIntercalar(it).length===it.length};}""")
+        print('   %s'%r)
+        assert r['o']==['r1','r2','r3','r4','r5','fc','fc','r6','r7','r8','r9','r10','q','r11','r12']
+        assert r['so3']==['r1','r2','r3','fc','fc','q'] and r['semRev']==['fc','fc','q'] and r['mesmos']
+        print('   OK\n')
+
+        print('=== M) missão guardada na ordem antiga: só a NÃO iniciada é reordenada ===')
+        r=await page.evaluate("""()=>{
+          localStorage.removeItem('vdn_missao_'+todayStr());missaoMem=null;
+          const base=missaoMontar();
+          const antiga=()=>{const m=JSON.parse(JSON.stringify(base));delete m.ordem;
+            m.itens=[...Array(7)].map((_,i)=>({tipo:'rev',subId:'x'+i,nome:'X'+i,min:20}))
+              .concat([{tipo:'fc',topicId:'tP',nome:'G',alvo:3,base:0,min:2},{tipo:'q',subId:'p0',nome:'P',alvo:3,base:0,min:5}]);
+            return m;};
+          let m=antiga();missaoGuardar(m);
+          const naoIniciada=missaoGarantir().itens.map(x=>x.tipo);
+          m=antiga();m.iniciada=true;missaoGuardar(m);
+          const iniciada=missaoGarantir().itens.map(x=>x.tipo);
+          localStorage.removeItem('vdn_missao_'+todayStr());missaoMem=null;
+          return {naoIniciada,iniciada,saves:window.__saves};}""")
+        print('   %s'%r)
+        assert r['naoIniciada']==['rev']*5+['fc']+['rev']*2+['q']
+        assert r['iniciada']==['rev']*7+['fc','q'], 'missão iniciada não pode ser remontada'
+        print('   OK\n')
+
+        print('=== N) botão do Painel recontado quando o acervo chega e ao fechar a janela ===')
+        r=await page.evaluate("""async()=>{
+          localStorage.removeItem('vdn_missao_'+todayStr());missaoMem=null;
+          const a=db.acervo;db.acervo=[];showScreen('dashboard');missaoCtaRender();
+          const antes=document.querySelector('#missao-cta small').textContent;
+          db.acervo=a;
+          missaoAbrir();closeModal();await new Promise(r=>setTimeout(r,30));
+          const depois=document.querySelector('#missao-cta small').textContent;
+          const total=missaoEstado(missaoAtual()).total;
+          return {antes,depois,total};}""")
+        print('   %s'%r)
+        assert r['depois'].startswith('%d %s'%(r['total'],'item' if r['total']==1 else 'itens')) and r['antes']!=r['depois']
         print('   OK\n')
 
         graves=real_errors(errs)

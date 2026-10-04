@@ -46,7 +46,7 @@ async def main():
         assert r['primeiro']=='toggleTimer' and r['menuFechado']
         await page.click('#si-s0 .sub-acoes-mais > summary')
         r=await page.evaluate("()=>[...document.querySelectorAll('#si-s0 .sub-acoes-mais-menu button')].map(b=>b.checkVisibility())")
-        assert r==[True,True], r
+        assert r==[True]*5, r   # rodada 2: Revisões, Anotar, Fluxograma, Renomear, Excluir
         await page.click('#si-s0 .sub-acoes-mais-menu .btn-danger')
         await page.wait_for_timeout(300)
         r=await page.evaluate("()=>db.topics.k1[0].subtopics.map(s=>s.id)")
