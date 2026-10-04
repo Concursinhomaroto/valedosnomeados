@@ -94,21 +94,25 @@ async def main():
         assert r['iguais'] and '2 revisões registradas' in r['ok'] and r['naFila']==['s2'] and r['feitas']==2
         print('   OK\n')
 
-        print('=== E) uma ordem só: Painel ("O que fazer agora"), revisão por questões e Missão ===')
+        print('=== E) uma ordem só, o mais atrasado primeiro: Painel, revisão por questões e Missão ===')
         r=await page.evaluate("""()=>{
           db.revisions={s0:[{date:addDays(todayStr(),-2),completed:false}],s1:[{date:addDays(todayStr(),-9),completed:false}],
                         s3:[{date:addDays(todayStr(),-4),completed:false}]};
-          db.topics.k1[0].subtopics.find(x=>x.id==='s3').priority=90;   // prioridade alta sobe no Painel
-          const painel=computeStudyRecommendations().filter(x=>x.tipo==='revisao').map(x=>x.subId);
-          const treino=trevMontar().assuntos.map(a=>a.subId);
+          db.topics.k1[0].subtopics.find(x=>x.id==='s3').priority=90;   // prioridade não passa na frente do atraso
+          showScreen('dashboard');
+          const painel=[...document.querySelectorAll('#next-steps-list .next-step-item')]
+            .map(e=>(e.getAttribute('onclick').match(/revAbrirTela\\('([^']+)'\\)/)||[])[1]).filter(Boolean);
+          const atrasos=revOrdemDoDia().map(c=>c.atraso||0);
+          const treino=trevMontar().assuntos.map(a=>a.subId).concat(trevMontar().semQuestao.map(c=>c.sub.id));
           try{Object.keys(localStorage).filter(k=>k.indexOf('vdn_missao')===0).forEach(k=>localStorage.removeItem(k));}catch(e){}
           missaoMem=null;
           const missao=missaoMontar().itens.filter(i=>i.tipo==='rev').map(i=>i.subId);
-          return {painel,treino,missao,fila:revCandidatos().map(c=>c.sub.id)};}""")
+          return {painel,atrasos,ordem:revOrdemDoDia().map(c=>c.sub.id),treino,missao};}""")
         print('   %s'%r)
-        assert r['painel'][0]=='s3', 'prioridade 90 vem primeiro no Painel'
-        assert r['treino']==[x for x in r['painel'] if x in r['treino']][:len(r['treino'])] and r['treino'][0]=='s3'
-        assert r['missao']==r['painel'][:len(r['missao'])]
+        assert r['painel'][:3]==['s1','s3','s0'] and r['painel']==r['ordem'][:len(r['painel'])]
+        assert r['atrasos']==sorted(r['atrasos'],reverse=True)
+        assert sorted(r['treino'])==sorted(r['ordem'][:len(r['treino'])])
+        assert r['missao']==r['ordem'][:len(r['missao'])]
         print('   OK\n')
 
         graves=real_errors(errs)
