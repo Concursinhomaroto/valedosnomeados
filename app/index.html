@@ -2933,6 +2933,22 @@ button.dash-faixa-questoes:hover{border-color:var(--accent);}
 @media(max-width:1000px){.dash-faixa{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:600px){.qd-topo{grid-template-columns:repeat(2,minmax(0,1fr));}}
 
+/* ===== MÁQUINA DE VENCER (Treino inteligente) ===== */
+.ti-topo{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+.ti-meta{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;
+  border-radius:999px;padding:4px 10px;cursor:pointer;font:inherit;font-size:12px;font-weight:800;}
+.ti-meta i{display:block;width:70px;height:6px;border-radius:99px;background:rgba(255,255,255,.2);overflow:hidden;}
+.ti-meta b{display:block;height:100%;background:#4ade80;}
+.ti-comp{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.ti-comp span{font-size:12px;font-weight:700;background:rgba(255,255,255,.12);border-radius:999px;padding:3px 10px;}
+.ti-acoes{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;}
+.ti-acoes .treino-destaque-btn{margin-top:0;}
+.ti-tam{display:inline-flex;border:1px solid rgba(255,255,255,.25);border-radius:999px;overflow:hidden;}
+.ti-tam button{background:none;border:0;color:#fff;font:inherit;font-size:12px;font-weight:800;padding:5px 11px;cursor:pointer;opacity:.7;}
+.ti-tam button.on{background:rgba(255,255,255,.2);opacity:1;}
+.ti-pior{color:#fff;text-decoration:underline;cursor:pointer;font-weight:800;}
+.treino-destaque .ti-rodape{display:block;line-height:1.5;}
+
 /* ===== PAINEL (rodada 2): densidade, sem vão vazio =====
    "Hoje" e Diagnóstico com a mesma altura; a Agenda sai da coluna e vira uma faixa de
    7 colunas na largura inteira; "Hoje" ganha duas colunas por dentro. */
@@ -13248,7 +13264,8 @@ function treinoResumoHTML(){
         ${r.itensErrados.map(it=>`<li>${escapeHtml((it.questao||'').slice(0,110))}${(it.questao||'').length>110?'…':''}</li>`).join('')}
       </ul>`:''}
     <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
-      ${r.itensErrados.length?`<button class="btn btn-primary" onclick="treinoTreinarErradas()"><i class="fa fa-rotate"></i> Treinar só as que errei</button>`:''}
+      <button class="btn btn-primary" onclick="treinoFecharResumo();tiComecar()"><i class="fa fa-bolt"></i> Mais uma rodada inteligente</button>
+      ${r.itensErrados.length?`<button class="btn btn-ghost" onclick="treinoTreinarErradas()"><i class="fa fa-rotate"></i> Treinar só as que errei</button>`:''}
       <button class="btn btn-ghost" onclick="treinoFecharResumo()"><i class="fa fa-arrow-left"></i> Voltar para Treinar</button>
     </div>
   </div>`;
@@ -13533,20 +13550,97 @@ function treinoDecksListaHTML(decks){
     ${treinoErrosAberto?treinoErrosPainelHTML():''}
   </div>`;
 }
+// ===== MÁQUINA DE VENCER: Treino inteligente =====
+// Um botão monta a sessão que mais rende ponto, com o que o acervo já sabe de você:
+//  • erros a consertar (errou e não refez hoje) — o ponto que você está perdendo;
+//  • acertos no chute e questões difíceis — o ponto que ainda não é seu;
+//  • novas dos assuntos mais fracos (edital em foco e prioridade primeiro);
+//  • acertos antigos (15+ dias) pra não esquecer.
+// Nada respondido hoje volta. Se uma parte não tiver questão, o resto completa. Só lê.
+const TI_PARTES=[{id:'feridas',lbl:'erros a consertar',ic:'🩹',p:.40},{id:'chutes',lbl:'chutes e difíceis',ic:'🎲',p:.20},
+  {id:'novas',lbl:'novas dos assuntos fracos',ic:'🌱',p:.25},{id:'relembrar',lbl:'pra relembrar',ic:'🔁',p:.15}];
+const TI_TAMANHOS=[10,20,30];
+const TI_RELEMBRAR_DIAS=15;
+const META_QUESTOES_PADRAO=30;
+function tiTamanho(){
+  try{const n=parseInt(localStorage.getItem('vdn_ti_n'),10);if(TI_TAMANHOS.includes(n))return n;}catch(e){}
+  return 20;
+}
+function tiEscolherTamanho(n){
+  try{localStorage.setItem('vdn_ti_n',String(n));}catch(e){}
+  const el=document.querySelector('.treino-destaque');
+  if(el)el.outerHTML=treinoDestaqueHTML();
+}
+function tiMontar(n){
+  const hoje=todayStr();
+  const ativo=treinarPoolAtivo().filter(q=>missaoHojeStr(q.ultimaVezEm)!==hoje);
+  const foco=edFocoIndice();
+  const pctSub={};treinoAssuntoStats().forEach(x=>{pctSub[x.subId]=x.pct;});
+  const prio=q=>{const sb=simFindSub(q.subId);return (sb&&sb.priority)||50;};
+  const peso=q=>(foco&&foco.idx[q.subId]?1000:0)+prio(q);
+  const dias=q=>q.ultimaVezEm?(Date.now()-new Date(q.ultimaVezEm).getTime())/86400000:9999;
+  const grupos={
+    feridas:ativo.filter(q=>q.ultimoResultado==='X')
+      .sort((a,b)=>peso(b)-peso(a)||(b.erros||0)-(a.erros||0)||dias(b)-dias(a)),
+    chutes:ativo.filter(q=>q.ultimoResultado!=='X'&&q.vezesRespondida&&((q.chuteAcertos||0)>0||q.dificuldadeAferida==='dificil'))
+      .sort((a,b)=>peso(b)-peso(a)||dias(b)-dias(a)),
+    novas:ativo.filter(q=>!q.vezesRespondida)
+      .sort((a,b)=>peso(b)-peso(a)||(pctSub[a.subId]??50)-(pctSub[b.subId]??50)),
+    relembrar:ativo.filter(q=>q.ultimoResultado==='C'&&dias(q)>=TI_RELEMBRAR_DIAS&&!(q.chuteAcertos>0))
+      .sort((a,b)=>dias(b)-dias(a)),
+  };
+  // Novas: primeiro até 3 de cada assunto (a rodada não vira um assunto só); o resto
+  // fica no fim da fila e só entra se faltar questão.
+  const porSub={},variadas=[],resto=[];
+  grupos.novas.forEach(q=>((porSub[q.subId]=(porSub[q.subId]||0)+1)<=3?variadas:resto).push(q));
+  grupos.novas=variadas.concat(resto);
+  const vistos=new Set(),itens=[],partes={};
+  const pega=(id,qtd)=>{let k=0;for(const q of grupos[id]){if(k>=qtd||itens.length>=n)break;
+    const c=acervoChave2De(q);if(vistos.has(c))continue;vistos.add(c);itens.push(q);k++;}
+    partes[id]=(partes[id]||0)+k;};
+  TI_PARTES.forEach(t=>pega(t.id,Math.round(n*t.p)));
+  TI_PARTES.forEach(t=>pega(t.id,n));   // o que faltou, completa na mesma ordem de valor
+  return {itens,partes,total:itens.length};
+}
+function tiComecar(){
+  const n=tiTamanho();
+  const m=tiMontar(n);
+  if(!m.total){toast('Nenhuma questão pra treinar agora — importe ou gere questões no Acervo.','var(--muted)');return;}
+  if(!treinoIniciar(m.itens,{titulo:'⚡ Treino inteligente'}))return;
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
+}
+function metaQuestoesDia(){return db.metaQuestoesDia||META_QUESTOES_PADRAO;}
+function metaQuestoesEditar(){
+  const v=prompt('Quantas questões por dia é a sua meta?',String(metaQuestoesDia()));
+  if(v===null)return;
+  const n=parseInt(v,10);
+  if(!(n>0&&n<=500)){toast('Use um número entre 1 e 500.','var(--orange)');return;}
+  db.metaQuestoesDia=n;saveDB();
+  renderSimGeralScreen();
+}
 function treinoDestaqueHTML(){
-  const foco=treinoPiorAssunto();
-  const nuncavistas=treinarDecks().find(d=>d.id==='nuncavistas');
-  const usaFoco=!!foco;
-  const titulo=usaFoco?'Comece pelo que mais te derruba':'Comece agora';
-  const sub=usaFoco?`${escapeHtml(foco.subName)} · ${foco.pct}% de acerto em ${foco.vezes} resposta${foco.vezes>1?'s':''}`
-                   :`${nuncavistas.itens.length} questões esperando por você`;
-  const onclick=usaFoco?`treinoTreinarAssunto('${foco.subId}')`:`treinarComDeck('nuncavistas')`;
+  const n=tiTamanho();
+  const m=tiMontar(n);
+  const hoje=questoesDiaResumo().n, meta=metaQuestoesDia();
+  const pct=Math.min(100,Math.round(hoje/meta*100));
+  const pior=treinoPiorAssunto();
+  const comp=TI_PARTES.filter(t=>m.partes[t.id]).map(t=>`<span>${t.ic} ${m.partes[t.id]} ${t.lbl}</span>`).join('');
   return`<div class="treino-destaque">
-    <div class="treino-destaque-eyebrow">PRONTO PARA TREINAR</div>
-    <div class="treino-destaque-titulo">${titulo}</div>
-    <div class="treino-destaque-sub">${sub}</div>
-    <button class="btn treino-destaque-btn" onclick="${onclick}"><i class="fa fa-play"></i> Treinar agora</button>
-    <div class="treino-destaque-rodape"><i class="fa fa-circle-info"></i> Nada vira prova. Pare quando quiser — tudo o que você responder já conta.</div>
+    <div class="ti-topo">
+      <div class="treino-destaque-eyebrow">⚡ MÁQUINA DE VENCER</div>
+      <button class="ti-meta" onclick="metaQuestoesEditar()" title="Questões de hoje (cada uma conta uma vez a cada 7 dias) · clique pra mudar a meta">
+        <span>${hoje}/${meta} hoje</span><i><b style="width:${pct}%"></b></i></button>
+    </div>
+    <div class="treino-destaque-titulo">Treino inteligente</div>
+    <div class="treino-destaque-sub">${m.total?'O que mais rende ponto agora, na dose certa:':'Sem questões pra montar agora — importe ou gere no Acervo.'}</div>
+    ${m.total?`<div class="ti-comp">${comp}</div>`:''}
+    <div class="ti-acoes">
+      <button class="btn treino-destaque-btn" onclick="tiComecar()" ${m.total?'':'disabled'}><i class="fa fa-bolt"></i> Treinar ${m.total} agora</button>
+      <span class="ti-tam">${TI_TAMANHOS.map(t=>`<button class="${t===n?'on':''}" onclick="tiEscolherTamanho(${t})">${t}</button>`).join('')}</span>
+    </div>
+    ${pior?`<div class="treino-destaque-rodape ti-rodape">ou só o que mais te derruba: <a class="ti-pior" onclick="treinoTreinarAssunto('${pior.subId}')">${escapeHtml(pior.subName)} · ${pior.pct}%</a></div>`
+          :`<div class="treino-destaque-rodape"><i class="fa fa-circle-info"></i> Tudo o que você responder já conta.</div>`}
   </div>`;
 }
 // ===== Montar meu treino (secao 1.3) — filtros combinaveis, contagem ao vivo, sem prova =====
