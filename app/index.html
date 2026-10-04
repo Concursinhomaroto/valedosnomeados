@@ -3051,6 +3051,21 @@ span.ti-meta{cursor:default;}
 @media(max-width:600px){.treino-semana{grid-template-columns:repeat(2,minmax(0,1fr));}}
 .dash-hoje-sub-dica{font-size:12px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--st-atrasado);margin-left:4px;}
 
+/* ===== CORRIGIR GABARITO NO TREINO ===== */
+.treino-q-acoes{display:flex;gap:4px;flex-shrink:0;}
+.gab-ed{display:flex;flex-direction:column;gap:10px;}
+.gab-ed-q{font-size:13px;color:var(--text2);background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;line-height:1.5;}
+.gab-ed-lbl{font-size:12px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);}
+.gab-ed-opcoes{display:flex;flex-direction:column;gap:6px;}
+.gab-ed-ce{flex-direction:row;}
+.gab-ed-ce .gab-ed-op{flex:1;text-align:center;}
+.gab-ed-op{text-align:left;padding:9px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--panel2);color:var(--text);
+  cursor:pointer;font:inherit;font-size:13px;font-weight:700;}
+.gab-ed-op small{color:var(--muted);font-weight:600;}
+.gab-ed-op.on{border-color:var(--green);background:rgba(22,163,74,.14);color:var(--green-t);}
+.gab-ed-rec{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;}
+.gab-ed-acoes{display:flex;justify-content:flex-end;gap:8px;}
+
 /* ===== PAINEL (rodada 2): densidade, sem vão vazio =====
    "Hoje" e Diagnóstico com a mesma altura; a Agenda sai da coluna e vira uma faixa de
    7 colunas na largura inteira; "Hoje" ganha duas colunas por dentro. */
@@ -13090,6 +13105,88 @@ function treinoExcluirQuestaoAtual(){
   toast('🗑️ Questão excluída do banco.','var(--muted)');
   treinoPular();
 }
+// ===== CORRIGIR O GABARITO NA HORA =====
+// Questão com gabarito errado (comum em item importado) dava duas saídas ruins: excluir
+// ou ir caçar no Acervo. Aqui corrige ali mesmo — gabarito e explicação — no próprio
+// item do acervo (a sessão usa o mesmo objeto). Se a questão já foi respondida, a resposta
+// pode ser recorrigida: placar da sessão, contadores da questão, estatística do assunto e
+// as questões de hoje passam a refletir o gabarito certo.
+let treinoGabaritoNovo=null;
+function treinoEditarGabaritoAbrir(){
+  const s=treinoSessao;
+  if(!s)return;
+  const item=s.itens[s.idx];
+  if(!item)return;
+  treinoGabaritoNovo=item.correta;
+  const respondida=s.respondidasSet.has(s.idx)&&!!item.userAnswer;
+  const ce=item.formato==='certoerrado';
+  const rotulo=a=>ce?(a.letra==='C'?'C) Certo':'E) Errado'):`${a.letra}) ${escapeHtml(String(a.texto||'').slice(0,90))}${String(a.texto||'').length>90?'…':''}`;
+  document.getElementById('modal').classList.remove('modal-wide');
+  openModal('✏️ Corrigir o gabarito',`<div class="gab-ed">
+    <div class="gab-ed-q">${escapeHtml(String(item.questao||'').slice(0,220))}${String(item.questao||'').length>220?'…':''}</div>
+    <div class="gab-ed-lbl">Gabarito certo</div>
+    <div class="gab-ed-opcoes${ce?' gab-ed-ce':''}">${(item.alternativas||[]).map(a=>`<button type="button" class="gab-ed-op${a.letra===item.correta?' on':''}" data-letra="${escapeHtml(a.letra)}"
+      onclick="treinoGabaritoNovo=this.dataset.letra;document.querySelectorAll('.gab-ed-op').forEach(b=>b.classList.toggle('on',b===this))">${rotulo(a)}${a.letra===item.correta?' <small>(atual)</small>':''}</button>`).join('')}</div>
+    <div class="gab-ed-lbl">Explicação</div>
+    <textarea id="gab-ed-exp" class="inp" rows="4" style="width:100%">${escapeHtml(item.explicacao||'')}</textarea>
+    ${respondida?`<label class="gab-ed-rec"><input type="checkbox" id="gab-ed-recorrigir" checked> Recorrigir a minha resposta (${escapeHtml(item.userAnswer)}) com o gabarito novo</label>`:''}
+    <div class="gab-ed-acoes"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="treinoEditarGabaritoSalvar()"><i class="fa fa-check"></i> Salvar</button></div>
+  </div>`);
+}
+function treinoEditarGabaritoSalvar(){
+  const s=treinoSessao;
+  if(!s)return;
+  const item=s.itens[s.idx];
+  if(!item)return;
+  const nova=treinoGabaritoNovo;
+  if(!(item.alternativas||[]).some(a=>a.letra===nova)){toast('⚠️ Escolha uma das alternativas.','var(--red)');return;}
+  const antes=item.correta;
+  const expEl=document.getElementById('gab-ed-exp');
+  const recEl=document.getElementById('gab-ed-recorrigir');
+  item.correta=nova;
+  if(expEl)item.explicacao=expEl.value.trim();
+  if(antes!==nova)item.gabaritoEditadoEm=new Date().toISOString();
+  let virou=0;
+  if(antes!==nova&&recEl&&recEl.checked&&s.respondidasSet.has(s.idx)&&item.userAnswer){
+    const eraCerta=item.userAnswer===antes, ficaCerta=item.userAnswer===nova;
+    if(eraCerta!==ficaCerta){virou=ficaCerta?1:-1;treinoRecorrigir(item,virou);}
+  }
+  acervoSalvar();
+  saveDB();
+  closeModal();
+  renderSimGeralScreen();
+  toast(antes===nova?'✏️ Explicação salva.'
+    :virou>0?`✏️ Gabarito corrigido para ${nova} — sua resposta passou a contar como certa.`
+    :virou<0?`✏️ Gabarito corrigido para ${nova} — sua resposta passou a contar como errada.`
+    :`✏️ Gabarito corrigido para ${nova}.`,'var(--green)');
+}
+// d=+1: o que contou como erro vira acerto; d=-1: o contrário. Mexe só no que a resposta
+// desta sessão somou.
+function treinoRecorrigir(item,d){
+  const s=treinoSessao;
+  const nn=v=>Math.max(0,v||0);
+  s.certas=nn(s.certas+d); s.erradas=nn(s.erradas-d);
+  item.acertos=nn((item.acertos||0)+d); item.erros=nn((item.erros||0)-d);
+  item.ultimoResultado=d>0?'C':'X';
+  item.dificuldadeAferida=acervoDificuldade(item.acertos,item.vezesRespondida||0);
+  if(item.confianca){
+    const a=item.confianca+'Acertos', e=item.confianca+'Erros';
+    item[a]=nn((item[a]||0)+d); item[e]=nn((item[e]||0)-d);
+  }
+  const hoje=todayStr();
+  if(item.contadaEm===hoje){
+    item.contadaResultado=d>0?'C':'X';
+    const r=(db.questoesPorDia||{})[hoje];
+    if(r){r.c=nn(r.c+d);r.x=nn(r.x-d);}
+  }
+  const sub=simFindSub(item.subId);
+  if(sub&&sub.simStats){
+    sub.simStats.acertosTotal=nn(sub.simStats.acertosTotal+d);
+    const pf=(sub.simStats.porFormato||{})[item.formato||'multipla'];
+    if(pf)pf.acertos=nn(pf.acertos+d);
+  }
+}
 function treinoAnterior(){
   const s=treinoSessao;
   if(!s||s.idx<=0)return;
@@ -13287,7 +13384,10 @@ function treinoQuestaoHTML(){
   return`<div class="sim-q">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
       ${etiquetas}
-      <button class="btn btn-xs btn-ghost" style="flex-shrink:0;color:var(--red-t)" onclick="treinoExcluirQuestaoAtual()" title="Excluir esta questão do banco — ela está errada ou quebrada"><i class="fa fa-trash"></i></button>
+      <span class="treino-q-acoes">
+        <button class="btn btn-xs btn-ghost" onclick="treinoEditarGabaritoAbrir()" title="Corrigir o gabarito (e a explicação) desta questão"><i class="fa fa-pen"></i> Gabarito</button>
+        <button class="btn btn-xs btn-ghost" style="flex-shrink:0;color:var(--red-t)" onclick="treinoExcluirQuestaoAtual()" title="Excluir esta questão do banco — ela está errada ou quebrada"><i class="fa fa-trash"></i></button>
+      </span>
     </div>
     ${treinoHistoricoHTML(item)}
     ${textoApoioHTML(item)}
