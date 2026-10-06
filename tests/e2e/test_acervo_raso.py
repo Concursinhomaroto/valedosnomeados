@@ -70,6 +70,7 @@ async def main():
         print('   %s'%r)
         assert r['existe'] and not r['aberta'] and r['celulas']==14 and not r['visivel']
         await page.click('.banco-cobertura > summary')
+        await page.wait_for_timeout(250)   # o <details> abre no quadro seguinte ao clique
         r=await page.evaluate("()=>document.querySelector('.banco-cobertura .banco-mapa-grid').checkVisibility()")
         assert r
         # re-render da tela mantém o que a pessoa abriu
