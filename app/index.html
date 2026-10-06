@@ -2997,6 +2997,9 @@ span.ti-meta{cursor:default;}
 
 /* ===== RELÓGIO DO TREINO ===== */
 .treino-relogio{font-weight:900;color:var(--accent);font-variant-numeric:tabular-nums;}
+.rev-relogio{display:inline-block;margin-right:8px;padding:1px 9px;border-radius:999px;background:var(--st-acao-bg);color:var(--accent);
+  font-weight:900;font-variant-numeric:tabular-nums;}
+.rev-relogio-pausa{opacity:.55;}
 .treino-pordia{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);}
 .treino-pordia-cab{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px;font-size:13px;}
 .treino-pordia .qd-tr{font-size:12px;padding:4px 2px;}
@@ -13010,7 +13013,7 @@ function treinoTempoTick(){
   const delta=Math.min(5,Math.max(0,(agora-(s.ultimoTick||agora))/1000));
   s.ultimoTick=agora;
   const tela=document.getElementById('screen-simgeral');
-  const ativa=!document.hidden&&!!tela&&tela.classList.contains('active');
+  const ativa=!document.hidden&&!!tela&&tela.classList.contains('active')&&!cronometroManualRodando();
   if(ativa){s.seg+=delta;s.segPend+=delta;}
   const el=document.getElementById('treino-relogio');
   if(el)el.textContent='⏱ '+fmtHMS(Math.floor(s.seg));
@@ -21429,10 +21432,61 @@ function revConcluirDaFila(subId,quality){
 // 20 min, 92%. Baratear a revisão vale três vezes mais do que qualquer ajuste no
 // agendador. Esta tela é só o que a revisão precisa: o resumo de um lado, o fluxograma do
 // outro, e os botões de responder. Nada mais.
+// ===== RELÓGIO DA REVISÃO =====
+// Abriu a revisão, o tempo começa a contar sozinho (sem ligar o cronômetro). Só corre com
+// a janela aberta e a aba visível; ao responder, abrir o miniboss ou fechar, o tempo entra
+// no estudo do dia, no assunto e no reino. Com o cronômetro flutuante ou o pomodoro
+// ligados, este fica parado — quem conta é o cronômetro, pra não somar em dobro.
+let revTempo=null,revTempoIntervalo=null;
+function cronometroManualRodando(){
+  return (typeof ftRunning!=='undefined'&&ftRunning)||(typeof pmdRunning!=='undefined'&&pmdRunning);
+}
+function revTempoIniciar(subId){
+  revTempoLancar();
+  revTempo={subId,seg:0,ultimoTick:Date.now()};
+  if(revTempoIntervalo)clearInterval(revTempoIntervalo);
+  revTempoIntervalo=setInterval(revTempoTick,1000);
+}
+function revTempoTick(){
+  const t=revTempo;
+  if(!t){if(revTempoIntervalo){clearInterval(revTempoIntervalo);revTempoIntervalo=null;}return;}
+  const modal=document.getElementById('modal');
+  if(!modal||!modal.classList.contains('open')||!document.getElementById('rev-relogio')){revTempoLancar();return;}
+  const agora=Date.now();
+  const delta=Math.min(5,Math.max(0,(agora-t.ultimoTick)/1000));
+  t.ultimoTick=agora;
+  const manual=cronometroManualRodando();
+  if(!document.hidden&&!manual)t.seg+=delta;
+  const el=document.getElementById('rev-relogio');
+  if(el){el.textContent='⏱ '+fmtHMS(Math.floor(t.seg));el.classList.toggle('rev-relogio-pausa',manual);
+    el.title=manual?'Parado: o cronômetro flutuante já está contando o seu tempo':'Tempo desta revisão — entra no seu estudo do dia';}
+}
+// Lança o tempo (uma vez) e encerra o relógio.
+function revTempoLancar(){
+  const t=revTempo;
+  revTempo=null;
+  if(revTempoIntervalo){clearInterval(revTempoIntervalo);revTempoIntervalo=null;}
+  if(!t)return 0;
+  const sec=Math.floor(t.seg);
+  if(sec<=0)return 0;
+  logStudySeconds(sec);
+  db.lifetimeSeconds=(db.lifetimeSeconds||0)+sec;
+  if(!db.subTotalSeconds)db.subTotalSeconds={};
+  db.subTotalSeconds[t.subId]=(db.subTotalSeconds[t.subId]||0)+sec;
+  const ctx=simTopicKingdomDoSub(t.subId);
+  if(ctx&&ctx.kingdom){if(!db.kingdomSeconds)db.kingdomSeconds={};db.kingdomSeconds[ctx.kingdom.id]=(db.kingdomSeconds[ctx.kingdom.id]||0)+sec;}
+  if(!db.freeSessions)db.freeSessions=[];
+  db.freeSessions.push({tipo:'revisao',reinoId:ctx&&ctx.kingdom?ctx.kingdom.id:'',reinoName:ctx&&ctx.kingdom?ctx.kingdom.name:'Revisão',
+    segundos:sec,data:todayStr(),hora:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})});
+  histApararSessoes();
+  saveDB();
+  return sec;
+}
 function revAbrirTela(subId){
   const ctx=findTopicKingdomBySubId(subId);
   if(!ctx||!ctx.sub){toast('Assunto não encontrado.','var(--red)');return;}
   document.getElementById('modal').classList.add('modal-wide');
+  revTempoIniciar(subId);
   revAbertoEm=Date.now();
   revPrazoEscolhido=revEscadaSugerida(ctx.sub);
   openModal(`🔁 Revisão — ${escapeHtml(ctx.sub.name)}`,revTelaHTML(subId));
@@ -21443,6 +21497,7 @@ function revAbrirTela(subId){
 // larga limpa o marcador ao sair.
 function revFecharTela(){
   revAbertoEm=0; // fechou sem responder: não é revisão, não entra na medição
+  revTempoLancar(); // mas o tempo de estudo foi real: entra no dia
   document.getElementById('modal').classList.remove('modal-wide');
   closeModal();
 }
@@ -21474,6 +21529,7 @@ function revTelaHTML(subId){
   const gerandoR=resumoGenerating.has(subId), gerandoF=fluxoGenerating.has(subId);
 
   const cab=`<div style="font-size:12px;color:var(--muted);font-weight:700;margin:-8px 0 16px">
+    <span class="rev-relogio" id="rev-relogio" title="Tempo desta revisão — entra no seu estudo do dia">⏱ ${fmtHMS(Math.floor(revTempo&&revTempo.subId===subId?revTempo.seg:0))}</span>
     ${escapeHtml(topic.name)} · ${iconeReino(kingdom.icon)} ${escapeHtml(kingdom.name)} ·
     há ${dias} dia${dias===1?'':'s'} sem olhar
     ${ac===null?' · <span style="color:var(--orange-t)">sem medição em questões</span>'
@@ -21533,6 +21589,7 @@ function revTelaHTML(subId){
 }
 function revTelaResponder(subId,quality){
   if(revAbertoEm){revRegistrarDuracao((Date.now()-revAbertoEm)/1000);revAbertoEm=0;}
+  revTempoTick();revTempoLancar();
   revConcluirDaFila(subId,quality);
   revFecharTela();
 }
