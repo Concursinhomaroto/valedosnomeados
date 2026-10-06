@@ -3069,6 +3069,51 @@ span.ti-meta{cursor:default;}
 .gab-ed-rec{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;}
 .gab-ed-acoes{display:flex;justify-content:flex-end;gap:8px;}
 
+/* ===== TREINO INTELIGENTE: mistura ajustável ===== */
+.maq .ti-comp .ti-linha{gap:6px;}
+.maq .ti-linha em{font-style:normal;flex:1 1 auto;min-width:0;}
+.maq .ti-linha small{font-size:12px;opacity:.65;font-weight:700;white-space:nowrap;}
+.maq .ti-zero{opacity:.6;}
+.ti-step{width:24px;height:24px;border-radius:7px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);
+  color:#fff;font:inherit;font-size:15px;font-weight:900;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;}
+.ti-step:hover:not(:disabled){background:rgba(255,255,255,.2);}
+.ti-step:disabled{opacity:.3;cursor:default;}
+.maq .ti-comp .ti-qtd{min-width:26px;text-align:center;cursor:pointer;border-bottom:1px dashed rgba(255,255,255,.35);}
+.ti-perso{font-size:12px;font-weight:800;opacity:.85;}
+.ti-perso a{color:#fff;text-decoration:underline;cursor:pointer;}
+
+/* ===== DASH DE CONQUISTAS ===== */
+.cd{display:flex;flex-direction:column;gap:14px;margin-bottom:18px;}
+.cd-topo{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+.cd-topo>div{background:var(--panel);border:1.5px solid var(--border);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;}
+.cd-topo b{font-size:22px;font-weight:900;color:var(--accent);font-variant-numeric:tabular-nums;}
+.cd-topo span{font-size:12px;color:var(--muted);font-weight:700;}
+.cd-topo i{display:block;height:6px;border-radius:99px;background:var(--border);overflow:hidden;margin-top:6px;}
+.cd-topo i b{display:block;height:100%;background:linear-gradient(90deg,#8b5cf6,#f59e0b);}
+.cd-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:stretch;}
+.cd-card{margin:0;padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0;}
+.cd-tit{font-size:13px;font-weight:900;color:var(--text);margin-bottom:4px;}
+.cd-vazio{font-size:12px;color:var(--muted);}
+.cd-rec,.cd-quase{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);min-width:0;}
+.cd-rec:last-child,.cd-quase:last-child{border-bottom:0;}
+.cd-rec-ic{font-size:20px;flex:0 0 28px;text-align:center;}
+.cd-rec-txt{flex:1;min-width:0;display:flex;flex-direction:column;}
+.cd-rec-txt b,.cd-quase-txt b{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cd-rec-txt span{font-size:12px;font-weight:800;}
+.cd-rec-dir{display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;}
+.cd-rec-dir small{font-size:12px;color:var(--muted);font-weight:700;}
+.cd-rec-dir em{font-style:normal;font-size:12px;font-weight:900;color:var(--gold-t,#b45309);}
+.cd-quase-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;}
+.cd-quase-txt>div{display:flex;justify-content:space-between;gap:8px;align-items:baseline;min-width:0;}
+.cd-quase-txt small{font-size:12px;color:var(--muted);font-weight:700;white-space:nowrap;}
+.cd-quase-txt i,.cd-cat i{display:block;height:6px;border-radius:99px;background:var(--border);overflow:hidden;}
+.cd-quase-txt i b,.cd-cat i b{display:block;height:100%;}
+.cd-cat{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;gap:8px;align-items:center;font-size:12px;font-weight:700;padding:3px 0;}
+.cd-cat span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cd-cat i b{background:var(--accent);}
+.cd-cat small{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;}
+@media(max-width:1000px){.cd-cols{grid-template-columns:minmax(0,1fr);}.cd-topo{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
 /* ===== PAINEL (rodada 2): densidade, sem vão vazio =====
    "Hoje" e Diagnóstico com a mesma altura; a Agenda sai da coluna e vira uma faixa de
    7 colunas na largura inteira; "Hoje" ganha duas colunas por dentro. */
@@ -3750,6 +3795,7 @@ body.missao-ligada .dash-v2 .div-btn:hover{text-decoration:underline;filter:none
     <h2>🏅 Conquistas</h2>
     <p id="conquistas-summary" class="conq-summary-text"></p>
   </div>
+  <div id="conquistas-dash"></div>
   <div id="conquistas-grid"></div>
 </div>
 
@@ -13149,7 +13195,7 @@ function treinoEditarGabaritoSalvar(){
   const recEl=document.getElementById('gab-ed-recorrigir');
   item.correta=nova;
   if(expEl)item.explicacao=expEl.value.trim();
-  if(antes!==nova)item.gabaritoEditadoEm=new Date().toISOString();
+  if(antes!==nova){item.gabaritoEditadoEm=new Date().toISOString();db.gabaritosCorrigidos=(db.gabaritosCorrigidos||0)+1;conquistasAgendarChecagem();}
   let virou=0;
   if(antes!==nova&&recEl&&recEl.checked&&s.respondidasSet.has(s.idx)&&item.userAnswer){
     const eraCerta=item.userAnswer===antes, ficaCerta=item.userAnswer===nova;
@@ -13303,6 +13349,7 @@ function treinoEncerrar(){
     histApararSessoes();
     if(!s.respondidas)saveDB();   // com resposta, o histórico do treino (abaixo) já grava
   }
+  if(s.titulo==='⚡ Treino inteligente'&&s.respondidas>0){db.tiRodadas=(db.tiRodadas||0)+1;conquistasAgendarChecagem();}
   const itensErrados=s.itens.filter((it,i)=>s.respondidasSet.has(i)&&it.userAnswer&&it.userAnswer!==it.correta);
   treinoResumo={certas:s.certas,erradas:s.erradas,respondidas:s.respondidas,
     total:s.itens.length,liquida:s.certas-s.erradas,itensErrados,titulo:s.titulo,
@@ -13866,10 +13913,52 @@ function tiTamanho(){
 }
 function tiEscolherTamanho(n){
   try{localStorage.setItem('vdn_ti_n',String(n));}catch(e){}
+  tiMixSalvar(null);   // tamanho pronto = volta à mistura automática
+  tiRedesenhar();
+}
+function tiRedesenhar(){
   const el=document.querySelector('.treino-destaque');
   if(el)el.outerHTML=treinoDestaqueHTML();
 }
-function tiMontar(n){
+// Mistura personalizada: quantas de cada parte VOCÊ quer (+/− no cartão). Fica neste
+// aparelho (localStorage, com cópia em memória se ele não existir). null = automática.
+let tiMixMem=null;
+function tiMix(){
+  try{const m=JSON.parse(localStorage.getItem('vdn_ti_mix')||'null');if(m&&typeof m==='object')return m;return null;}
+  catch(e){return tiMixMem;}
+}
+function tiMixSalvar(m){
+  tiMixMem=m;
+  try{if(m)localStorage.setItem('vdn_ti_mix',JSON.stringify(m));else localStorage.removeItem('vdn_ti_mix');}catch(e){}
+}
+// Rodada atual: a personalizada, se houver; senão a automática do tamanho escolhido.
+function tiMontarAtual(){
+  const mix=tiMix();
+  return mix?tiMontar(0,mix):tiMontar(tiTamanho());
+}
+function tiAjustar(id,delta){
+  const atual=tiMontarAtual();
+  const base={};TI_PARTES.forEach(t=>{base[t.id]=atual.partes[t.id]||0;});
+  base[id]=Math.max(0,Math.min(atual.disp[id]||0,(base[id]||0)+delta));
+  tiMixSalvar(base);
+  tiRedesenhar();
+}
+function tiDigitar(id){
+  const atual=tiMontarAtual();
+  const t=TI_PARTES.find(x=>x.id===id);
+  const v=prompt(`Quantas "${t?t.lbl:id}"? (disponíveis: ${atual.disp[id]||0})`,String(atual.partes[id]||0));
+  if(v===null)return;
+  const n=parseInt(v,10);
+  if(!(n>=0)){toast('Use um número inteiro.','var(--orange)');return;}
+  const base={};TI_PARTES.forEach(x=>{base[x.id]=atual.partes[x.id]||0;});
+  base[id]=Math.min(atual.disp[id]||0,n);
+  tiMixSalvar(base);
+  tiRedesenhar();
+}
+function tiPadrao(){tiMixSalvar(null);tiRedesenhar();}
+// n = tamanho (mistura automática por TI_PARTES, completando com as outras partes);
+// mix = {feridas,chutes,novas,relembrar} pedidos à mão (sem completar: você manda).
+function tiMontar(n,mix){
   const hoje=todayStr();
   const ativo=treinarPoolAtivo().filter(q=>missaoHojeStr(q.ultimaVezEm)!==hoje);
   const foco=edFocoIndice();
@@ -13892,17 +13981,22 @@ function tiMontar(n){
   const porSub={},variadas=[],resto=[];
   grupos.novas.forEach(q=>((porSub[q.subId]=(porSub[q.subId]||0)+1)<=3?variadas:resto).push(q));
   grupos.novas=variadas.concat(resto);
-  const vistos=new Set(),itens=[],partes={};
-  const pega=(id,qtd)=>{let k=0;for(const q of grupos[id]){if(k>=qtd||itens.length>=n)break;
+  const vistos=new Set(),itens=[],partes={},disp={};
+  TI_PARTES.forEach(t=>{disp[t.id]=grupos[t.id].length;partes[t.id]=0;});
+  const limite=mix?Infinity:n;
+  const pega=(id,qtd)=>{let k=0;for(const q of grupos[id]){if(k>=qtd||itens.length>=limite)break;
     const c=acervoChave2De(q);if(vistos.has(c))continue;vistos.add(c);itens.push(q);k++;}
     partes[id]=(partes[id]||0)+k;};
-  TI_PARTES.forEach(t=>pega(t.id,Math.round(n*t.p)));
-  TI_PARTES.forEach(t=>pega(t.id,n));   // o que faltou, completa na mesma ordem de valor
-  return {itens,partes,total:itens.length};
+  if(mix){
+    TI_PARTES.forEach(t=>pega(t.id,Math.max(0,parseInt(mix[t.id],10)||0)));
+  }else{
+    TI_PARTES.forEach(t=>pega(t.id,Math.round(n*t.p)));
+    TI_PARTES.forEach(t=>pega(t.id,n));   // o que faltou, completa na mesma ordem de valor
+  }
+  return {itens,partes,disp,total:itens.length,personalizado:!!mix};
 }
 function tiComecar(){
-  const n=tiTamanho();
-  const m=tiMontar(n);
+  const m=tiMontarAtual();
   if(!m.total){toast('Nenhuma questão pra treinar agora — importe ou gere questões no Acervo.','var(--muted)');return;}
   if(!treinoIniciar(m.itens,{titulo:'⚡ Treino inteligente'}))return;
   renderSimGeralScreen();
@@ -14008,7 +14102,9 @@ function trevRegistrar(){
     revConcluirDaFila(a.subId,nota);feitas++;
   });
   if(!feitas){toast('Nenhum assunto marcado.','var(--muted)');return;}
+  db.trevRegistradas=(db.trevRegistradas||0)+feitas;
   saveDB();
+  conquistasAgendarChecagem();
   r.revisaoRegistrada=feitas;
   try{updateRevBadge();}catch(e){}
   renderSimGeralScreen();
@@ -14022,11 +14118,16 @@ function trevFeitasHoje(){
 }
 function treinoDestaqueHTML(){
   const n=tiTamanho();
-  const m=tiMontar(n);
+  const m=tiMontarAtual();
   const hoje=questoesDiaResumo().n, meta=metaQuestoesDia();
   const pct=Math.min(100,Math.round(hoje/meta*100));
   const pior=treinoPiorAssunto();
-  const comp=TI_PARTES.filter(t=>m.partes[t.id]).map(t=>`<span><i>${t.ic}</i><b>${m.partes[t.id]}</b> ${t.lbl}</span>`).join('');
+  // Cada parte com − / + (e o número clicável pra digitar); "de X" = quantas existem.
+  const comp=TI_PARTES.map(t=>`<span class="ti-linha${m.partes[t.id]?'':' ti-zero'}"><i>${t.ic}</i>
+    <button class="ti-step" onclick="tiAjustar('${t.id}',-1)" ${m.partes[t.id]?'':'disabled'} aria-label="Menos ${t.lbl}">−</button>
+    <b class="ti-qtd" onclick="tiDigitar('${t.id}')" title="Clique pra digitar">${m.partes[t.id]}</b>
+    <button class="ti-step" onclick="tiAjustar('${t.id}',1)" ${(m.partes[t.id]||0)<(m.disp[t.id]||0)?'':'disabled'} aria-label="Mais ${t.lbl}">+</button>
+    <em>${t.lbl}</em><small>de ${m.disp[t.id]||0}</small></span>`).join('');
   const rv=trevMontar(), revHoje=trevFeitasHoje();
   const revPct=Math.min(100,Math.round(revHoje/Math.max(1,rv.cota)*100));
   const prox=rv.assuntos.slice(0,5);
@@ -14054,11 +14155,12 @@ function treinoDestaqueHTML(){
       </div>
       <div class="maq-passo">
         <div class="maq-cab ti-tit2"><span class="ti-passo-n">2</span><b>Treino inteligente</b></div>
-        <div class="treino-destaque-sub">${m.total?'O que mais rende ponto agora, na dose certa:':'Sem questões pra montar agora — importe ou gere no Acervo.'}</div>
-        ${m.total?`<div class="ti-comp">${comp}</div>`:''}
+        <div class="treino-destaque-sub">${m.total||m.personalizado?'O que mais rende ponto agora — ajuste cada parte no − / +:':'Sem questões pra montar agora — importe ou gere no Acervo.'}</div>
+        ${TI_PARTES.some(t=>m.disp[t.id])?`<div class="ti-comp">${comp}</div>`:''}
         <div class="maq-acoes ti-acoes">
           <button class="btn treino-destaque-btn" onclick="tiComecar()" ${m.total?'':'disabled'}><i class="fa fa-bolt"></i> Treinar ${m.total} agora</button>
-          <span class="ti-tam">${TI_TAMANHOS.map(t=>`<button class="${t===n?'on':''}" onclick="tiEscolherTamanho(${t})">${t}</button>`).join('')}</span>
+          <span class="ti-tam">${TI_TAMANHOS.map(t=>`<button class="${t===n&&!m.personalizado?'on':''}" onclick="tiEscolherTamanho(${t})">${t}</button>`).join('')}</span>
+          ${m.personalizado?`<span class="ti-perso">personalizado · <a onclick="tiPadrao()">↺ padrão</a></span>`:''}
         </div>
         ${pior?`<div class="treino-destaque-rodape ti-rodape">ou só o que mais te derruba: <a class="ti-pior" onclick="treinoTreinarAssunto('${pior.subId}')">${escapeHtml(pior.subName)} · ${pior.pct}%</a></div>`:''}
       </div>
@@ -19338,6 +19440,23 @@ function has4ConsecutiveSundays(){
   return false;
 }
 
+// ===== QUESTÕES & MISSÕES (base das conquistas novas) =====
+// Tudo lido do que já é gravado: questões por dia (db.questoesPorDia), missões concluídas
+// (db.missoesConcluidas, uma data por dia), revisões registradas por questões, rodadas do
+// Treino inteligente e gabaritos corrigidos (contadores simples).
+function qDiasRegistro(){return Object.entries(db.questoesPorDia||{}).filter(([,r])=>(r&&r.n)>0);}
+function qRecordeDia(){return qDiasRegistro().reduce((m,[,r])=>Math.max(m,r.n||0),0);}
+function qDiasMeta(){const meta=metaQuestoesDia();return qDiasRegistro().filter(([,r])=>(r.n||0)>=meta).length;}
+function qDiasSniper(){return qDiasRegistro().filter(([,r])=>(r.n||0)>=20&&(r.c||0)/(r.n||1)>=0.8).length;}
+function maiorSequenciaDatas(datas){
+  const set=new Set(datas);let melhor=0;
+  datas.forEach(d=>{if(set.has(addDays(d,-1)))return;let n=1;while(set.has(addDays(d,n)))n++;melhor=Math.max(melhor,n);});
+  return melhor;
+}
+function qSequencia(){return maiorSequenciaDatas(qDiasRegistro().map(([d])=>d));}
+function missoesSequencia(){return maiorSequenciaDatas(db.missoesConcluidas||[]);}
+function errosConsertados(){return (db.acervo||[]).filter(q=>(q.erros||0)>0&&q.ultimoResultado==='C').length;}
+
 // ===== RARIDADE / DIFICULDADE / TIERS =====
 const TIER_LABELS=['Bronze','Prata','Ouro','Platina','Diamante','Mestre','Lenda'];
 const TIER_COLORS=['#b45309','#94a3b8','#eab308','#22d3ee','#a78bfa','#ef4444','#f59e0b'];
@@ -19402,10 +19521,23 @@ const ACHIEVEMENTS_REGISTRY=[
   {id:'dia_epico',categoria:'tempo',titulo:'Dia Épico',descricao:'Maior tempo estudado em um único dia.',icone:'🌟',dificuldade:'dificil',getValue:()=>{const vals=Object.values(db.sessions||{});return vals.length?Math.floor(Math.max(...vals)/3600):0;},tiers:[3,5,8,10]},
   {id:'sessoes_totais',categoria:'tempo',titulo:'Frequentador Assíduo',descricao:'Total de sessões de estudo registradas.',icone:'📋',dificuldade:'facil',getValue:()=>db.totalSessionsCount||0,tiers:[10,50,150,400,800]},
 
+  // --- E2) QUESTÕES & MISSÕES ---
+  {id:'q_feitas',categoria:'questoes',titulo:'Máquina de Questões',descricao:'Questões feitas (cada uma conta uma vez a cada 7 dias).',icone:'📝',dificuldade:'dificil',getValue:()=>questoesHistorico().tot.n,tiers:[50,200,500,1000,2500,5000,10000]},
+  {id:'q_certas',categoria:'questoes',titulo:'Acertador Nato',descricao:'Questões certas no total — ponto que já é seu.',icone:'✅',dificuldade:'dificil',getValue:()=>questoesHistorico().tot.c,tiers:[30,150,400,800,2000,4000,8000]},
+  {id:'q_recorde',categoria:'questoes',titulo:'Dia de Fogo',descricao:'Recorde de questões num único dia.',icone:'🔥',dificuldade:'medio',getValue:()=>qRecordeDia(),tiers:[20,40,60,100,150,200]},
+  {id:'q_meta',categoria:'questoes',titulo:'Meta de Questões',descricao:'Dias em que você bateu a meta diária de questões.',icone:'🎯',dificuldade:'dificil',getValue:()=>qDiasMeta(),tiers:[1,5,15,40,100,200]},
+  {id:'q_sniper',categoria:'questoes',titulo:'Sniper',descricao:'Dias com 20+ questões e 80%+ de acerto.',icone:'🎯',dificuldade:'dificilimo',getValue:()=>qDiasSniper(),tiers:[1,5,15,40,80]},
+  {id:'q_sequencia',categoria:'questoes',titulo:'Ritmo Implacável',descricao:'Maior sequência de dias seguidos fazendo questões.',icone:'🥁',dificuldade:'dificil',getValue:()=>qSequencia(),tiers:[3,7,14,30,60,100]},
+  {id:'missoes',categoria:'questoes',titulo:'Missão Cumprida',descricao:'Missões do dia concluídas até o fim.',icone:'🎖️',dificuldade:'dificil',getValue:()=>(db.missoesConcluidas||[]).length,tiers:[1,5,15,40,100,200]},
+  {id:'missoes_seq',categoria:'questoes',titulo:'Soldado da Missão',descricao:'Maior sequência de dias com a missão concluída.',icone:'🪖',dificuldade:'dificilimo',getValue:()=>missoesSequencia(),tiers:[3,7,14,30,60]},
+  {id:'rev_questoes',categoria:'questoes',titulo:'Revisor de Elite',descricao:'Revisões registradas pela revisão por questões.',icone:'🔁',dificuldade:'dificil',getValue:()=>db.trevRegistradas||0,tiers:[5,25,75,200,500,1000]},
+  {id:'ti_rodadas',categoria:'questoes',titulo:'Engrenagem da Vitória',descricao:'Rodadas do Treino inteligente terminadas.',icone:'⚙️',dificuldade:'medio',getValue:()=>db.tiRodadas||0,tiers:[1,10,30,75,150,300]},
+  {id:'erros_consertados',categoria:'questoes',titulo:'Conserta-Tudo',descricao:'Questões que você errou e, depois, acertou.',icone:'🩹',dificuldade:'dificil',getValue:()=>errosConsertados(),tiers:[10,50,150,400,1000,2000]},
+
   // --- F) META-CONQUISTAS / PRESTÍGIO ---
   {id:'mestre_categoria',categoria:'meta',titulo:'Mestre da Categoria',descricao:'Destravar todas as conquistas de uma dimensão inteira.',icone:'🎖️',dificuldade:'dificil',
     getValue:()=>{
-      const cats=['volume','consistencia','dominio','amplitude','tempo'];
+      const cats=['volume','consistencia','dominio','amplitude','tempo','questoes'];
       const items=ACHIEVEMENTS_REGISTRY.filter(a=>!['meta','secreta'].includes(a.categoria));
       return cats.some(cat=>{const list=items.filter(a=>a.categoria===cat);return list.length>0&&list.every(a=>achievementStatus(a).maxed);})?1:0;
     },tiers:[1]},
@@ -19451,6 +19583,7 @@ const ACHIEVEMENTS_REGISTRY=[
   {id:'lendario_silencioso',categoria:'secreta',secreta:true,titulo:'Lendário Silencioso',descricao:'Destravar 10 conquistas secretas — a secreta das secretas.',icone:'🥷',dificuldade:'dificilimo',
     getValue:()=>ACHIEVEMENTS_REGISTRY.filter(a=>a.secreta&&a.id!=='lendario_silencioso').filter(a=>achievementStatus(a).tierIdx>=0).length,tiers:[10]},
   {id:'autopsia_do_erro',categoria:'secreta',secreta:true,titulo:'Autópsia do Erro',descricao:'Errar o mesmo assunto 5+ vezes antes de finalmente dominá-lo.',icone:'🔬',dificuldade:'medio',getValue:()=>(db.erroAssuntos||[]).some(a=>a.count>=5)?1:0,tiers:[1]},
+  {id:'revisor_banca',categoria:'secreta',secreta:true,titulo:'Revisor da Banca',descricao:'Corrigir 10 gabaritos errados durante o treino.',icone:'🧑‍⚖️',dificuldade:'medio',getValue:()=>(db.gabaritosCorrigidos||0)>=10?1:0,tiers:[1]},
   {id:'contagem_regressiva',categoria:'secreta',secreta:true,titulo:'Contagem Regressiva',descricao:'Estudar no dia que cai exatamente 7 dias antes de uma prova marcada em Editais.',icone:'⏳',dificuldade:'medio',getValue:()=>hasStudied7DaysBeforeExam()?1:0,tiers:[1]},
 ];
 
@@ -19485,12 +19618,16 @@ function checkAchievementUnlocks(){
     if(st.tierIdx>prevTier){
       db.achievementsState[a.id]=st.tierIdx;
       changed=true;
+      // Histórico de desbloqueios pras "Conquistas recentes" (os 60 últimos).
+      if(!Array.isArray(db.achievementsLog))db.achievementsLog=[];
       // Soma XP de cada tier cruzado (pode ser mais de um, se o valor pulou vários
       // níveis entre uma checagem e outra) — tiers mais altos da mesma conquista valem
       // um pouco mais que os iniciais.
       const base=ACHIEVEMENT_XP_BASE[achievementRarity(a)]||10;
       let xpGanho=0;
       for(let i=prevTier+1;i<=st.tierIdx;i++)xpGanho+=base+i*5;
+      db.achievementsLog.push({id:a.id,tier:st.tierIdx,xp:xpGanho,em:new Date().toISOString()});
+      if(db.achievementsLog.length>60)db.achievementsLog=db.achievementsLog.slice(-60);
       gainXP(xpGanho);
       if(a.secreta){
         toast(`🔓 Conquista secreta revelada: ${a.titulo}! +${xpGanho} XP`,'var(--gold)');
@@ -19544,7 +19681,7 @@ function conqSetFilter(tipo,val){
   if(tipo==='status')conqFilterStatus=val;
   renderConquistasScreen();
 }
-const CONQ_CAT_LABELS={all:'Todas as categorias',volume:'📦 Volume',consistencia:'🔥 Consistência',dominio:'🎯 Domínio',amplitude:'🌍 Amplitude',tempo:'⏱️ Tempo',meta:'🎖️ Prestígio',secreta:'❓ Secretas'};
+const CONQ_CAT_LABELS={all:'Todas as categorias',questoes:'📝 Questões & Missões',volume:'📦 Volume',consistencia:'🔥 Consistência',dominio:'🎯 Domínio',amplitude:'🌍 Amplitude',tempo:'⏱️ Tempo',meta:'🎖️ Prestígio',secreta:'❓ Secretas'};
 function renderConquistasScreen(){
   const el=document.getElementById('conquistas-grid');
   if(!el)return;
@@ -19570,7 +19707,7 @@ function renderConquistasScreen(){
 
   const diffOpts=['facil','medio','dificil','dificilimo'];
   const rarityOpts=['Comum','Incomum','Rara','Épica','Lendária'];
-  const catOpts=['all','volume','consistencia','dominio','amplitude','tempo','meta','secreta'];
+  const catOpts=['all','questoes','volume','consistencia','dominio','amplitude','tempo','meta','secreta'];
   const filtrosHTML=`<div class="conq-filters">
     <select class="inp conq-filter-sel" onchange="conqSetFilter('cat',this.value)">${catOpts.map(c=>`<option value="${c}"${conqFilterCat===c?' selected':''}>${CONQ_CAT_LABELS[c]}</option>`).join('')}</select>
     <select class="inp conq-filter-sel" onchange="conqSetFilter('diff',this.value)"><option value="all"${conqFilterDiff==='all'?' selected':''}>Toda dificuldade</option>${diffOpts.map(d=>`<option value="${d}"${conqFilterDiff===d?' selected':''}>${DIFF_LABEL[d]}</option>`).join('')}</select>
@@ -19632,10 +19769,56 @@ function renderConquistasScreen(){
   }).join('');
 
   el.innerHTML=filtrosHTML+`<div class="conq-grid">${cardsHTML||'<div class="empty" style="grid-column:1/-1"><p>Nenhuma conquista neste filtro.</p></div>'}</div>`;
+  conqDashRender();
   const summaryEl=document.getElementById('conquistas-summary');
   if(summaryEl)summaryEl.textContent=`${unlockedTotal} de ${maxTotal} níveis · ${list.length}/${ACHIEVEMENTS_REGISTRY.length} conquistas exibidas · 🏆 ${gamerscore} pontos`;
 }
 
+// ===== DASH DE CONQUISTAS =====
+// Acompanhamento no topo da tela: números gerais, as conquistas recentes (com data e XP),
+// as que estão quase subindo de nível e o progresso de cada categoria. Só lê.
+function conqDashRender(){
+  const el=document.getElementById('conquistas-dash');
+  if(!el)return;
+  const todas=ACHIEVEMENTS_REGISTRY.map(a=>({a,st:achievementStatus(a)}));
+  let niveis=0,maxNiveis=0,completas=0,secTot=0,secRev=0;
+  todas.forEach(({a,st})=>{niveis+=st.tierIdx+1;maxNiveis+=st.tierList.length;if(st.maxed)completas++;
+    if(a.secreta){secTot++;if(st.tierIdx>=0)secRev++;}});
+  const log=(db.achievementsLog||[]).slice().reverse();
+  const xpConq=(db.achievementsLog||[]).reduce((s,x)=>s+(x.xp||0),0);
+  const hoje=todayStr();
+  const quando=iso=>{const d=missaoHojeStr(iso);if(d===hoje)return 'hoje';if(d===addDays(hoje,-1))return 'ontem';
+    return new Date(iso).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});};
+  const porId=Object.fromEntries(ACHIEVEMENTS_REGISTRY.map(a=>[a.id,a]));
+  const recentes=log.slice(0,8).map(x=>{const a=porId[x.id];if(!a)return'';
+    return`<div class="cd-rec"><span class="cd-rec-ic">${a.icone}</span><div class="cd-rec-txt"><b>${escapeHtml(a.titulo)}</b>
+      <span style="color:${TIER_COLORS[x.tier]||'var(--muted)'}">${a.secreta?'secreta revelada':'Nível '+(TIER_LABELS[x.tier]||'')}</span></div>
+      <div class="cd-rec-dir"><small>${quando(x.em)}</small>${x.xp?`<em>+${x.xp} XP</em>`:''}</div></div>`;}).join('');
+  const quase=todas.filter(({a,st})=>!st.maxed&&!(a.secreta&&st.tierIdx<0)&&st.pctToNext>0)
+    .sort((x,y)=>y.st.pctToNext-x.st.pctToNext).slice(0,6)
+    .map(({a,st})=>`<div class="cd-quase"><span class="cd-rec-ic">${a.icone}</span><div class="cd-quase-txt">
+      <div><b>${escapeHtml(a.titulo)}</b><small>${st.val} / ${st.nextThreshold} → ${TIER_LABELS[st.tierIdx+1]||''}</small></div>
+      <i><b style="width:${st.pctToNext}%;background:${TIER_COLORS[Math.min(st.tierIdx+1,TIER_COLORS.length-1)]}"></b></i></div></div>`).join('');
+  const cats=['questoes','volume','consistencia','dominio','amplitude','tempo','meta','secreta'];
+  const porCat=cats.map(c=>{const l=todas.filter(({a})=>a.categoria===c);let u=0,t=0;l.forEach(({st})=>{u+=st.tierIdx+1;t+=st.tierList.length;});
+    return{c,u,t,pct:t?Math.round(u/t*100):0};}).filter(x=>x.t);
+  el.innerHTML=`<div class="cd">
+    <div class="cd-topo">
+      <div><b>${niveis}/${maxNiveis}</b><span>níveis desbloqueados</span><i><b style="width:${maxNiveis?Math.round(niveis/maxNiveis*100):0}%"></b></i></div>
+      <div><b>${completas}</b><span>conquistas no máximo</span></div>
+      <div><b>${secRev}/${secTot}</b><span>secretas reveladas</span></div>
+      <div><b>+${xpConq.toLocaleString('pt-BR')}</b><span>XP de conquistas registrado</span></div>
+    </div>
+    <div class="cd-cols">
+      <div class="section-card cd-card"><div class="cd-tit">🕒 Conquistas recentes</div>
+        ${recentes||'<p class="cd-vazio">Os próximos desbloqueios aparecem aqui, com a data e o XP ganho.</p>'}</div>
+      <div class="section-card cd-card"><div class="cd-tit">🎯 Quase lá</div>
+        ${quase||'<p class="cd-vazio">Nenhuma conquista em andamento.</p>'}</div>
+      <div class="section-card cd-card"><div class="cd-tit">📊 Por categoria</div>
+        ${porCat.map(x=>`<div class="cd-cat"><span>${CONQ_CAT_LABELS[x.c]||x.c}</span><i><b style="width:${x.pct}%"></b></i><small>${x.u}/${x.t}</small></div>`).join('')}</div>
+    </div>
+  </div>`;
+}
 // Fecha o painel de cronômetro desse miniboss (clicando no nome dele), sem mexer no tempo
 // acumulado nem pausar um cronômetro em andamento — só esconde o painel grande, que às
 // vezes fica aberto sem querer (ex: depois de um "Reset", que zera mas não fecha). O
@@ -20599,7 +20782,7 @@ function renderSimKingdomBreakdown(){
 function dashMaquinaRender(){
   const el=document.getElementById('dash-maquina');
   if(!el)return;
-  const rv=trevMontar(), ti=tiMontar(tiTamanho());
+  const rv=trevMontar(), ti=tiMontarAtual();
   const nErros=(treinarDecks().find(d=>d.id==='feridas')||{itens:[]}).itens.length;
   const nCards=fcVencidosContagem();
   el.innerHTML=`<div class="dash-maq-tit">⚡ Máquina de vencer</div>
@@ -22307,6 +22490,9 @@ function missaoTick(){
   m.feitos=agora;
   if(e.acabou&&!m.concluida){
     m.concluida=true;missaoGuardar(m);missaoTickParar();
+    // Missão concluída vira registro (uma data por dia) — base das conquistas de missão.
+    if(!Array.isArray(db.missoesConcluidas))db.missoesConcluidas=[];
+    if(!db.missoesConcluidas.includes(m.data)){db.missoesConcluidas.push(m.data);saveDB();conquistasAgendarChecagem();}
     if(!document.getElementById('modal').classList.contains('open'))missaoResumo();
     missaoBarraRender();
     return;
