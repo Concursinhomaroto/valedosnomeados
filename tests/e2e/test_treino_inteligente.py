@@ -90,6 +90,28 @@ async def main():
         assert r==0, 'a rodada seguinte não repete o que acabou de responder'
         print('   OK\n')
 
+        print('=== F) mistura ajustável: − / +, digitar, limite pelo disponível, padrão ===')
+        r=await page.evaluate("""()=>{treinoSessao=null;treinoResumo=null;showScreen('simgeral');renderSimGeralScreen();tiPadrao();tiEscolherTamanho(20);
+          const auto=tiMontarAtual().partes;
+          tiAjustar('feridas',-3);tiAjustar('novas',1);
+          const ajust=tiMontarAtual();
+          const btn=document.querySelector('.treino-destaque [onclick="tiComecar()"]').textContent.trim();
+          const perso=!!document.querySelector('.ti-perso');
+          const realPrompt=window.prompt;window.prompt=()=>'999';tiDigitar('relembrar');window.prompt=realPrompt;
+          const dig=tiMontarAtual();
+          let salvo=null;try{salvo=JSON.parse(localStorage.getItem('vdn_ti_mix'));}catch(e){}
+          tiComecar();const sessao=treinoSessao?treinoSessao.itens.length:0;treinoSessao=null;
+          tiPadrao();const volta=tiMontarAtual();
+          return {auto,ajust:ajust.partes,total:ajust.total,btn,perso,relembrar:dig.partes.relembrar,disp:dig.disp.relembrar,
+            salvo,sessao,somaDig:dig.total,voltaPerso:volta.personalizado,voltaTotal:volta.total};}""")
+        print('   %s'%r)
+        assert r['ajust']['feridas']==r['auto']['feridas']-3 and r['ajust']['novas']==r['auto']['novas']+1
+        assert r['btn']=='Treinar %d agora'%r['total'] and r['perso']
+        assert r['relembrar']==r['disp'], 'digitar mais do que existe fica no máximo disponível'
+        assert r['salvo'] and r['salvo']['relembrar']==r['disp'] and r['sessao']==r['somaDig']
+        assert not r['voltaPerso'] and r['voltaTotal']==20
+        print('   OK\n')
+
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))
         assert not graves, graves

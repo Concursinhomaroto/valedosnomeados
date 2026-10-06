@@ -3069,6 +3069,19 @@ span.ti-meta{cursor:default;}
 .gab-ed-rec{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;}
 .gab-ed-acoes{display:flex;justify-content:flex-end;gap:8px;}
 
+/* ===== TREINO INTELIGENTE: mistura ajustável ===== */
+.maq .ti-comp .ti-linha{gap:6px;}
+.maq .ti-linha em{font-style:normal;flex:1 1 auto;min-width:0;}
+.maq .ti-linha small{font-size:12px;opacity:.65;font-weight:700;white-space:nowrap;}
+.maq .ti-zero{opacity:.6;}
+.ti-step{width:24px;height:24px;border-radius:7px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);
+  color:#fff;font:inherit;font-size:15px;font-weight:900;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;}
+.ti-step:hover:not(:disabled){background:rgba(255,255,255,.2);}
+.ti-step:disabled{opacity:.3;cursor:default;}
+.maq .ti-comp .ti-qtd{min-width:26px;text-align:center;cursor:pointer;border-bottom:1px dashed rgba(255,255,255,.35);}
+.ti-perso{font-size:12px;font-weight:800;opacity:.85;}
+.ti-perso a{color:#fff;text-decoration:underline;cursor:pointer;}
+
 /* ===== PAINEL (rodada 2): densidade, sem vão vazio =====
    "Hoje" e Diagnóstico com a mesma altura; a Agenda sai da coluna e vira uma faixa de
    7 colunas na largura inteira; "Hoje" ganha duas colunas por dentro. */
@@ -13866,10 +13879,52 @@ function tiTamanho(){
 }
 function tiEscolherTamanho(n){
   try{localStorage.setItem('vdn_ti_n',String(n));}catch(e){}
+  tiMixSalvar(null);   // tamanho pronto = volta à mistura automática
+  tiRedesenhar();
+}
+function tiRedesenhar(){
   const el=document.querySelector('.treino-destaque');
   if(el)el.outerHTML=treinoDestaqueHTML();
 }
-function tiMontar(n){
+// Mistura personalizada: quantas de cada parte VOCÊ quer (+/− no cartão). Fica neste
+// aparelho (localStorage, com cópia em memória se ele não existir). null = automática.
+let tiMixMem=null;
+function tiMix(){
+  try{const m=JSON.parse(localStorage.getItem('vdn_ti_mix')||'null');if(m&&typeof m==='object')return m;return null;}
+  catch(e){return tiMixMem;}
+}
+function tiMixSalvar(m){
+  tiMixMem=m;
+  try{if(m)localStorage.setItem('vdn_ti_mix',JSON.stringify(m));else localStorage.removeItem('vdn_ti_mix');}catch(e){}
+}
+// Rodada atual: a personalizada, se houver; senão a automática do tamanho escolhido.
+function tiMontarAtual(){
+  const mix=tiMix();
+  return mix?tiMontar(0,mix):tiMontar(tiTamanho());
+}
+function tiAjustar(id,delta){
+  const atual=tiMontarAtual();
+  const base={};TI_PARTES.forEach(t=>{base[t.id]=atual.partes[t.id]||0;});
+  base[id]=Math.max(0,Math.min(atual.disp[id]||0,(base[id]||0)+delta));
+  tiMixSalvar(base);
+  tiRedesenhar();
+}
+function tiDigitar(id){
+  const atual=tiMontarAtual();
+  const t=TI_PARTES.find(x=>x.id===id);
+  const v=prompt(`Quantas "${t?t.lbl:id}"? (disponíveis: ${atual.disp[id]||0})`,String(atual.partes[id]||0));
+  if(v===null)return;
+  const n=parseInt(v,10);
+  if(!(n>=0)){toast('Use um número inteiro.','var(--orange)');return;}
+  const base={};TI_PARTES.forEach(x=>{base[x.id]=atual.partes[x.id]||0;});
+  base[id]=Math.min(atual.disp[id]||0,n);
+  tiMixSalvar(base);
+  tiRedesenhar();
+}
+function tiPadrao(){tiMixSalvar(null);tiRedesenhar();}
+// n = tamanho (mistura automática por TI_PARTES, completando com as outras partes);
+// mix = {feridas,chutes,novas,relembrar} pedidos à mão (sem completar: você manda).
+function tiMontar(n,mix){
   const hoje=todayStr();
   const ativo=treinarPoolAtivo().filter(q=>missaoHojeStr(q.ultimaVezEm)!==hoje);
   const foco=edFocoIndice();
@@ -13892,17 +13947,22 @@ function tiMontar(n){
   const porSub={},variadas=[],resto=[];
   grupos.novas.forEach(q=>((porSub[q.subId]=(porSub[q.subId]||0)+1)<=3?variadas:resto).push(q));
   grupos.novas=variadas.concat(resto);
-  const vistos=new Set(),itens=[],partes={};
-  const pega=(id,qtd)=>{let k=0;for(const q of grupos[id]){if(k>=qtd||itens.length>=n)break;
+  const vistos=new Set(),itens=[],partes={},disp={};
+  TI_PARTES.forEach(t=>{disp[t.id]=grupos[t.id].length;partes[t.id]=0;});
+  const limite=mix?Infinity:n;
+  const pega=(id,qtd)=>{let k=0;for(const q of grupos[id]){if(k>=qtd||itens.length>=limite)break;
     const c=acervoChave2De(q);if(vistos.has(c))continue;vistos.add(c);itens.push(q);k++;}
     partes[id]=(partes[id]||0)+k;};
-  TI_PARTES.forEach(t=>pega(t.id,Math.round(n*t.p)));
-  TI_PARTES.forEach(t=>pega(t.id,n));   // o que faltou, completa na mesma ordem de valor
-  return {itens,partes,total:itens.length};
+  if(mix){
+    TI_PARTES.forEach(t=>pega(t.id,Math.max(0,parseInt(mix[t.id],10)||0)));
+  }else{
+    TI_PARTES.forEach(t=>pega(t.id,Math.round(n*t.p)));
+    TI_PARTES.forEach(t=>pega(t.id,n));   // o que faltou, completa na mesma ordem de valor
+  }
+  return {itens,partes,disp,total:itens.length,personalizado:!!mix};
 }
 function tiComecar(){
-  const n=tiTamanho();
-  const m=tiMontar(n);
+  const m=tiMontarAtual();
   if(!m.total){toast('Nenhuma questão pra treinar agora — importe ou gere questões no Acervo.','var(--muted)');return;}
   if(!treinoIniciar(m.itens,{titulo:'⚡ Treino inteligente'}))return;
   renderSimGeralScreen();
@@ -14022,11 +14082,16 @@ function trevFeitasHoje(){
 }
 function treinoDestaqueHTML(){
   const n=tiTamanho();
-  const m=tiMontar(n);
+  const m=tiMontarAtual();
   const hoje=questoesDiaResumo().n, meta=metaQuestoesDia();
   const pct=Math.min(100,Math.round(hoje/meta*100));
   const pior=treinoPiorAssunto();
-  const comp=TI_PARTES.filter(t=>m.partes[t.id]).map(t=>`<span><i>${t.ic}</i><b>${m.partes[t.id]}</b> ${t.lbl}</span>`).join('');
+  // Cada parte com − / + (e o número clicável pra digitar); "de X" = quantas existem.
+  const comp=TI_PARTES.map(t=>`<span class="ti-linha${m.partes[t.id]?'':' ti-zero'}"><i>${t.ic}</i>
+    <button class="ti-step" onclick="tiAjustar('${t.id}',-1)" ${m.partes[t.id]?'':'disabled'} aria-label="Menos ${t.lbl}">−</button>
+    <b class="ti-qtd" onclick="tiDigitar('${t.id}')" title="Clique pra digitar">${m.partes[t.id]}</b>
+    <button class="ti-step" onclick="tiAjustar('${t.id}',1)" ${(m.partes[t.id]||0)<(m.disp[t.id]||0)?'':'disabled'} aria-label="Mais ${t.lbl}">+</button>
+    <em>${t.lbl}</em><small>de ${m.disp[t.id]||0}</small></span>`).join('');
   const rv=trevMontar(), revHoje=trevFeitasHoje();
   const revPct=Math.min(100,Math.round(revHoje/Math.max(1,rv.cota)*100));
   const prox=rv.assuntos.slice(0,5);
@@ -14054,11 +14119,12 @@ function treinoDestaqueHTML(){
       </div>
       <div class="maq-passo">
         <div class="maq-cab ti-tit2"><span class="ti-passo-n">2</span><b>Treino inteligente</b></div>
-        <div class="treino-destaque-sub">${m.total?'O que mais rende ponto agora, na dose certa:':'Sem questões pra montar agora — importe ou gere no Acervo.'}</div>
-        ${m.total?`<div class="ti-comp">${comp}</div>`:''}
+        <div class="treino-destaque-sub">${m.total||m.personalizado?'O que mais rende ponto agora — ajuste cada parte no − / +:':'Sem questões pra montar agora — importe ou gere no Acervo.'}</div>
+        ${TI_PARTES.some(t=>m.disp[t.id])?`<div class="ti-comp">${comp}</div>`:''}
         <div class="maq-acoes ti-acoes">
           <button class="btn treino-destaque-btn" onclick="tiComecar()" ${m.total?'':'disabled'}><i class="fa fa-bolt"></i> Treinar ${m.total} agora</button>
-          <span class="ti-tam">${TI_TAMANHOS.map(t=>`<button class="${t===n?'on':''}" onclick="tiEscolherTamanho(${t})">${t}</button>`).join('')}</span>
+          <span class="ti-tam">${TI_TAMANHOS.map(t=>`<button class="${t===n&&!m.personalizado?'on':''}" onclick="tiEscolherTamanho(${t})">${t}</button>`).join('')}</span>
+          ${m.personalizado?`<span class="ti-perso">personalizado · <a onclick="tiPadrao()">↺ padrão</a></span>`:''}
         </div>
         ${pior?`<div class="treino-destaque-rodape ti-rodape">ou só o que mais te derruba: <a class="ti-pior" onclick="treinoTreinarAssunto('${pior.subId}')">${escapeHtml(pior.subName)} · ${pior.pct}%</a></div>`:''}
       </div>
@@ -20599,7 +20665,7 @@ function renderSimKingdomBreakdown(){
 function dashMaquinaRender(){
   const el=document.getElementById('dash-maquina');
   if(!el)return;
-  const rv=trevMontar(), ti=tiMontar(tiTamanho());
+  const rv=trevMontar(), ti=tiMontarAtual();
   const nErros=(treinarDecks().find(d=>d.id==='feridas')||{itens:[]}).itens.length;
   const nCards=fcVencidosContagem();
   el.innerHTML=`<div class="dash-maq-tit">⚡ Máquina de vencer</div>
