@@ -55,7 +55,20 @@ async def main():
         r2=await page.evaluate("""()=>{const t=document.getElementById('rev-relogio');const out={txt:t.textContent,pausa:t.classList.contains('rev-relogio-pausa')};
           revFecharTela();ftRunning=false;ftStartedAt=null;out.dia=db.sessions[todayStr()]||0;return out;}""")
         print('   antes %s · %s'%(r,r2))
-        assert r2['pausa'] and r2['txt']=='⏱ 00:00:00' and r2['dia']==r
+        assert r2['pausa'] and r2['txt']=='⏱ contando no cronômetro' and r2['dia']==r
+        print('   OK\n')
+
+        print('=== E) revisando a partir do Painel, a "Meta diária" atualiza na hora ===')
+        r=await page.evaluate("""()=>{db.dailyGoalMinutes=60;db.sessions[todayStr()]=29*60+27;showScreen('dashboard');
+          return document.getElementById('goal-lbl').textContent;}""")
+        await page.evaluate("()=>revAbrirTela('s1')")
+        await page.wait_for_timeout(3400)
+        r2=await page.evaluate("()=>{revTelaResponder('s1',4);return true;}")
+        await page.wait_for_timeout(400)
+        r3=await page.evaluate("()=>({lbl:document.getElementById('goal-lbl').textContent,ativa:document.getElementById('screen-dashboard').classList.contains('active')})")
+        print('   antes %r · depois %s'%(r,r3))
+        assert r.startswith('29 / 60'), 'antes da revisão: 29 min'
+        assert r3['ativa'] and r3['lbl'].startswith('30 / 60') and int(r3['lbl'].split(' ')[0])>=30
         print('   OK\n')
 
         graves=real_errors(errs)

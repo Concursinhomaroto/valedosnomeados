@@ -19057,6 +19057,19 @@ function logStudySeconds(seconds){
   db.sessions[td]=(db.sessions[td]||0)+seconds;
   // Depois de quem chamou terminar de gravar o resto da sessao (tempo do reino etc.).
   setTimeout(marcosDoDiaVerificar,0);
+  painelTempoAgendar();
+}
+// O cartão "Meta diária" (e a sequência) só eram redesenhados ao ENTRAR no Painel:
+// revisar a partir do próprio Painel gravava o tempo, mas o cartão continuava mostrando o
+// número antigo. Entrou tempo de estudo com o Painel aberto, ele se atualiza na hora.
+let painelTempoTimer=null;
+function painelTempoAgendar(){
+  if(painelTempoTimer)return;
+  painelTempoTimer=setTimeout(()=>{
+    painelTempoTimer=null;
+    const tela=document.getElementById('screen-dashboard');
+    if(tela&&tela.classList.contains('active')){try{renderDashboard();}catch(e){console.warn('Painel:',e);}}
+  },60);
 }
 // Saiu de renderDashboard: abrir o Painel gravava no banco (XP da meta, marco de sequencia,
 // recordes). Meta e sequencia so mudam quando entra tempo de estudo ou a meta e trocada,
@@ -21458,7 +21471,7 @@ function revTempoTick(){
   const manual=cronometroManualRodando();
   if(!document.hidden&&!manual)t.seg+=delta;
   const el=document.getElementById('rev-relogio');
-  if(el){el.textContent='⏱ '+fmtHMS(Math.floor(t.seg));el.classList.toggle('rev-relogio-pausa',manual);
+  if(el){el.textContent=manual?'⏱ contando no cronômetro':'⏱ '+fmtHMS(Math.floor(t.seg));el.classList.toggle('rev-relogio-pausa',manual);
     el.title=manual?'Parado: o cronômetro flutuante já está contando o seu tempo':'Tempo desta revisão — entra no seu estudo do dia';}
 }
 // Lança o tempo (uma vez) e encerra o relógio.
