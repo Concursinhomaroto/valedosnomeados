@@ -29,3 +29,19 @@ Um array JSON. Cada item:
 Nada é descartado em silêncio: o relatório da importação diz quantas entraram (com e sem
 assunto), quantas foram recusadas e por quê, quais foram ligadas por nome parecido (não
 igual) e quais esperam você escolher a matéria.
+
+## Pacotes publicados (dentro do app)
+
+Em **Dicas → Pacotes**, o admin publica as dicas do filtro em uso (busca, matéria, grupo,
+banca, assunto; rascunhos ficam de fora) para todos os assinantes. O pacote vai para o nó
+`dicas_pacotes` do Firebase — lê quem está logado, grava só o admin, a mesma regra do
+`sala_mapa` — no mesmo formato acima (matéria e assunto por nome).
+
+Quem adiciona recebe as dicas pelo mesmo caminho da importação em lote. Numa versão nova
+do pacote ("Atualizar para a vN"): a dica que a pessoa não mexeu é trocada; a que ela
+editou fica como ela deixou; a que ela apagou não volta; o "já sei" e o assunto que ela
+ligou continuam. O relatório conta cada caso.
+
+Requer a regra `dicas_pacotes` do `firebase.rules.json` **publicada** no Firebase (console
+→ Realtime Database → Regras, ou `firebase deploy --only database`). Sem ela, o painel
+avisa que falta publicar as regras.
