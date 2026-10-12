@@ -527,7 +527,7 @@ async def main():
                   const vaza=[...document.querySelectorAll('#screen-dicas *')].filter(e=>{
                     const r=e.getBoundingClientRect();return r.width&&r.right>window.innerWidth+1;}).length;
                   return {rolagemLateral:document.documentElement.scrollWidth>window.innerWidth+1,vaza,
-                          colunas:getComputedStyle(grade).gridTemplateColumns.split(' ').length,
+                          colunas:new Set([...grade.children].map(c=>Math.round(c.getBoundingClientRect().left))).size,   // colunas de texto: conta pelas posicoes
                           fundo:getComputedStyle(card).backgroundColor,
                           texto:getComputedStyle(card.querySelector('.dica-titulo')).color};}""")
                 m.update({'tema':tema,'largura':larg})
