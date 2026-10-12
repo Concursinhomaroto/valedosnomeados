@@ -2957,6 +2957,12 @@ button.dica-etq-assunto:hover{border-color:var(--accent);color:var(--accent);}
 .dica-corr-txt{font-size:var(--fs-leitura);color:var(--text2);line-height:1.5;overflow-wrap:break-word;}
 .dica-corr-txt b{color:var(--accent);font-size:var(--fs-selo);text-transform:uppercase;letter-spacing:.4px;}
 .dica-corr .btn{align-self:flex-start;margin-top:2px;}
+/* Etapa 3: quadro de números — o valor é o que se lê de longe; o resto, em letra miúda. */
+.dicas-quadro{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr));gap:var(--sp-2);}
+.dicas-quadro-cel{background:var(--panel);border:1.5px solid var(--border);border-radius:var(--r-md);padding:var(--sp-2) var(--sp-3);
+  display:flex;flex-direction:column;gap:2px;min-width:0;}
+.dicas-quadro-cel.dica-sei{opacity:.72;}
+.dicas-quadro-extra{font-size:var(--fs-selo);color:var(--muted);font-weight:600;overflow-wrap:break-word;}
 @media(max-width:600px){
   .dica-linha{grid-template-columns:5.9em minmax(0,1fr);}
   .dica-card{padding:var(--sp-3);}
@@ -18746,6 +18752,7 @@ function dicasHTML(){
       <span class="banco-acoes">
         <button class="btn btn-xs btn-ghost" onclick="dicasCriarAbrir()"><i class="fa fa-plus"></i> Nova dica</button>
         <button class="btn btn-xs btn-ghost" onclick="dicasImportarAbrir()"><i class="fa fa-file-import"></i> Importar em lote</button>
+        <button class="btn btn-xs btn-ghost" onclick="dicasColinhaAbrir()"><i class="fa fa-print"></i> Colinha</button>
       </span>
     </div>
     <div id="dicas-chips">${dicasChipsHTML()}</div>
@@ -18819,16 +18826,24 @@ function dicasChipsHTML(){
   const assuntoAtivo=f.assunto?dicasSubs.get(f.assunto):null;
   const mostrar=[chip(f.jaSei,'dicasAlternarJaSei()',`✅ mostrar as que já sei · <b>${sabidas}</b>`,'As que você marcou como "já sei" saem da lista padrão')];
   if(semAssunto||f.semAssunto)mostrar.push(chip(f.semAssunto,'dicasAlternarSemAssunto()',`⚠️ sem assunto · <b>${semAssunto}</b>`,'Dicas que ainda não estão ligadas a um miniboss'));
+  const nNum=dicasNumerosFiltrados().length;
   return`<div class="banco-chips-faixa dicas-chips">
+    <div class="banco-chip-grupo" id="dicas-chips-ver"><span class="banco-chip-rotulo">Ver</span><div class="banco-chips">${
+      chip(dicasVista==='lista',"dicasVer('lista')",'📋 Dicas')+chip(dicasVista==='numeros',"dicasVer('numeros')",`🔢 Números que caem · <b>${nNum}</b>`,'Quadro só com os números, por matéria')}</div></div>
     <div class="banco-chip-grupo" id="dicas-chips-materia"><span class="banco-chip-rotulo">Matéria</span><div class="banco-chips">${chipsMat.join('')}</div></div>
     ${f.assunto?`<div class="banco-chip-grupo" id="dicas-chips-assunto"><span class="banco-chip-rotulo">Assunto</span><div class="banco-chips">${
       chip(true,`dicasFiltrarAssunto('${escapeAttrJs(f.assunto)}')`,`${escapeHtml(assuntoAtivo?assuntoAtivo.sub.name:'assunto apagado')} ✕`,'Tirar o filtro de assunto')}</div></div>`:''}
-    ${porGrupo.size>1||f.grupo?`<div class="banco-chip-grupo" id="dicas-chips-grupo"><span class="banco-chip-rotulo">Grupo</span><div class="banco-chips">${
+    ${dicasVista!=='numeros'&&(porGrupo.size>1||f.grupo)?`<div class="banco-chip-grupo" id="dicas-chips-grupo"><span class="banco-chip-rotulo">Grupo</span><div class="banco-chips">${
       [...porGrupo.entries()].map(([g,n])=>chip(f.grupo===g,`dicasFiltrarGrupo('${escapeAttrJs(g)}')`,`${escapeHtml(g)} · <b>${n}</b>`)).join('')}</div></div>`:''}
-    <div class="banco-chip-grupo" id="dicas-chips-mostrar"><span class="banco-chip-rotulo">Mostrar</span><div class="banco-chips">${mostrar.join('')}</div></div>
+    ${dicasVista==='numeros'?'':`<div class="banco-chip-grupo" id="dicas-chips-mostrar"><span class="banco-chip-rotulo">Mostrar</span><div class="banco-chips">${mostrar.join('')}</div></div>`}
   </div>`;
 }
 function dicasContaHTML(pool){
+  if(dicasVista==='numeros'){
+    const n=dicasNumerosFiltrados().length;
+    return`<span><b>${n}</b> ${n===1?'número':'números'}${dicasTemFiltro()?' com este filtro':''} · as que você já sabe aparecem também</span>`
+      +(dicasTemFiltro()?`<button class="sg-mais" style="margin:0" onclick="dicasFiltroLimpar()">limpar filtro</button>`:'');
+  }
   const escondidas=dicasFiltro.jaSei?0:dicasAplicarFiltros({...dicasFiltro,jaSei:true}).filter(d=>dicaSei(d.id)).length;
   return`<span><b>${pool.length}</b> ${pool.length===1?'dica':'dicas'}${dicasTemFiltro()?' com este filtro':''}</span>`
     +(escondidas?`<span>· ${escondidas} que você já sabe ${escondidas===1?'está escondida':'estão escondidas'}</span>`:'')
@@ -18836,6 +18851,7 @@ function dicasContaHTML(pool){
 }
 // Agrupado por matéria + grupo, na ordem em que as dicas aparecem — a ordem do pacote.
 function dicasCorpoHTML(pool){
+  if(dicasVista==='numeros')return dicasQuadroNumerosHTML();
   const resolver=dicasFiltro.semAssunto?dicasSemAssuntoHTML(pool):'';
   if(!pool.length)return resolver+`<div class="section-card"><div class="empty" style="padding:24px 12px">
     <i class="fa fa-filter"></i><p>Nenhuma dica com esse filtro.</p></div></div>`;
@@ -19541,6 +19557,162 @@ function simVirarDica(i){
   const q=simGeralActive&&simGeralActive.questoes&&simGeralActive.questoes[i];
   if(!q)return;
   dicaAbrirDeQuestao(q,q.subId,'simgeral');
+}
+// ===== NÚMEROS QUE CAEM E COLINHA (etapa 3) =====
+// Número é a coisa mais fácil de errar por um detalhe e a mais rápida de reler: um quadro
+// só com eles, por matéria, mostra tudo de uma vez — inclusive os que você já sabe, porque
+// quadro é pra bater o olho, não lista de revisão.
+let dicasVista='lista';       // 'lista' | 'numeros'
+function dicasVer(v){dicasVista=v==='numeros'?'numeros':'lista';dicasEditando=null;dicasRefrescar();}
+function dicasNumerosFiltrados(){
+  return dicasAplicarFiltros({...dicasFiltro,jaSei:true,semAssunto:false}).filter(d=>d.tipo==='numero');
+}
+function dicasQuadroNumerosHTML(){
+  const nums=dicasNumerosFiltrados();
+  if(!nums.length)return`<div class="section-card"><div class="empty" style="padding:24px 12px"><i class="fa fa-hashtag"></i>
+    <p>Nenhum número${dicasTemFiltro()?' com esse filtro':' cadastrado ainda'}.</p>
+    <p class="dicas-vazio-txt">Crie uma dica do tipo <b>Número</b> — valor em destaque e rótulo embaixo, ex.: <b>+2 a +8 °C</b> · rede de frio, instância local.</p></div></div>`;
+  const porMat=new Map();
+  nums.forEach(d=>{if(!porMat.has(d.kingdomId))porMat.set(d.kingdomId,[]);porMat.get(d.kingdomId).push(d);});
+  return[...porMat.entries()].map(([kId,ds])=>{
+    const k=dicasReino(kId);
+    return`<section class="dica-grupo">
+      <div class="sec-title dica-grupo-tit"><span>${k?iconeReino(k.icon)+' '+escapeHtml(k.name):'❓ matéria apagada'} · números que caem</span> <b class="dica-grupo-n">${ds.length}</b></div>
+      <div class="dicas-quadro">${ds.map(d=>{
+        const c=dicaAssunto(d);
+        const extra=[d.titulo&&d.titulo!==d.rotulo?d.titulo:'',c?c.sub.name:'',(d.bancas||[]).join(', ')].filter(Boolean);
+        return`<div class="dicas-quadro-cel${dicaSei(d.id)?' dica-sei':''}" data-dica="${escapeHtml(d.id)}">
+          <div class="dica-num-valor">${escapeHtml(d.valor||'')}</div>
+          <div class="dica-num-rotulo">${escapeHtml(d.rotulo||d.titulo||'')}</div>
+          ${extra.length?`<div class="dicas-quadro-extra">${escapeHtml(extra.join(' · '))}</div>`:''}
+        </div>`;}).join('')}</div>
+    </section>`;
+  }).join('');
+}
+
+// ---- Colinha: uma página só, pra imprimir ----
+// Da matéria escolhida ou do edital em foco. Do edital entra a dica do assunto que ele
+// cobra (o mesmo índice de foco que a fila de estudo usa, edFocoIndice) e a dica sem
+// assunto ligado das matérias dele — sem saber o assunto, na véspera é melhor sobrar do que
+// faltar; a de um assunto que o edital não cobra fica de fora.
+//
+// A janela de impressão é escrita daqui e o print() é chamado daqui: o HTML montado não
+// leva tag de script nenhuma. O fechamento dessa tag escrito literalmente — em string ou
+// até em comentário — encerra o bloco de script do app no meio e derruba a página
+// inteira (registrado em docs/plano-refatoracao.md); quando precisar, escreva <\/script>.
+function dicasColinhaEscopoEdital(){
+  const foco=edFocoIndice();
+  if(!foco)return null;
+  const reinos=new Set();
+  (foco.edital.disciplinas||[]).forEach(d=>{if(d.kingdomId)reinos.add(d.kingdomId);});
+  const subs=dicasMapaSubs();
+  Object.keys(foco.idx).forEach(sid=>{const c=subs.get(sid);if(c)reinos.add(c.kingdom.id);});
+  return{edital:foco.edital,idx:foco.idx,reinos};
+}
+function dicasColinhaSelecionar(o){
+  let ds=db.dicas||[];
+  let titulo='';
+  if(o.escopo==='edital'){
+    const ed=dicasColinhaEscopoEdital();
+    if(!ed)return{titulo:'',dicas:[]};
+    ds=ds.filter(d=>d.subId?!!ed.idx[d.subId]:ed.reinos.has(d.kingdomId));
+    titulo=`${ed.edital.nome||'Edital'}${ed.edital.banca?' · '+ed.edital.banca:''}`;
+  }else{
+    const k=dicasReino(o.kingdomId);
+    ds=ds.filter(d=>d.kingdomId===o.kingdomId);
+    titulo=k?k.name:'';
+  }
+  if(!o.comSei)ds=ds.filter(d=>!dicaSei(d.id));
+  return{titulo,dicas:ds};
+}
+function dicasColinhaHTML(o){
+  dicasMapaSubs();
+  const sel=dicasColinhaSelecionar(o);
+  const e=escapeHtml;
+  const ordemReinos=(db.kingdoms||[]).map(k=>k.id);
+  const porMat=new Map();
+  sel.dicas.slice().sort((a,b)=>ordemReinos.indexOf(a.kingdomId)-ordemReinos.indexOf(b.kingdomId))
+    .forEach(d=>{if(!porMat.has(d.kingdomId))porMat.set(d.kingdomId,[]);porMat.get(d.kingdomId).push(d);});
+  const linha=(rot,txt)=>txt?`<div class="l"><b>${rot}</b> ${e(txt)}</div>`:'';
+  const exemplos=d=>o.comExemplos&&(d.exemplos||[]).length
+    ?`<div class="ex">${d.exemplos.map(x=>`<span class="${x.ok?'ok':'nok'}">${x.ok?'✔':'✖'} ${e(x.txt)}</span>`).join('')}</div>`:'';
+  const corpo=[...porMat.entries()].map(([kId,ds])=>{
+    const k=dicasReino(kId);
+    const nums=ds.filter(d=>d.tipo==='numero');
+    const resto=ds.filter(d=>d.tipo!=='numero');
+    const grupos=new Map();
+    resto.forEach(d=>{const g=dicaGrupo(d);if(!grupos.has(g))grupos.set(g,[]);grupos.get(g).push(d);});
+    return`<h2>${k?e(k.name):'Matéria apagada'}</h2>
+      ${nums.length?`<table class="nums"><caption>Números que caem</caption>${nums.map(d=>
+        `<tr><td class="v">${e(d.valor||'')}</td><td>${e(d.rotulo||d.titulo||'')}</td></tr>`).join('')}</table>`:''}
+      ${[...grupos.entries()].map(([g,lista])=>`<h3>${e(g)}</h3>${lista.map(d=>`<div class="d">
+        <div class="t">${e(d.titulo||'')}</div>
+        ${d.tipo==='par'?`${linha(e(d.a||'')+' × '+e(d.b||''),d.diferenca)}`
+          :linha('Regra',d.regra)+linha('Aplicar',d.aplicar)+linha('Cuidado',d.cuidado)}
+        ${exemplos(d)}
+      </div>`).join('')}`).join('')}`;
+  }).join('');
+  const total=sel.dicas.length;
+  return`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Colinha — ${e(sel.titulo)}</title>
+<style>
+  @page{size:A4;margin:11mm;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',system-ui,Arial,sans-serif;color:#111;font-size:10pt;line-height:1.35;}
+  header{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #111;padding-bottom:4px;margin-bottom:8px;}
+  header h1{font-size:14pt;}
+  header span{font-size:8.5pt;color:#555;}
+  main{column-count:2;column-gap:7mm;}
+  h2{font-size:11.5pt;margin:6px 0 4px;padding:2px 6px;background:#eee;break-after:avoid;}
+  h3{font-size:9pt;text-transform:uppercase;letter-spacing:.5px;color:#444;margin:6px 0 3px;break-after:avoid;}
+  .d{break-inside:avoid;margin-bottom:5px;padding-bottom:4px;border-bottom:1px dotted #bbb;}
+  .t{font-weight:800;font-size:10pt;}
+  .l b{font-size:8pt;text-transform:uppercase;letter-spacing:.3px;color:#333;}
+  .ex{display:flex;flex-direction:column;font-size:9pt;margin-top:1px;}
+  .ex .nok{color:#444;}
+  table.nums{width:100%;border-collapse:collapse;margin:2px 0 6px;break-inside:avoid;font-size:9.5pt;}
+  table.nums caption{text-align:left;font-size:8pt;text-transform:uppercase;letter-spacing:.5px;color:#444;font-weight:700;}
+  table.nums td{border-bottom:1px solid #ccc;padding:2px 4px;vertical-align:top;}
+  table.nums td.v{font-weight:900;white-space:nowrap;}
+  .vazio{column-span:all;color:#555;font-size:11pt;padding:20px 0;}
+</style></head><body>
+<header><h1>Colinha — ${e(sel.titulo)}</h1><span>${total} ${total===1?'dica':'dicas'} · ${e(new Date().toLocaleDateString('pt-BR'))}${o.comSei?'':' · sem as que você já sabe'}</span></header>
+<main>${corpo||'<p class="vazio">Nenhuma dica nesse recorte.</p>'}</main>
+</body></html>`;
+}
+function dicasColinhaAbrir(){
+  dicasMapaSubs();
+  const ed=dicasColinhaEscopoEdital();
+  const comDica=new Set((db.dicas||[]).map(d=>d.kingdomId));
+  const reinos=(db.kingdoms||[]).filter(k=>comDica.has(k.id));
+  const kSel=dicasFiltro.materia||(reinos[0]||{}).id||'';
+  openModal('🖨️ Colinha',`<div class="dica-form dica-form-modal" id="dicas-colinha-form">
+    <div class="dicas-sub" style="margin:0">Uma página só, em duas colunas, pra imprimir ou salvar em PDF — os números da matéria no topo e as dicas por grupo.</div>
+    <label class="banco-check"><input type="radio" name="dicas-colinha-escopo" value="materia" checked> Matéria</label>
+    <select id="dicas-colinha-materia" class="inp" aria-label="Matéria da colinha">${reinos.map(k=>`<option value="${escapeHtml(k.id)}"${k.id===kSel?' selected':''}>${iconeReino(k.icon)} ${escapeHtml(k.name)}</option>`).join('')}</select>
+    <label class="banco-check"${ed?'':' title="Marque um edital como foco na tela Editais"'}><input type="radio" name="dicas-colinha-escopo" value="edital"${ed?'':' disabled'}> Edital em foco${ed?`: <b>${escapeHtml(ed.edital.nome||'')}</b>`:' — nenhum edital em foco'}</label>
+    <label class="banco-check"><input type="checkbox" id="dicas-colinha-sei"> Incluir as que eu já sei</label>
+    <label class="banco-check"><input type="checkbox" id="dicas-colinha-ex" checked> Incluir os exemplos</label>
+    <div class="banco-edit-linha">
+      <button class="btn btn-sm btn-primary" onclick="dicasColinhaImprimir()"><i class="fa fa-print"></i> Gerar e imprimir</button>
+      <button class="btn btn-sm btn-ghost" onclick="closeModal()">Cancelar</button>
+    </div>
+  </div>`);
+}
+function dicasColinhaLerOpcoes(){
+  const esc=(document.querySelector('input[name="dicas-colinha-escopo"]:checked')||{}).value||'materia';
+  return{escopo:esc,kingdomId:(document.getElementById('dicas-colinha-materia')||{}).value||'',
+         comSei:!!(document.getElementById('dicas-colinha-sei')||{}).checked,
+         comExemplos:!!(document.getElementById('dicas-colinha-ex')||{}).checked};
+}
+function dicasColinhaImprimir(){
+  const o=dicasColinhaLerOpcoes();
+  if(!dicasColinhaSelecionar(o).dicas.length){toast('⚠️ Nenhuma dica nesse recorte.','var(--orange)');return;}
+  const w=window.open('','_blank');
+  if(!w){toast('⚠️ Permita pop-ups pra gerar a colinha.','var(--red)');return;}
+  w.document.open();w.document.write(dicasColinhaHTML(o));w.document.close();
+  closeModal();
+  setTimeout(()=>{try{w.focus();w.print();}catch(e){}},300);
 }
 function montarHTML(){
   const acervo=montarAcervo();
@@ -32611,6 +32783,9 @@ window.dicasImportarPendenteDescartar=dicasImportarPendenteDescartar;
 window.dicasRelatorioFechar=dicasRelatorioFechar;
 window.dicasVerSemAssunto=dicasVerSemAssunto;
 window.dicasLigarAssunto=dicasLigarAssunto;
+window.dicasVer=dicasVer;
+window.dicasColinhaAbrir=dicasColinhaAbrir;
+window.dicasColinhaImprimir=dicasColinhaImprimir;
 window.dicasFiltrarAssunto=dicasFiltrarAssunto;
 window.dicasAbrirAssunto=dicasAbrirAssunto;
 window.dicaIrPara=dicaIrPara;
