@@ -2974,6 +2974,12 @@ button.dica-etq-assunto:hover{border-color:var(--accent);color:var(--accent);}
 .dica-rascunho-aviso{font-size:var(--fs-selo);font-weight:800;color:var(--accent);}
 .dicas-rasc-tit{font-size:var(--fs-selo);font-weight:900;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin:var(--sp-2) 0 6px;}
 .dicas-ia-recusas{margin:var(--sp-2) 0;}
+/* Etapa 6: pacotes publicados. */
+.dicas-pacote-desc{font-size:var(--fs-selo);color:var(--muted);font-weight:600;margin-top:2px;overflow-wrap:break-word;}
+.dicas-pacote-erro{font-size:var(--fs-leitura);font-weight:700;color:var(--orange-t);background:var(--panel2);
+  border:1px solid var(--border);border-radius:var(--r-sm);padding:var(--sp-2) var(--sp-3);line-height:1.5;}
+.dicas-pacote-admin{display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-2);padding-top:var(--sp-3);
+  border-top:1.5px dashed var(--border);}
 @media(max-width:600px){
   .dica-linha{grid-template-columns:5.9em minmax(0,1fr);}
   .dica-card{padding:var(--sp-3);}
@@ -18460,6 +18466,7 @@ const DICAS_LAPIDE_DIAS=180;
 let DICAS_REF=null;
 let dicasSalvarTimer=null;
 let dicasLapides={};          // id -> ISO de quando foi apagada
+let dicasLapidesPacote={};    // id -> {pacote, pacoteItem}: a dica apagada viera de um pacote
 let dicasNuvemLida=false;     // a leitura da nuvem voltou nesta sessão?
 let dicasUltimoHash='';       // o que está na nuvem agora — não regrava o que já está lá
 let dicasCarregou=false;
@@ -18488,7 +18495,7 @@ function dicasUnir(...listas){
   return[...porId.values()];
 }
 function dicasParaGravar(){
-  const lapides=Object.keys(dicasLapides).map(id=>({id,apagada:true,editadaEm:dicasLapides[id]}));
+  const lapides=Object.keys(dicasLapides).map(id=>({id,apagada:true,editadaEm:dicasLapides[id],...(dicasLapidesPacote[id]||{})}));
   return(db.dicas||[]).concat(lapides);
 }
 // Une o que chegou de fora (nuvem, cache) com o que já está em memória e separa vivas de
@@ -18496,13 +18503,19 @@ function dicasParaGravar(){
 // mexido no lugar.
 function dicasAbsorver(...listas){
   const limite=Date.now()-DICAS_LAPIDE_DIAS*86400000;
-  const vivas=[],lapides={};
+  const vivas=[],lapides={},lapPacote={};
   dicasUnir(...listas,dicasParaGravar()).forEach(x=>{
-    if(x.apagada){if(dicaMomento(x)>=limite)lapides[x.id]=x.editadaEm;return;}
+    if(x.apagada){
+      if(dicaMomento(x)<limite)return;
+      lapides[x.id]=x.editadaEm;
+      if(x.pacote)lapPacote[x.id]={pacote:String(x.pacote),pacoteItem:String(x.pacoteItem||'')};
+      return;
+    }
     vivas.push(dicaNormalizar(x));
   });
   db.dicas=vivas;
   dicasLapides=lapides;
+  dicasLapidesPacote=lapPacote;
 }
 function dicasLerNuvem(){
   return new Promise(res=>{
@@ -18573,7 +18586,8 @@ function dicasRestaurarDoBackup(doBackup,atuais){
   const vindas=dicasComoLista(doBackup).filter(x=>x&&x.id&&!x.apagada).map(x=>{
     if(!dicasLapides[x.id])return x;
     delete dicasLapides[x.id];
-    return{...x,editadaEm:agora};
+    delete dicasLapidesPacote[x.id];
+    return{...x,editadaEm:agora,...dicaPacoteIntacta(x,agora)};
   });
   db.dicas=dicasUnir(atuais,vindas).filter(x=>!x.apagada).map(x=>dicaNormalizar(x));
   dicasSalvar(true);
@@ -18634,6 +18648,9 @@ function dicaNormalizar(x,origemPadrao){
   const origem=String(x.origem||'').trim().toLowerCase();
   d.origem=DICAS_ORIGENS[origem]?origem:(origemPadrao||'minha');
   if(x.rascunho)d.rascunho=true;   // gerada por IA e ainda não aprovada (etapa 5)
+  // De qual pacote publicado veio (etapa 6): é o que deixa a versão nova achar esta dica.
+  ['pacote','pacoteItem','pacoteEm'].forEach(c=>{const v=x[c]==null?'':String(x[c]).trim();if(v)d[c]=v;});
+  if(d.pacote&&x.pacoteVersao)d.pacoteVersao=Math.max(1,parseInt(x.pacoteVersao,10)||1);
   d.criadaEm=x.criadaEm?String(x.criadaEm):dicasAgora();
   d.editadaEm=x.editadaEm?String(x.editadaEm):d.criadaEm;
   return d;
@@ -18656,6 +18673,9 @@ function dicaDuplicada(d,ignorarId){
 }
 function dicaGrupo(d){return(d&&d.grupo)||DICAS_SEM_GRUPO;}
 function dicaSei(id){const e=(db.dicasEstado||{})[id];return!!(e&&e.sei);}
+// Mudança que não é do texto (ligar o assunto, restaurar backup) mexe no editadaEm pra
+// sincronizar, mas não pode fazer a dica de pacote parecer editada por você (etapa 6).
+function dicaPacoteIntacta(d,agora){return(d.pacoteEm&&d.pacoteEm===d.editadaEm)?{pacoteEm:agora}:{};}
 // Índice de miniboss refeito a cada render: o mapa muda (miniboss novo, renomeado) e a
 // dica guarda só o subId.
 let dicasSubs=new Map();
@@ -18746,6 +18766,7 @@ function dicasRefrescar(){
   chips.innerHTML=dicasChipsHTML();
   conta.innerHTML=dicasContaHTML(pool);
   corpo.innerHTML=dicasCorpoHTML(pool);
+  dicasPacotePublicarConta();
 }
 function dicasRefrescarSeAberta(){
   const tela=document.getElementById('screen-dicas');
@@ -18766,6 +18787,7 @@ function dicasHTML(){
       <span class="banco-acoes">
         <button class="btn btn-xs btn-ghost" onclick="dicasCriarAbrir()"><i class="fa fa-plus"></i> Nova dica</button>
         <button class="btn btn-xs btn-ghost" onclick="dicasImportarAbrir()"><i class="fa fa-file-import"></i> Importar em lote</button>
+        <button class="btn btn-xs btn-ghost" onclick="dicasPacotesAbrir()"><i class="fa fa-box-open"></i> Pacotes</button>
         <button class="btn btn-xs btn-ghost" onclick="dicasColinhaAbrir()"><i class="fa fa-print"></i> Colinha</button>
       </span>
     </div>
@@ -18786,11 +18808,12 @@ function dicasVazioHTML(){
     <div class="empty"><i class="fa fa-lightbulb"></i>
       <p>Nenhuma dica ainda.</p>
       <p class="dicas-vazio-txt">Aqui ficam as regras, os macetes, as pegadinhas e os números de cada
-        matéria — o que se relê na véspera da prova. Importe um pacote pronto (um array JSON) ou
-        escreva a primeira dica.</p>
+        matéria — o que se relê na véspera da prova. Adicione um pacote publicado, importe um
+        arquivo pronto (um array JSON) ou escreva a primeira dica.</p>
     </div>
     <div class="dicas-vazio-acoes">
-      <button class="btn btn-sm btn-primary" onclick="dicasImportarAbrir()"><i class="fa fa-file-import"></i> Importar em lote</button>
+      <button class="btn btn-sm btn-primary" onclick="dicasPacotesAbrir()"><i class="fa fa-box-open"></i> Pacotes publicados</button>
+      <button class="btn btn-sm btn-ghost" onclick="dicasImportarAbrir()"><i class="fa fa-file-import"></i> Importar em lote</button>
       <button class="btn btn-sm btn-ghost" onclick="dicasCriarAbrir()"><i class="fa fa-plus"></i> Nova dica</button>
     </div>
     ${dicasPaineisHTML()}
@@ -18800,7 +18823,8 @@ function dicasPaineisHTML(){
   return(dicasImportarRelatorio?dicasRelatorioHTML():'')
     +dicasImportarPendentesHTML()
     +(dicasCriando?dicaEditorHTML(null,'criar'):'')
-    +(dicasImportando?dicasImportarHTML():'');
+    +(dicasImportando?dicasImportarHTML():'')
+    +(dicasPacotesAberto?dicasPacotesHTML():'');
 }
 function dicasBancasExistentes(){
   const m=new Map();
@@ -19098,7 +19122,8 @@ function dicaEditarSalvar(id){
   // sem levar os dois, editar uma dica nascida de um erro devolvia o "Virar dica" àquela
   // questão, e editar um rascunho o aprovava sem você pedir.
   const d=dicaNormalizar({...lido,id,criadaEm:velha.criadaEm,editadaEm:dicasAgora(),
-    assuntoNome:lido.subId?'':velha.assuntoNome,deQuestao:velha.deQuestao,rascunho:velha.rascunho},velha.origem);
+    assuntoNome:lido.subId?'':velha.assuntoNome,deQuestao:velha.deQuestao,rascunho:velha.rascunho,
+    pacote:velha.pacote,pacoteItem:velha.pacoteItem,pacoteEm:velha.pacoteEm,pacoteVersao:velha.pacoteVersao},velha.origem);
   const motivo=dicaValidar(d);
   if(motivo){toast('⚠️ Não salvei: '+motivo+'.','var(--red)');return;}
   if(dicaDuplicada(d,id)){toast('⚠️ Já existe outra dica com esse título nessa matéria.','var(--red)');return;}
@@ -19115,6 +19140,7 @@ function dicaApagar(id){
   if(!confirm(`Apagar a dica "${d.titulo}"?`))return;
   db.dicas=db.dicas.filter(x=>x.id!==id);
   dicasLapides[id]=dicasAgora();
+  if(d.pacote)dicasLapidesPacote[id]={pacote:d.pacote,pacoteItem:d.pacoteItem||''};
   // O estado dela no registro principal sai junto — registro principal pequeno.
   if(db.dicasEstado&&db.dicasEstado[id]){delete db.dicasEstado[id];saveDB();}
   if(dicasEditando===id)dicasEditando=null;
@@ -19186,7 +19212,7 @@ function dicasImportarItem(item,k,ix,rel,n){
   const agora=dicasAgora();
   const{id,materia,assunto,reino,...resto}=item;
   const d=dicaNormalizar({...resto,id:genId(),kingdomId:k.id,subId:c?c.sub.id:'',
-    assuntoNome:c?'':nomeAss,criadaEm:agora,editadaEm:agora},'material');
+    assuntoNome:c?'':nomeAss,criadaEm:agora,editadaEm:agora,...(item.pacote?{pacoteEm:agora}:{})},'material');
   const motivo=dicaValidar(d)||(dicaDuplicada(d)?'já existe uma dica com esse título nessa matéria':'');
   if(motivo){rel.recusadas.push({n,titulo:d.titulo||'',motivo});return;}
   db.dicas.push(d);
@@ -19280,9 +19306,13 @@ function dicasRelatorioHTML(){
   const rec=r.recusadas;
   const aprox=Object.entries(r.aproximados||{});
   return`<div class="banco-item dicas-relatorio" id="dicas-relatorio">
-    <div class="dica-form-tit">📥 Importação: ${r.lidos} ${r.lidos===1?'item lido':'itens lidos'}</div>
+    <div class="dica-form-tit">${r.pacote?`📦 Pacote "${escapeHtml(r.pacote)}"`:'📥 Importação'}: ${r.lidos} ${r.lidos===1?'item lido':'itens lidos'}</div>
     <ul class="dicas-rel-lista">
       <li>✅ <b>${r.entraram}</b> ${r.entraram===1?'entrou':'entraram'}${r.entraram?` — ${r.comAssunto} já ${r.comAssunto===1?'ligada':'ligadas'} a um assunto, ${r.semAssunto} só com a matéria`:''}</li>
+      ${r.atualizadas?`<li>🔄 <b>${r.atualizadas}</b> ${r.atualizadas===1?'atualizada':'atualizadas'} para a versão nova</li>`:''}
+      ${r.mantidas?`<li>✏️ <b>${r.mantidas}</b> ${r.mantidas===1?'ficou':'ficaram'} como você editou — a versão nova não troca o que você mexeu</li>`:''}
+      ${r.iguais?`<li>＝ <b>${r.iguais}</b> sem mudança nesta versão</li>`:''}
+      ${r.apagadas?`<li>🗑️ <b>${r.apagadas}</b> que você tinha apagado ${r.apagadas===1?'ficou':'ficaram'} de fora</li>`:''}
       <li>⛔ <b>${rec.length}</b> ${rec.length===1?'recusada':'recusadas'}</li>
       ${r.aguardando?`<li>⏳ <b>${r.aguardando}</b> esperando você escolher a matéria</li>`:''}
     </ul>
@@ -19344,7 +19374,7 @@ function dicasLigarAssunto(i){
     if(!ids.has(d.id))return d;
     n++;
     const{assuntoNome,...resto}=d;
-    return{...resto,subId,editadaEm:agora};
+    return{...resto,subId,editadaEm:agora,...dicaPacoteIntacta(d,agora)};
   });
   // O nome passa a resolver sozinho na próxima importação (e no Colar prova, que usa o
   // mesmo caderno de apelidos).
@@ -19935,6 +19965,266 @@ function dicaAprovar(id){
   toast('✅ Dica aprovada — entra na lista, na correção e na colinha.','var(--green)');
 }
 function dicasAlternarRascunhos(){dicasFiltro.rascunhos=!dicasFiltro.rascunhos;dicasRefrescar();}
+// ===== PACOTES PUBLICADOS (etapa 6) =====
+// Um nó compartilhado, dicas_pacotes: qualquer pessoa logada lê, só o admin grava — a
+// mesma regra do sala_mapa (firebase.rules.json). O pacote leva o CONTEÚDO, com matéria e
+// assunto por NOME (cada conta tem ids diferentes no mapa); adicionar passa pelo mesmo
+// caminho da importação em lote. O "já sei" continua de cada pessoa, no registro dela.
+//
+// Atualizar não atropela ninguém: a dica guarda de qual pacote e item veio (pacote,
+// pacoteItem), a versão (pacoteVersao) e quando o pacote foi aplicado nela (pacoteEm).
+// Se a pessoa não mexeu desde então (editadaEm === pacoteEm), a versão nova troca o
+// texto; se mexeu, fica a dela — e o relatório conta quantas ficaram assim. A que ela
+// apagou também não volta numa atualização (a lápide guarda o item do pacote).
+const DICAS_PACOTES_NO='dicas_pacotes';
+const DICAS_PACOTES_ESPERA_MS=10000;
+let dicasPacotesAberto=false;
+let dicasPacotesEstado={carregando:false,erro:'',lista:null};
+function dicasPacotesRef(caminho){
+  if(!firebaseDB||useLocalFallback)return null;
+  return firebaseDB.ref(DICAS_PACOTES_NO+(caminho?'/'+caminho:''));
+}
+// Antes de as regras serem publicadas no Firebase, a leitura volta permission_denied: o
+// painel explica o que falta em vez de parecer vazio.
+function dicasPacotesErro(e,acao){
+  const txt=String((e&&(e.code||e.message))||e||'');
+  return /permission|denied/i.test(txt)
+    ?`Os pacotes ainda não estão liberados no servidor: falta publicar as regras do Firebase com o nó "${DICAS_PACOTES_NO}" (está no firebase.rules.json).`
+    :`Não consegui ${acao} os pacotes agora: ${txt}`;
+}
+function dicasPacotesRender(){
+  const tela=document.getElementById('screen-dicas');
+  if(tela&&tela.classList.contains('active'))renderDicasScreen();
+}
+async function dicasPacotesCarregar(){
+  const ref=dicasPacotesRef();
+  if(!ref){dicasPacotesEstado={carregando:false,erro:'Sem conexão com o servidor agora — os pacotes ficam na nuvem.',lista:null};dicasPacotesRender();return;}
+  dicasPacotesEstado={...dicasPacotesEstado,carregando:true,erro:''};
+  dicasPacotesRender();
+  try{
+    // Sem internet, o once do Firebase espera calado até a conexão voltar: o painel não
+    // pode ficar em "carregando" pra sempre.
+    const snap=await Promise.race([ref.once('value'),
+      new Promise((_,falha)=>setTimeout(()=>falha(new Error('o servidor não respondeu')),DICAS_PACOTES_ESPERA_MS))]);
+    const v=snap.val()||{};
+    const lista=Object.keys(v).map(k=>({...v[k],id:(v[k]&&v[k].id)||k}))
+      .filter(p=>p&&p.nome&&dicasComoLista(p.dicas).length)
+      .sort((a,b)=>String(b.publicadoEm||'').localeCompare(String(a.publicadoEm||'')));
+    dicasPacotesEstado={carregando:false,erro:'',lista};
+  }catch(e){
+    console.warn('Falha ao ler os pacotes de dicas:',e);
+    dicasPacotesEstado={carregando:false,erro:dicasPacotesErro(e,'ler'),lista:null};
+  }
+  dicasPacotesRender();
+}
+function dicasPacotesAbrir(){
+  dicasPacotesAberto=true;dicasImportando=false;dicasCriando=false;
+  renderDicasScreen();
+  dicasPacotesCarregar();
+}
+function dicasPacotesFechar(){dicasPacotesAberto=false;renderDicasScreen();}
+function dicasPacoteSituacao(p){
+  const minhas=(db.dicas||[]).filter(d=>d.pacote===p.id);
+  if(!minhas.length)return{tipo:'novo',n:0};
+  const versao=Math.max(...minhas.map(d=>d.pacoteVersao||0));
+  return{tipo:versao<(p.versao||1)?'atualizar':'emdia',n:minhas.length,versao};
+}
+function dicasPacoteLinhaHTML(p){
+  const s=dicasPacoteSituacao(p);
+  const n=dicasComoLista(p.dicas).length;
+  const pid=escapeAttrJs(p.id);
+  const data=p.publicadoEm?new Date(p.publicadoEm).toLocaleDateString('pt-BR'):'';
+  const acao=s.tipo==='novo'
+    ?`<button class="btn btn-xs btn-primary" onclick="dicasPacoteAplicar('${pid}')"><i class="fa fa-download"></i> Adicionar às minhas dicas</button>`
+    :(s.tipo==='atualizar'
+      ?`<button class="btn btn-xs btn-primary" onclick="dicasPacoteAplicar('${pid}')"><i class="fa fa-rotate"></i> Atualizar para a v${p.versao||1}</button>`
+      :`<span class="dica-selo-sei">✅ em dia (v${s.versao})</span>`);
+  return`<div class="banco-edit-linha dicas-ligar-linha dicas-pacote" data-pacote="${escapeHtml(p.id)}">
+    <div class="dicas-ligar-nome"><b>📦 ${escapeHtml(p.nome)}</b><span> · v${p.versao||1} · ${n} ${n===1?'dica':'dicas'}${data?' · '+escapeHtml(data):''}</span>
+      ${p.descricao?`<div class="dicas-pacote-desc">${escapeHtml(p.descricao)}</div>`:''}</div>
+    ${acao}
+    ${isAdmin()?`<button class="btn btn-xs btn-ghost" style="color:var(--red-t)" onclick="dicasPacoteRemover('${pid}')" title="Tira o pacote do ar. Quem já adicionou continua com as dicas.">Remover</button>`:''}
+  </div>`;
+}
+function dicasPacotesHTML(){
+  const st=dicasPacotesEstado;
+  const corpo=st.carregando?`<div class="flash-empty"><i class="fa fa-spinner fa-spin"></i> Carregando os pacotes...</div>`
+    :st.erro?`<div class="dicas-pacote-erro">⚠️ ${escapeHtml(st.erro)}</div>`
+    :(!st.lista||!st.lista.length)?`<div class="dicas-sub" style="margin:0">Nenhum pacote publicado ainda.</div>`
+    :st.lista.map(dicasPacoteLinhaHTML).join('');
+  return`<div class="banco-item banco-item-editando dica-form" id="dicas-pacotes">
+    <div class="dica-form-tit">📦 Pacotes publicados</div>
+    <div class="dicas-sub" style="margin:0">Dicas prontas, publicadas para todos os assinantes. Adicionar traz as dicas pra sua lista;
+      o seu "já sei" e o que você editar continuam seus — numa versão nova do pacote, a dica que você editou não é trocada.</div>
+    ${corpo}
+    ${isAdmin()&&!st.carregando?dicasPacotePublicarHTML():''}
+    <div class="banco-edit-linha"><button class="btn btn-sm btn-ghost" onclick="dicasPacotesFechar()">Fechar</button></div>
+  </div>`;
+}
+// ---- Assinante: adicionar ou atualizar ----
+function dicasPacoteAplicar(pid){
+  const p=(dicasPacotesEstado.lista||[]).find(x=>x.id===pid);
+  if(!p)return;
+  dicasMapaSubs();
+  db.dicas=db.dicas||[];
+  const ix=simIndiceAssuntos();
+  const agora=dicasAgora();
+  const itens=dicasComoLista(p.dicas);
+  // Numa atualização, item que você apagou fica apagado. Adicionar de novo um pacote do
+  // qual não sobrou nenhuma dica é pedido explícito: aí volta tudo.
+  const apagados=new Set(dicasPacoteSituacao(p).tipo==='novo'?[]
+    :Object.values(dicasLapidesPacote).filter(x=>x.pacote===p.id).map(x=>x.pacoteItem));
+  const rel={lidos:itens.length,entraram:0,comAssunto:0,semAssunto:0,recusadas:[],aguardando:0,aproximados:{},
+             pacote:p.nome,atualizadas:0,mantidas:0,iguais:0,apagadas:0};
+  const pend=new Map();
+  itens.forEach((item,i)=>{
+    const n=i+1;
+    if(!item||typeof item!=='object'){rel.recusadas.push({n,titulo:'',motivo:'não é um objeto JSON'});return;}
+    const marca={pacote:p.id,pacoteItem:String(item.id||n),pacoteVersao:p.versao||1};
+    const ja=db.dicas.find(d=>d.pacote===marca.pacote&&d.pacoteItem===marca.pacoteItem);
+    if(ja){
+      const j=db.dicas.indexOf(ja);
+      if(ja.pacoteEm&&ja.editadaEm!==ja.pacoteEm){
+        // você mexeu nela: fica a sua versão, só anota que esta versão do pacote já passou
+        db.dicas[j]={...ja,pacoteVersao:marca.pacoteVersao,editadaEm:agora};
+        rel.mantidas++;return;
+      }
+      const{id,materia,assunto,reino,...resto}=item;
+      const novo=dicaNormalizar({fonte:p.nome,...resto,...marca,id:ja.id,kingdomId:ja.kingdomId,subId:ja.subId||'',
+        assuntoNome:ja.subId?'':(String(assunto||'').trim()||ja.assuntoNome),criadaEm:ja.criadaEm,
+        editadaEm:agora,pacoteEm:agora},'material');
+      const motivo=dicaValidar(novo)||(dicaDuplicada(novo,ja.id)?'já existe outra dica com esse título nessa matéria':'');
+      if(motivo){rel.recusadas.push({n,titulo:novo.titulo||'',motivo:motivo+' (a versão anterior ficou)'});return;}
+      const sem=x=>backupHash({...x,editadaEm:'',pacoteEm:'',pacoteVersao:0});
+      if(sem(novo)===sem(ja))rel.iguais++; else rel.atualizadas++;
+      db.dicas[j]=novo;
+      return;
+    }
+    if(apagados.has(marca.pacoteItem)){rel.apagadas++;return;}
+    const nomeMat=String(item.materia||item['matéria']||'').trim();
+    const k=nomeMat?dicasCasarMateria(nomeMat):null;
+    const comMarca={fonte:p.nome,...item,...marca};
+    if(!k){
+      if(!nomeMat){rel.recusadas.push({n,titulo:String(item.titulo||'').trim(),motivo:'sem "materia"'});return;}
+      if(!pend.has(nomeMat))pend.set(nomeMat,[]);
+      pend.get(nomeMat).push({n,item:comMarca});
+      rel.aguardando++;
+      return;
+    }
+    if(revNorm(k.name)!==revNorm(nomeMat)){
+      const kk=nomeMat+'\u0001'+k.name;
+      rel.aproximados[kk]=(rel.aproximados[kk]||0)+1;
+    }
+    dicasImportarItem(comMarca,k,ix,rel,n);
+  });
+  pend.forEach((lista,nome)=>dicasImportarPendentes.push({nome,itens:lista,rel}));
+  dicasImportarRelatorio=rel;
+  dicasSalvar();
+  renderDicasScreen();
+  const partes=[];
+  if(rel.entraram)partes.push(`${rel.entraram} ${rel.entraram===1?'entrou':'entraram'}`);
+  if(rel.atualizadas)partes.push(`${rel.atualizadas} ${rel.atualizadas===1?'atualizada':'atualizadas'}`);
+  if(rel.mantidas)partes.push(`${rel.mantidas} ${rel.mantidas===1?'mantida':'mantidas'} como você editou`);
+  if(rel.recusadas.length)partes.push(`${rel.recusadas.length} ${rel.recusadas.length===1?'recusada':'recusadas'}`);
+  if(rel.aguardando)partes.push(`${rel.aguardando} esperando você escolher a matéria`);
+  toast(`📦 "${p.nome}": ${partes.join(' · ')||'nada mudou'}.`,(rel.recusadas.length||rel.aguardando)?'var(--orange)':'var(--green)');
+}
+// ---- Admin: publicar, atualizar, remover ----
+function dicasPacotePublicavel(){
+  dicasMapaSubs();
+  return dicasAplicarFiltros({...dicasFiltro,jaSei:true,rascunhos:false,semAssunto:false})
+    .filter(d=>dicasReino(d.kingdomId));
+}
+function dicasPacotePublicarContaHTML(n){
+  return`Publica as <b>${n}</b> ${n===1?'dica':'dicas'} do filtro em uso na aba (busca, matéria, grupo, banca, assunto;
+      o "já sei" não conta e rascunhos ficam de fora) para todos os assinantes.`;
+}
+function dicasPacotePublicarHTML(){
+  const pool=dicasPacotePublicavel();
+  const lista=dicasPacotesEstado.lista||[];
+  return`<div class="dicas-pacote-admin" id="dicas-pacote-publicar">
+    <div class="dica-form-tit">📤 Publicar <span class="dicas-sub" style="margin:0">(só você vê isto)</span></div>
+    <div class="dicas-sub" style="margin:0" id="dicas-pub-conta">${dicasPacotePublicarContaHTML(pool.length)}</div>
+    <div class="dica-form-grade">
+      <label class="dica-campo" for="dicas-pub-alvo"><span>Pacote</span><select id="dicas-pub-alvo" class="inp">
+        <option value="">Novo pacote</option>
+        ${lista.map(p=>`<option value="${escapeHtml(p.id)}">Atualizar "${escapeHtml(p.nome)}" (v${p.versao||1} → v${(p.versao||1)+1})</option>`).join('')}
+      </select></label>
+      <label class="dica-campo" for="dicas-pub-nome"><span>Nome</span><input id="dicas-pub-nome" class="inp" placeholder="Ex.: Português — 25 pontos (vazio mantém o nome)"></label>
+    </div>
+    <label class="dica-campo" for="dicas-pub-desc"><span>Descrição</span><textarea id="dicas-pub-desc" class="inp" rows="2" placeholder="Pra quem é e o que cobre (opcional)"></textarea></label>
+    <div class="banco-edit-linha"><button id="dicas-pub-btn" class="btn btn-sm btn-primary" onclick="dicasPacotePublicar()"${pool.length?'':' disabled'}><i class="fa fa-upload"></i> Publicar</button></div>
+  </div>`;
+}
+// O filtro muda sem refazer os painéis (dicasRefrescar): só a contagem acompanha, pra o que
+// já foi digitado no nome e na descrição não se perder.
+function dicasPacotePublicarConta(){
+  const el=document.getElementById('dicas-pub-conta');
+  if(!el)return;
+  const n=dicasPacotePublicavel().length;
+  el.innerHTML=dicasPacotePublicarContaHTML(n);
+  const b=document.getElementById('dicas-pub-btn');
+  if(b)b.disabled=!n;
+}
+// O item leva o id que já tinha no pacote (pra a próxima versão achar a mesma dica nas
+// contas que a adicionaram) ou, se é dica nova no pacote, o id dela na sua conta.
+function dicaParaPacote(d,pacoteId){
+  const k=dicasReino(d.kingdomId);
+  const c=dicaAssunto(d);
+  const out={id:(d.pacote===pacoteId&&d.pacoteItem)?d.pacoteItem:d.id,tipo:d.tipo,materia:k?k.name:'',
+             assunto:c?c.sub.name:(d.assuntoNome||'')};
+  ['grupo','titulo','regra','aplicar','cuidado','valor','rotulo','a','b','diferenca','fonte','origem']
+    .forEach(f=>{if(d[f])out[f]=d[f];});
+  if((d.exemplos||[]).length)out.exemplos=d.exemplos;
+  if((d.bancas||[]).length)out.bancas=d.bancas;
+  if(!out.assunto)delete out.assunto;
+  return out;
+}
+async function dicasPacotePublicar(){
+  if(!isAdmin())return;
+  const pool=dicasPacotePublicavel();
+  if(!pool.length){toast('⚠️ Nenhuma dica no filtro em uso.','var(--orange)');return;}
+  const alvoId=(document.getElementById('dicas-pub-alvo')||{}).value||'';
+  const existente=(dicasPacotesEstado.lista||[]).find(p=>p.id===alvoId)||null;
+  const nome=String((document.getElementById('dicas-pub-nome')||{}).value||'').trim()||(existente?existente.nome:'');
+  const descricao=String((document.getElementById('dicas-pub-desc')||{}).value||'').trim()||(existente?(existente.descricao||''):'');
+  if(!nome){toast('⚠️ Dê um nome ao pacote.','var(--red)');return;}
+  const versao=existente?(existente.versao||1)+1:1;
+  if(!confirm(`Publicar ${pool.length} ${pool.length===1?'dica':'dicas'} como "${nome}" (v${versao}) para todos os assinantes?`))return;
+  const id=existente?existente.id:'pk'+Date.now().toString(36)+genId().replace(/[^a-z0-9]/gi,'').slice(-6);
+  const agora=dicasAgora();
+  const itens=pool.map(d=>dicaParaPacote(d,id));
+  const pacote={id,nome,descricao,versao,publicadoEm:agora,dicas:itens};
+  const ref=dicasPacotesRef(id);
+  if(!ref){toast('⚠️ Sem conexão com o servidor agora.','var(--red)');return;}
+  toast('📤 Publicando...','var(--accent)');
+  try{
+    await ref.set(sanitizeForFirebase(pacote));
+  }catch(e){
+    console.warn('Falha ao publicar o pacote de dicas:',e);
+    toast('❌ '+dicasPacotesErro(e,'publicar'),'var(--red)');
+    return;
+  }
+  // As suas dicas publicadas passam a ser "deste pacote, nesta versão": o painel mostra
+  // "em dia" em vez de oferecer adicionar o que já é seu, e a próxima versão reaproveita
+  // o mesmo id de item.
+  const itemDe=new Map(pool.map((d,i)=>[d.id,itens[i].id]));
+  db.dicas=db.dicas.map(d=>itemDe.has(d.id)
+    ?{...d,pacote:id,pacoteItem:itemDe.get(d.id),pacoteVersao:versao,pacoteEm:agora,editadaEm:agora}:d);
+  dicasSalvar();
+  toast(`📤 "${nome}" v${versao} publicado com ${pool.length} ${pool.length===1?'dica':'dicas'}.`,'var(--green)');
+  await dicasPacotesCarregar();
+}
+async function dicasPacoteRemover(pid){
+  if(!isAdmin())return;
+  const p=(dicasPacotesEstado.lista||[]).find(x=>x.id===pid);
+  const ref=dicasPacotesRef(pid);
+  if(!p||!ref||!confirm(`Tirar "${p.nome}" do ar? Quem já adicionou continua com as dicas.`))return;
+  try{await ref.remove();toast(`🗑️ "${p.nome}" saiu do ar.`,'var(--muted)');}
+  catch(e){toast('❌ '+dicasPacotesErro(e,'remover'),'var(--red)');return;}
+  await dicasPacotesCarregar();
+}
+
 function montarHTML(){
   const acervo=montarAcervo();
   if(!acervo.length)return'';
@@ -33004,6 +33294,11 @@ window.dicasImportarPendenteDescartar=dicasImportarPendenteDescartar;
 window.dicasRelatorioFechar=dicasRelatorioFechar;
 window.dicasVerSemAssunto=dicasVerSemAssunto;
 window.dicasLigarAssunto=dicasLigarAssunto;
+window.dicasPacotesAbrir=dicasPacotesAbrir;
+window.dicasPacotesFechar=dicasPacotesFechar;
+window.dicasPacoteAplicar=dicasPacoteAplicar;
+window.dicasPacotePublicar=dicasPacotePublicar;
+window.dicasPacoteRemover=dicasPacoteRemover;
 window.dicasGerarIA=dicasGerarIA;
 window.dicaAprovar=dicaAprovar;
 window.dicasAlternarRascunhos=dicasAlternarRascunhos;

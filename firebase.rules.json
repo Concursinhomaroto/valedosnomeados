@@ -54,6 +54,10 @@
       ".read": "auth != null",
       ".write": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'"
     },
+    "dicas_pacotes": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email === 'leonardobrunotlc@gmail.com'"
+    },
     "sala_presence": {
       ".read": "auth != null",
       "$uid": {
