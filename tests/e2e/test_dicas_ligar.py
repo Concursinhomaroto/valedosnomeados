@@ -76,10 +76,12 @@ async def main():
         for k,v in L.items(): print('   %-16s %s dica(s) → %-6s %s'%(k,v['n'],v['sub'] or '—',v['via']))
         assert L['Botulismo']['sub']=='sNot' and 'conteúdo' in L['Botulismo']['via']
         assert L['Controle social']['sub']=='sCs' and 'pelo nome' in L['Controle social']['via'] and L['Controle social']['n']==2
-        assert L['PCR']['sub']=='' and L['Ortografia']['sub']=='' and L['Sintomático']['sub']==''
+        # o grupo das dicas tem o nome de um boss: sugere o boss inteiro, e a IA ainda pode refinar
+        assert L['PCR']['sub']=='boss:tU' and 'grupo' in L['PCR']['via'] and L['Sintomático']['sub']=='boss:tD'
+        assert L['Ortografia']['sub']==''
         botoes=await page.evaluate("()=>[...document.querySelectorAll('.dicas-ligar-acoes button')].map(b=>b.textContent.trim())")
         print('   botões: %s'%botoes)
-        assert botoes==['Ligar todas as escolhidas (2)','🤖 Sugerir com IA (3 sem sugestão)']
+        assert botoes==['Ligar todas as escolhidas (4)','🤖 Sugerir com IA (3 linhas)']
         # o select oferece miniboss de todas as materias, a da dica primeiro
         grupos=await page.evaluate("()=>[...document.querySelectorAll('#dicas-ligar-0 optgroup')].map(o=>o.label)")
         print('   opções: %s'%grupos)
@@ -144,7 +146,75 @@ async def main():
             await page.evaluate("()=>{['toast','sidebar','nav-principal'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.visibility='';});}")
         print('   OK\n')
 
-        todos=graves(errs)+graves(errs2)
+        print('=== G) ligar ao BOSS inteiro: vale pra todos os minibosses dele ===')
+        def qa(i,sub,vezes,acertos):
+            return {'questao':'Item %d de vacina.'%i,'formato':'certoerrado','correta':'E',
+                    'alternativas':[{'letra':'C','texto':'Certo'},{'letra':'E','texto':'Errado'}],'explicacao':'x',
+                    'subId':sub,'subName':sub,'topicName':'Vacinação','kingdomId':'kEnf','kingdomName':'Enfermagem',
+                    'kingdomIcon':'💉','status':'ativa','vezesRespondida':vezes,'acertos':acertos,'erros':vezes-acertos}
+        seed3=make_seed({'studyNickname':'Leo',
+          'kingdoms':[{'id':'kEnf','name':'Enfermagem','icon':'💉','color':'#22d3ee'}],
+          'topics':{'kEnf':[{'id':'tVac','name':'Vacinação','icon':'💉','subtopics':[
+                        {'id':'vBcg','name':'BCG','priority':70,'studied':True},{'id':'vHpv','name':'HPV','priority':70,'studied':True}]},
+                      {'id':'tUrg','name':'Urgência e emergência','icon':'🚑','subtopics':[
+                        {'id':'uPcr','name':'Parada cardiorrespiratória','priority':70,'studied':True}]}]},
+          'acervo':[qa(1,'vBcg',2,1),qa(2,'vHpv',1,1)]})
+        ctx3,pg3,errs3=await abrir(browser,seed3,viewport={'width':1440,'height':900})
+        await pg3.evaluate("(t)=>{showScreen('dicas');dicasImportarProcessar(t);dicasRelatorioFechar();}",json.dumps([
+          n('Imunização','Imunização e rede de frio','BCG sem cicatriz','não revacinar'),
+          n('Imunização','Imunização e rede de frio','HPV no calendário','9 a 14 anos'),
+          n('Vacinação','Imunização e rede de frio','Influenza: volume','0,5 ml'),
+          n('PCR','Urgência e emergência','Epinefrina na PCR','1 mg'),
+        ],ensure_ascii=False))
+        r=await pg3.evaluate("()=>db.dicas.map(d=>d.titulo+'|'+(d.subId||'')+'|'+(d.topicId||'')+'|'+(d.assuntoNome||''))")
+        print('   importação: %s'%r)
+        assert 'Influenza: volume||tVac|' in r                       # assunto com o nome do boss liga no boss
+        await pg3.evaluate("()=>dicasVerSemAssunto()")
+        r=await pg3.evaluate("""()=>{const ix=n=>dicasResolverGrupos.findIndex(g=>g.nome===n);
+          const sel=n=>document.getElementById('dicas-ligar-'+ix(n));
+          return {pcr:sel('PCR').value,via:sel('PCR').closest('.dicas-ligar-linha').querySelector('.dicas-ligar-via').textContent,
+                  opBoss:[...sel('Imunização').options].filter(o=>o.value.startsWith('boss:')).map(o=>o.value+'='+o.textContent)};}""")
+        print('   PCR sugere %s (%s) · opções de boss: %s'%(r['pcr'],r['via'],r['opBoss']))
+        assert r['pcr']=='boss:tUrg' and 'grupo' in r['via']                    # pelo grupo das dicas
+        assert 'boss:tVac=👑 Boss inteiro: Vacinação' in r['opBoss']
+        await pg3.evaluate("""()=>{const i=dicasResolverGrupos.findIndex(g=>g.nome==='Imunização');const el=document.getElementById('dicas-ligar-'+i);
+          el.value='boss:tVac';el.dispatchEvent(new Event('change'));dicasLigarTodas();}""")
+        r=await pg3.evaluate("""()=>({ds:db.dicas.map(d=>d.titulo+'|'+(d.subId||'')+'|'+(d.topicId||'')),toast:window.__toasts.slice(-1)[0],
+          bcg:dicasDoAssunto('vBcg').map(d=>d.titulo).sort(),pcr:dicasDoAssunto('uPcr').map(d=>d.titulo),
+          apelidos:Object.keys(db.simColarApelidos||{})})""")
+        print('   %s'%r['toast'])
+        print('   no miniboss BCG: %s'%r['bcg'])
+        assert all(x.endswith('|tVac') for x in r['ds'] if not x.startswith('Epinefrina')) and 'Epinefrina na PCR||tUrg' in r['ds']
+        assert r['bcg']==['BCG sem cicatriz','HPV no calendário','Influenza: volume'] and r['pcr']==['Epinefrina na PCR']
+        assert r['apelidos']==[]                                                  # apelido e so pra miniboss
+        # etiqueta, filtro do boss, Acervo somado e treino do boss
+        await pg3.evaluate("()=>dicasFiltroLimpar()")
+        r=await pg3.evaluate("""()=>{const d=db.dicas.find(x=>x.titulo==='BCG sem cicatriz');const card=document.getElementById('dica-'+d.id);
+          return {etq:card.querySelector('.dica-etq-boss').textContent,treino:card.querySelector('.dica-treino').innerText.replace(/\s+/g,' ').trim()};}""")
+        print('   cartão: etiqueta "%s" · %s'%(r['etq'],r['treino']))
+        assert r['etq']=='👑 Vacinação' and r['treino'].startswith('📚 2 questões no Acervo · você acerta 67% (2 de 3')
+        await pg3.click('.dica-etq-boss >> nth=0')
+        r=await pg3.evaluate("()=>({n:dicasAplicarFiltros().length,chip:document.getElementById('dicas-chips-assunto').innerText})")
+        print('   filtro do boss: %s dicas · chip "%s"'%(r['n'],r['chip'].replace(chr(10),' ')))
+        assert r['n']==3 and 'Vacinação (boss inteiro)' in r['chip']
+        r=await pg3.evaluate("""()=>{dicaTreinarBoss('tVac');return {titulo:treinoSessao&&treinoSessao.titulo,
+          subs:treinoSessao?[...new Set(treinoSessao.itens.map(i=>i.subId))].sort():[]};}""")
+        print('   treinar o boss: %s'%r)
+        assert r['titulo']=='Vacinação' and r['subs']==['vBcg','vHpv']
+        # editar mantem o boss; o pacote leva o nome do boss
+        r=await pg3.evaluate("""()=>{treinoSessao=null;treinoResumo=null;treinoTempoParar();showScreen('dicas');dicasFiltroLimpar();
+          const d=db.dicas.find(x=>x.titulo==='HPV no calendário');dicaEditarAbrir(d.id);
+          const sel=document.getElementById('dica-edit-assunto').value;dicaEditarSalvar(d.id);
+          const depois=db.dicas.find(x=>x.titulo==='HPV no calendário');
+          return {sel,topicId:depois.topicId,subId:depois.subId||'',pacote:dicaParaPacote(depois,'pk').assunto};}""")
+        print('   editar: seletor %s → %s · pacote leva "%s"'%(r['sel'],r['topicId'],r['pacote']))
+        assert r['sel']=='boss:tVac' and r['topicId']=='tVac' and r['subId']=='' and r['pacote']=='Vacinação'
+        # correção de uma questão do miniboss traz as dicas do boss
+        r=await pg3.evaluate("()=>{const h=dicasNaCorrecaoHTML('vBcg',{questao:'BCG sem cicatriz deve ser revacinado.'});return h.includes('BCG sem cicatriz');}")
+        assert r
+        print('   OK\n')
+
+        todos=graves(errs)+graves(errs2)+graves(errs3)
         print('erros de JS: %s'%(todos or 'nenhum'))
         assert not todos, todos
         await browser.close()

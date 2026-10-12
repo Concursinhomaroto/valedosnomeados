@@ -2879,14 +2879,12 @@ body.missao-ligada #dash-overdue-revs{display:none;}
 .dica-grupo-tit{margin-bottom:var(--sp-3);flex-wrap:wrap;gap:6px;}
 .dica-grupo-mat{color:var(--muted);}
 .dica-grupo-n{color:var(--muted);letter-spacing:0;}
-.dica-grade{columns:340px;column-gap:var(--sp-3);}
-/* Colunas (não grade): cartão de texto tem altura muito diferente de um pro outro, e na grade
-   o baixo deixava um buraco do lado do alto. Aqui cada coluna empilha sem buraco. */
-.dica-grade>*{break-inside:avoid;margin:0 0 var(--sp-3);}
-.dica-numeros{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:var(--sp-3);align-items:start;}
-.dica-grade+.dica-numeros{margin-top:0;}
-.dica-grade>.dica-form{column-span:all;}
-.dica-numeros>.dica-form{grid-column:1/-1;margin:0;}
+/* Grade em linhas da mesma altura: colunas e linhas alinhadas, e o rodapé (Já sei · Editar)
+   de todos os cartões da linha na mesma altura. Dicas de texto e números usam as mesmas
+   colunas, então os dois blocos de um grupo também se alinham. */
+.dica-grade,.dica-numeros{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:var(--sp-3);align-items:stretch;}
+.dica-grade+.dica-numeros{margin-top:var(--sp-3);}
+.dica-grade>.dica-form,.dica-numeros>.dica-form{grid-column:1/-1;margin:0;}
 .dica-card{background:var(--panel);border:1.5px solid var(--border);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-4);
   display:flex;flex-direction:column;gap:var(--sp-2);min-width:0;box-shadow:var(--shadow);}
 .dica-card.dica-sei{opacity:.72;}
@@ -2896,9 +2894,10 @@ body.missao-ligada #dash-overdue-revs{display:none;}
 .dica-etq{font-size:var(--fs-selo);font-weight:700;color:var(--muted);border:1px solid var(--border);border-radius:var(--r-full);
   padding:1px 8px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
 .dica-etq-sem{color:var(--orange-t);border-color:currentColor;}
+.dica-etq-boss{color:var(--accent);border-color:var(--accent);}
 .dica-selo-sei{font-size:var(--fs-selo);font-weight:800;color:var(--green-t);}
 .dica-linhas{display:flex;flex-direction:column;gap:6px;}
-.dica-linha{display:grid;grid-template-columns:7.6em minmax(0,1fr);gap:var(--sp-2);align-items:baseline;}
+.dica-linha{display:flex;flex-direction:column;gap:1px;}   /* rótulo em cima: o texto usa a largura toda */
 .dica-linha dt{font-size:var(--fs-selo);font-weight:900;text-transform:uppercase;letter-spacing:.4px;color:var(--accent);line-height:1.4;}
 .dica-linha dd{font-size:var(--fs-corpo);color:var(--text);line-height:1.5;white-space:pre-line;overflow-wrap:break-word;}
 .dica-exemplos{list-style:none;display:flex;flex-direction:column;gap:4px;}
@@ -2916,7 +2915,7 @@ body.missao-ligada #dash-overdue-revs{display:none;}
   border:1px solid var(--border);border-radius:var(--r-sm);padding:6px 8px;overflow-wrap:break-word;}
 .dica-par-x{font-weight:900;color:var(--muted);}
 .dica-num{gap:var(--sp-2);}
-.dica-num-topo{display:grid;grid-template-columns:minmax(4.5em,40%) minmax(0,1fr);gap:var(--sp-3);align-items:start;}
+.dica-num-topo{display:grid;grid-template-columns:fit-content(50%) minmax(0,1fr);gap:var(--sp-3);align-items:start;}
 .dica-num-info{display:flex;flex-direction:column;gap:3px;min-width:0;}
 .dica-num-tit{font-size:var(--fs-corpo);font-weight:900;color:var(--text);line-height:1.3;}
 .dica-num-valor{font-size:var(--fs-xl);font-weight:900;color:var(--accent);line-height:1.15;font-variant-numeric:tabular-nums;overflow-wrap:break-word;}
@@ -2948,7 +2947,7 @@ body.missao-ligada #dash-overdue-revs{display:none;}
 .dicas-ligar-linha select.inp{width:auto;min-width:0;}
 .dicas-ligar-acoes{margin:var(--sp-2) 0;}
 .dicas-ligar-via{font-size:var(--fs-selo);font-weight:800;margin-top:2px;color:var(--green-t);}
-.dicas-ligar-via-texto,.dicas-ligar-via-ia{color:var(--orange-t);}
+.dicas-ligar-via-texto,.dicas-ligar-via-ia,.dicas-ligar-via-grupo{color:var(--orange-t);}
 .dicas-ligar-via-voce{color:var(--accent);}
 .dicas-vazio-txt{font-size:var(--fs-leitura)!important;font-weight:600;line-height:1.6;max-width:440px;margin:8px auto 0;}
 .dicas-vazio-acoes{display:flex;justify-content:center;gap:var(--sp-2);flex-wrap:wrap;}
@@ -2956,7 +2955,7 @@ body.missao-ligada #dash-overdue-revs{display:none;}
    usa a borda tracejada do bloco "GUARDE" do comentário (.expl-marca): é a mesma família. */
 button.dica-etq-assunto{background:none;font-family:inherit;cursor:pointer;}
 button.dica-etq-assunto:hover{border-color:var(--accent);color:var(--accent);}
-.dicas-sub-wrap .dica-grade{columns:300px;}
+.dicas-sub-wrap .dica-grade{grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));}
 .dicas-sub-wrap .flash-header{flex-wrap:wrap;}
 .dicas-sub-acoes{display:flex;gap:6px;flex-wrap:wrap;}
 .dica-form-modal{margin:0;padding:0;}
@@ -2981,7 +2980,9 @@ button.dica-etq-assunto:hover{border-color:var(--accent);color:var(--accent);}
 .dica-treino{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:var(--fs-selo);font-weight:700;color:var(--text2);
   background:var(--panel2);border:1px solid var(--border);border-radius:var(--r-sm);padding:5px 8px;}
 .dica-treino span{color:var(--muted);font-weight:600;}
-.dica-treino .btn{margin-left:auto;}
+.dica-treino{flex-wrap:nowrap;}
+.dica-treino-txt{flex:1;min-width:0;}
+.dica-treino .btn{margin-left:auto;flex-shrink:0;}
 /* Sem questão no Acervo: só uma linha discreta — a caixa repetida em todo cartão pesava a lista. */
 .dica-treino.dica-treino-vazio{color:var(--muted);font-weight:600;background:none;border:0;padding:0;}
 /* Etapa 5: rascunho da IA — borda tracejada e aviso, até você aprovar. */
@@ -2996,7 +2997,6 @@ button.dica-etq-assunto:hover{border-color:var(--accent);color:var(--accent);}
 .dicas-pacote-admin{display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-2);padding-top:var(--sp-3);
   border-top:1.5px dashed var(--border);}
 @media(max-width:600px){
-  .dica-linha{grid-template-columns:5.9em minmax(0,1fr);}
   .dica-card{padding:var(--sp-3);}
   .dica-grupo{margin-bottom:var(--sp-4);}
 }
@@ -18775,10 +18775,11 @@ function dicaNormalizar(x,origemPadrao){
   const tipo=normalizeForDedup(String(x.tipo||'dica'));   // "Número" -> "numero"
   const d={id:String(x.id||genId()),tipo,kingdomId:String(x.kingdomId||'')};
   if(x.subId)d.subId=String(x.subId);
+  else if(x.topicId)d.topicId=String(x.topicId);   // ligada ao boss inteiro
   const campos=['grupo','titulo','fonte','deQuestao'].concat(DICAS_CAMPOS_TIPO[tipo]||[]);
   // O assunto como estava escrito no pacote fica guardado só enquanto não houver miniboss:
   // é o que permite resolver "sem assunto" em grupo, pelo nome que o pacote pretendia.
-  if(!d.subId)campos.push('assuntoNome');
+  if(!d.subId&&!d.topicId)campos.push('assuntoNome');
   campos.forEach(c=>{const v=x[c]==null?'':String(x[c]).trim();if(v)d[c]=v;});
   if(tipo==='numero'&&!d.titulo&&d.rotulo)d.titulo=d.rotulo;
   if(tipo!=='numero'){const ex=dicaNormalizarExemplos(x.exemplos);if(ex.length)d.exemplos=ex;}
@@ -18818,8 +18819,45 @@ function dicaPacoteIntacta(d,agora){return(d.pacoteEm&&d.pacoteEm===d.editadaEm)
 // Índice de miniboss refeito a cada render: o mapa muda (miniboss novo, renomeado) e a
 // dica guarda só o subId.
 let dicasSubs=new Map();
-function dicasMapaSubs(){dicasSubs=new Map(simIndiceAssuntos().map(c=>[c.sub.id,c]));return dicasSubs;}
+function dicasMapaSubs(){
+  dicasSubs=new Map(simIndiceAssuntos().map(c=>[c.sub.id,c]));
+  dicasBosses=new Map();
+  (db.kingdoms||[]).forEach(k=>(db.topics[k.id]||[]).forEach(t=>dicasBosses.set(t.id,{topic:t,kingdom:k})));
+  return dicasSubs;
+}
 function dicaAssunto(d){return(d&&d.subId&&dicasSubs.get(d.subId))||null;}
+// Boss = o tópico que agrupa os minibosses. A dica pode ligar no boss inteiro (topicId)
+// quando cobre vários minibosses dele — "Imunização" inteira no boss Vacinação — e aí vale
+// pra todos eles: painel do miniboss, correção, treino e colinha.
+const DICAS_BOSS='boss:';
+let dicasBosses=new Map();   // topicId -> {topic, kingdom}
+function dicasEhBoss(v){return String(v||'').startsWith(DICAS_BOSS);}
+function dicasBossPorId(topicId){
+  if(!topicId)return null;
+  const b=dicasBosses.get(topicId);
+  if(b)return b;
+  for(const k of db.kingdoms||[])for(const t of(db.topics[k.id]||[]))if(t.id===topicId)return{topic:t,kingdom:k};
+  return null;
+}
+function dicaBoss(d){return(d&&!d.subId&&d.topicId&&dicasBossPorId(d.topicId))||null;}
+function dicaLigada(d){return!!(dicaAssunto(d)||dicaBoss(d));}
+function dicaVinculoNome(d){const c=dicaAssunto(d);if(c)return c.sub.name;const b=dicaBoss(d);return b?b.topic.name:'';}
+function dicaVinculoValor(d){return d?(d.subId||(d.topicId?DICAS_BOSS+d.topicId:'')):'';}
+function dicasBossDoSub(subId){
+  const c=dicasSubs.get(subId);
+  if(c)return c.topic.id;
+  for(const k of db.kingdoms||[])for(const t of(db.topics[k.id]||[]))if((t.subtopics||[]).some(x=>x.id===subId))return t.id;
+  return'';
+}
+// Filtro por assunto: um miniboss traz também as dicas do boss dele; um boss traz as dele
+// e as de todos os minibosses.
+function dicaNoFiltroAssunto(d,alvo){
+  if(dicasEhBoss(alvo)){
+    const t=alvo.slice(DICAS_BOSS.length);
+    return d.subId?dicasBossDoSub(d.subId)===t:d.topicId===t;
+  }
+  return d.subId===alvo||(!d.subId&&!!d.topicId&&d.topicId===dicasBossDoSub(alvo));
+}
 function dicasReino(id){return(db.kingdoms||[]).find(k=>k.id===id)||null;}
 // Matéria escrita -> reino. Exato primeiro; depois um nome contido no outro, com tamanho
 // parecido e um candidato só (a mesma folga do simCasarAssunto: "Direito" não pode
@@ -18845,7 +18883,7 @@ let dicasCriando=false,dicasEditando=null,dicasImportando=false;
 function dicaBuscavel(d){
   const c=dicaAssunto(d);
   return normalizeForDedup([d.titulo,d.grupo,d.regra,d.aplicar,d.cuidado,d.valor,d.rotulo,
-    d.a,d.b,d.diferenca,d.fonte,c?c.sub.name:d.assuntoNome,(d.bancas||[]).join(' '),
+    d.a,d.b,d.diferenca,d.fonte,c?c.sub.name:(dicaVinculoNome(d)||d.assuntoNome),(d.bancas||[]).join(' '),
     (d.exemplos||[]).map(e=>e.txt).join(' ')].filter(Boolean).join(' '));
 }
 function dicaTemBanca(d,b){const k=String(b).toLowerCase();return(d.bancas||[]).some(x=>x.toLowerCase()===k);}
@@ -18854,10 +18892,10 @@ function dicasAplicarFiltros(f){
   // Rascunho da IA só aparece no recorte de rascunhos; fora dele, é como se não existisse.
   let out=(db.dicas||[]).filter(d=>f.rascunhos?!!d.rascunho:!d.rascunho);
   if(f.materia)out=out.filter(d=>d.kingdomId===f.materia);
-  if(f.assunto)out=out.filter(d=>d.subId===f.assunto);
+  if(f.assunto)out=out.filter(d=>dicaNoFiltroAssunto(d,f.assunto));
   if(f.grupo)out=out.filter(d=>dicaGrupo(d)===f.grupo);
   if(f.banca)out=out.filter(d=>dicaTemBanca(d,f.banca));
-  if(f.semAssunto)out=out.filter(d=>!dicaAssunto(d));
+  if(f.semAssunto)out=out.filter(d=>!dicaLigada(d));
   // "Já sei" tira a dica da lista padrão — a revisão de véspera é do que ainda não está firme.
   if(!f.jaSei)out=out.filter(d=>!dicaSei(d.id));
   if(f.texto){
@@ -18873,7 +18911,7 @@ function dicasTemFiltro(){
 function dicasFiltrarMateria(id){dicasFiltro.materia=(id&&dicasFiltro.materia!==id)?id:'';dicasFiltro.assunto='';dicasFiltro.grupo='';dicasRefrescar();}
 // Clicar na etiqueta de assunto de um cartão filtra por ele (e clicar de novo solta).
 function dicasFiltrarAssunto(subId){
-  const c=dicasMapaSubs().get(subId);
+  const c=dicasMapaSubs().get(subId)||(dicasEhBoss(subId)?dicasBosses.get(subId.slice(DICAS_BOSS.length)):null);
   if(dicasFiltro.assunto===subId){dicasFiltro.assunto='';dicasRefrescar();return;}
   dicasFiltro.assunto=subId;
   if(c)dicasFiltro.materia=c.kingdom.id;
@@ -19006,8 +19044,9 @@ function dicasChipsHTML(){
   baseGrupo.forEach(d=>porGrupo.set(dicaGrupo(d),(porGrupo.get(dicaGrupo(d))||0)+1));
   if(f.grupo&&!porGrupo.has(f.grupo))porGrupo.set(f.grupo,0);
   const sabidas=dicasAplicarFiltros({...f,jaSei:true}).filter(d=>dicaSei(d.id)).length;
-  const semAssunto=dicasAplicarFiltros({...f,semAssunto:false}).filter(d=>!dicaAssunto(d)).length;
-  const assuntoAtivo=f.assunto?dicasSubs.get(f.assunto):null;
+  const semAssunto=dicasAplicarFiltros({...f,semAssunto:false}).filter(d=>!dicaLigada(d)).length;
+  const assuntoAtivo=f.assunto&&!dicasEhBoss(f.assunto)?dicasSubs.get(f.assunto):null;
+  const bossAtivo=f.assunto&&dicasEhBoss(f.assunto)?dicasBosses.get(f.assunto.slice(DICAS_BOSS.length)):null;
   const mostrar=[chip(f.jaSei,'dicasAlternarJaSei()',`✅ mostrar as que já sei · <b>${sabidas}</b>`,'As que você marcou como "já sei" saem da lista padrão')];
   const rascunhos=dicasAplicarFiltros({...f,rascunhos:true,jaSei:true}).length;
   if(rascunhos||f.rascunhos)mostrar.push(chip(f.rascunhos,'dicasAlternarRascunhos()',`📝 rascunhos da IA · <b>${rascunhos}</b>`,'Dicas geradas por IA esperando você revisar e aprovar'));
@@ -19018,7 +19057,7 @@ function dicasChipsHTML(){
       chip(dicasVista==='lista',"dicasVer('lista')",'📋 Dicas')+chip(dicasVista==='numeros',"dicasVer('numeros')",`🔢 Números que caem · <b>${nNum}</b>`,'Quadro só com os números, por matéria')}</div></div>
     <div class="banco-chip-grupo" id="dicas-chips-materia"><span class="banco-chip-rotulo">Matéria</span><div class="banco-chips">${chipsMat.join('')}</div></div>
     ${f.assunto?`<div class="banco-chip-grupo" id="dicas-chips-assunto"><span class="banco-chip-rotulo">Assunto</span><div class="banco-chips">${
-      chip(true,`dicasFiltrarAssunto('${escapeAttrJs(f.assunto)}')`,`${escapeHtml(assuntoAtivo?assuntoAtivo.sub.name:'assunto apagado')} ✕`,'Tirar o filtro de assunto')
+      chip(true,`dicasFiltrarAssunto('${escapeAttrJs(f.assunto)}')`,`${escapeHtml(assuntoAtivo?assuntoAtivo.sub.name:(bossAtivo?'👑 '+bossAtivo.topic.name+' (boss inteiro)':'assunto apagado'))} ✕`,'Tirar o filtro de assunto')
       +(assuntoAtivo?chip(false,`dicasGerarIA('${escapeAttrJs(f.assunto)}')`,dicasGerando.has(f.assunto)?'⏳ gerando…':'✨ gerar dicas deste assunto com IA','Gera rascunhos a partir do resumo e das questões do Acervo deste assunto'):'')}</div></div>`:''}
     ${dicasVista!=='numeros'&&(porGrupo.size>1||f.grupo)?`<div class="banco-chip-grupo" id="dicas-chips-grupo"><span class="banco-chip-rotulo">Grupo</span><div class="banco-chips">${
       [...porGrupo.entries()].map(([g,n])=>chip(f.grupo===g,`dicasFiltrarGrupo('${escapeAttrJs(g)}')`,`${escapeHtml(g)} · <b>${n}</b>`)).join('')}</div></div>`:''}
@@ -19062,11 +19101,13 @@ function dicasCorpoHTML(pool){
   }).join('');
 }
 function dicaEtiquetasHTML(d,ctx){
-  const c=dicaAssunto(d);
-  const filtrar=c?(ctx==='aba'?`dicasFiltrarAssunto('${escapeAttrJs(c.sub.id)}')`:`dicasAbrirAssunto('${escapeAttrJs(c.sub.id)}')`):'';
+  const c=dicaAssunto(d),b=c?null:dicaBoss(d);
+  const alvo=c?c.sub.id:(b?DICAS_BOSS+b.topic.id:'');
+  const filtrar=alvo?(ctx==='aba'?`dicasFiltrarAssunto('${escapeAttrJs(alvo)}')`:`dicasAbrirAssunto('${escapeAttrJs(alvo)}')`):'';
   const sem=d.assuntoNome?`O assunto escrito ("${d.assuntoNome}") não casou com nenhum miniboss`:'Ainda não ligada a um miniboss';
   return(d.bancas||[]).map(b=>`<span class="banco-tag">${escapeHtml(b)}</span>`).join('')
     +(c?`<button type="button" class="dica-etq dica-etq-assunto" onclick="${filtrar}" title="Ver as dicas deste assunto">${escapeHtml(c.sub.name)}</button>`
+       :b?`<button type="button" class="dica-etq dica-etq-assunto dica-etq-boss" onclick="${filtrar}" title="Ligada ao boss inteiro — vale pra todos os minibosses dele">👑 ${escapeHtml(b.topic.name)}</button>`
        :`<span class="dica-etq dica-etq-sem" title="${escapeHtml(sem)}">sem assunto</span>`);
 }
 function dicaExemplosHTML(d){
@@ -19154,12 +19195,16 @@ function dicasOpcoesReinoHTML(sel){
 function dicasAssuntoOpcoesHTML(kId,selecionado,vazio){
   const porChefao=new Map();
   simIndiceAssuntos().filter(c=>c.kingdom.id===kId).forEach(c=>{
-    if(!porChefao.has(c.topic.id))porChefao.set(c.topic.id,{nome:c.topic.name,subs:[]});
+    if(!porChefao.has(c.topic.id))porChefao.set(c.topic.id,{id:c.topic.id,nome:c.topic.name,subs:[]});
     porChefao.get(c.topic.id).subs.push(c.sub);
   });
   return`<option value="">${escapeHtml(vazio||'— sem assunto —')}</option>`
-    +[...porChefao.values()].map(g=>`<optgroup label="${escapeHtml(g.nome)}">${
+    +[...porChefao.values()].map(g=>`<optgroup label="${escapeHtml(g.nome)}">${dicasOpcaoBossHTML(g,selecionado)}${
       g.subs.map(s=>`<option value="${escapeHtml(s.id)}"${s.id===selecionado?' selected':''}>${escapeHtml(s.name)}</option>`).join('')}</optgroup>`).join('');
+}
+function dicasOpcaoBossHTML(g,selecionado){
+  const v=DICAS_BOSS+g.id;
+  return`<option value="${escapeHtml(v)}"${v===selecionado?' selected':''}>👑 Boss inteiro: ${escapeHtml(g.nome)}</option>`;
 }
 function dicasGruposDe(kId){
   const s=new Set();
@@ -19184,7 +19229,7 @@ function dicaEditorHTML(d,modo){
     <div class="dica-form-grade">
       ${campo('tipo','Tipo',`<select id="${p}tipo" class="inp" onchange="dicaFormTipo('${p}')">${DICAS_TIPOS.map(t=>`<option value="${t.id}"${t.id===tipo?' selected':''}>${t.lbl}</option>`).join('')}</select>`)}
       ${campo('materia','Matéria',`<select id="${p}materia" class="inp" onchange="dicaFormMateria('${p}')">${dicasOpcoesReinoHTML(kId)}</select>`)}
-      ${campo('assunto','Assunto',`<select id="${p}assunto" class="inp">${dicasAssuntoOpcoesHTML(kId,(d&&d.subId)||'')}</select>`)}
+      ${campo('assunto','Assunto',`<select id="${p}assunto" class="inp">${dicasAssuntoOpcoesHTML(kId,dicaVinculoValor(d))}</select>`)}
       ${campo('grupo','Grupo',`<input id="${p}grupo" class="inp" list="${p}grupos" placeholder="Ex.: Regência e preposições" value="${v('grupo')}"><datalist id="${p}grupos">${dicasGruposDe(kId).map(g=>`<option value="${escapeHtml(g)}">`).join('')}</datalist>`)}
     </div>
     ${linha('titulo','Título','Curto: o nome do macete')}
@@ -19225,7 +19270,9 @@ function dicaFormMateria(p){
 function dicaLerForm(p){
   const v=id=>String((document.getElementById(p+id)||{}).value||'').trim();
   const tipo=v('tipo')||'dica';
-  const d={tipo,kingdomId:v('materia'),subId:v('assunto'),grupo:v('grupo'),titulo:v('titulo'),
+  const assunto=v('assunto');
+  const d={tipo,kingdomId:v('materia'),subId:dicasEhBoss(assunto)?'':assunto,
+           topicId:dicasEhBoss(assunto)?assunto.slice(DICAS_BOSS.length):'',grupo:v('grupo'),titulo:v('titulo'),
            bancas:v('bancas'),origem:v('origem'),fonte:v('fonte')};
   (DICAS_CAMPOS_TIPO[tipo]||[]).forEach(c=>{d[c]=v(c);});
   if(tipo!=='numero')d.exemplos=v('exemplos');
@@ -19278,7 +19325,7 @@ function dicaEditarSalvar(id){
   // sem levar os dois, editar uma dica nascida de um erro devolvia o "Virar dica" àquela
   // questão, e editar um rascunho o aprovava sem você pedir.
   const d=dicaNormalizar({...lido,id,criadaEm:velha.criadaEm,editadaEm:dicasAgora(),
-    assuntoNome:lido.subId?'':velha.assuntoNome,deQuestao:velha.deQuestao,rascunho:velha.rascunho,
+    assuntoNome:(lido.subId||lido.topicId)?'':velha.assuntoNome,deQuestao:velha.deQuestao,rascunho:velha.rascunho,
     pacote:velha.pacote,pacoteItem:velha.pacoteItem,pacoteEm:velha.pacoteEm,pacoteVersao:velha.pacoteVersao},velha.origem);
   const motivo=dicaValidar(d);
   if(motivo){toast('⚠️ Não salvei: '+motivo+'.','var(--red)');return;}
@@ -19365,15 +19412,17 @@ function dicasImportarItem(item,k,ix,rel,n){
       }
     }
   }
+  // Sem miniboss com esse nome, um boss com o MESMO nome (sem acento e caixa) também serve.
+  const boss=!c&&nomeAss?(db.topics[k.id]||[]).find(t=>revNorm(t.name)===revNorm(nomeAss))||null:null;
   const agora=dicasAgora();
   const{id,materia,assunto,reino,...resto}=item;
-  const d=dicaNormalizar({...resto,id:genId(),kingdomId:k.id,subId:c?c.sub.id:'',
-    assuntoNome:c?'':nomeAss,criadaEm:agora,editadaEm:agora,...(item.pacote?{pacoteEm:agora}:{})},'material');
+  const d=dicaNormalizar({...resto,id:genId(),kingdomId:k.id,subId:c?c.sub.id:'',topicId:boss?boss.id:'',
+    assuntoNome:(c||boss)?'':nomeAss,criadaEm:agora,editadaEm:agora,...(item.pacote?{pacoteEm:agora}:{})},'material');
   const motivo=dicaValidar(d)||(dicaDuplicada(d)?'já existe uma dica com esse título nessa matéria':'');
   if(motivo){rel.recusadas.push({n,titulo:d.titulo||'',motivo});return;}
   db.dicas.push(d);
   rel.entraram++;
-  if(c)rel.comAssunto++; else rel.semAssunto++;
+  if(c||boss)rel.comAssunto++; else rel.semAssunto++;
 }
 function dicasImportarProcessar(textoArquivo){
   const ta=document.getElementById('dicas-importar-txt');
@@ -19503,12 +19552,25 @@ function dicasSugerirAssunto(g,ix,porId){
   const card={tags:[g.nome].concat(ds.map(d=>d.grupo||'')).join(' '),
               pergunta:ds.map(d=>d.titulo||'').join(' '),resposta:ds.map(d=>d.rotulo||'').join(' ')};
   const pelaTexto=lista=>{const m=revCasarCard(card,lista.map(c=>c.sub));return m&&m.conf==='alta'?lista.find(c=>c.sub===m.sub):null;};
+  // Boss com o nome do assunto: entra como "miniboss" de id boss:<topicId>.
+  const ixBoss=[];
+  (db.kingdoms||[]).forEach(k=>(db.topics[k.id]||[]).forEach(t=>ixBoss.push(
+    {sub:{id:DICAS_BOSS+t.id,name:t.name},topic:t,kingdom:k,norm:revNorm(t.name),toks:revTokensNome(t.name)})));
+  const bossReino=ixBoss.filter(c=>c.kingdom.id===g.kId);
   const ap=g.nome?simColarApelido(g.nome):null;
   let c=ap?ix.find(x=>x.sub.id===ap)||null:null,via='nome';
   if(!c&&g.nome)c=simCasarAssunto(g.nome,doReino);
+  if(!c&&g.nome)c=simCasarAssunto(g.nome,bossReino);
   if(!c){c=pelaTexto(doReino);via='texto';}
-  if(!c&&g.nome){c=simCasarAssunto(g.nome,ix);via='nome';}
+  if(!c&&g.nome){c=simCasarAssunto(g.nome,ix)||simCasarAssunto(g.nome,ixBoss);via='nome';}
   if(!c){c=pelaTexto(ix);via='texto';}
+  // Por último, o GRUPO das dicas com o nome de um boss ("Urgência e emergência").
+  if(!c){
+    for(const gr of new Set(ds.map(d=>d.grupo).filter(Boolean))){
+      c=simCasarAssunto(gr,bossReino)||simCasarAssunto(gr,ixBoss);
+      if(c){via='grupo';break;}
+    }
+  }
   return c?{subId:c.sub.id,via}:null;
 }
 // Todos os minibosses do mapa, a matéria da dica primeiro: assunto de SUS ou legislação
@@ -19517,18 +19579,22 @@ function dicasAssuntoOpcoesTodasHTML(kIdPrimeiro,selecionado,vazio){
   const porTopico=new Map();
   const ix=simIndiceAssuntos();
   ix.filter(c=>c.kingdom.id===kIdPrimeiro).concat(ix.filter(c=>c.kingdom.id!==kIdPrimeiro)).forEach(c=>{
-    if(!porTopico.has(c.topic.id))porTopico.set(c.topic.id,{nome:c.kingdom.name+' › '+c.topic.name,subs:[]});
+    if(!porTopico.has(c.topic.id))porTopico.set(c.topic.id,{id:c.topic.id,nome:c.kingdom.name+' › '+c.topic.name,boss:c.topic.name,subs:[]});
     porTopico.get(c.topic.id).subs.push(c.sub);
   });
   return`<option value="">${escapeHtml(vazio||'— sem assunto —')}</option>`
-    +[...porTopico.values()].map(g=>`<optgroup label="${escapeHtml(g.nome)}">${
+    +[...porTopico.values()].map(g=>`<optgroup label="${escapeHtml(g.nome)}">${dicasOpcaoBossHTML({id:g.id,nome:g.boss},selecionado)}${
       g.subs.map(s=>`<option value="${escapeHtml(s.id)}"${s.id===selecionado?' selected':''}>${escapeHtml(s.name)}</option>`).join('')}</optgroup>`).join('');
 }
-const DICAS_LIGAR_VIA={nome:'sugestão pelo nome',texto:'sugestão pelo conteúdo — confira',ia:'sugestão da IA — confira',voce:'escolhido por você'};
+const DICAS_LIGAR_VIA={nome:'sugestão pelo nome',texto:'sugestão pelo conteúdo — confira',grupo:'sugestão pelo grupo (boss inteiro) — confira',
+  ia:'sugestão da IA — confira',voce:'escolhido por você'};
+// A IA trabalha nas linhas sem sugestão e nas que só acharam o boss pelo grupo: ela pode
+// achar o miniboss certo dentro dele.
+function dicasLigarParaIA(e){return!e||(!e.subId&&e.via!=='voce')||e.via==='grupo';}
 function dicasSemAssuntoHTML(pool){
   const grupos=new Map();
   pool.forEach(d=>{
-    if(dicaAssunto(d))return;
+    if(dicaLigada(d))return;
     const k=d.kingdomId+'\u0001'+(d.assuntoNome||'');
     if(!grupos.has(k))grupos.set(k,{kId:d.kingdomId,nome:d.assuntoNome||'',ids:[]});
     grupos.get(k).ids.push(d.id);
@@ -19538,15 +19604,15 @@ function dicasSemAssuntoHTML(pool){
   const ix=simIndiceAssuntos();
   const porId=new Map((db.dicas||[]).map(d=>[d.id,d]));
   const escolhas=dicasResolverGrupos.map(g=>dicasResolverEscolha[dicasResolverChave(g)]||dicasSugerirAssunto(g,ix,porId));
-  const nEscolhidas=escolhas.filter(Boolean).length;
-  const semEscolha=dicasResolverGrupos.length-nEscolhidas;
+  const nEscolhidas=escolhas.filter(e=>e&&e.subId).length;
+  const paraIA=escolhas.filter(dicasLigarParaIA).length;
   return`<div class="section-card" id="dicas-resolver">
     <div class="sec-title" style="margin-bottom:4px">🔗 Ligar ao assunto</div>
     <div class="dicas-sub">Estas dicas estão só com a matéria. Cada linha já vem com uma sugestão quando dá pra achar uma —
       confira e ligue uma a uma, ou todas de uma vez. Dá pra escolher um miniboss de outra matéria: a dica vai junto pra ela.</div>
     <div class="banco-edit-linha dicas-ligar-acoes">
       <button class="btn btn-sm btn-primary" id="dicas-ligar-todas" onclick="dicasLigarTodas()"${nEscolhidas?'':' disabled'}><i class="fa fa-link"></i> Ligar todas as escolhidas (${nEscolhidas})</button>
-      ${semEscolha?`<button class="btn btn-sm btn-ghost" id="dicas-ligar-ia" onclick="dicasLigarSugerirIA()"${dicasLigandoIA?' disabled':''}>${dicasLigandoIA?'<i class="fa fa-spinner fa-spin"></i> Pedindo à IA...':`🤖 Sugerir com IA (${semEscolha} sem sugestão)`}</button>`:''}
+      ${paraIA?`<button class="btn btn-sm btn-ghost" id="dicas-ligar-ia" onclick="dicasLigarSugerirIA()"${dicasLigandoIA?' disabled':''} title="Preenche as linhas sem sugestão e as que só acharam o boss pelo grupo">${dicasLigandoIA?'<i class="fa fa-spinner fa-spin"></i> Pedindo à IA...':`🤖 Sugerir com IA (${paraIA} ${paraIA===1?'linha':'linhas'})`}</button>`:''}
     </div>
     ${dicasResolverGrupos.map((g,i)=>{
       const k=dicasReino(g.kId);
@@ -19571,27 +19637,29 @@ function dicasResolverEscolher(i,subId){
 }
 // Liga as dicas de um grupo. Miniboss de outra matéria leva a dica pra lá — menos a que
 // bateria título com outra dica que já existe nessa matéria (fica onde está, e é contada).
-function dicasLigarGrupo(g,subId,agora){
-  const c=dicasSubs.get(subId);
-  if(!c)return{n:0,conflitos:[],c:null};
+function dicasLigarGrupo(g,valor,agora){
+  const boss=dicasEhBoss(valor)?dicasBosses.get(valor.slice(DICAS_BOSS.length)):null;
+  const c=boss?null:dicasSubs.get(valor);
+  const alvo=c||boss;
+  if(!alvo)return{n:0,conflitos:[],nome:'',kingdom:null};
   const ids=new Set(g.ids);
   const conflitos=[];
   let n=0;
   const antes=db.dicas||[];
   db.dicas=antes.map(d=>{
     if(!ids.has(d.id))return d;
-    const kingdomId=c.kingdom.id;
+    const kingdomId=alvo.kingdom.id;
     if(kingdomId!==d.kingdomId&&dicaDuplicada({...d,kingdomId},d.id)){conflitos.push(d.titulo);return d;}
     n++;
-    const{assuntoNome,...resto}=d;
-    return{...resto,kingdomId,subId,editadaEm:agora,...dicaPacoteIntacta(d,agora)};
+    const{assuntoNome,subId:_s,topicId:_t,...resto}=d;
+    return{...resto,kingdomId,...(c?{subId:c.sub.id}:{topicId:boss.topic.id}),editadaEm:agora,...dicaPacoteIntacta(d,agora)};
   });
   // O nome passa a resolver sozinho na próxima importação (e no Colar prova, que usa o
-  // mesmo caderno de apelidos).
-  const k=g.nome?revNorm(g.nome):'';
-  if(k){if(!db.simColarApelidos)db.simColarApelidos={};db.simColarApelidos[k]=subId;}
+  // mesmo caderno de apelidos) — só pra miniboss: o caderno de apelidos guarda miniboss.
+  const k=g.nome&&c?revNorm(g.nome):'';
+  if(k){if(!db.simColarApelidos)db.simColarApelidos={};db.simColarApelidos[k]=c.sub.id;}
   delete dicasResolverEscolha[dicasResolverChave(g)];
-  return{n,conflitos,c};
+  return{n,conflitos,nome:c?c.sub.name:'👑 '+boss.topic.name,kingdom:alvo.kingdom};
 }
 function dicasLigarAssunto(i){
   const g=dicasResolverGrupos[i];
@@ -19599,11 +19667,11 @@ function dicasLigarAssunto(i){
   if(!g||!subId){toast('⚠️ Escolha o miniboss.','var(--red)');return;}
   dicasMapaSubs();
   const r=dicasLigarGrupo(g,subId,dicasAgora());
-  if(!r.c)return;
+  if(!r.nome)return;
   saveDB();
   dicasSalvar();
   dicasRefrescar();
-  toast(`🔗 ${r.n} ${r.n===1?'dica ligada':'dicas ligadas'} a "${r.c.sub.name}"${r.conflitos.length?` · ${r.conflitos.length} ${r.conflitos.length===1?'ficou onde estava':'ficaram onde estavam'}: já existe dica com esse título em ${r.c.kingdom.name}`:''}.`,
+  toast(`🔗 ${r.n} ${r.n===1?'dica ligada':'dicas ligadas'} a "${r.nome}"${r.conflitos.length?` · ${r.conflitos.length} ${r.conflitos.length===1?'ficou onde estava':'ficaram onde estavam'}: já existe dica com esse título em ${r.kingdom.name}`:''}.`,
     r.conflitos.length?'var(--orange)':'var(--green)');
 }
 function dicasLigarTodas(){
@@ -19630,10 +19698,7 @@ async function dicasLigarSugerirIA(){
   const ix=simIndiceAssuntos();
   if(!ix.length){toast('⚠️ Seu mapa ainda não tem minibosses pra ligar.','var(--orange)');return;}
   const porId=new Map((db.dicas||[]).map(d=>[d.id,d]));
-  const alvo=dicasResolverGrupos.filter(g=>{
-    const e=dicasResolverEscolha[dicasResolverChave(g)];
-    return !(e&&e.via==='voce')&&!(e||dicasSugerirAssunto(g,ix,porId));
-  });
+  const alvo=dicasResolverGrupos.filter(g=>dicasLigarParaIA(dicasResolverEscolha[dicasResolverChave(g)]||dicasSugerirAssunto(g,ix,porId)));
   if(!alvo.length){toast('Todas as linhas já têm sugestão.','var(--muted)');return;}
   const chaves=alvo.map(dicasResolverChave);
   const linhasGrupos=alvo.map((g,n)=>{
@@ -19642,13 +19707,19 @@ async function dicasLigarSugerirIA(){
     const grupos=[...new Set(ds.map(d=>d.grupo).filter(Boolean))].join(', ');
     return`${n}. assunto escrito: "${g.nome||'(nenhum)'}" · matéria: ${k?k.name:'?'}${grupos?' · grupo: '+grupos:''} · dicas: ${ds.slice(0,4).map(d=>'"'+d.titulo+'"').join('; ')}`;
   }).join('\n');
-  const linhasSubs=ix.map(c=>`${c.sub.id} = ${c.kingdom.name} › ${c.topic.name} › ${c.sub.name}`).join('\n');
+  const bossVistos=new Set();
+  const linhasSubs=ix.map(c=>{
+    const boss=bossVistos.has(c.topic.id)?'':`${DICAS_BOSS}${c.topic.id} = ${c.kingdom.name} › ${c.topic.name} (boss inteiro)\n`;
+    bossVistos.add(c.topic.id);
+    return boss+`${c.sub.id} = ${c.kingdom.name} › ${c.topic.name} › ${c.sub.name}`;
+  }).join('\n');
   const prompt=`Você organiza dicas de estudo para concurso. Para cada GRUPO de dicas abaixo, escolha o ASSUNTO (miniboss) da LISTA que melhor corresponde ao tema das dicas.
 
 REGRAS
 1. Use somente ids que aparecem na LISTA, exatamente como estão escritos.
 2. Prefira um assunto da mesma matéria do grupo; use outra matéria só se o tema claramente pertence a ela (ex.: controle social do SUS numa matéria de SUS).
-3. Se nenhum assunto da lista servir, use "" — não chute.
+3. Se as dicas do grupo cobrem vários assuntos de um mesmo boss (ex.: vacinas diferentes num boss "Vacinação"), escolha o boss inteiro — o id que começa com "${DICAS_BOSS}".
+4. Se nenhum assunto da lista servir, use "" — não chute.
 
 FORMATO: responda APENAS com um array JSON, sem texto antes nem depois:
 [{"g":0,"id":"<id da lista ou vazio>"}]
@@ -19663,7 +19734,7 @@ ${linhasSubs}`;
   try{
     const{parsed}=await callGeminiJSON(apiKey,prompt,false,8192);
     const lista=Array.isArray(parsed)?parsed:(parsed&&Array.isArray(parsed.ligacoes)?parsed.ligacoes:[]);
-    const validos=new Set(ix.map(c=>c.sub.id));
+    const validos=new Set(ix.map(c=>c.sub.id).concat([...bossVistos].map(t=>DICAS_BOSS+t)));
     let n=0;
     lista.forEach(x=>{
       const ch=chaves[Number(x&&x.g)];
@@ -19688,7 +19759,11 @@ ${linhasSubs}`;
 // A dica serve mais onde o assunto está acontecendo: na tela do miniboss que você está
 // estudando e na hora em que você erra uma questão dele. Tudo aqui lê o mesmo db.dicas e
 // grava pelo mesmo caminho da aba (dicaCriarDoForm/dicasSalvar) — nada de cópia paralela.
-function dicasDoAssunto(subId){return subId?(db.dicas||[]).filter(d=>d.subId===subId&&!d.rascunho):[];}
+function dicasDoAssunto(subId){
+  if(!subId)return[];
+  const t=dicasBossDoSub(subId);   // as do boss inteiro valem pra cada miniboss dele
+  return(db.dicas||[]).filter(d=>!d.rascunho&&(d.subId===subId||(!d.subId&&!!t&&d.topicId===t)));
+}
 function dicasRascunhosDoAssunto(subId){return subId?(db.dicas||[]).filter(d=>d.subId===subId&&d.rascunho):[];}
 function dicaDaQuestao(chave){return chave?(db.dicas||[]).find(d=>d.deQuestao===chave)||null:null;}
 
@@ -19696,7 +19771,7 @@ function dicaDaQuestao(chave){return chave?(db.dicas||[]).find(d=>d.deQuestao===
 // Pelo assunto: filtro de assunto ligado e as que você já sabe à vista — quem vem do
 // miniboss quer ver tudo daquele assunto, não a lista de revisão.
 function dicasAbrirAssunto(subId){
-  const c=dicasMapaSubs().get(subId);
+  const c=dicasMapaSubs().get(subId)||(dicasEhBoss(subId)?dicasBosses.get(subId.slice(DICAS_BOSS.length)):null);
   dicasFiltro={...DICAS_FILTRO_VAZIO,materia:c?c.kingdom.id:'',assunto:subId,jaSei:true};
   dicasEditando=null;dicasCriando=false;
   showScreen('dicas');
@@ -19951,8 +20026,7 @@ function dicasQuadroNumerosHTML(){
     return`<section class="dica-grupo">
       <div class="sec-title dica-grupo-tit"><span>${k?iconeReino(k.icon)+' '+escapeHtml(k.name):'❓ matéria apagada'} · números que caem</span> <b class="dica-grupo-n">${ds.length}</b></div>
       <div class="dicas-quadro">${ds.map(d=>{
-        const c=dicaAssunto(d);
-        const extra=[d.titulo&&d.titulo!==d.rotulo?d.titulo:'',c?c.sub.name:'',(d.bancas||[]).join(', ')].filter(Boolean);
+        const extra=[d.titulo&&d.titulo!==d.rotulo?d.titulo:'',dicaVinculoNome(d),(d.bancas||[]).join(', ')].filter(Boolean);
         return`<div class="dicas-quadro-cel${dicaSei(d.id)?' dica-sei':''}" data-dica="${escapeHtml(d.id)}">
           <div class="${dicaValorClasse(d.valor)}">${escapeHtml(d.valor||'')}</div>
           <div class="dica-num-rotulo">${escapeHtml(d.rotulo||d.titulo||'')}</div>
@@ -19987,7 +20061,8 @@ function dicasColinhaSelecionar(o){
   if(o.escopo==='edital'){
     const ed=dicasColinhaEscopoEdital();
     if(!ed)return{titulo:'',dicas:[]};
-    ds=ds.filter(d=>d.subId?!!ed.idx[d.subId]:ed.reinos.has(d.kingdomId));
+    ds=ds.filter(d=>d.subId?!!ed.idx[d.subId]
+      :(dicaBoss(d)?(dicaBoss(d).topic.subtopics||[]).some(x=>ed.idx[x.id]):ed.reinos.has(d.kingdomId)));
     titulo=`${ed.edital.nome||'Edital'}${ed.edital.banca?' · '+ed.edital.banca:''}`;
   }else{
     const k=dicasReino(o.kingdomId);
@@ -20106,8 +20181,12 @@ function dicasAcervoResumir(){
   return m;
 }
 function dicaTreinoHTML(d){
-  if(!d.subId)return'';
-  const a=(dicasAcervoResumo||dicasAcervoResumir()).get(d.subId);
+  const b=dicaBoss(d);
+  if(!d.subId&&!b)return'';
+  const resumo=dicasAcervoResumo||dicasAcervoResumir();
+  // Boss inteiro: soma o Acervo de todos os minibosses dele.
+  const a=d.subId?resumo.get(d.subId):(b.topic.subtopics||[]).reduce((t,s)=>{const x=resumo.get(s.id);
+    return x?{n:t.n+x.n,vezes:t.vezes+x.vezes,acertos:t.acertos+x.acertos}:t;},{n:0,vezes:0,acertos:0});
   if(!a||!a.n)return`<div class="dica-treino dica-treino-vazio">📚 Nenhuma questão deste assunto no Acervo ainda</div>`;
   const pct=a.vezes?Math.round(100*a.acertos/a.vezes):null;
   // Mesma amostra mínima da dificuldade aferida: com menos de 3 respostas, o número não
@@ -20115,8 +20194,18 @@ function dicaTreinoHTML(d){
   const poucas=a.vezes<ACERVO_DIFICULDADE_MIN_AMOSTRA;
   const acerto=pct==null?'nunca respondidas'
     :`você acerta <b style="color:${poucas?'var(--muted)':faixaCorTexto(pct)}">${pct}%</b> <span>(${a.acertos} de ${a.vezes}${poucas?' · pouca amostra':''})</span>`;
-  return`<div class="dica-treino">📚 <b>${a.n}</b> ${a.n===1?'questão':'questões'} no Acervo · ${acerto}
-    <button class="btn btn-xs btn-ghost" onclick="dicaTreinarAssunto('${escapeAttrJs(d.subId)}')" title="Modo Treino só com as questões deste assunto">🎯 Treinar</button></div>`;
+  return`<div class="dica-treino"><div class="dica-treino-txt">📚 <b>${a.n}</b> ${a.n===1?'questão':'questões'} no Acervo · ${acerto}</div>
+    <button class="btn btn-xs btn-ghost" onclick="${d.subId?`dicaTreinarAssunto('${escapeAttrJs(d.subId)}')`:`dicaTreinarBoss('${escapeAttrJs(b.topic.id)}')`}" title="Modo Treino só com as questões ${d.subId?'deste assunto':'deste boss'}">🎯 Treinar</button></div>`;
+}
+function dicaTreinarBoss(topicId){
+  const b=dicasBossPorId(topicId);
+  if(!b)return;
+  showScreen('simgeral');
+  if(!document.getElementById('screen-simgeral').classList.contains('active'))return;   // plano travado
+  const subs=new Set((b.topic.subtopics||[]).map(s=>s.id));
+  if(!treinoIniciar(treinoPoolCompleto().filter(q=>subs.has(q.subId)),{titulo:b.topic.name}))return;
+  renderSimGeralScreen();
+  window.scrollTo(0,0);
 }
 function dicaTreinarAssunto(subId){
   showScreen('simgeral');
@@ -20432,7 +20521,7 @@ function dicasPacoteAplicar(pid){
       }
       const{id,materia,assunto,reino,...resto}=item;
       const novo=dicaNormalizar({fonte:p.nome,...resto,...marca,id:ja.id,kingdomId:ja.kingdomId,subId:ja.subId||'',
-        assuntoNome:ja.subId?'':(String(assunto||'').trim()||ja.assuntoNome),criadaEm:ja.criadaEm,
+        topicId:ja.topicId||'',assuntoNome:(ja.subId||ja.topicId)?'':(String(assunto||'').trim()||ja.assuntoNome),criadaEm:ja.criadaEm,
         editadaEm:agora,pacoteEm:agora},'material');
       const motivo=dicaValidar(novo)||(dicaDuplicada(novo,ja.id)?'já existe outra dica com esse título nessa matéria':'');
       if(motivo){rel.recusadas.push({n,titulo:novo.titulo||'',motivo:motivo+' (a versão anterior ficou)'});return;}
@@ -20513,9 +20602,8 @@ function dicasPacotePublicarConta(){
 // contas que a adicionaram) ou, se é dica nova no pacote, o id dela na sua conta.
 function dicaParaPacote(d,pacoteId){
   const k=dicasReino(d.kingdomId);
-  const c=dicaAssunto(d);
   const out={id:(d.pacote===pacoteId&&d.pacoteItem)?d.pacoteItem:d.id,tipo:d.tipo,materia:k?k.name:'',
-             assunto:c?c.sub.name:(d.assuntoNome||'')};
+             assunto:dicaVinculoNome(d)||d.assuntoNome||''};
   ['grupo','titulo','regra','aplicar','cuidado','valor','rotulo','a','b','diferenca','fonte','origem']
     .forEach(f=>{if(d[f])out[f]=d[f];});
   if((d.exemplos||[]).length)out.exemplos=d.exemplos;
@@ -33649,6 +33737,7 @@ window.dicasGerarIA=dicasGerarIA;
 window.dicaAprovar=dicaAprovar;
 window.dicasAlternarRascunhos=dicasAlternarRascunhos;
 window.dicaTreinarAssunto=dicaTreinarAssunto;
+window.dicaTreinarBoss=dicaTreinarBoss;
 window.dicasVer=dicasVer;
 window.dicasColinhaAbrir=dicasColinhaAbrir;
 window.dicasColinhaImprimir=dicasColinhaImprimir;
