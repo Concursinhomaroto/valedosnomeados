@@ -1,5 +1,6 @@
 [
   {
+    "id": "pt25-01",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Pronomes indefinidos",
@@ -26,6 +27,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-02",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Pronomes indefinidos",
@@ -52,6 +54,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-03",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Pronomes relativos",
@@ -78,6 +81,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-04",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Pronomes relativos",
@@ -104,6 +108,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-05",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Concordância nominal",
@@ -130,6 +135,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-06",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Conjunções",
@@ -156,6 +162,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-07",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Preposições",
@@ -182,6 +189,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-08",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Crase",
@@ -208,6 +216,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-09",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Regência verbal",
@@ -234,6 +243,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-10",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Regência verbal",
@@ -260,6 +270,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-11",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Regência verbal",
@@ -286,6 +297,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-12",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Regência verbal",
@@ -312,6 +324,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-13",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Concordância verbal",
@@ -338,6 +351,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-14",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Concordância verbal",
@@ -364,6 +378,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-15",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Termos da oração",
@@ -390,6 +405,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-16",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Vozes verbais",
@@ -416,6 +432,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-17",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Formas nominais",
@@ -442,6 +459,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-18",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Modos verbais",
@@ -468,6 +486,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-19",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Colocação pronominal",
@@ -494,6 +513,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-20",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Colocação pronominal",
@@ -520,6 +540,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-21",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Colocação pronominal",
@@ -550,6 +571,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-22",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Ortografia",
@@ -580,6 +602,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-23",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Semântica",
@@ -606,6 +629,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-24",
     "tipo": "par",
     "materia": "Português",
     "assunto": "Semântica",
@@ -628,6 +652,7 @@
     "fonte": "Pacote Português 25 pontos (Vale)"
   },
   {
+    "id": "pt25-25",
     "tipo": "dica",
     "materia": "Português",
     "assunto": "Figuras de linguagem",

@@ -48,8 +48,10 @@ async def main():
         assert "auth.token.email === 'leonardobrunotlc@gmail.com'" in regras['dicas_pacotes']['.write']
         print('   OK\n')
 
+        # A a J testam os pacotes publicados no Firebase; o pronto que vem com o site (K) sai
+        # da lista aqui pra nao se misturar com eles.
         ctxA,adm,errsA=await abrir(browser,seed(),viewport={'width':1440,'height':900})
-        await adm.evaluate("(t)=>{dicasImportarProcessar(t);dicasRelatorioFechar();showScreen('dicas');}",open(PACOTE,encoding='utf-8').read())
+        await adm.evaluate("(t)=>{DICAS_PACOTES_PRONTOS.splice(0);dicasImportarProcessar(t);dicasRelatorioFechar();showScreen('dicas');}",open(PACOTE,encoding='utf-8').read())
 
         print('=== A) admin: painel vazio, com o formulario de publicar ===')
         await adm.click('#dicas-content button:has-text("Pacotes")')
@@ -95,7 +97,7 @@ async def main():
         print('   OK\n')
 
         ctxB,ana,errsB=await abrir(browser,seed_assinante(),viewport={'width':1440,'height':900})
-        await ana.evaluate("(pk)=>{window.__root.dicas_pacotes=pk;currentUser={...currentUser,email:'ana@exemplo.com'};showScreen('dicas');}",
+        await ana.evaluate("(pk)=>{window.__root.dicas_pacotes=pk;currentUser={...currentUser,email:'ana@exemplo.com'};DICAS_PACOTES_PRONTOS.splice(0);showScreen('dicas');}",
                            await adm.evaluate("()=>window.__root.dicas_pacotes"))
 
         print('=== C) assinante: aba vazia mostra Pacotes; adiciona; nao ve publicar ===')
@@ -205,7 +207,7 @@ async def main():
         assert len(lap)==1 and lap[0]['pacote']==PID and lap[0]['pacoteItem']
         await ana.close()
         _,ana,errsB2=await abrir(browser,salvo['v1'],salvo['dicas'],ctx=ctxB,viewport={'width':1440,'height':900})
-        await ana.evaluate("(pk)=>{window.__root.dicas_pacotes=pk;currentUser={...currentUser,email:'ana@exemplo.com'};showScreen('dicas');dicasPacotesAbrir();}",
+        await ana.evaluate("(pk)=>{window.__root.dicas_pacotes=pk;currentUser={...currentUser,email:'ana@exemplo.com'};DICAS_PACOTES_PRONTOS.splice(0);showScreen('dicas');dicasPacotesAbrir();}",
                            await adm.evaluate("()=>window.__root.dicas_pacotes"))
         await ana.wait_for_timeout(300)
         r=await ana.evaluate("""()=>{const pref=%s,c=%s;
@@ -282,7 +284,60 @@ async def main():
         print('   capturas em tests/e2e/_out/dicas_pacotes_*.png')
         print('   OK\n')
 
-        todos=graves(errsA)+graves(errsB)+graves(errsB2)
+        print('=== K) pacote pronto que vem com o site: aparece pra todos sem publicar ===')
+        ctxC,adm2,errsC=await abrir(browser,seed(),viewport={'width':1440,'height':900})
+        await adm2.evaluate("()=>showScreen('dicas')")
+        await adm2.wait_for_timeout(600)
+        r=await adm2.evaluate("""()=>({linhas:[...document.querySelectorAll('#dicas-pacotes .dicas-pacote')].map(l=>l.innerText.replace(/\\n/g,' | ')),
+          opcoes:[...document.querySelectorAll('#dicas-pub-alvo option')].map(o=>o.textContent)})""")
+        print('   admin, aba vazia abre sozinha: %s'%r['linhas'])
+        print('   opções de publicar: %s'%r['opcoes'])
+        assert len(r['linhas'])==1 and 'Português — 25 pontos' in r['linhas'][0] and 'pronto do Vale' in r['linhas'][0]
+        assert 'Remover' not in r['linhas'][0] and r['opcoes']==['Novo pacote']   # nao da pra publicar por cima dele
+
+        ctxD,bia,errsD=await abrir(browser,seed_assinante(),viewport={'width':1440,'height':900})
+        await bia.evaluate("()=>{currentUser={...currentUser,email:'bia@exemplo.com'};showScreen('dicas');}")
+        await bia.wait_for_timeout(600)
+        r=await bia.evaluate("()=>[...document.querySelectorAll('#dicas-pacotes .dicas-pacote')].map(l=>l.innerText.replace(/\\n/g,' | '))")
+        print('   assinante, aba vazia: %s'%r)
+        assert len(r)==1 and 'Adicionar às minhas dicas' in r[0]
+        await bia.click('#dicas-pacotes button:has-text("Adicionar às minhas dicas")')
+        await bia.wait_for_timeout(300)
+        r=await bia.evaluate("""()=>{const c=db.dicas.find(d=>d.titulo==='Crase antes de horas');
+          return {n:db.dicas.length,todas:db.dicas.every(d=>d.pacote==='pk-portugues-25'&&/^pt25-\\d\\d$/.test(d.pacoteItem)),
+                  crase:{item:c.pacoteItem,subId:c.subId},painel:!!document.getElementById('dicas-pacotes'),
+                  rel:(document.getElementById('dicas-relatorio')||{}).innerText||''};}""")
+        print('   adicionou: %s dicas · "Crase antes de horas" = %s · painel aberto sozinho fechou: %s'%(r['n'],r['crase'],not r['painel']))
+        print('   relatório: %s'%r['rel'].split('\n')[0])
+        assert r['n']==25 and r['todas'] and r['crase']=={'item':'pt25-08','subId':'xCrase'} and not r['painel']
+        assert r['rel'].startswith('📦 Pacote "Português — 25 pontos"')
+
+        # versao nova publicada no Firebase com o MESMO id passa na frente da que vem com o site
+        await bia.evaluate("""async()=>{const r=await fetch('/docs/dicas/portugues-25-pontos.json');const dicas=await r.json();
+          dicas[7].regra='V2: '+dicas[7].regra;
+          window.__root.dicas_pacotes={'pk-portugues-25':{id:'pk-portugues-25',nome:'Português — 25 pontos',versao:2,publicadoEm:'2026-11-01T00:00:00.000Z',dicas}};
+          dicasPacotesAbrir();}""")
+        await bia.wait_for_timeout(400)
+        r=await bia.evaluate("()=>[...document.querySelectorAll('#dicas-pacotes .dicas-pacote')].map(l=>l.innerText.replace(/\\n/g,' | '))")
+        print('   com v2 no Firebase: %s'%r)
+        assert len(r)==1 and 'Atualizar para a v2' in r[0] and 'pronto do Vale' not in r[0]
+        await bia.click('#dicas-pacotes button:has-text("Atualizar para a v2")')
+        await bia.wait_for_timeout(300)
+        r=await bia.evaluate("()=>db.dicas.find(d=>d.titulo==='Crase antes de horas').regra.slice(0,3)")
+        assert r=='V2:', r
+
+        # sem o Firebase (regra fora do ar), o pronto continua na lista, com o aviso
+        await bia.evaluate("()=>{window.__root.dicas_pacotes=null;}")
+        await bia.evaluate(NEGADO)
+        await bia.evaluate("()=>dicasPacotesAbrir()")
+        await bia.wait_for_timeout(400)
+        r=await bia.evaluate("()=>document.getElementById('dicas-pacotes').innerText")
+        print('   Firebase negando: aviso %s · pronto listado %s'%('falta publicar as regras' in r,'pronto do Vale' in r))
+        assert 'falta publicar as regras' in r and 'pronto do Vale' in r and 'em dia (v2)' in r
+        await ctxC.close();await ctxD.close()
+        print('   OK\n')
+
+        todos=graves(errsA)+graves(errsB)+graves(errsB2)+graves(errsC)+graves(errsD)
         print('erros de JS: %s'%(todos or 'nenhum'))
         assert not todos, todos
         await browser.close()
