@@ -4786,6 +4786,48 @@ function idbLer(chave){
     }catch(e){resolve(null);}
   }));
 }
+// ===== NÓS GRANDES COM VERSÃO (banco de questões, histórico, arquivo de provas) =====
+// Cada abertura do app baixava os três inteiros, mesmo com a cópia igualzinha no
+// IndexedDB. Agora cada nó tem um irmão minúsculo <nó>_ver = {ts}. Ao gravar: a versão
+// local é invalidada ANTES de subir e só volta depois que a nuvem confirmou (gravação
+// não confirmada = próxima abertura baixa e junta, como sempre foi). Ao abrir: versão da
+// nuvem == versão local -> usa a cópia local e não baixa nada.
+function noVerLer(no,chaveCache,ms){
+  const ref=userRef(no+'_ver');
+  return Promise.all([
+    idbLer(chaveCache+'_ver').catch(()=>null),
+    ref?new Promise(res=>{const t=setTimeout(()=>res(null),ms||5000);
+      ref.once('value').then(sn=>{clearTimeout(t);res(sn.val());},()=>{clearTimeout(t);res(null);});}):Promise.resolve(null)
+  ]).then(([local,nuvem])=>({local,nuvem,igual:!!(local&&nuvem&&local.ts&&local.ts===nuvem.ts)}));
+}
+// Sobe o nó e, confirmado, carimba a versão nova na nuvem e na cópia local.
+function noGravarComVersao(ref,no,chaveCache,dados){
+  try{if(cacheIdbOk)idbGravar(chaveCache+'_ver',null);}catch(e){}
+  const r=ref.set(dados);
+  if(r&&r.then)r.then(()=>{
+    const ver={ts:Date.now()};
+    const vr=userRef(no+'_ver');
+    if(!vr)return;
+    const w=vr.set(ver);
+    if(w&&w.then)w.then(()=>{try{if(cacheIdbOk)idbGravar(chaveCache+'_ver',ver);}catch(e){}}).catch(()=>{});
+  }).catch(()=>{});
+  return r;
+}
+// Depois de baixar e juntar: a cópia local passa a ser o resultado, carimbada com a versão
+// da nuvem (se a nuvem ainda não tem versão, cria uma — vale pra próxima abertura).
+function noCarimbarLocal(no,chaveCache,dados,verNuvem){
+  if(!cacheIdbOk)return;
+  try{
+    idbGravar(chaveCache,dados).then(ok=>{
+      if(!ok)return;
+      if(verNuvem&&verNuvem.ts){idbGravar(chaveCache+'_ver',verNuvem);return;}
+      const ver={ts:Date.now()};const vr=userRef(no+'_ver');
+      if(!vr)return;
+      const w=vr.set(ver);
+      if(w&&w.then)w.then(()=>idbGravar(chaveCache+'_ver',ver)).catch(()=>{});
+    });
+  }catch(e){}
+}
 function idbGravar(chave,valor){
   return idbAbrir().then(conn=>new Promise(resolve=>{
     if(!conn)return resolve(false);
@@ -5415,6 +5457,7 @@ async function loadDB(callback){
     const prevLastPayment=db.lastPaymentAt;
     const prevAccountEmail=db.accountEmail;
     const data=snapshot.val();
+    syncBase=data?syncMapa(data):null;   // o que o servidor tem agora: base do próximo "só o que mudou"
     guardarPlanoDoServidor(data);   // fonte da verdade do plano, antes de db ser tocado
     // Se o celular ficou estudando OFFLINE numa sessão anterior (sem internet
     // nenhuma — não só uma queda passageira), a escrita pro Firebase nunca chegou a
@@ -5846,9 +5889,10 @@ function saveDB(){
   clearTimeout(saveTimeout);
   saveTimeout=setTimeout(()=>{
     try{
-      DB_REF.set(payloadParaFirebase()).catch(e=>{
+      syncGravar(payloadParaFirebase()).catch(e=>{
         console.warn('Firebase save error:',e);
         isSaving=false;
+        syncBase=null;   // na próxima, manda tudo de novo (set), como antes
         warnSyncIssue('⚠️ Não foi possível salvar na nuvem agora. Seus dados estão seguros neste dispositivo.');
       });
     }catch(e){
@@ -6745,6 +6789,47 @@ function guardarPlanoDoServidor(data){
 // que está em memória — assim a regra nunca vê o cliente tentando mudar o plano, e um
 // save legítimo não é recusado por causa de divergência. Enquanto o servidor não tem
 // nada (conta recém-criada), mantém o que o app montou: o trial.
+// ===== GRAVAR SÓ O QUE MUDOU (economia de download) =====
+// O saveDB fazia DB_REF.set(registro inteiro) a cada gravação — e todo aparelho com o app
+// aberto na mesma conta (DB_REF.on('value')) baixava o registro INTEIRO de novo a cada
+// questão respondida. Era isso que estourava os 10 GB/mês de download do Firebase.
+// Agora: guardamos um "retrato" do que o servidor tem (syncBase: um JSON por campo e,
+// nos campos que são objeto, um por filho) e mandamos um update() só com os caminhos que
+// mudaram — os outros aparelhos recebem só esse pedaço. Sem retrato (primeira gravação,
+// ou depois de um erro), cai no set() inteiro, exatamente como antes.
+let syncBase=null;
+function syncMapa(obj){
+  const m={};
+  Object.keys(obj||{}).forEach(k=>{
+    const v=obj[k];
+    if(v&&typeof v==='object'&&!Array.isArray(v)){
+      const ch={};Object.keys(v).forEach(c=>{ch[c]=JSON.stringify(v[c]);});
+      m[k]={o:1,ch};
+    }else m[k]={o:0,s:JSON.stringify(v)};
+  });
+  return m;
+}
+function syncDelta(base,novo,payload){
+  const up={};
+  Object.keys(novo).forEach(k=>{
+    const b=base[k],n=novo[k];
+    if(!b){up[k]=payload[k];return;}
+    if(n.o&&b.o){
+      Object.keys(n.ch).forEach(c=>{if(b.ch[c]!==n.ch[c])up[k+'/'+c]=payload[k][c];});
+      Object.keys(b.ch).forEach(c=>{if(!(c in n.ch))up[k+'/'+c]=null;});
+    }else if(n.o!==b.o||n.s!==b.s)up[k]=payload[k];
+  });
+  Object.keys(base).forEach(k=>{if(!(k in novo))up[k]=null;});
+  return up;
+}
+function syncGravar(payload){
+  const novo=syncMapa(payload);
+  if(!syncBase){syncBase=novo;return DB_REF.set(payload);}
+  const up=syncDelta(syncBase,novo,payload);
+  syncBase=novo;
+  if(!Object.keys(up).length){isSaving=false;return Promise.resolve();}   // nada mudou: nada sobe
+  return DB_REF.update(up);
+}
 function payloadParaFirebase(){
   // O banco de questoes tem no proprio (vdn_acervo) e nao entra aqui: e o que mantem o
   // registro principal pequeno, e o registro principal e o que sobe a cada saveDB.
@@ -15530,7 +15615,7 @@ function acervoSalvar(agora){
     try{if(cacheIdbOk)idbGravar(acervoChaveCache(),lista);}catch(e){}
     if(!ACERVO_REF)return;
     try{
-      const r=ACERVO_REF.set(lista);
+      const r=noGravarComVersao(ACERVO_REF,'vdn_acervo',acervoChaveCache(),lista);
       if(r&&r.catch)r.catch(e=>{
         console.warn('Falha ao salvar o banco de questões:',e);
         warnSyncIssue('⚠️ Não consegui salvar o banco de questões na nuvem agora. Ele continua guardado neste aparelho.');
@@ -15583,7 +15668,9 @@ async function acervoCarregar(){
   let local=null;
   try{local=await idbLer(acervoChaveCache());}catch(e){}
   let nuvem=null;
-  if(ACERVO_REF){
+  const ver=ACERVO_REF?await noVerLer('vdn_acervo',acervoChaveCache()):{igual:false};
+  if(ver.igual&&Array.isArray(local))nuvem=local;   // nada mudou na nuvem: não baixa
+  else if(ACERVO_REF){
     try{
       nuvem=await new Promise(res=>{
         const t=setTimeout(()=>res(null),8000);   // banco grande em rede ruim nao trava o boot
@@ -15605,6 +15692,8 @@ async function acervoCarregar(){
   if(noRegistro||migrou||db.acervo.length!==((Array.isArray(nuvem)?nuvem:[]).length)){
     acervoSalvar(true);
     if(noRegistro)saveDB();   // o registro principal encolhe na mesma hora
+  }else if(!ver.igual&&ACERVO_REF){
+    noCarimbarLocal('vdn_acervo',acervoChaveCache(),sanitizeForFirebase(db.acervo||[]),ver.nuvem);
   }
   await provarqCarregar();
   await histCarregar();
@@ -15656,7 +15745,7 @@ function histSalvar(agora){
     try{if(cacheIdbOk)idbGravar(histChaveCache(),d);}catch(e){}
     if(!HIST_REF)return;
     try{
-      const r=HIST_REF.set(d);
+      const r=noGravarComVersao(HIST_REF,'vdn_historico',histChaveCache(),d);
       if(r&&r.catch)r.catch(e=>console.warn('Falha ao salvar o histórico:',e));
     }catch(e){console.warn('Falha síncrona ao salvar o histórico:',e);}
   };
@@ -15681,7 +15770,9 @@ async function histCarregar(){
   HIST_REF=userRef('vdn_historico');
   let local=null,nuvem=null;
   try{local=await idbLer(histChaveCache());}catch(e){}
-  if(HIST_REF){
+  const ver=HIST_REF?await noVerLer('vdn_historico',histChaveCache()):{igual:false};
+  if(ver.igual&&local)nuvem=local;   // nada mudou na nuvem: não baixa
+  else if(HIST_REF){
     try{
       nuvem=await new Promise(res=>{
         const t=setTimeout(()=>res(null),8000);
@@ -15698,6 +15789,7 @@ async function histCarregar(){
   };
   db.hist.geral.sort((x,y)=>new Date(y.data||0)-new Date(x.data||0));
   db.hist.subs.sort((x,y)=>new Date(y.data||0)-new Date(x.data||0));
+  if(!ver.igual&&HIST_REF)noCarimbarLocal('vdn_historico',histChaveCache(),sanitizeForFirebase(db.hist),ver.nuvem);
   return db.hist.geral.length+db.hist.sessoes.length+db.hist.subs.length;
 }
 function histGuardar(lista,itens){
@@ -15758,7 +15850,7 @@ function provarqSalvar(agora){
     try{if(cacheIdbOk)idbGravar(provarqChaveCache(),lista);}catch(e){}
     if(!PROVARQ_REF)return;
     try{
-      const r=PROVARQ_REF.set(lista);
+      const r=noGravarComVersao(PROVARQ_REF,'vdn_provas_arq',provarqChaveCache(),lista);
       if(r&&r.catch)r.catch(e=>console.warn('Falha ao salvar o arquivo de provas:',e));
     }catch(e){console.warn('Falha síncrona ao salvar o arquivo de provas:',e);}
   };
@@ -15768,7 +15860,9 @@ async function provarqCarregar(){
   PROVARQ_REF=userRef('vdn_provas_arq');
   let local=null,nuvem=null;
   try{local=await idbLer(provarqChaveCache());}catch(e){}
-  if(PROVARQ_REF){
+  const ver=PROVARQ_REF?await noVerLer('vdn_provas_arq',provarqChaveCache()):{igual:false};
+  if(ver.igual&&Array.isArray(local))nuvem=local;   // nada mudou na nuvem: não baixa
+  else if(PROVARQ_REF){
     try{
       nuvem=await new Promise(res=>{
         const t=setTimeout(()=>res(null),8000);
@@ -15787,6 +15881,7 @@ async function provarqCarregar(){
   const noRegistro=(db.provasArquivo||[]).length;
   db.provasArquivo=junto.slice(0,PROVARQ_MAX);
   if(noRegistro||db.provasArquivo.length!==((Array.isArray(nuvem)?nuvem:[]).length))provarqSalvar(true);
+  else if(!ver.igual&&PROVARQ_REF)noCarimbarLocal('vdn_provas_arq',provarqChaveCache(),sanitizeForFirebase(db.provasArquivo.map(({_mapa,...a})=>a)),ver.nuvem);
   return db.provasArquivo.length;
 }
 // Grava uma marcacao sua direto no esqueleto arquivado, na posicao ORIGINAL do item —
