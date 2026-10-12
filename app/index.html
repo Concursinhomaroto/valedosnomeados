@@ -2936,6 +2936,12 @@ body.missao-ligada #dash-overdue-revs{display:none;}
 .dicas-ligar-nome{flex:1;min-width:160px;font-size:var(--fs-leitura);color:var(--text);}
 .dicas-ligar-nome span{color:var(--muted);font-weight:600;}
 .dicas-ligar-linha select.inp{max-width:100%;}
+/* Ligar ao assunto: de onde veio a sugestão — "confira" quando não foi pelo nome. */
+.dicas-ligar-linha select.inp{width:auto;min-width:0;}
+.dicas-ligar-acoes{margin:var(--sp-2) 0;}
+.dicas-ligar-via{font-size:var(--fs-selo);font-weight:800;margin-top:2px;color:var(--green-t);}
+.dicas-ligar-via-texto,.dicas-ligar-via-ia{color:var(--orange-t);}
+.dicas-ligar-via-voce{color:var(--accent);}
 .dicas-vazio-txt{font-size:var(--fs-leitura)!important;font-weight:600;line-height:1.6;max-width:440px;margin:8px auto 0;}
 .dicas-vazio-acoes{display:flex;justify-content:center;gap:var(--sp-2);flex-wrap:wrap;}
 /* Etapa 2: dicas fora da aba — no miniboss, na correção e no modal. A caixa da correção
@@ -19456,6 +19462,41 @@ function dicasVerSemAssunto(){dicasFiltro={...DICAS_FILTRO_VAZIO,semAssunto:true
 // com uma escolha só. O miniboss que o casamento por nome acharia hoje (o mapa pode ter
 // ganho o miniboss depois da importação) já vem sugerido — mas só liga quando você manda.
 let dicasResolverGrupos=[];
+// Sugestão pra cada grupo "sem assunto", da mais segura pra menos: apelido que você já
+// gravou → nome do assunto, na mesma matéria → conteúdo das dicas (título, grupo, rótulo)
+// contendo o nome INTEIRO de um miniboss, na mesma matéria → as duas buscas em todas as
+// matérias. Só sugere: nada é ligado sem um clique (Ligar ou Ligar todas).
+let dicasResolverEscolha={};   // chave do grupo -> {subId, via:'nome'|'texto'|'ia'|'voce'}
+let dicasLigandoIA=false;
+function dicasResolverChave(g){return g.kId+'\u0001'+g.nome;}
+function dicasSugerirAssunto(g,ix,porId){
+  const doReino=ix.filter(c=>c.kingdom.id===g.kId);
+  const ds=g.ids.map(id=>porId.get(id)).filter(Boolean);
+  const card={tags:[g.nome].concat(ds.map(d=>d.grupo||'')).join(' '),
+              pergunta:ds.map(d=>d.titulo||'').join(' '),resposta:ds.map(d=>d.rotulo||'').join(' ')};
+  const pelaTexto=lista=>{const m=revCasarCard(card,lista.map(c=>c.sub));return m&&m.conf==='alta'?lista.find(c=>c.sub===m.sub):null;};
+  const ap=g.nome?simColarApelido(g.nome):null;
+  let c=ap?ix.find(x=>x.sub.id===ap)||null:null,via='nome';
+  if(!c&&g.nome)c=simCasarAssunto(g.nome,doReino);
+  if(!c){c=pelaTexto(doReino);via='texto';}
+  if(!c&&g.nome){c=simCasarAssunto(g.nome,ix);via='nome';}
+  if(!c){c=pelaTexto(ix);via='texto';}
+  return c?{subId:c.sub.id,via}:null;
+}
+// Todos os minibosses do mapa, a matéria da dica primeiro: assunto de SUS ou legislação
+// pode morar em outra matéria — escolher um de lá leva a dica pra essa matéria.
+function dicasAssuntoOpcoesTodasHTML(kIdPrimeiro,selecionado,vazio){
+  const porTopico=new Map();
+  const ix=simIndiceAssuntos();
+  ix.filter(c=>c.kingdom.id===kIdPrimeiro).concat(ix.filter(c=>c.kingdom.id!==kIdPrimeiro)).forEach(c=>{
+    if(!porTopico.has(c.topic.id))porTopico.set(c.topic.id,{nome:c.kingdom.name+' › '+c.topic.name,subs:[]});
+    porTopico.get(c.topic.id).subs.push(c.sub);
+  });
+  return`<option value="">${escapeHtml(vazio||'— sem assunto —')}</option>`
+    +[...porTopico.values()].map(g=>`<optgroup label="${escapeHtml(g.nome)}">${
+      g.subs.map(s=>`<option value="${escapeHtml(s.id)}"${s.id===selecionado?' selected':''}>${escapeHtml(s.name)}</option>`).join('')}</optgroup>`).join('');
+}
+const DICAS_LIGAR_VIA={nome:'sugestão pelo nome',texto:'sugestão pelo conteúdo — confira',ia:'sugestão da IA — confira',voce:'escolhido por você'};
 function dicasSemAssuntoHTML(pool){
   const grupos=new Map();
   pool.forEach(d=>{
@@ -19467,43 +19508,153 @@ function dicasSemAssuntoHTML(pool){
   dicasResolverGrupos=[...grupos.values()];
   if(!dicasResolverGrupos.length)return'';
   const ix=simIndiceAssuntos();
+  const porId=new Map((db.dicas||[]).map(d=>[d.id,d]));
+  const escolhas=dicasResolverGrupos.map(g=>dicasResolverEscolha[dicasResolverChave(g)]||dicasSugerirAssunto(g,ix,porId));
+  const nEscolhidas=escolhas.filter(Boolean).length;
+  const semEscolha=dicasResolverGrupos.length-nEscolhidas;
   return`<div class="section-card" id="dicas-resolver">
     <div class="sec-title" style="margin-bottom:4px">🔗 Ligar ao assunto</div>
-    <div class="dicas-sub">Estas dicas estão só com a matéria. Escolha o miniboss — vale pra todas as dicas da linha.</div>
+    <div class="dicas-sub">Estas dicas estão só com a matéria. Cada linha já vem com uma sugestão quando dá pra achar uma —
+      confira e ligue uma a uma, ou todas de uma vez. Dá pra escolher um miniboss de outra matéria: a dica vai junto pra ela.</div>
+    <div class="banco-edit-linha dicas-ligar-acoes">
+      <button class="btn btn-sm btn-primary" id="dicas-ligar-todas" onclick="dicasLigarTodas()"${nEscolhidas?'':' disabled'}><i class="fa fa-link"></i> Ligar todas as escolhidas (${nEscolhidas})</button>
+      ${semEscolha?`<button class="btn btn-sm btn-ghost" id="dicas-ligar-ia" onclick="dicasLigarSugerirIA()"${dicasLigandoIA?' disabled':''}>${dicasLigandoIA?'<i class="fa fa-spinner fa-spin"></i> Pedindo à IA...':`🤖 Sugerir com IA (${semEscolha} sem sugestão)`}</button>`:''}
+    </div>
     ${dicasResolverGrupos.map((g,i)=>{
       const k=dicasReino(g.kId);
-      const ap=g.nome?simColarApelido(g.nome):null;
-      const doReino=ix.filter(c=>c.kingdom.id===g.kId);
-      const sug=g.nome?((ap&&doReino.find(c=>c.sub.id===ap))||simCasarAssunto(g.nome,doReino)):null;
+      const e=escolhas[i];
+      const exemplos=g.ids.slice(0,3).map(id=>(porId.get(id)||{}).titulo).filter(Boolean);
       return`<div class="banco-edit-linha dicas-ligar-linha">
-        <div class="dicas-ligar-nome"><b>${g.nome?'"'+escapeHtml(g.nome)+'"':'sem assunto indicado'}</b><span> · ${k?escapeHtml(k.name):'matéria apagada'} · ${g.ids.length} ${g.ids.length===1?'dica':'dicas'}</span></div>
-        <select id="dicas-ligar-${i}" class="inp" style="width:auto" aria-label="Miniboss">${dicasAssuntoOpcoesHTML(g.kId,sug?sug.sub.id:'','Escolha o miniboss...')}</select>
+        <div class="dicas-ligar-nome"><b>${g.nome?'"'+escapeHtml(g.nome)+'"':'sem assunto indicado'}</b><span> · ${k?escapeHtml(k.name):'matéria apagada'} · ${g.ids.length} ${g.ids.length===1?'dica':'dicas'}</span>
+          ${exemplos.length?`<div class="dicas-pacote-desc">ex.: ${exemplos.map(t=>escapeHtml(t)).join(' · ')}</div>`:''}
+          ${e&&e.subId?`<div class="dicas-ligar-via dicas-ligar-via-${e.via}">${escapeHtml(DICAS_LIGAR_VIA[e.via]||'')}</div>`:''}</div>
+        <select id="dicas-ligar-${i}" class="inp" aria-label="Miniboss" onchange="dicasResolverEscolher(${i},this.value)">${dicasAssuntoOpcoesTodasHTML(g.kId,e?e.subId:'','Escolha o miniboss...')}</select>
         <button class="btn btn-xs btn-primary" onclick="dicasLigarAssunto(${i})"><i class="fa fa-link"></i> Ligar</button>
       </div>`;
     }).join('')}
   </div>`;
 }
+function dicasResolverEscolher(i,subId){
+  const g=dicasResolverGrupos[i];
+  if(!g)return;
+  const ch=dicasResolverChave(g);
+  if(subId)dicasResolverEscolha[ch]={subId,via:'voce'}; else dicasResolverEscolha[ch]={subId:'',via:'voce'};
+  dicasRefrescar();
+}
+// Liga as dicas de um grupo. Miniboss de outra matéria leva a dica pra lá — menos a que
+// bateria título com outra dica que já existe nessa matéria (fica onde está, e é contada).
+function dicasLigarGrupo(g,subId,agora){
+  const c=dicasSubs.get(subId);
+  if(!c)return{n:0,conflitos:[],c:null};
+  const ids=new Set(g.ids);
+  const conflitos=[];
+  let n=0;
+  const antes=db.dicas||[];
+  db.dicas=antes.map(d=>{
+    if(!ids.has(d.id))return d;
+    const kingdomId=c.kingdom.id;
+    if(kingdomId!==d.kingdomId&&dicaDuplicada({...d,kingdomId},d.id)){conflitos.push(d.titulo);return d;}
+    n++;
+    const{assuntoNome,...resto}=d;
+    return{...resto,kingdomId,subId,editadaEm:agora,...dicaPacoteIntacta(d,agora)};
+  });
+  // O nome passa a resolver sozinho na próxima importação (e no Colar prova, que usa o
+  // mesmo caderno de apelidos).
+  const k=g.nome?revNorm(g.nome):'';
+  if(k){if(!db.simColarApelidos)db.simColarApelidos={};db.simColarApelidos[k]=subId;}
+  delete dicasResolverEscolha[dicasResolverChave(g)];
+  return{n,conflitos,c};
+}
 function dicasLigarAssunto(i){
   const g=dicasResolverGrupos[i];
   const subId=(document.getElementById('dicas-ligar-'+i)||{}).value||'';
   if(!g||!subId){toast('⚠️ Escolha o miniboss.','var(--red)');return;}
-  const c=dicasMapaSubs().get(subId);
-  if(!c)return;
-  const agora=dicasAgora();
-  const ids=new Set(g.ids);
-  let n=0;
-  db.dicas=(db.dicas||[]).map(d=>{
-    if(!ids.has(d.id))return d;
-    n++;
-    const{assuntoNome,...resto}=d;
-    return{...resto,subId,editadaEm:agora,...dicaPacoteIntacta(d,agora)};
-  });
-  // O nome passa a resolver sozinho na próxima importação (e no Colar prova, que usa o
-  // mesmo caderno de apelidos).
-  if(g.nome)simColarGravarApelido(g.nome,subId);
+  dicasMapaSubs();
+  const r=dicasLigarGrupo(g,subId,dicasAgora());
+  if(!r.c)return;
+  saveDB();
   dicasSalvar();
   dicasRefrescar();
-  toast(`🔗 ${n} ${n===1?'dica ligada':'dicas ligadas'} a "${c.sub.name}".`,'var(--green)');
+  toast(`🔗 ${r.n} ${r.n===1?'dica ligada':'dicas ligadas'} a "${r.c.sub.name}"${r.conflitos.length?` · ${r.conflitos.length} ${r.conflitos.length===1?'ficou onde estava':'ficaram onde estavam'}: já existe dica com esse título em ${r.c.kingdom.name}`:''}.`,
+    r.conflitos.length?'var(--orange)':'var(--green)');
+}
+function dicasLigarTodas(){
+  dicasMapaSubs();
+  const agora=dicasAgora();
+  // Lê as escolhas antes de ligar: cada ligação muda os grupos (e os índices) da tela.
+  const pares=dicasResolverGrupos.map((g,i)=>[g,(document.getElementById('dicas-ligar-'+i)||{}).value||'']).filter(p=>p[1]);
+  if(!pares.length){toast('⚠️ Nenhuma linha com miniboss escolhido.','var(--orange)');return;}
+  let n=0,grupos=0;
+  const conflitos=[];
+  pares.forEach(([g,subId])=>{const r=dicasLigarGrupo(g,subId,agora);if(r.n)grupos++;n+=r.n;conflitos.push(...r.conflitos);});
+  saveDB();
+  dicasSalvar();
+  dicasRefrescar();
+  toast(`🔗 ${n} ${n===1?'dica ligada':'dicas ligadas'} em ${grupos} ${grupos===1?'assunto':'assuntos'}${conflitos.length?` · ${conflitos.length} ${conflitos.length===1?'ficou onde estava':'ficaram onde estavam'} (título repetido na outra matéria)`:''}.`,
+    conflitos.length?'var(--orange)':'var(--green)');
+}
+// A IA só preenche as linhas sem sugestão (ou com sugestão que não foi sua) e só pode
+// escolher ids que existem no seu mapa; o que ela devolver fora disso é ignorado.
+async function dicasLigarSugerirIA(){
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey){toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');openAISettingsModal();return;}
+  if(dicasLigandoIA)return;
+  const ix=simIndiceAssuntos();
+  if(!ix.length){toast('⚠️ Seu mapa ainda não tem minibosses pra ligar.','var(--orange)');return;}
+  const porId=new Map((db.dicas||[]).map(d=>[d.id,d]));
+  const alvo=dicasResolverGrupos.filter(g=>{
+    const e=dicasResolverEscolha[dicasResolverChave(g)];
+    return !(e&&e.via==='voce')&&!(e||dicasSugerirAssunto(g,ix,porId));
+  });
+  if(!alvo.length){toast('Todas as linhas já têm sugestão.','var(--muted)');return;}
+  const chaves=alvo.map(dicasResolverChave);
+  const linhasGrupos=alvo.map((g,n)=>{
+    const ds=g.ids.map(id=>porId.get(id)).filter(Boolean);
+    const k=dicasReino(g.kId);
+    const grupos=[...new Set(ds.map(d=>d.grupo).filter(Boolean))].join(', ');
+    return`${n}. assunto escrito: "${g.nome||'(nenhum)'}" · matéria: ${k?k.name:'?'}${grupos?' · grupo: '+grupos:''} · dicas: ${ds.slice(0,4).map(d=>'"'+d.titulo+'"').join('; ')}`;
+  }).join('\n');
+  const linhasSubs=ix.map(c=>`${c.sub.id} = ${c.kingdom.name} › ${c.topic.name} › ${c.sub.name}`).join('\n');
+  const prompt=`Você organiza dicas de estudo para concurso. Para cada GRUPO de dicas abaixo, escolha o ASSUNTO (miniboss) da LISTA que melhor corresponde ao tema das dicas.
+
+REGRAS
+1. Use somente ids que aparecem na LISTA, exatamente como estão escritos.
+2. Prefira um assunto da mesma matéria do grupo; use outra matéria só se o tema claramente pertence a ela (ex.: controle social do SUS numa matéria de SUS).
+3. Se nenhum assunto da lista servir, use "" — não chute.
+
+FORMATO: responda APENAS com um array JSON, sem texto antes nem depois:
+[{"g":0,"id":"<id da lista ou vazio>"}]
+
+GRUPOS
+${linhasGrupos}
+
+LISTA DE ASSUNTOS (id = matéria › tópico › assunto)
+${linhasSubs}`;
+  dicasLigandoIA=true;
+  dicasRefrescar();
+  try{
+    const{parsed}=await callGeminiJSON(apiKey,prompt,false,8192);
+    const lista=Array.isArray(parsed)?parsed:(parsed&&Array.isArray(parsed.ligacoes)?parsed.ligacoes:[]);
+    const validos=new Set(ix.map(c=>c.sub.id));
+    let n=0;
+    lista.forEach(x=>{
+      const ch=chaves[Number(x&&x.g)];
+      const id=String((x&&x.id)||'');
+      if(ch==null||!validos.has(id))return;
+      const e=dicasResolverEscolha[ch];
+      if(e&&e.via==='voce')return;
+      dicasResolverEscolha[ch]={subId:id,via:'ia'};
+      n++;
+    });
+    toast(n?`🤖 A IA sugeriu ${n} de ${alvo.length} ${alvo.length===1?'linha':'linhas'} — confira antes de ligar.`
+           :'⚠️ A IA não achou assunto na sua lista para essas linhas.',n?'var(--green)':'var(--orange)');
+  }catch(e){
+    console.warn('Falha ao sugerir assuntos com IA:',e);
+    toast('❌ '+((e&&e.message)||'Não consegui pedir as sugestões agora.'),'var(--red)');
+  }finally{
+    dicasLigandoIA=false;
+    dicasRefrescar();
+  }
 }
 // ===== DICAS FORA DA ABA (etapa 2): miniboss, correção e Banco de Erros =====
 // A dica serve mais onde o assunto está acontecendo: na tela do miniboss que você está
@@ -33452,6 +33603,9 @@ window.dicasImportarPendenteDescartar=dicasImportarPendenteDescartar;
 window.dicasRelatorioFechar=dicasRelatorioFechar;
 window.dicasVerSemAssunto=dicasVerSemAssunto;
 window.dicasLigarAssunto=dicasLigarAssunto;
+window.dicasLigarTodas=dicasLigarTodas;
+window.dicasLigarSugerirIA=dicasLigarSugerirIA;
+window.dicasResolverEscolher=dicasResolverEscolher;
 window.dicasPacotesAbrir=dicasPacotesAbrir;
 window.dicasPacotesFechar=dicasPacotesFechar;
 window.dicasPacoteAplicar=dicasPacoteAplicar;
