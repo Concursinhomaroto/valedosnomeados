@@ -302,7 +302,7 @@ async def main():
               const cards=[...document.querySelectorAll('#dicas-sub-sCrase .dica-card')];
               return {miniboss:vaza('#si-sCrase'),rolagem:document.documentElement.scrollWidth>window.innerWidth+1,
                       visiveis:cards.filter(c=>c.getBoundingClientRect().width>0).length,
-                      colunas:getComputedStyle(document.querySelector('#dicas-sub-sCrase .dica-grade')).gridTemplateColumns.split(' ').length};}""")
+                      colunas:new Set(cards.map(c=>Math.round(c.getBoundingClientRect().left))).size};}""")
             await page.wait_for_timeout(200)
             await page.screenshot(path=os.path.join(OUT,'dicas_miniboss_%s_%s.png'%(larg,tema)))
             print('   %-5s %4spx miniboss: %s cartões visíveis em %s coluna(s) · elementos vazando %s · rolagem lateral %s'

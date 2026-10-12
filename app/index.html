@@ -2879,10 +2879,14 @@ body.missao-ligada #dash-overdue-revs{display:none;}
 .dica-grupo-tit{margin-bottom:var(--sp-3);flex-wrap:wrap;gap:6px;}
 .dica-grupo-mat{color:var(--muted);}
 .dica-grupo-n{color:var(--muted);letter-spacing:0;}
-.dica-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:var(--sp-3);align-items:start;}
-.dica-numeros{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:var(--sp-3);}
-.dica-grade+.dica-numeros{margin-top:var(--sp-3);}
-.dica-grade>.dica-form,.dica-numeros>.dica-form{grid-column:1/-1;margin:0;}
+.dica-grade{columns:340px;column-gap:var(--sp-3);}
+/* Colunas (não grade): cartão de texto tem altura muito diferente de um pro outro, e na grade
+   o baixo deixava um buraco do lado do alto. Aqui cada coluna empilha sem buraco. */
+.dica-grade>*{break-inside:avoid;margin:0 0 var(--sp-3);}
+.dica-numeros{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:var(--sp-3);align-items:start;}
+.dica-grade+.dica-numeros{margin-top:0;}
+.dica-grade>.dica-form{column-span:all;}
+.dica-numeros>.dica-form{grid-column:1/-1;margin:0;}
 .dica-card{background:var(--panel);border:1.5px solid var(--border);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-4);
   display:flex;flex-direction:column;gap:var(--sp-2);min-width:0;box-shadow:var(--shadow);}
 .dica-card.dica-sei{opacity:.72;}
@@ -2911,9 +2915,13 @@ body.missao-ligada #dash-overdue-revs{display:none;}
 .dica-par-lado{text-align:center;font-size:var(--fs-md);font-weight:900;color:var(--text);background:var(--panel2);
   border:1px solid var(--border);border-radius:var(--r-sm);padding:6px 8px;overflow-wrap:break-word;}
 .dica-par-x{font-weight:900;color:var(--muted);}
-.dica-num{gap:4px;}
-.dica-num-tit{font-size:var(--fs-rotulo);font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+.dica-num{gap:var(--sp-2);}
+.dica-num-topo{display:grid;grid-template-columns:minmax(4.5em,40%) minmax(0,1fr);gap:var(--sp-3);align-items:start;}
+.dica-num-info{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.dica-num-tit{font-size:var(--fs-corpo);font-weight:900;color:var(--text);line-height:1.3;}
 .dica-num-valor{font-size:var(--fs-xl);font-weight:900;color:var(--accent);line-height:1.15;font-variant-numeric:tabular-nums;overflow-wrap:break-word;}
+.dica-num-valor-medio{font-size:var(--fs-lg);line-height:1.2;}
+.dica-num-valor-longo{font-size:var(--fs-md);line-height:1.3;}
 .dica-num-rotulo{font-size:var(--fs-leitura);font-weight:700;color:var(--text2);line-height:1.4;}
 .dica-form{display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-3);padding:var(--sp-3);}
 .dica-form [hidden]{display:none!important;}
@@ -2948,7 +2956,7 @@ body.missao-ligada #dash-overdue-revs{display:none;}
    usa a borda tracejada do bloco "GUARDE" do comentário (.expl-marca): é a mesma família. */
 button.dica-etq-assunto{background:none;font-family:inherit;cursor:pointer;}
 button.dica-etq-assunto:hover{border-color:var(--accent);color:var(--accent);}
-.dicas-sub-wrap .dica-grade{grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));}
+.dicas-sub-wrap .dica-grade{columns:300px;}
 .dicas-sub-wrap .flash-header{flex-wrap:wrap;}
 .dicas-sub-acoes{display:flex;gap:6px;flex-wrap:wrap;}
 .dica-form-modal{margin:0;padding:0;}
@@ -2974,7 +2982,8 @@ button.dica-etq-assunto:hover{border-color:var(--accent);color:var(--accent);}
   background:var(--panel2);border:1px solid var(--border);border-radius:var(--r-sm);padding:5px 8px;}
 .dica-treino span{color:var(--muted);font-weight:600;}
 .dica-treino .btn{margin-left:auto;}
-.dica-treino-vazio{color:var(--muted);font-weight:600;}
+/* Sem questão no Acervo: só uma linha discreta — a caixa repetida em todo cartão pesava a lista. */
+.dica-treino.dica-treino-vazio{color:var(--muted);font-weight:600;background:none;border:0;padding:0;}
 /* Etapa 5: rascunho da IA — borda tracejada e aviso, até você aprovar. */
 .dica-card.dica-rascunho{border-style:dashed;border-color:var(--accent);}
 .dica-rascunho-aviso{font-size:var(--fs-selo);font-weight:800;color:var(--accent);}
@@ -19069,6 +19078,12 @@ function dicaRodapeHTML(d,sei,ctx){
     ${d.rascunho?`<button class="btn btn-xs btn-ghost dica-btn-descartar" style="color:var(--red-t)" onclick="dicaApagar('${id}')"><i class="fa fa-trash"></i> Descartar</button>`:''}
   </div>`;
 }
+// O valor é o que se lê de relance, mas "9 meses + reforço aos 4 anos" na fonte de "40 h"
+// quebrava em três linhas — ou no meio da palavra. A fonte acompanha o tamanho do texto.
+function dicaValorClasse(v){
+  const n=String(v||'').length;
+  return'dica-num-valor'+(n>22?' dica-num-valor-longo':n>11?' dica-num-valor-medio':'');
+}
 function dicaCardHTML(d,ctx){
   ctx=(typeof ctx==='string')?ctx:'aba';   // .map(dicaCardHTML) passa o índice como 2º argumento
   if(ctx==='aba'&&dicasEditando===d.id)return dicaEditorHTML(d,'edit');
@@ -19079,9 +19094,13 @@ function dicaCardHTML(d,ctx){
   const idHtml=escapeHtml((ctx==='aba'?'dica-':'dica-'+ctx+'-')+d.id);
   if(d.tipo==='numero'){
     return`<article class="${cls} dica-num" id="${idHtml}">
-      ${d.titulo&&d.titulo!==d.rotulo?`<div class="dica-num-tit">${escapeHtml(d.titulo)}</div>`:''}
-      <div class="dica-num-valor">${escapeHtml(d.valor||'')}</div>
-      <div class="dica-num-rotulo">${escapeHtml(d.rotulo||d.titulo||'')}</div>
+      <div class="dica-num-topo">
+        <div class="${dicaValorClasse(d.valor)}">${escapeHtml(d.valor||'')}</div>
+        <div class="dica-num-info">
+          ${d.titulo&&d.titulo!==d.rotulo?`<div class="dica-num-tit">${escapeHtml(d.titulo)}</div>`:''}
+          <div class="dica-num-rotulo">${escapeHtml(d.rotulo||d.titulo||'')}</div>
+        </div>
+      </div>
       <div class="dica-etiquetas">${selo}${dicaEtiquetasHTML(d,ctx)}</div>
       ${dicaTreinoHTML(d)}
       ${dicaRodapeHTML(d,sei,ctx)}
@@ -19920,7 +19939,7 @@ function dicasQuadroNumerosHTML(){
         const c=dicaAssunto(d);
         const extra=[d.titulo&&d.titulo!==d.rotulo?d.titulo:'',c?c.sub.name:'',(d.bancas||[]).join(', ')].filter(Boolean);
         return`<div class="dicas-quadro-cel${dicaSei(d.id)?' dica-sei':''}" data-dica="${escapeHtml(d.id)}">
-          <div class="dica-num-valor">${escapeHtml(d.valor||'')}</div>
+          <div class="${dicaValorClasse(d.valor)}">${escapeHtml(d.valor||'')}</div>
           <div class="dica-num-rotulo">${escapeHtml(d.rotulo||d.titulo||'')}</div>
           ${extra.length?`<div class="dicas-quadro-extra">${escapeHtml(extra.join(' · '))}</div>`:''}
         </div>`;}).join('')}</div>
