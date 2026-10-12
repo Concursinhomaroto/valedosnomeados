@@ -2963,6 +2963,12 @@ button.dica-etq-assunto:hover{border-color:var(--accent);color:var(--accent);}
   display:flex;flex-direction:column;gap:2px;min-width:0;}
 .dicas-quadro-cel.dica-sei{opacity:.72;}
 .dicas-quadro-extra{font-size:var(--fs-selo);color:var(--muted);font-weight:600;overflow-wrap:break-word;}
+/* Etapa 4: o Acervo do assunto, no rodapé do cartão. */
+.dica-treino{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:var(--fs-selo);font-weight:700;color:var(--text2);
+  background:var(--panel2);border:1px solid var(--border);border-radius:var(--r-sm);padding:5px 8px;}
+.dica-treino span{color:var(--muted);font-weight:600;}
+.dica-treino .btn{margin-left:auto;}
+.dica-treino-vazio{color:var(--muted);font-weight:600;}
 @media(max-width:600px){
   .dica-linha{grid-template-columns:5.9em minmax(0,1fr);}
   .dica-card{padding:var(--sp-3);}
@@ -18740,6 +18746,7 @@ function dicasRefrescarSeAberta(){
 }
 function dicasHTML(){
   dicasMapaSubs();
+  dicasAcervoResumir();
   if(!(db.dicas||[]).length)return dicasVazioHTML();
   const pool=dicasAplicarFiltros();
   return`<div class="section-card">
@@ -18910,6 +18917,7 @@ function dicaCardHTML(d,ctx){
       <div class="dica-num-valor">${escapeHtml(d.valor||'')}</div>
       <div class="dica-num-rotulo">${escapeHtml(d.rotulo||d.titulo||'')}</div>
       <div class="dica-etiquetas">${selo}${dicaEtiquetasHTML(d,ctx)}</div>
+      ${dicaTreinoHTML(d)}
       ${dicaRodapeHTML(d,sei,ctx)}
     </article>`;
   }
@@ -18928,6 +18936,7 @@ function dicaCardHTML(d,ctx){
     </header>
     ${corpo}
     ${dicaExemplosHTML(d)}
+    ${dicaTreinoHTML(d)}
     ${dicaRodapeHTML(d,sei,ctx)}
   </article>`;
 }
@@ -19396,6 +19405,7 @@ function dicasSubBotaoHTML(subId){
 }
 function dicasSubPainelHTML(s){
   dicasMapaSubs();
+  dicasAcervoResumir();
   const ds=dicasDoAssunto(s.id);
   const sid=escapeAttrJs(s.id);
   return`<div class="flash-header">
@@ -19713,6 +19723,43 @@ function dicasColinhaImprimir(){
   w.document.open();w.document.write(dicasColinhaHTML(o));w.document.close();
   closeModal();
   setTimeout(()=>{try{w.focus();w.print();}catch(e){}},300);
+}
+// ===== TREINO POR DICA (etapa 4) =====
+// A dica diz a regra; o Acervo diz se você acerta. No cartão: quantas questões do Acervo
+// são do mesmo assunto e o seu acerto nelas, e um botão que monta o Modo Treino só com
+// elas — o mesmo treinoTreinarAssunto do Treinar, sem gerar nada novo.
+//
+// montarAcervo varre o Acervo inteiro: o resumo é feito uma vez por abertura da aba (e do
+// painel do miniboss) e reaproveitado enquanto você filtra ou digita na busca.
+let dicasAcervoResumo=null;
+function dicasAcervoResumir(){
+  const m=new Map();
+  treinoPoolCompleto().forEach(q=>{
+    if(!q.subId)return;
+    const a=m.get(q.subId)||{n:0,vezes:0,acertos:0};
+    a.n++;a.vezes+=q.vezesRespondida||0;a.acertos+=q.acertos||0;
+    m.set(q.subId,a);
+  });
+  dicasAcervoResumo=m;
+  return m;
+}
+function dicaTreinoHTML(d){
+  if(!d.subId)return'';
+  const a=(dicasAcervoResumo||dicasAcervoResumir()).get(d.subId);
+  if(!a||!a.n)return`<div class="dica-treino dica-treino-vazio">📚 Nenhuma questão deste assunto no Acervo ainda</div>`;
+  const pct=a.vezes?Math.round(100*a.acertos/a.vezes):null;
+  // Mesma amostra mínima da dificuldade aferida: com menos de 3 respostas, o número não
+  // ganha cor — uma sorte ou um azar decidiria o tom.
+  const poucas=a.vezes<ACERVO_DIFICULDADE_MIN_AMOSTRA;
+  const acerto=pct==null?'nunca respondidas'
+    :`você acerta <b style="color:${poucas?'var(--muted)':faixaCorTexto(pct)}">${pct}%</b> <span>(${a.acertos} de ${a.vezes}${poucas?' · pouca amostra':''})</span>`;
+  return`<div class="dica-treino">📚 <b>${a.n}</b> ${a.n===1?'questão':'questões'} no Acervo · ${acerto}
+    <button class="btn btn-xs btn-ghost" onclick="dicaTreinarAssunto('${escapeAttrJs(d.subId)}')" title="Modo Treino só com as questões deste assunto">🎯 Treinar</button></div>`;
+}
+function dicaTreinarAssunto(subId){
+  showScreen('simgeral');
+  if(!document.getElementById('screen-simgeral').classList.contains('active'))return;   // plano travado
+  treinoTreinarAssunto(subId);
 }
 function montarHTML(){
   const acervo=montarAcervo();
@@ -32783,6 +32830,7 @@ window.dicasImportarPendenteDescartar=dicasImportarPendenteDescartar;
 window.dicasRelatorioFechar=dicasRelatorioFechar;
 window.dicasVerSemAssunto=dicasVerSemAssunto;
 window.dicasLigarAssunto=dicasLigarAssunto;
+window.dicaTreinarAssunto=dicaTreinarAssunto;
 window.dicasVer=dicasVer;
 window.dicasColinhaAbrir=dicasColinhaAbrir;
 window.dicasColinhaImprimir=dicasColinhaImprimir;
