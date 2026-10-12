@@ -81,6 +81,35 @@ async def main():
         assert r['painel'].startswith('📚 4 questões no Acervo') and r['chamadas']==0
         print('   OK\n')
 
+        print('=== C2) errou no treino: "Virar dica" abre a pegadinha com o Cuidado preenchido ===')
+        await page.evaluate("""()=>{dicaTreinarAssunto('sCrase');const it=treinoSessao.itens[treinoSessao.idx];
+          it.explicacao='O certo é o contrário. GUARDE: depois de desde não há crase.';
+          treinoSelecionar(it.alternativas.find(a=>a.letra!==it.correta).letra);treinoConfirmarResposta();}""")
+        await page.wait_for_timeout(200)
+        botao=await page.evaluate("()=>(document.querySelector('#treino-virar-dica button')||{}).textContent||''")
+        print('   botão na correção: "%s"'%botao.strip())
+        assert botao.strip()=='💡 Virar dica'
+        await page.click('#treino-virar-dica button')
+        await page.wait_for_timeout(200)
+        r=await page.evaluate("""()=>({titulo:(document.querySelector('.modal-title,#modal-title,.modal h3')||{}).textContent||'',
+          cuidado:(document.getElementById('dica-modal-cuidado')||{}).value||'',
+          assunto:(document.getElementById('dica-modal-assunto')||{}).value||''})""")
+        print('   modal: assunto %s · cuidado "%s"'%(r['assunto'],r['cuidado'][:60]))
+        assert r['assunto']=='sCrase' and r['cuidado'], r
+        await page.fill('#dica-modal-titulo','Pegadinha do treino: desde')
+        await page.evaluate("()=>{const t=document.getElementById('treino-nota');if(t)t.value='nota ainda não guardada';}")
+        await page.evaluate("()=>dicasModalSalvar()")
+        await page.wait_for_timeout(200)
+        r=await page.evaluate("""()=>{const it=treinoSessao.itens[treinoSessao.idx];const d=db.dicas.find(x=>x.titulo==='Pegadinha do treino: desde');
+          return {d:d&&{origem:d.origem,subId:d.subId,deQuestao:d.deQuestao===acervoChave2(it),cuidado:d.cuidado},
+                  botao:(document.querySelector('#treino-virar-dica button')||{}).textContent||'',
+                  nota:(document.getElementById('treino-nota')||{}).value};}""")
+        print('   dica: %s · botão agora: "%s" · nota não guardada ficou: %s'%(r['d'],r['botao'].strip(),r['nota']=='nota ainda não guardada'))
+        assert r['d'] and r['d']['origem']=='erro' and r['d']['subId']=='sCrase' and r['d']['deQuestao'] and r['d']['cuidado']
+        assert r['botao'].strip()=='💡 Já virou dica' and r['nota']=='nota ainda não guardada'
+        await page.evaluate("()=>{treinoSessao=null;treinoResumo=null;treinoTempoParar();showScreen('dicas');}")
+        print('   OK\n')
+
         print('=== D) 375 px ===')
         await page.evaluate("()=>{dicasFiltroLimpar();document.documentElement.setAttribute('data-theme','dark');}")
         await page.set_viewport_size({'width':375,'height':812})
