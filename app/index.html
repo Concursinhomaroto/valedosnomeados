@@ -2938,6 +2938,25 @@ body.missao-ligada #dash-overdue-revs{display:none;}
 .dicas-ligar-linha select.inp{max-width:100%;}
 .dicas-vazio-txt{font-size:var(--fs-leitura)!important;font-weight:600;line-height:1.6;max-width:440px;margin:8px auto 0;}
 .dicas-vazio-acoes{display:flex;justify-content:center;gap:var(--sp-2);flex-wrap:wrap;}
+/* Etapa 2: dicas fora da aba — no miniboss, na correção e no modal. A caixa da correção
+   usa a borda tracejada do bloco "GUARDE" do comentário (.expl-marca): é a mesma família. */
+button.dica-etq-assunto{background:none;font-family:inherit;cursor:pointer;}
+button.dica-etq-assunto:hover{border-color:var(--accent);color:var(--accent);}
+.dicas-sub-wrap .dica-grade{grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));}
+.dicas-sub-wrap .flash-header{flex-wrap:wrap;}
+.dicas-sub-acoes{display:flex;gap:6px;flex-wrap:wrap;}
+.dica-form-modal{margin:0;padding:0;}
+.dicas-correcao{margin-top:var(--sp-2);padding:var(--sp-2) var(--sp-3);border:1.5px dashed var(--accent);border-radius:var(--r-sm);
+  background:var(--panel);display:flex;flex-direction:column;gap:6px;}
+.dicas-correcao-cab{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:var(--fs-selo);font-weight:900;
+  color:var(--accent);text-transform:uppercase;letter-spacing:.5px;}
+.dicas-correcao-cab .sg-mais{margin:0 0 0 auto;text-transform:none;letter-spacing:0;}
+.dica-corr{display:flex;flex-direction:column;gap:2px;padding-top:6px;border-top:1px solid var(--border);}
+.dica-corr:first-of-type{border-top:0;padding-top:0;}
+.dica-corr-tit{font-size:var(--fs-leitura);font-weight:900;color:var(--text);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.dica-corr-txt{font-size:var(--fs-leitura);color:var(--text2);line-height:1.5;overflow-wrap:break-word;}
+.dica-corr-txt b{color:var(--accent);font-size:var(--fs-selo);text-transform:uppercase;letter-spacing:.4px;}
+.dica-corr .btn{align-self:flex-start;margin-top:2px;}
 @media(max-width:600px){
   .dica-linha{grid-template-columns:5.9em minmax(0,1fr);}
   .dica-card{padding:var(--sp-3);}
@@ -8432,6 +8451,7 @@ function subItemHTML(s,topicId){
       </button>
       <button class="btn btn-sm ${flashCountSub(s.id)?'btn-purple-s':'btn-ghost'}" onclick="toggleFlash('${s.id}')" id="flash-btn-${s.id}"><i class="fa fa-layer-group"></i> Flashcards${flashCountSub(s.id)?` (${flashCountSub(s.id)})`:''}</button>
       <button class="btn btn-sm ${s.simStats?'btn-pink':'btn-ghost'}" onclick="toggleSim('${s.id}')" id="sim-btn-${s.id}"><i class="fa fa-list-check"></i> Simulado</button>
+      ${dicasSubBotaoHTML(s.id)}
       </div>
       <details class="sub-acoes-mais">
         <summary class="${hasNote||hasFluxo?'sub-acoes-tem':''}" title="Revisões, anotação, fluxograma, renomear, excluir" aria-label="Mais ações do miniboss">⋯</summary>
@@ -8449,6 +8469,7 @@ function subItemHTML(s,topicId){
     <div class="resumo-wrap${openResumo.has(s.id)?' resumo-open':''}" id="resumo-${s.id}">${resumoPanelHTML(s)}</div>
     <div class="flash-wrap${openFlash.has(s.id)?' flash-open':''}" id="flash-${s.id}">${flashPanelHTML(s)}</div>
     <div class="sim-wrap${openSim.has(s.id)?' sim-open':''}" id="sim-${s.id}">${simPanelHTML(s)}</div>
+    <div class="flash-wrap dicas-sub-wrap${openDicasSub.has(s.id)?' flash-open':''}" id="dicas-sub-${s.id}">${openDicasSub.has(s.id)?dicasSubPainelHTML(s):''}</div>
     <div class="fluxo-wrap${openFluxo.has(s.id)?' fluxo-open':''}" id="fluxo-${s.id}">${fluxoPanelHTML(s)}</div>
     <div class="timer-wrap" id="tw-${s.id}" ${panelOpen?'style="display:block"':''}>
       <div class="timer-display" id="td-${s.id}">${fmtHMS(displayTime)}</div>
@@ -11174,6 +11195,7 @@ function simPanelHTML(s){
             }).join('')}
           </div>
           ${simExplicacaoHTML(q)}
+          ${q.userAnswer!==q.correta?dicasNaCorrecaoHTML(s.id,q):''}
           ${q.problematico?'<div class="sim-flagged-banner"><i class="fa fa-flag"></i> Marcada como problemática — não conta nas suas estatísticas.</div>':''}
           <button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="toggleQuestaoProblematica('${s.id}','${active.histId}',${i})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>
         </div>
@@ -13562,6 +13584,7 @@ function treinoQuestaoHTML(){
     ${respondida?`<div class="sim-score-banner ${item.userAnswer===item.correta?'sim-good':'sim-bad'}">${item.userAnswer===item.correta?'✔️ Você acertou':'✖️ Você errou'}</div>
       ${simExplicacaoHTML(item)}
       ${fonteApoioTreinoHTML(item)}
+      ${item.userAnswer!==item.correta?dicasNaCorrecaoHTML(item.subId,item):''}
       ${treinoMotivoHTML(item)}
       ${treinoNotaHTML(item)}
       ${treinoAcoesHTML(item)}`:''}
@@ -18582,7 +18605,7 @@ function dicaNormalizar(x,origemPadrao){
   const tipo=normalizeForDedup(String(x.tipo||'dica'));   // "Número" -> "numero"
   const d={id:String(x.id||genId()),tipo,kingdomId:String(x.kingdomId||'')};
   if(x.subId)d.subId=String(x.subId);
-  const campos=['grupo','titulo','fonte'].concat(DICAS_CAMPOS_TIPO[tipo]||[]);
+  const campos=['grupo','titulo','fonte','deQuestao'].concat(DICAS_CAMPOS_TIPO[tipo]||[]);
   // O assunto como estava escrito no pacote fica guardado só enquanto não houver miniboss:
   // é o que permite resolver "sem assunto" em grupo, pelo nome que o pacote pretendia.
   if(!d.subId)campos.push('assuntoNome');
@@ -18639,7 +18662,7 @@ function dicasCasarMateria(nome){
 }
 
 // ---- Filtros ----
-const DICAS_FILTRO_VAZIO={materia:'',grupo:'',banca:'',texto:'',jaSei:false,semAssunto:false};
+const DICAS_FILTRO_VAZIO={materia:'',assunto:'',grupo:'',banca:'',texto:'',jaSei:false,semAssunto:false};
 let dicasFiltro={...DICAS_FILTRO_VAZIO};
 let dicasCriando=false,dicasEditando=null,dicasImportando=false;
 function dicaBuscavel(d){
@@ -18653,6 +18676,7 @@ function dicasAplicarFiltros(f){
   f=f||dicasFiltro;
   let out=db.dicas||[];
   if(f.materia)out=out.filter(d=>d.kingdomId===f.materia);
+  if(f.assunto)out=out.filter(d=>d.subId===f.assunto);
   if(f.grupo)out=out.filter(d=>dicaGrupo(d)===f.grupo);
   if(f.banca)out=out.filter(d=>dicaTemBanca(d,f.banca));
   if(f.semAssunto)out=out.filter(d=>!dicaAssunto(d));
@@ -18666,9 +18690,18 @@ function dicasAplicarFiltros(f){
 }
 function dicasTemFiltro(){
   const f=dicasFiltro;
-  return!!(f.materia||f.grupo||f.banca||f.texto||f.semAssunto);
+  return!!(f.materia||f.assunto||f.grupo||f.banca||f.texto||f.semAssunto);
 }
-function dicasFiltrarMateria(id){dicasFiltro.materia=(id&&dicasFiltro.materia!==id)?id:'';dicasFiltro.grupo='';dicasRefrescar();}
+function dicasFiltrarMateria(id){dicasFiltro.materia=(id&&dicasFiltro.materia!==id)?id:'';dicasFiltro.assunto='';dicasFiltro.grupo='';dicasRefrescar();}
+// Clicar na etiqueta de assunto de um cartão filtra por ele (e clicar de novo solta).
+function dicasFiltrarAssunto(subId){
+  const c=dicasMapaSubs().get(subId);
+  if(dicasFiltro.assunto===subId){dicasFiltro.assunto='';dicasRefrescar();return;}
+  dicasFiltro.assunto=subId;
+  if(c)dicasFiltro.materia=c.kingdom.id;
+  dicasFiltro.grupo='';
+  dicasRefrescar();
+}
 function dicasFiltrarGrupo(g){dicasFiltro.grupo=dicasFiltro.grupo===g?'':g;dicasRefrescar();}
 function dicasFiltrarBanca(b){dicasFiltro.banca=b||'';dicasRefrescar();}
 // Só a contagem, os chips e a lista se refazem — o campo de busca não, senão perderia o
@@ -18783,10 +18816,13 @@ function dicasChipsHTML(){
   if(f.grupo&&!porGrupo.has(f.grupo))porGrupo.set(f.grupo,0);
   const sabidas=dicasAplicarFiltros({...f,jaSei:true}).filter(d=>dicaSei(d.id)).length;
   const semAssunto=dicasAplicarFiltros({...f,semAssunto:false}).filter(d=>!dicaAssunto(d)).length;
+  const assuntoAtivo=f.assunto?dicasSubs.get(f.assunto):null;
   const mostrar=[chip(f.jaSei,'dicasAlternarJaSei()',`✅ mostrar as que já sei · <b>${sabidas}</b>`,'As que você marcou como "já sei" saem da lista padrão')];
   if(semAssunto||f.semAssunto)mostrar.push(chip(f.semAssunto,'dicasAlternarSemAssunto()',`⚠️ sem assunto · <b>${semAssunto}</b>`,'Dicas que ainda não estão ligadas a um miniboss'));
   return`<div class="banco-chips-faixa dicas-chips">
     <div class="banco-chip-grupo" id="dicas-chips-materia"><span class="banco-chip-rotulo">Matéria</span><div class="banco-chips">${chipsMat.join('')}</div></div>
+    ${f.assunto?`<div class="banco-chip-grupo" id="dicas-chips-assunto"><span class="banco-chip-rotulo">Assunto</span><div class="banco-chips">${
+      chip(true,`dicasFiltrarAssunto('${escapeAttrJs(f.assunto)}')`,`${escapeHtml(assuntoAtivo?assuntoAtivo.sub.name:'assunto apagado')} ✕`,'Tirar o filtro de assunto')}</div></div>`:''}
     ${porGrupo.size>1||f.grupo?`<div class="banco-chip-grupo" id="dicas-chips-grupo"><span class="banco-chip-rotulo">Grupo</span><div class="banco-chips">${
       [...porGrupo.entries()].map(([g,n])=>chip(f.grupo===g,`dicasFiltrarGrupo('${escapeAttrJs(g)}')`,`${escapeHtml(g)} · <b>${n}</b>`)).join('')}</div></div>`:''}
     <div class="banco-chip-grupo" id="dicas-chips-mostrar"><span class="banco-chip-rotulo">Mostrar</span><div class="banco-chips">${mostrar.join('')}</div></div>
@@ -18822,11 +18858,12 @@ function dicasCorpoHTML(pool){
     </section>`;
   }).join('');
 }
-function dicaEtiquetasHTML(d){
+function dicaEtiquetasHTML(d,ctx){
   const c=dicaAssunto(d);
+  const filtrar=c?(ctx==='aba'?`dicasFiltrarAssunto('${escapeAttrJs(c.sub.id)}')`:`dicasAbrirAssunto('${escapeAttrJs(c.sub.id)}')`):'';
   const sem=d.assuntoNome?`O assunto escrito ("${d.assuntoNome}") não casou com nenhum miniboss`:'Ainda não ligada a um miniboss';
   return(d.bancas||[]).map(b=>`<span class="banco-tag">${escapeHtml(b)}</span>`).join('')
-    +(c?`<span class="dica-etq" title="Assunto">${escapeHtml(c.sub.name)}</span>`
+    +(c?`<button type="button" class="dica-etq dica-etq-assunto" onclick="${filtrar}" title="Ver as dicas deste assunto">${escapeHtml(c.sub.name)}</button>`
        :`<span class="dica-etq dica-etq-sem" title="${escapeHtml(sem)}">sem assunto</span>`);
 }
 function dicaExemplosHTML(d){
@@ -18834,29 +18871,30 @@ function dicaExemplosHTML(d){
   if(!ex.length)return'';
   return`<ul class="dica-exemplos">${ex.map(e=>`<li class="dica-ex ${e.ok?'dica-ex-ok':'dica-ex-nok'}"><span class="dica-ex-sinal">${e.ok?'✔ certo':'✖ errado'}</span> ${escapeHtml(e.txt)}</li>`).join('')}</ul>`;
 }
-function dicaRodapeHTML(d,sei){
+function dicaRodapeHTML(d,sei,ctx){
   const o=DICAS_ORIGENS[d.origem]||DICAS_ORIGENS.minha;
   const id=escapeAttrJs(d.id);
   const origem=o.lbl+(d.fonte?' · '+d.fonte:'');
   return`<div class="dica-rodape">
     <span class="dica-origem" title="${escapeHtml('Origem: '+origem)}">${o.icone} ${escapeHtml(origem)}</span>
-    <button class="btn btn-xs btn-ghost dica-btn-sei" onclick="dicaJaSei('${id}')">${sei?'↩️ Rever':'✅ Já sei'}</button>
-    <button class="btn btn-xs btn-ghost dica-btn-editar" onclick="dicaEditarAbrir('${id}')"><i class="fa fa-pen"></i> Editar</button>
+    <button class="btn btn-xs btn-ghost dica-btn-sei" onclick="dicaJaSei('${id}','${ctx}')">${sei?'↩️ Rever':'✅ Já sei'}</button>
+    <button class="btn btn-xs btn-ghost dica-btn-editar" onclick="${ctx==='aba'?`dicaEditarAbrir('${id}')`:`dicaIrPara('${id}',true)`}"><i class="fa fa-pen"></i> Editar</button>
   </div>`;
 }
-function dicaCardHTML(d){
-  if(dicasEditando===d.id)return dicaEditorHTML(d,'edit');
+function dicaCardHTML(d,ctx){
+  ctx=(typeof ctx==='string')?ctx:'aba';   // .map(dicaCardHTML) passa o índice como 2º argumento
+  if(ctx==='aba'&&dicasEditando===d.id)return dicaEditorHTML(d,'edit');
   const sei=dicaSei(d.id);
   const cls='dica-card'+(sei?' dica-sei':'');
   const selo=sei?'<span class="dica-selo-sei">✅ já sei</span>':'';
-  const idHtml=escapeHtml('dica-'+d.id);
+  const idHtml=escapeHtml((ctx==='aba'?'dica-':'dica-'+ctx+'-')+d.id);
   if(d.tipo==='numero'){
     return`<article class="${cls} dica-num" id="${idHtml}">
       ${d.titulo&&d.titulo!==d.rotulo?`<div class="dica-num-tit">${escapeHtml(d.titulo)}</div>`:''}
       <div class="dica-num-valor">${escapeHtml(d.valor||'')}</div>
       <div class="dica-num-rotulo">${escapeHtml(d.rotulo||d.titulo||'')}</div>
-      <div class="dica-etiquetas">${selo}${dicaEtiquetasHTML(d)}</div>
-      ${dicaRodapeHTML(d,sei)}
+      <div class="dica-etiquetas">${selo}${dicaEtiquetasHTML(d,ctx)}</div>
+      ${dicaRodapeHTML(d,sei,ctx)}
     </article>`;
   }
   let corpo='';
@@ -18870,21 +18908,22 @@ function dicaCardHTML(d){
   return`<article class="${cls}" id="${idHtml}">
     <header class="dica-cab">
       <h4 class="dica-titulo">${escapeHtml(d.titulo||'')}</h4>
-      <div class="dica-etiquetas">${selo}${dicaEtiquetasHTML(d)}</div>
+      <div class="dica-etiquetas">${selo}${dicaEtiquetasHTML(d,ctx)}</div>
     </header>
     ${corpo}
     ${dicaExemplosHTML(d)}
-    ${dicaRodapeHTML(d,sei)}
+    ${dicaRodapeHTML(d,sei,ctx)}
   </article>`;
 }
-function dicaJaSei(id){
+function dicaJaSei(id,ctx){
   if(!db.dicasEstado||typeof db.dicasEstado!=='object'||Array.isArray(db.dicasEstado))db.dicasEstado={};
   const sei=!dicaSei(id);
   db.dicasEstado[id]={sei,vistaEm:dicasAgora()};
   saveDB();
-  dicasRefrescar();
+  dicasRefrescarSeAberta();
+  dicasRefrescarFora(id);
   toast(sei
-    ?(dicasFiltro.jaSei?'✅ Marcada como "já sei".':'✅ Marcada como "já sei" — ela sai da lista. O chip "mostrar as que já sei" traz de volta.')
+    ?((ctx&&ctx!=='aba')||dicasFiltro.jaSei?'✅ Marcada como "já sei".':'✅ Marcada como "já sei" — ela sai da lista. O chip "mostrar as que já sei" traz de volta.')
     :'↩️ Voltou pra lista de revisão.',sei?'var(--green)':'var(--accent)');
 }
 
@@ -18909,7 +18948,7 @@ function dicasGruposDe(kId){
   return[...s];
 }
 function dicaEditorHTML(d,modo){
-  const p=modo==='criar'?'dica-novo-':'dica-edit-';
+  const p=modo==='criar'?'dica-novo-':(modo==='modal'?'dica-modal-':'dica-edit-');
   const tipo=(d&&d.tipo)||'dica';
   const kId=(d&&d.kingdomId)||dicasFiltro.materia||((db.kingdoms||[])[0]||{}).id||'';
   const v=c=>escapeHtml((d&&d[c])||'');
@@ -18918,9 +18957,11 @@ function dicaEditorHTML(d,modo){
   const area=(id,lbl,ph)=>campo(id,lbl,`<textarea id="${p}${id}" class="inp" rows="2" placeholder="${escapeHtml(ph)}">${v(id)}</textarea>`);
   const linha=(id,lbl,ph,val)=>campo(id,lbl,`<input id="${p}${id}" class="inp" placeholder="${escapeHtml(ph)}" value="${val!=null?escapeHtml(val):v(id)}">`);
   const exemplos=((d&&d.exemplos)||[]).map(e=>(e.ok?'✔ ':'✖ ')+e.txt).join('\n');
-  const idJs=d?escapeAttrJs(d.id):'';
-  return`<div class="banco-item banco-item-editando dica-form" id="${p}form" data-tipo="${tipo}">
-    <div class="dica-form-tit">${modo==='criar'?'✍️ Nova dica':'✏️ Editar dica'}</div>
+  const idJs=(d&&d.id)?escapeAttrJs(d.id):'';
+  const salvar=modo==='criar'?'dicasCriarSalvar()':(modo==='modal'?'dicasModalSalvar()':`dicaEditarSalvar('${idJs}')`);
+  const cancelar=modo==='criar'?'dicasCriarCancelar()':(modo==='modal'?'closeModal()':'dicaEditarCancelar()');
+  return`<div class="${modo==='modal'?'dica-form dica-form-modal':'banco-item banco-item-editando dica-form'}" id="${p}form" data-tipo="${tipo}">
+    ${modo==='modal'?'':`<div class="dica-form-tit">${modo==='criar'?'✍️ Nova dica':'✏️ Editar dica'}</div>`}
     <div class="dica-form-grade">
       ${campo('tipo','Tipo',`<select id="${p}tipo" class="inp" onchange="dicaFormTipo('${p}')">${DICAS_TIPOS.map(t=>`<option value="${t.id}"${t.id===tipo?' selected':''}>${t.lbl}</option>`).join('')}</select>`)}
       ${campo('materia','Matéria',`<select id="${p}materia" class="inp" onchange="dicaFormMateria('${p}')">${dicasOpcoesReinoHTML(kId)}</select>`)}
@@ -18941,9 +18982,9 @@ function dicaEditorHTML(d,modo){
       ${linha('fonte','Fonte','Norma ou material (opcional)')}
     </div>
     <div class="banco-edit-linha">
-      <button class="btn btn-sm btn-primary" onclick="${modo==='criar'?'dicasCriarSalvar()':`dicaEditarSalvar('${idJs}')`}"><i class="fa fa-check"></i> Salvar</button>
-      <button class="btn btn-sm btn-ghost" onclick="${modo==='criar'?'dicasCriarCancelar()':'dicaEditarCancelar()'}">Cancelar</button>
-      ${modo==='criar'?'':`<button class="btn btn-sm btn-ghost dica-apagar" onclick="dicaApagar('${idJs}')"><i class="fa fa-trash"></i> Apagar dica</button>`}
+      <button class="btn btn-sm btn-primary" onclick="${salvar}"><i class="fa fa-check"></i> Salvar</button>
+      <button class="btn btn-sm btn-ghost" onclick="${cancelar}">Cancelar</button>
+      ${modo==='edit'?`<button class="btn btn-sm btn-ghost dica-apagar" onclick="dicaApagar('${idJs}')"><i class="fa fa-trash"></i> Apagar dica</button>`:''}
     </div>
   </div>`;
 }
@@ -18978,20 +19019,27 @@ function dicasCriarAbrir(){
   if(el)el.focus();
 }
 function dicasCriarCancelar(){dicasCriando=false;renderDicasScreen();}
-function dicasCriarSalvar(){
+// Um caminho só pra criar, da aba ou do modal: o mesmo motivo de recusa e a mesma trava
+// de duplicata. extras leva o que o formulário não tem (a questão de onde a dica saiu).
+function dicaCriarDoForm(p,extras){
   const agora=dicasAgora();
-  const d=dicaNormalizar({...dicaLerForm('dica-novo-'),id:genId(),criadaEm:agora,editadaEm:agora},'minha');
+  const d=dicaNormalizar({...dicaLerForm(p),...(extras||{}),id:genId(),criadaEm:agora,editadaEm:agora},'minha');
   const motivo=dicaValidar(d);
-  if(motivo){toast('⚠️ Não salvei: '+motivo+'.','var(--red)');return;}
-  if(dicaDuplicada(d)){toast('⚠️ Já existe uma dica com esse título nessa matéria. Edite a que existe ou mude o título.','var(--red)');return;}
+  if(motivo){toast('⚠️ Não salvei: '+motivo+'.','var(--red)');return null;}
+  if(dicaDuplicada(d)){toast('⚠️ Já existe uma dica com esse título nessa matéria. Edite a que existe ou mude o título.','var(--red)');return null;}
   db.dicas=db.dicas||[];
   db.dicas.push(d);
+  dicasSalvar();
+  return d;
+}
+function dicasCriarSalvar(){
+  const d=dicaCriarDoForm('dica-novo-');
+  if(!d)return;
   dicasCriando=false;
   // A dica recém-criada precisa aparecer: se o filtro em uso a esconderia, ele dá lugar à
   // matéria dela.
   dicasMapaSubs();
   if(!dicasAplicarFiltros().some(x=>x.id===d.id))dicasFiltro={...DICAS_FILTRO_VAZIO,materia:d.kingdomId};
-  dicasSalvar();
   renderDicasScreen();
   toast('✅ Dica criada.','var(--green)');
 }
@@ -19016,6 +19064,7 @@ function dicaEditarSalvar(id){
   dicasEditando=null;
   dicasSalvar();
   renderDicasScreen();
+  [velha.subId,d.subId].forEach(sid=>{if(sid)dicasSubRefrescar(sid);});
   toast('✏️ Dica atualizada.','var(--green)');
 }
 function dicaApagar(id){
@@ -19029,6 +19078,7 @@ function dicaApagar(id){
   if(dicasEditando===id)dicasEditando=null;
   dicasSalvar();
   renderDicasScreen();
+  if(d.subId)dicasSubRefrescar(d.subId);
   toast('🗑️ Dica apagada.','var(--muted)');
 }
 
@@ -19260,6 +19310,237 @@ function dicasLigarAssunto(i){
   dicasSalvar();
   dicasRefrescar();
   toast(`🔗 ${n} ${n===1?'dica ligada':'dicas ligadas'} a "${c.sub.name}".`,'var(--green)');
+}
+// ===== DICAS FORA DA ABA (etapa 2): miniboss, correção e Banco de Erros =====
+// A dica serve mais onde o assunto está acontecendo: na tela do miniboss que você está
+// estudando e na hora em que você erra uma questão dele. Tudo aqui lê o mesmo db.dicas e
+// grava pelo mesmo caminho da aba (dicaCriarDoForm/dicasSalvar) — nada de cópia paralela.
+function dicasDoAssunto(subId){return subId?(db.dicas||[]).filter(d=>d.subId===subId):[];}
+function dicaDaQuestao(chave){return chave?(db.dicas||[]).find(d=>d.deQuestao===chave)||null:null;}
+
+// ---- Leva pra aba Dicas ----
+// Pelo assunto: filtro de assunto ligado e as que você já sabe à vista — quem vem do
+// miniboss quer ver tudo daquele assunto, não a lista de revisão.
+function dicasAbrirAssunto(subId){
+  const c=dicasMapaSubs().get(subId);
+  dicasFiltro={...DICAS_FILTRO_VAZIO,materia:c?c.kingdom.id:'',assunto:subId,jaSei:true};
+  dicasEditando=null;dicasCriando=false;
+  showScreen('dicas');
+  window.scrollTo(0,0);
+}
+// Uma dica só (e, se pedido, já com o editor aberto nela).
+function dicaIrPara(id,editar){
+  const d=(db.dicas||[]).find(x=>x.id===id);
+  if(!d)return;
+  dicasFiltro={...DICAS_FILTRO_VAZIO,materia:d.kingdomId,jaSei:dicaSei(id)};
+  dicasEditando=editar?id:null;dicasCriando=false;
+  showScreen('dicas');
+  const alvo=document.getElementById(editar?'dica-edit-form':'dica-'+id);
+  if(alvo&&alvo.scrollIntoView)alvo.scrollIntoView({block:'center'});
+}
+// "Já sei" marcado fora da aba: atualiza o painel do miniboss e as linhas de correção que
+// mostram aquela dica, sem redesenhar a tela inteira.
+function dicasRefrescarFora(id){
+  const d=(db.dicas||[]).find(x=>x.id===id);
+  if(!d)return;
+  if(d.subId)dicasSubRefrescar(d.subId);
+  document.querySelectorAll('.dica-corr').forEach(el=>{if(el.dataset.dica===id)el.outerHTML=dicaLinhaCorrecaoHTML(d);});
+}
+
+// ---- Editor em modal ----
+// Fora da aba o editor abre em modal: no miniboss e no Banco de Erros, ir pra outra tela
+// no meio do estudo faria perder o lugar. Prefixo próprio (dica-modal-) porque a aba pode
+// ter o formulário de criar aberto ao mesmo tempo, escondido, com os ids dica-novo-.
+let dicaModalCtx=null;
+function dicaNovaEmModal(rascunho,ctx){
+  dicasMapaSubs();
+  dicaModalCtx=ctx||{};
+  openModal(escapeHtml(dicaModalCtx.titulo||'💡 Nova dica'),dicaEditorHTML(rascunho,'modal'));
+  const t=document.getElementById('dica-modal-titulo');
+  if(t)t.focus();
+}
+function dicasModalSalvar(){
+  const ctx=dicaModalCtx||{};
+  const d=dicaCriarDoForm('dica-modal-',ctx.extras);
+  if(!d)return;
+  dicaModalCtx=null;
+  closeModal();
+  if(d.subId)dicasSubRefrescar(d.subId);
+  if(ctx.depois==='erros')renderErrosScreen();
+  if(ctx.depois==='simgeral'&&simGeralActive&&simGeralActive.corrected)renderSimGeralScreen();
+  dicasRefrescarSeAberta();
+  toast(ctx.extras&&ctx.extras.deQuestao?'💡 Dica criada a partir deste erro.':'✅ Dica criada.','var(--green)');
+}
+
+// ---- 1) Bloco Dicas na tela do miniboss ----
+let openDicasSub=new Set();   // subIds com o painel de dicas aberto na tela do reino
+function dicasSubBotaoHTML(subId){
+  const n=dicasDoAssunto(subId).length;
+  return`<button class="btn btn-sm ${n?'btn-purple-s':'btn-ghost'}" onclick="toggleDicasSub('${escapeAttrJs(subId)}')" id="dicas-sub-btn-${escapeHtml(subId)}" title="Regras, macetes e pegadinhas deste assunto">💡 Dicas${n?` (${n})`:''}</button>`;
+}
+function dicasSubPainelHTML(s){
+  dicasMapaSubs();
+  const ds=dicasDoAssunto(s.id);
+  const sid=escapeAttrJs(s.id);
+  return`<div class="flash-header">
+      <div class="flash-title">💡 Dicas <span class="flash-count">${ds.length} ${ds.length===1?'dica':'dicas'}</span></div>
+      <span class="dicas-sub-acoes">
+        <button class="btn btn-xs btn-ghost" onclick="dicaNovaDoSub('${sid}')"><i class="fa fa-plus"></i> Nova dica</button>
+        ${ds.length?`<button class="btn btn-xs btn-ghost" onclick="dicasAbrirAssunto('${sid}')">Ver na aba Dicas →</button>`:''}
+      </span>
+    </div>
+    ${ds.length?`<div class="dica-grade">${ds.map(d=>dicaCardHTML(d,'sub')).join('')}</div>`
+      :`<div class="flash-empty">Nenhuma dica ligada a este assunto ainda. Crie aqui, importe um pacote na aba Dicas (em Treinar) ou transforme um erro em dica no Banco de Erros.</div>`}`;
+}
+function toggleDicasSub(subId){
+  if(openDicasSub.has(subId))openDicasSub.delete(subId); else openDicasSub.add(subId);
+  dicasSubRefrescar(subId);
+}
+function dicasSubRefrescar(subId){
+  const sub=simFindSub(subId);
+  const wrap=document.getElementById('dicas-sub-'+subId);
+  if(wrap&&sub){
+    const aberto=openDicasSub.has(subId);
+    wrap.innerHTML=aberto?dicasSubPainelHTML(sub):'';
+    wrap.classList.toggle('flash-open',aberto);
+  }
+  const btn=document.getElementById('dicas-sub-btn-'+subId);
+  if(btn)btn.outerHTML=dicasSubBotaoHTML(subId);
+}
+function dicaNovaDoSub(subId){
+  const c=dicasMapaSubs().get(subId);
+  if(!c)return;
+  dicaNovaEmModal({tipo:'dica',kingdomId:c.kingdom.id,subId,origem:'minha'},{titulo:'💡 Nova dica · '+c.sub.name});
+}
+
+// ---- 2) Dicas do assunto ao corrigir uma questão errada ----
+// Até três, as mais ligadas ao que a questão cobrou primeiro (palavras da questão que
+// aparecem na dica). Mostra todas as do assunto, inclusive as marcadas "já sei": se você
+// errou, ela não estava tão firme — e o botão "Rever" devolve ela à lista de revisão.
+const DICAS_CORRECAO_MAX=3;
+function dicaRelevancia(d,palavras){
+  if(!palavras.size)return 0;
+  const txt=normalizeForDedup([d.titulo,d.regra,d.aplicar,d.cuidado,d.valor,d.rotulo,d.a,d.b,d.diferenca,
+    (d.exemplos||[]).map(e=>e.txt).join(' ')].filter(Boolean).join(' '));
+  return new Set(txt.split(' ').filter(w=>palavras.has(w))).size;
+}
+// Na hora do erro, a linha que mais serve é a pegadinha; sem ela, a regra.
+function dicaLinhaChave(d){
+  if(d.tipo==='numero')return{icone:'🔢',lbl:d.valor||'',txt:d.rotulo||''};
+  if(d.tipo==='par')return{icone:explIcone('REGRA'),lbl:`${d.a||''} × ${d.b||''}`,txt:d.diferenca||''};
+  if(d.cuidado)return{icone:explIcone('CUIDADO'),lbl:'Cuidado',txt:d.cuidado};
+  if(d.regra)return{icone:explIcone('REGRA'),lbl:'Regra',txt:d.regra};
+  return{icone:explIcone('MACETE'),lbl:'Como aplicar',txt:d.aplicar||''};
+}
+function dicaLinhaCorrecaoHTML(d){
+  const sei=dicaSei(d.id);
+  const l=dicaLinhaChave(d);
+  return`<div class="dica-corr" data-dica="${escapeHtml(d.id)}">
+    <div class="dica-corr-tit">${escapeHtml(d.titulo||'')}${sei?'<span class="dica-selo-sei">✅ você marcou "já sei"</span>':''}</div>
+    <div class="dica-corr-txt">${l.icone} <b>${escapeHtml(l.lbl)}</b> ${escapeHtml(l.txt)}</div>
+    ${sei?`<button class="btn btn-xs btn-ghost" onclick="dicaJaSei('${escapeAttrJs(d.id)}','corr')">↩️ Rever</button>`:''}
+  </div>`;
+}
+function dicasNaCorrecaoHTML(subId,q){
+  const ds=dicasDoAssunto(subId);
+  if(!ds.length)return'';
+  const palavras=new Set(normalizeForDedup([q&&q.questao].concat(((q&&q.alternativas)||[]).map(a=>a&&a.texto))
+    .filter(Boolean).join(' ')).split(' ').filter(w=>w.length>=4));
+  const ordem=ds.map((d,i)=>({d,i,r:dicaRelevancia(d,palavras)})).sort((x,y)=>y.r-x.r||x.i-y.i).map(x=>x.d);
+  const mostra=ordem.slice(0,DICAS_CORRECAO_MAX);
+  return`<div class="dicas-correcao" data-dicas-sub="${escapeHtml(subId)}">
+    <div class="dicas-correcao-cab">💡 Dicas deste assunto · ${ds.length}
+      <button class="sg-mais" onclick="dicasAbrirAssunto('${escapeAttrJs(subId)}')">${ds.length>mostra.length?`ver as ${ds.length}`:'ver na aba Dicas'} →</button></div>
+    ${mostra.map(dicaLinhaCorrecaoHTML).join('')}
+  </div>`;
+}
+
+// ---- 3) Virar dica (Banco de Erros e resultado do simulado) ----
+// Mesmo padrão do simEnviarParaFlashcard: um botão por questão errada, e a mesma questão
+// não vira duas dicas (deQuestao guarda a identidade dela, acervoChave2). A diferença: o
+// flashcard sai pronto da questão; a dica precisa do seu título e da sua regra — então o
+// botão abre o editor já com o Cuidado preenchido, e você completa.
+function dicasCortar(t,n){
+  t=String(t||'').replace(/\s+/g,' ').trim();
+  if(t.length<=n)return t;
+  const corte=t.slice(0,n);
+  const fim=Math.max(corte.lastIndexOf('. '),corte.lastIndexOf('; '));
+  return fim>n*0.5?corte.slice(0,fim+1):corte.replace(/\s+\S*$/,'')+'…';
+}
+// O comentário da questão já vem marcado com o vocabulário do app (REGRA:, MACETE:,
+// PEGADINHA:...). Cada marca vai pro campo que ela nomeia; o texto sem marca fica de reserva.
+function dicasPartesComentario(txt){
+  const partes={regra:[],aplicar:[],cuidado:[],resto:[]};
+  const s=String(txt||'').trim().replace(/^(?:item\s+)?(certo|errado|correto|incorreto)\s*[.:—–-]*\s*/i,'');
+  const re=new RegExp(EXPL_RE_MARCA.source,'g');
+  let fim=0,tag='',m;
+  const guarda=(t,corpo)=>{
+    corpo=corpo.trim();
+    if(!corpo)return;
+    const k=t.normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase();
+    if(k==='REGRA')partes.regra.push(corpo);
+    else if(k==='MACETE'||k==='GUARDE'||k==='DECORE')partes.aplicar.push(corpo);
+    else if(k)partes.cuidado.push(corpo);          // PEGADINHA, CUIDADO, ATENÇÃO
+    else partes.resto.push(corpo);
+  };
+  while((m=re.exec(s))){guarda(tag,s.slice(fim,m.index));tag=m[1];fim=re.lastIndex;}
+  guarda(tag,s.slice(fim));
+  return partes;
+}
+function dicaRascunhoDeErro(q){
+  const alts=q.alternativas||[];
+  const ce=q.formato==='certoerrado'||(alts.length===2&&alts.every(a=>a.letra==='C'||a.letra==='E'));
+  const p=dicasPartesComentario(q.explicacao);
+  const textoAlt=l=>((alts.find(a=>a.letra===l)||{}).texto||'').trim();
+  const nomeCE=l=>l==='C'?'CERTO':(l==='E'?'ERRADO':'');
+  // Com a pegadinha marcada no comentário, ela é o Cuidado. Sem ela, o Cuidado conta o
+  // que aconteceu (o que você marcou x o gabarito) e o porquê que o comentário dá.
+  let cuidado=p.cuidado.join(' ');
+  if(!cuidado){
+    const marcou=!q.userAnswer?'Deixei em branco':(ce?`Marquei ${nomeCE(q.userAnswer)}`:`Marquei a ${q.userAnswer}`);
+    const gab=ce?`o gabarito é ${nomeCE(q.correta)}`
+      :`a certa é a ${q.correta}${textoAlt(q.correta)?` (${dicasCortar(textoAlt(q.correta),120)})`:''}`;
+    cuidado=`${marcou}; ${gab}.`+(p.resto.length?' '+p.resto.join(' '):'');
+  }
+  // O próprio item que te pegou é o melhor exemplo: no certo/errado, o enunciado com o
+  // gabarito; na múltipla, a alternativa certa e a que você marcou (curta demais não ensina).
+  const exemplos=[];
+  if(ce){if(q.questao)exemplos.push({txt:dicasCortar(q.questao,300),ok:q.correta==='C'});}
+  else{
+    const certa=textoAlt(q.correta),marcada=(q.userAnswer&&q.userAnswer!==q.correta)?textoAlt(q.userAnswer):'';
+    if(certa.length>=15)exemplos.push({txt:dicasCortar(certa,240),ok:true});
+    if(marcada.length>=15)exemplos.push({txt:dicasCortar(marcada,240),ok:false});
+  }
+  return{tipo:'dica',regra:dicasCortar(p.regra.join(' '),400),aplicar:dicasCortar(p.aplicar.join(' '),400),
+         cuidado:dicasCortar(cuidado,500),exemplos,fonte:q.fonte?dicasCortar(q.fonte,160):'',origem:'erro'};
+}
+function dicaVirarBotaoHTML(q,onclick){
+  if(!q||!q.questao)return'';
+  const ja=dicaDaQuestao(acervoChave2(q));
+  return ja
+    ?`<button class="btn btn-xs btn-green-s" onclick="dicaIrPara('${escapeAttrJs(ja.id)}')" title="${escapeHtml('Esta questão já virou a dica “'+(ja.titulo||'')+'”')}">💡 Já virou dica</button>`
+    :`<button class="btn btn-xs btn-ghost" onclick="${onclick}" title="Abre uma dica nova com o Cuidado já preenchido a partir deste erro">💡 Virar dica</button>`;
+}
+function dicaAbrirDeQuestao(q,subId,depois){
+  if(!q||!q.questao)return;
+  const chave=acervoChave2(q);
+  const ja=dicaDaQuestao(chave);
+  if(ja){dicaIrPara(ja.id);return;}
+  const c=dicasMapaSubs().get(subId);
+  const rascunho={...dicaRascunhoDeErro(q),kingdomId:c?c.kingdom.id:(q.kingdomId||''),subId:c?subId:''};
+  dicaNovaEmModal(rascunho,{titulo:'💡 Virar dica'+(c?' · '+c.sub.name:''),extras:{deQuestao:chave},depois});
+}
+function dicaVirarDoErro(subId,histId,qIdx){
+  const sub=simFindSub(subId);
+  const hist=sub&&(sub.simHistorico||[]).find(h=>h.id===histId);
+  const q=hist&&hist.questoes&&hist.questoes[qIdx];
+  if(!q){toast('⚠️ Não achei esta questão no histórico.','var(--orange)');return;}
+  dicaAbrirDeQuestao(q,subId,'erros');
+}
+function simVirarDica(i){
+  const q=simGeralActive&&simGeralActive.questoes&&simGeralActive.questoes[i];
+  if(!q)return;
+  dicaAbrirDeQuestao(q,q.subId,'simgeral');
 }
 function montarHTML(){
   const acervo=montarAcervo();
@@ -19782,12 +20063,14 @@ function simGeralResultsHTML(){
           ${q.fonte?`<div class="sim-fonte" title="De onde a explicação saiu — confira quando o ponto for número, prazo ou dose"><i class="fa fa-link"></i> ${escapeHtml(q.fonte)}</div>`:''}
           ${fonteApoioHTML(q,i)}
           </div>
+          ${q.userAnswer!==q.correta?dicasNaCorrecaoHTML(q.subId,q):''}
           ${simMotivoHTML(q,i)}
           ${simNotaHTML(q,i)}
           <div class="sim-flagged-banner" style="display:${questaoForaDaConta(q)?'':'none'}"><i class="fa fa-flag"></i> Fora da conta — não pesa no placar nem nas suas estatísticas.</div>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
             ${(active.refazendo||active.revisando)?'':`<button class="btn btn-xs btn-ghost" onclick="toggleQuestaoProblematica('${q.subId}','${q._histId}',${q._qIdxInHist})">${q.problematico?'<i class="fa fa-rotate"></i> Remover marcação':'<i class="fa fa-flag"></i> Reportar questão com problema'}</button>`}
             <button class="btn btn-xs btn-ghost" onclick="simEnviarParaFlashcard(${i})"><i class="fa fa-layer-group"></i> Mandar pro flashcard</button>
+            ${q.userAnswer!==q.correta?dicaVirarBotaoHTML(q,`simVirarDica(${i})`):''}
           </div>
         </div>
       `).join('')}
@@ -21444,9 +21727,9 @@ function getErrorBank(){
             if(q.userAnswer!==q.correta){
               items.push({
                 subId:s.id,subName:s.name,topicName:t.name,
-                kingdomName:k.name,kingdomIcon:k.icon,
+                kingdomName:k.name,kingdomIcon:k.icon,kingdomId:k.id,
                 histId:hist.id,qIdx,data:hist.data,
-                questao:q.questao,alternativas:q.alternativas,
+                questao:q.questao,alternativas:q.alternativas,formato:q.formato,fonte:q.fonte,
                 correta:q.correta,userAnswer:q.userAnswer,
                 explicacao:q.explicacao,revisado:q.revisado===true,
                 problematico:q.problematico===true
@@ -21555,7 +21838,11 @@ function renderErrosScreen(){
       </div>
       ${!it.userAnswer?`<div class="err-skipped"><i class="fa fa-circle-exclamation"></i> Você não respondeu esta questão no simulado.</div>`:''}
       ${simExplicacaoHTML(it)}
-      <button class="btn btn-xs btn-ghost" style="margin-top:8px" onclick="goToSubtopic('${it.subId}')"><i class="fa fa-location-arrow"></i> Ir para o assunto</button>
+      ${dicasNaCorrecaoHTML(it.subId,it)}
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn btn-xs btn-ghost" onclick="goToSubtopic('${it.subId}')"><i class="fa fa-location-arrow"></i> Ir para o assunto</button>
+        ${dicaVirarBotaoHTML(it,`dicaVirarDoErro('${it.subId}','${it.histId}',${it.qIdx})`)}
+      </div>
     </div>
   `).join('');
 }
@@ -32324,6 +32611,14 @@ window.dicasImportarPendenteDescartar=dicasImportarPendenteDescartar;
 window.dicasRelatorioFechar=dicasRelatorioFechar;
 window.dicasVerSemAssunto=dicasVerSemAssunto;
 window.dicasLigarAssunto=dicasLigarAssunto;
+window.dicasFiltrarAssunto=dicasFiltrarAssunto;
+window.dicasAbrirAssunto=dicasAbrirAssunto;
+window.dicaIrPara=dicaIrPara;
+window.toggleDicasSub=toggleDicasSub;
+window.dicaNovaDoSub=dicaNovaDoSub;
+window.dicasModalSalvar=dicasModalSalvar;
+window.dicaVirarDoErro=dicaVirarDoErro;
+window.simVirarDica=simVirarDica;
 window.provaRestaurar=provaRestaurar;
 window.montarQtdGravar=montarQtdGravar;
 window.comentarProva=comentarProva;
