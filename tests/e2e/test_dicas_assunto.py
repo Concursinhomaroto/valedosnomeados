@@ -70,7 +70,7 @@ async def main():
         print('   "Já sei" no painel: estado %s · o cartão fica, marcado: %s · botão "%s"'%(r['sei'],r['marcado'],r['botao']))
         assert r['sei'] and r['marcado'] and r['ainda'] and 'Rever' in r['botao']
         # Nova dica no painel: modal ja ligado a materia e assunto
-        await page.evaluate("()=>document.querySelector('#dicas-sub-sCrase .dicas-sub-acoes button').click()")
+        await page.evaluate("()=>[...document.querySelectorAll('#dicas-sub-sCrase .dicas-sub-acoes button')].find(b=>/Nova dica/.test(b.textContent)).click()")
         r=await page.evaluate("""()=>({aberto:document.getElementById('modal').classList.contains('open'),
           titulo:document.getElementById('modal-title').textContent,
           materia:document.getElementById('dica-modal-materia').value,
