@@ -2969,6 +2969,11 @@ button.dica-etq-assunto:hover{border-color:var(--accent);color:var(--accent);}
 .dica-treino span{color:var(--muted);font-weight:600;}
 .dica-treino .btn{margin-left:auto;}
 .dica-treino-vazio{color:var(--muted);font-weight:600;}
+/* Etapa 5: rascunho da IA — borda tracejada e aviso, até você aprovar. */
+.dica-card.dica-rascunho{border-style:dashed;border-color:var(--accent);}
+.dica-rascunho-aviso{font-size:var(--fs-selo);font-weight:800;color:var(--accent);}
+.dicas-rasc-tit{font-size:var(--fs-selo);font-weight:900;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin:var(--sp-2) 0 6px;}
+.dicas-ia-recusas{margin:var(--sp-2) 0;}
 @media(max-width:600px){
   .dica-linha{grid-template-columns:5.9em minmax(0,1fr);}
   .dica-card{padding:var(--sp-3);}
@@ -18628,6 +18633,7 @@ function dicaNormalizar(x,origemPadrao){
   if(bancas.length)d.bancas=bancas;
   const origem=String(x.origem||'').trim().toLowerCase();
   d.origem=DICAS_ORIGENS[origem]?origem:(origemPadrao||'minha');
+  if(x.rascunho)d.rascunho=true;   // gerada por IA e ainda não aprovada (etapa 5)
   d.criadaEm=x.criadaEm?String(x.criadaEm):dicasAgora();
   d.editadaEm=x.editadaEm?String(x.editadaEm):d.criadaEm;
   return d;
@@ -18674,7 +18680,7 @@ function dicasCasarMateria(nome){
 }
 
 // ---- Filtros ----
-const DICAS_FILTRO_VAZIO={materia:'',assunto:'',grupo:'',banca:'',texto:'',jaSei:false,semAssunto:false};
+const DICAS_FILTRO_VAZIO={materia:'',assunto:'',grupo:'',banca:'',texto:'',jaSei:false,semAssunto:false,rascunhos:false};
 let dicasFiltro={...DICAS_FILTRO_VAZIO};
 let dicasCriando=false,dicasEditando=null,dicasImportando=false;
 function dicaBuscavel(d){
@@ -18686,7 +18692,8 @@ function dicaBuscavel(d){
 function dicaTemBanca(d,b){const k=String(b).toLowerCase();return(d.bancas||[]).some(x=>x.toLowerCase()===k);}
 function dicasAplicarFiltros(f){
   f=f||dicasFiltro;
-  let out=db.dicas||[];
+  // Rascunho da IA só aparece no recorte de rascunhos; fora dele, é como se não existisse.
+  let out=(db.dicas||[]).filter(d=>f.rascunhos?!!d.rascunho:!d.rascunho);
   if(f.materia)out=out.filter(d=>d.kingdomId===f.materia);
   if(f.assunto)out=out.filter(d=>d.subId===f.assunto);
   if(f.grupo)out=out.filter(d=>dicaGrupo(d)===f.grupo);
@@ -18702,7 +18709,7 @@ function dicasAplicarFiltros(f){
 }
 function dicasTemFiltro(){
   const f=dicasFiltro;
-  return!!(f.materia||f.assunto||f.grupo||f.banca||f.texto||f.semAssunto);
+  return!!(f.materia||f.assunto||f.grupo||f.banca||f.texto||f.semAssunto||f.rascunhos);
 }
 function dicasFiltrarMateria(id){dicasFiltro.materia=(id&&dicasFiltro.materia!==id)?id:'';dicasFiltro.assunto='';dicasFiltro.grupo='';dicasRefrescar();}
 // Clicar na etiqueta de assunto de um cartão filtra por ele (e clicar de novo solta).
@@ -18832,6 +18839,8 @@ function dicasChipsHTML(){
   const semAssunto=dicasAplicarFiltros({...f,semAssunto:false}).filter(d=>!dicaAssunto(d)).length;
   const assuntoAtivo=f.assunto?dicasSubs.get(f.assunto):null;
   const mostrar=[chip(f.jaSei,'dicasAlternarJaSei()',`✅ mostrar as que já sei · <b>${sabidas}</b>`,'As que você marcou como "já sei" saem da lista padrão')];
+  const rascunhos=dicasAplicarFiltros({...f,rascunhos:true,jaSei:true}).length;
+  if(rascunhos||f.rascunhos)mostrar.push(chip(f.rascunhos,'dicasAlternarRascunhos()',`📝 rascunhos da IA · <b>${rascunhos}</b>`,'Dicas geradas por IA esperando você revisar e aprovar'));
   if(semAssunto||f.semAssunto)mostrar.push(chip(f.semAssunto,'dicasAlternarSemAssunto()',`⚠️ sem assunto · <b>${semAssunto}</b>`,'Dicas que ainda não estão ligadas a um miniboss'));
   const nNum=dicasNumerosFiltrados().length;
   return`<div class="banco-chips-faixa dicas-chips">
@@ -18839,7 +18848,8 @@ function dicasChipsHTML(){
       chip(dicasVista==='lista',"dicasVer('lista')",'📋 Dicas')+chip(dicasVista==='numeros',"dicasVer('numeros')",`🔢 Números que caem · <b>${nNum}</b>`,'Quadro só com os números, por matéria')}</div></div>
     <div class="banco-chip-grupo" id="dicas-chips-materia"><span class="banco-chip-rotulo">Matéria</span><div class="banco-chips">${chipsMat.join('')}</div></div>
     ${f.assunto?`<div class="banco-chip-grupo" id="dicas-chips-assunto"><span class="banco-chip-rotulo">Assunto</span><div class="banco-chips">${
-      chip(true,`dicasFiltrarAssunto('${escapeAttrJs(f.assunto)}')`,`${escapeHtml(assuntoAtivo?assuntoAtivo.sub.name:'assunto apagado')} ✕`,'Tirar o filtro de assunto')}</div></div>`:''}
+      chip(true,`dicasFiltrarAssunto('${escapeAttrJs(f.assunto)}')`,`${escapeHtml(assuntoAtivo?assuntoAtivo.sub.name:'assunto apagado')} ✕`,'Tirar o filtro de assunto')
+      +(assuntoAtivo?chip(false,`dicasGerarIA('${escapeAttrJs(f.assunto)}')`,dicasGerando.has(f.assunto)?'⏳ gerando…':'✨ gerar dicas deste assunto com IA','Gera rascunhos a partir do resumo e das questões do Acervo deste assunto'):'')}</div></div>`:''}
     ${dicasVista!=='numeros'&&(porGrupo.size>1||f.grupo)?`<div class="banco-chip-grupo" id="dicas-chips-grupo"><span class="banco-chip-rotulo">Grupo</span><div class="banco-chips">${
       [...porGrupo.entries()].map(([g,n])=>chip(f.grupo===g,`dicasFiltrarGrupo('${escapeAttrJs(g)}')`,`${escapeHtml(g)} · <b>${n}</b>`)).join('')}</div></div>`:''}
     ${dicasVista==='numeros'?'':`<div class="banco-chip-grupo" id="dicas-chips-mostrar"><span class="banco-chip-rotulo">Mostrar</span><div class="banco-chips">${mostrar.join('')}</div></div>`}
@@ -18900,16 +18910,20 @@ function dicaRodapeHTML(d,sei,ctx){
   const origem=o.lbl+(d.fonte?' · '+d.fonte:'');
   return`<div class="dica-rodape">
     <span class="dica-origem" title="${escapeHtml('Origem: '+origem)}">${o.icone} ${escapeHtml(origem)}</span>
-    <button class="btn btn-xs btn-ghost dica-btn-sei" onclick="dicaJaSei('${id}','${ctx}')">${sei?'↩️ Rever':'✅ Já sei'}</button>
+    ${d.rascunho
+      ?`<button class="btn btn-xs btn-primary dica-btn-aprovar" onclick="dicaAprovar('${id}')">✅ Aprovar</button>`
+      :`<button class="btn btn-xs btn-ghost dica-btn-sei" onclick="dicaJaSei('${id}','${ctx}')">${sei?'↩️ Rever':'✅ Já sei'}</button>`}
     <button class="btn btn-xs btn-ghost dica-btn-editar" onclick="${ctx==='aba'?`dicaEditarAbrir('${id}')`:`dicaIrPara('${id}',true)`}"><i class="fa fa-pen"></i> Editar</button>
+    ${d.rascunho?`<button class="btn btn-xs btn-ghost dica-btn-descartar" style="color:var(--red-t)" onclick="dicaApagar('${id}')"><i class="fa fa-trash"></i> Descartar</button>`:''}
   </div>`;
 }
 function dicaCardHTML(d,ctx){
   ctx=(typeof ctx==='string')?ctx:'aba';   // .map(dicaCardHTML) passa o índice como 2º argumento
   if(ctx==='aba'&&dicasEditando===d.id)return dicaEditorHTML(d,'edit');
-  const sei=dicaSei(d.id);
-  const cls='dica-card'+(sei?' dica-sei':'');
-  const selo=sei?'<span class="dica-selo-sei">✅ já sei</span>':'';
+  const sei=!d.rascunho&&dicaSei(d.id);
+  const cls='dica-card'+(sei?' dica-sei':'')+(d.rascunho?' dica-rascunho':'');
+  const selo=(sei?'<span class="dica-selo-sei">✅ já sei</span>':'')
+    +(d.rascunho?'<span class="dica-rascunho-aviso">📝 rascunho da IA — confira com o material antes de aprovar</span>':'');
   const idHtml=escapeHtml((ctx==='aba'?'dica-':'dica-'+ctx+'-')+d.id);
   if(d.tipo==='numero'){
     return`<article class="${cls} dica-num" id="${idHtml}">
@@ -19080,8 +19094,11 @@ function dicaEditarSalvar(id){
   if(i<0){toast('⚠️ Essa dica não existe mais.','var(--orange)');dicasEditando=null;dicasRefrescar();return;}
   const velha=db.dicas[i];
   const lido=dicaLerForm('dica-edit-');
+  // O formulário não mostra de onde a dica saiu (deQuestao) nem se ainda é rascunho:
+  // sem levar os dois, editar uma dica nascida de um erro devolvia o "Virar dica" àquela
+  // questão, e editar um rascunho o aprovava sem você pedir.
   const d=dicaNormalizar({...lido,id,criadaEm:velha.criadaEm,editadaEm:dicasAgora(),
-    assuntoNome:lido.subId?'':velha.assuntoNome},velha.origem);
+    assuntoNome:lido.subId?'':velha.assuntoNome,deQuestao:velha.deQuestao,rascunho:velha.rascunho},velha.origem);
   const motivo=dicaValidar(d);
   if(motivo){toast('⚠️ Não salvei: '+motivo+'.','var(--red)');return;}
   if(dicaDuplicada(d,id)){toast('⚠️ Já existe outra dica com esse título nessa matéria.','var(--red)');return;}
@@ -19340,7 +19357,8 @@ function dicasLigarAssunto(i){
 // A dica serve mais onde o assunto está acontecendo: na tela do miniboss que você está
 // estudando e na hora em que você erra uma questão dele. Tudo aqui lê o mesmo db.dicas e
 // grava pelo mesmo caminho da aba (dicaCriarDoForm/dicasSalvar) — nada de cópia paralela.
-function dicasDoAssunto(subId){return subId?(db.dicas||[]).filter(d=>d.subId===subId):[];}
+function dicasDoAssunto(subId){return subId?(db.dicas||[]).filter(d=>d.subId===subId&&!d.rascunho):[];}
+function dicasRascunhosDoAssunto(subId){return subId?(db.dicas||[]).filter(d=>d.subId===subId&&d.rascunho):[];}
 function dicaDaQuestao(chave){return chave?(db.dicas||[]).find(d=>d.deQuestao===chave)||null:null;}
 
 // ---- Leva pra aba Dicas ----
@@ -19357,7 +19375,7 @@ function dicasAbrirAssunto(subId){
 function dicaIrPara(id,editar){
   const d=(db.dicas||[]).find(x=>x.id===id);
   if(!d)return;
-  dicasFiltro={...DICAS_FILTRO_VAZIO,materia:d.kingdomId,jaSei:dicaSei(id)};
+  dicasFiltro={...DICAS_FILTRO_VAZIO,materia:d.kingdomId,jaSei:dicaSei(id),rascunhos:!!d.rascunho};
   dicasEditando=editar?id:null;dicasCriando=false;
   showScreen('dicas');
   const alvo=document.getElementById(editar?'dica-edit-form':'dica-'+id);
@@ -19401,22 +19419,29 @@ function dicasModalSalvar(){
 let openDicasSub=new Set();   // subIds com o painel de dicas aberto na tela do reino
 function dicasSubBotaoHTML(subId){
   const n=dicasDoAssunto(subId).length;
-  return`<button class="btn btn-sm ${n?'btn-purple-s':'btn-ghost'}" onclick="toggleDicasSub('${escapeAttrJs(subId)}')" id="dicas-sub-btn-${escapeHtml(subId)}" title="Regras, macetes e pegadinhas deste assunto">💡 Dicas${n?` (${n})`:''}</button>`;
+  const r=dicasRascunhosDoAssunto(subId).length;
+  return`<button class="btn btn-sm ${n||r?'btn-purple-s':'btn-ghost'}" onclick="toggleDicasSub('${escapeAttrJs(subId)}')" id="dicas-sub-btn-${escapeHtml(subId)}" title="Regras, macetes e pegadinhas deste assunto">💡 Dicas${n?` (${n})`:''}${r?` · 📝${r}`:''}</button>`;
 }
 function dicasSubPainelHTML(s){
   dicasMapaSubs();
   dicasAcervoResumir();
   const ds=dicasDoAssunto(s.id);
+  const rasc=dicasRascunhosDoAssunto(s.id);
   const sid=escapeAttrJs(s.id);
   return`<div class="flash-header">
       <div class="flash-title">💡 Dicas <span class="flash-count">${ds.length} ${ds.length===1?'dica':'dicas'}</span></div>
       <span class="dicas-sub-acoes">
+        <button class="btn btn-xs btn-purple-s" onclick="dicasGerarIA('${sid}')"${dicasGerando.has(s.id)?' disabled':''} title="Rascunhos a partir do resumo e das questões do Acervo deste assunto"><i class="fa fa-wand-magic-sparkles"></i> Gerar com IA</button>
         <button class="btn btn-xs btn-ghost" onclick="dicaNovaDoSub('${sid}')"><i class="fa fa-plus"></i> Nova dica</button>
         ${ds.length?`<button class="btn btn-xs btn-ghost" onclick="dicasAbrirAssunto('${sid}')">Ver na aba Dicas →</button>`:''}
       </span>
     </div>
+    ${dicasGerando.has(s.id)?`<div class="flash-empty"><i class="fa fa-spinner fa-spin"></i> Gerando dicas com a IA a partir do resumo e das questões do Acervo...</div>`:''}
+    ${dicasGerarRelatorioHTML(s.id)}
+    ${rasc.length?`<div class="dicas-rasc-tit">📝 ${rasc.length} ${rasc.length===1?'rascunho da IA':'rascunhos da IA'} — revise e aprove</div>
+      <div class="dica-grade">${rasc.map(d=>dicaCardHTML(d,'sub')).join('')}</div>`:''}
     ${ds.length?`<div class="dica-grade">${ds.map(d=>dicaCardHTML(d,'sub')).join('')}</div>`
-      :`<div class="flash-empty">Nenhuma dica ligada a este assunto ainda. Crie aqui, importe um pacote na aba Dicas (em Treinar) ou transforme um erro em dica no Banco de Erros.</div>`}`;
+      :(rasc.length?'':`<div class="flash-empty">Nenhuma dica ligada a este assunto ainda. Gere rascunhos com a IA, crie aqui, importe um pacote na aba Dicas (em Treinar) ou transforme um erro em dica no Banco de Erros.</div>`)}`;
 }
 function toggleDicasSub(subId){
   if(openDicasSub.has(subId))openDicasSub.delete(subId); else openDicasSub.add(subId);
@@ -19620,7 +19645,7 @@ function dicasColinhaEscopoEdital(){
   return{edital:foco.edital,idx:foco.idx,reinos};
 }
 function dicasColinhaSelecionar(o){
-  let ds=db.dicas||[];
+  let ds=(db.dicas||[]).filter(d=>!d.rascunho);
   let titulo='';
   if(o.escopo==='edital'){
     const ed=dicasColinhaEscopoEdital();
@@ -19761,6 +19786,155 @@ function dicaTreinarAssunto(subId){
   if(!document.getElementById('screen-simgeral').classList.contains('active'))return;   // plano travado
   treinoTreinarAssunto(subId);
 }
+// ===== GERAR DICAS COM IA (etapa 5) =====
+// A partir do que JÁ ESTÁ no app sobre o assunto: o resumo do miniboss e as questões reais
+// do Acervo (com gabarito e comentário) — sem busca na web, pra a IA não trazer fato de
+// fora. Usa a chave de IA da própria pessoa (callGeminiJSON). Toda dica gerada entra como
+// origem "ia" e RASCUNHO: fica fora da lista, da correção, da colinha e do quadro até
+// você aprovar.
+//
+// "Sem número de lei ou norma que não esteja na fonte" não fica só no pedido ao modelo:
+// cada citação (Lei, Decreto, Portaria, Resolução, RDC, NR, Súmula, artigo) das dicas
+// geradas é conferida contra as citações do material, e a dica que citar o que o material
+// não traz é recusada — e aparece no relatório com o motivo, não some calada.
+const DICAS_IA_MAX=6;
+const DICAS_IA_FONTE_MAX=24000;   // por parte (resumo, questões): cabe no prompt com folga
+const DICAS_RE_NORMA=/\b(lei(?:\s+complementar)?|decreto(?:-lei)?|portaria|resolu[cç][aã]o|rdc|nr|instru[cç][aã]o\s+normativa|emenda\s+constitucional|medida\s+provis[oó]ria|s[uú]mula(?:\s+vinculante)?|arts?\.|artigos?)\s*(?:n[º°o]?\.?\s*|n[uú]mero\s*)?[\s\-–]*(\d{1,3}(?:\.\d{3})+|\d+)/gi;
+function dicasNormasCitadas(txt){
+  const out=new Set();
+  const re=new RegExp(DICAS_RE_NORMA.source,'gi');
+  const t=String(txt||'');
+  let m;
+  while((m=re.exec(t))){
+    let k=m[1].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').replace(/\.$/,'');
+    if(/^art/.test(k))k='art';
+    out.add(k+' '+m[2].replace(/\./g,''));
+  }
+  return out;
+}
+function dicaTextoTodo(d){
+  return[d.titulo,d.regra,d.aplicar,d.cuidado,d.valor,d.rotulo,d.a,d.b,d.diferenca,d.grupo,
+    (d.exemplos||[]).map(e=>e.txt).join(' ')].filter(Boolean).join(' \n ');
+}
+function dicasFonteDoAssunto(subId){
+  const sub=simFindSub(subId);
+  const resumo=String((sub&&sub.resumo&&sub.resumo.texto)||'').trim().slice(0,DICAS_IA_FONTE_MAX);
+  const qs=treinoPoolCompleto().filter(q=>q.subId===subId);
+  const questoes=qs.map((q,i)=>{
+    const ce=q.formato==='certoerrado';
+    const alts=ce?'':'\n'+(q.alternativas||[]).map(a=>`${a.letra}) ${a.texto}`).join('\n');
+    const gab=ce?(q.correta==='C'?'CERTO':'ERRADO'):q.correta;
+    return`${i+1}. ${q.questao}${alts}\nGabarito: ${gab}${q.explicacao?'\nComentário: '+q.explicacao:''}`;
+  }).join('\n\n').slice(0,DICAS_IA_FONTE_MAX);
+  return{resumo,questoes,nQuestoes:qs.length};
+}
+function dicasPromptGerar(c,fonte,existentes){
+  return`Você vai escrever DICAS DE REVISÃO DE VÉSPERA para concurso público brasileiro sobre o assunto abaixo, usando SOMENTE o MATERIAL fornecido no fim.
+
+MATÉRIA: ${c.kingdom.name}
+TÓPICO: ${c.topic.name}
+ASSUNTO: ${c.sub.name}
+
+COMO É UMA DICA AQUI
+- "titulo": curto (até 60 caracteres), o nome do macete.
+- "regra": a regra, em UMA frase.
+- "aplicar": como aplicar a regra na prova, com um exemplo curto.
+- "cuidado": a pegadinha — de preferência a que as QUESTÕES do material usaram para derrubar o candidato.
+- "exemplos": até 3 frases curtas, cada uma com "ok": true (certa) ou false (errada).
+- Para um número que costuma cair (prazo, dose, temperatura, percentual), use "tipo":"numero" com "valor" (ex.: "+2 a +8 °C") e "rotulo".
+- Para duas coisas que se confundem, use "tipo":"par" com "a", "b" e "diferenca".
+
+REGRAS OBRIGATÓRIAS
+1. Use apenas o que está no MATERIAL. Não traga fato, prazo ou número de fora dele.
+2. NÃO cite número de lei, decreto, portaria, resolução, RDC, NR, súmula ou artigo que não esteja escrito no MATERIAL. Se o material não traz o número, escreva a regra sem ele.
+3. Escreva com as suas palavras; não copie frases inteiras do material.
+4. De 3 a ${DICAS_IA_MAX} dicas, cada uma sobre um ponto diferente. Menos é melhor do que repetir.
+5. Não repita nenhuma destas dicas, que já existem neste assunto: ${existentes.length?existentes.map(t=>`"${t}"`).join('; '):'(nenhuma)'}.
+6. Se o material não der para nenhuma dica boa, devolva [].
+
+FORMATO: responda APENAS com um array JSON, sem texto antes nem depois:
+[{"tipo":"dica","titulo":"...","regra":"...","aplicar":"...","cuidado":"...","exemplos":[{"txt":"...","ok":true},{"txt":"...","ok":false}]}]
+
+MATERIAL
+=== RESUMO DO ASSUNTO ===
+${fonte.resumo||'(sem resumo)'}
+
+=== QUESTÕES REAIS DO ACERVO DESTE ASSUNTO (com gabarito e comentário) ===
+${fonte.questoes||'(nenhuma)'}`;
+}
+let dicasGerando=new Set();          // subIds com geração em andamento
+let dicasGerarRelatorio={};          // subId -> {criadas, recusadas:[{titulo,motivo}]}
+async function dicasGerarIA(subId){
+  const c=dicasMapaSubs().get(subId);
+  if(!c)return;
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey){toast('⚠️ Configure sua chave de API do Gemini primeiro','var(--red)');openAISettingsModal();return;}
+  if(dicasGerando.has(subId)){toast('Geração em andamento...','var(--orange)');return;}
+  const fonte=dicasFonteDoAssunto(subId);
+  if(!fonte.resumo&&!fonte.nQuestoes){
+    toast('⚠️ Este assunto ainda não tem resumo nem questões no Acervo — é deles que as dicas saem. Gere o resumo (📄 Resumo) ou responda questões do assunto primeiro.','var(--orange)');
+    return;
+  }
+  const existentes=(db.dicas||[]).filter(d=>d.subId===subId).map(d=>d.titulo).filter(Boolean);
+  dicasGerando.add(subId);
+  openDicasSub.add(subId);
+  dicasSubRefrescar(subId);
+  try{
+    const{parsed}=await callGeminiJSON(apiKey,dicasPromptGerar(c,fonte,existentes),false,8192);
+    const itens=Array.isArray(parsed)?parsed:(parsed&&Array.isArray(parsed.dicas)?parsed.dicas:[]);
+    const normasFonte=dicasNormasCitadas(fonte.resumo+'\n'+fonte.questoes);
+    const rotFonte=`IA · ${[fonte.resumo?'resumo':'',fonte.nQuestoes?fonte.nQuestoes+' questões do Acervo':''].filter(Boolean).join(' + ')}`;
+    const rel={criadas:0,recusadas:[]};
+    db.dicas=db.dicas||[];
+    itens.slice(0,DICAS_IA_MAX*2).forEach(item=>{
+      if(!item||typeof item!=='object'){rel.recusadas.push({titulo:'',motivo:'não é um objeto'});return;}
+      const agora=dicasAgora();
+      const{id,materia,assunto,subId:_s,kingdomId:_k,origem,fonte:_f,rascunho,...resto}=item;
+      const d=dicaNormalizar({grupo:c.topic.name,...resto,id:genId(),kingdomId:c.kingdom.id,subId,
+        origem:'ia',fonte:rotFonte,rascunho:true,criadaEm:agora,editadaEm:agora},'ia');
+      const foraDaFonte=[...dicasNormasCitadas(dicaTextoTodo(d))].filter(n=>!normasFonte.has(n));
+      const motivo=dicaValidar(d)
+        ||(foraDaFonte.length?`cita ${foraDaFonte.join(', ')}, que não está no material`:'')
+        ||(dicaDuplicada(d)?'já existe uma dica com esse título':'');
+      if(motivo){rel.recusadas.push({titulo:d.titulo||'',motivo});return;}
+      db.dicas.push(d);
+      rel.criadas++;
+    });
+    dicasGerarRelatorio[subId]=rel;
+    if(rel.criadas)dicasSalvar();
+    toast(rel.criadas
+      ?`📝 ${rel.criadas} ${rel.criadas===1?'rascunho criado':'rascunhos criados'} — revise e aprove${rel.recusadas.length?` · ${rel.recusadas.length} ${rel.recusadas.length===1?'recusado':'recusados'} (veja o motivo no painel)`:''}.`
+      :`⚠️ A IA não trouxe nenhuma dica aproveitável${rel.recusadas.length?` (${rel.recusadas.length} ${rel.recusadas.length===1?'recusada':'recusadas'} — veja o motivo no painel)`:''}.`,
+      rel.criadas?'var(--green)':'var(--orange)');
+  }catch(e){
+    console.warn('Falha ao gerar dicas:',e);
+    toast('❌ '+((e&&e.message)||'Não consegui gerar as dicas agora.'),'var(--red)');
+  }finally{
+    dicasGerando.delete(subId);
+    dicasSubRefrescar(subId);
+    dicasRefrescarSeAberta();
+  }
+}
+function dicasGerarRelatorioHTML(subId){
+  const r=dicasGerarRelatorio[subId];
+  if(!r||!r.recusadas.length)return'';
+  return`<div class="dicas-relatorio dicas-ia-recusas">
+    <div class="dica-form-tit">⛔ ${r.recusadas.length} ${r.recusadas.length===1?'dica gerada foi recusada':'dicas geradas foram recusadas'}</div>
+    <ul class="dicas-rel-recusas">${r.recusadas.map(x=>`<li>${x.titulo?`"${escapeHtml(x.titulo)}": `:''}${escapeHtml(x.motivo)}</li>`).join('')}</ul>
+  </div>`;
+}
+// Aprovar tira a marca de rascunho: dali em diante a dica vale como qualquer outra.
+function dicaAprovar(id){
+  const i=(db.dicas||[]).findIndex(x=>x.id===id);
+  if(i<0)return;
+  const{rascunho,...resto}=db.dicas[i];
+  db.dicas[i]={...resto,editadaEm:dicasAgora()};
+  dicasSalvar();
+  dicasRefrescarSeAberta();
+  if(resto.subId)dicasSubRefrescar(resto.subId);
+  toast('✅ Dica aprovada — entra na lista, na correção e na colinha.','var(--green)');
+}
+function dicasAlternarRascunhos(){dicasFiltro.rascunhos=!dicasFiltro.rascunhos;dicasRefrescar();}
 function montarHTML(){
   const acervo=montarAcervo();
   if(!acervo.length)return'';
@@ -32830,6 +33004,9 @@ window.dicasImportarPendenteDescartar=dicasImportarPendenteDescartar;
 window.dicasRelatorioFechar=dicasRelatorioFechar;
 window.dicasVerSemAssunto=dicasVerSemAssunto;
 window.dicasLigarAssunto=dicasLigarAssunto;
+window.dicasGerarIA=dicasGerarIA;
+window.dicaAprovar=dicaAprovar;
+window.dicasAlternarRascunhos=dicasAlternarRascunhos;
 window.dicaTreinarAssunto=dicaTreinarAssunto;
 window.dicasVer=dicasVer;
 window.dicasColinhaAbrir=dicasColinhaAbrir;
