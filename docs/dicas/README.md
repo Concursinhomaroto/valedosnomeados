@@ -13,6 +13,7 @@ Um array JSON. Cada item:
 
 | Campo | Para quê |
 |---|---|
+| `id` | opcional; fixo por item (ex.: `pt25-08`). É o que deixa a versão nova de um pacote achar a mesma dica |
 | `tipo` | `"dica"` (padrão), `"numero"` ou `"par"` |
 | `materia` | nome do reino; casa pelo nome (sem acento/caixa). Obrigatório |
 | `assunto` | nome do miniboss; casa por `simCasarAssunto` dentro da matéria. Se não casar, a dica entra só com a matéria e aparece em "sem assunto" |
@@ -41,6 +42,10 @@ Quem adiciona recebe as dicas pelo mesmo caminho da importação em lote. Numa v
 do pacote ("Atualizar para a vN"): a dica que a pessoa não mexeu é trocada; a que ela
 editou fica como ela deixou; a que ela apagou não volta; o "já sei" e o assunto que ela
 ligou continuam. O relatório conta cada caso.
+
+O `portugues-25-pontos.json` também aparece em **Pacotes** sozinho, como "pronto do Vale",
+para todo assinante, sem precisar publicar (`DICAS_PACOTES_PRONTOS` no app). A aba Dicas
+vazia já abre mostrando os pacotes.
 
 Requer a regra `dicas_pacotes` do `firebase.rules.json` **publicada** no Firebase (console
 → Realtime Database → Regras, ou `firebase deploy --only database`). Sem ela, o painel

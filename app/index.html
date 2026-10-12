@@ -18891,6 +18891,8 @@ function dicasHTML(){
   dicasMapaSubs();
   dicasAcervoResumir();
   if(!(db.dicas||[]).length)return dicasVazioHTML();
+  // O painel que a aba vazia abriu sozinha já cumpriu o papel: a lista volta a ser o centro.
+  if(dicasPacotesAuto){dicasPacotesAberto=false;dicasPacotesAuto=false;}
   const pool=dicasAplicarFiltros();
   return`<div class="section-card">
     <div class="sec-title" style="margin-bottom:4px">💡 Dicas</div>
@@ -18914,6 +18916,11 @@ function dicasHTML(){
 }
 // Vazio não pode deixar criar e importar inalcançáveis: são as duas portas da primeira dica.
 function dicasVazioHTML(){
+  // Aba vazia mostra direto os pacotes prontos: é o caminho mais curto até ter o que revisar.
+  if(dicasCarregou&&!dicasPacotesAberto&&!dicasPacotesAutoFeito){
+    dicasPacotesAutoFeito=true;dicasPacotesAberto=true;dicasPacotesAuto=true;
+    setTimeout(dicasPacotesCarregar,0);
+  }
   if(!dicasCarregou)return`<div class="section-card">
     <div class="sec-title" style="margin-bottom:4px">💡 Dicas</div>
     <div class="empty"><i class="fa fa-spinner fa-spin"></i><p>Carregando suas dicas…</p></div>
@@ -20093,7 +20100,33 @@ function dicasAlternarRascunhos(){dicasFiltro.rascunhos=!dicasFiltro.rascunhos;d
 // apagou também não volta numa atualização (a lápide guarda o item do pacote).
 const DICAS_PACOTES_NO='dicas_pacotes';
 const DICAS_PACOTES_ESPERA_MS=10000;
+// Pacote pronto que vem com o site (docs/dicas): aparece pra todo assinante sem ninguém
+// precisar publicar nada. Os itens têm id fixo (pt25-01...), então ele se comporta como um
+// pacote publicado: "já sei", edição e apagadas são respeitados do mesmo jeito. Publicar
+// pelo app uma versão nova com o mesmo id (Pacote: Atualizar) passa na frente dele.
+const DICAS_PACOTES_PRONTOS=[{id:'pk-portugues-25',nome:'Português — 25 pontos',versao:1,
+  publicadoEm:'2026-10-12T12:00:00.000Z',arquivo:'/docs/dicas/portugues-25-pontos.json',
+  descricao:'Os pontos de Português que mais caem: classes e pronomes, regência e crase, verbos e concordância, colocação pronominal, ortografia e sentido.'}];
+let dicasPacotesProntosLidos={};   // id -> pacote com as dicas, lido uma vez por sessão
+async function dicasPacotesProntosLer(){
+  const out=[],falhas=[];
+  for(const p of DICAS_PACOTES_PRONTOS){
+    if(!dicasPacotesProntosLidos[p.id]){
+      try{
+        const r=await fetch(p.arquivo);
+        if(!r.ok)throw new Error('HTTP '+r.status);
+        const dicas=await r.json();
+        if(!Array.isArray(dicas)||!dicas.length)throw new Error('arquivo sem dicas');
+        dicasPacotesProntosLidos[p.id]={...p,doVale:true,dicas};
+      }catch(e){console.warn('Falha ao ler o pacote pronto '+p.id+':',e);falhas.push(p.nome);}
+    }
+    if(dicasPacotesProntosLidos[p.id])out.push(dicasPacotesProntosLidos[p.id]);
+  }
+  return{prontos:out,falhas};
+}
 let dicasPacotesAberto=false;
+let dicasPacotesAuto=false;        // aberto sozinho pela aba vazia (não por um clique)
+let dicasPacotesAutoFeito=false;
 let dicasPacotesEstado={carregando:false,erro:'',lista:null};
 function dicasPacotesRef(caminho){
   if(!firebaseDB||useLocalFallback)return null;
@@ -20112,10 +20145,18 @@ function dicasPacotesRender(){
   if(tela&&tela.classList.contains('active'))renderDicasScreen();
 }
 async function dicasPacotesCarregar(){
-  const ref=dicasPacotesRef();
-  if(!ref){dicasPacotesEstado={carregando:false,erro:'Sem conexão com o servidor agora — os pacotes ficam na nuvem.',lista:null};dicasPacotesRender();return;}
   dicasPacotesEstado={...dicasPacotesEstado,carregando:true,erro:''};
   dicasPacotesRender();
+  const{prontos,falhas}=await dicasPacotesProntosLer();
+  const nuvem=await dicasPacotesLerNuvem();
+  const erros=[nuvem.erro,falhas.length?`Não consegui baixar agora: ${falhas.join(', ')}.`:''].filter(Boolean);
+  const ids=new Set(nuvem.lista.map(p=>p.id));
+  dicasPacotesEstado={carregando:false,erro:erros.join(' '),lista:nuvem.lista.concat(prontos.filter(p=>!ids.has(p.id)))};
+  dicasPacotesRender();
+}
+async function dicasPacotesLerNuvem(){
+  const ref=dicasPacotesRef();
+  if(!ref)return{lista:[],erro:'Sem conexão com o servidor agora — os pacotes publicados ficam na nuvem.'};
   try{
     // Sem internet, o once do Firebase espera calado até a conexão voltar: o painel não
     // pode ficar em "carregando" pra sempre.
@@ -20125,19 +20166,18 @@ async function dicasPacotesCarregar(){
     const lista=Object.keys(v).map(k=>({...v[k],id:(v[k]&&v[k].id)||k}))
       .filter(p=>p&&p.nome&&dicasComoLista(p.dicas).length)
       .sort((a,b)=>String(b.publicadoEm||'').localeCompare(String(a.publicadoEm||'')));
-    dicasPacotesEstado={carregando:false,erro:'',lista};
+    return{lista,erro:''};
   }catch(e){
     console.warn('Falha ao ler os pacotes de dicas:',e);
-    dicasPacotesEstado={carregando:false,erro:dicasPacotesErro(e,'ler'),lista:null};
+    return{lista:[],erro:dicasPacotesErro(e,'ler')};
   }
-  dicasPacotesRender();
 }
 function dicasPacotesAbrir(){
-  dicasPacotesAberto=true;dicasImportando=false;dicasCriando=false;
+  dicasPacotesAberto=true;dicasPacotesAuto=false;dicasImportando=false;dicasCriando=false;
   renderDicasScreen();
   dicasPacotesCarregar();
 }
-function dicasPacotesFechar(){dicasPacotesAberto=false;renderDicasScreen();}
+function dicasPacotesFechar(){dicasPacotesAberto=false;dicasPacotesAuto=false;renderDicasScreen();}
 function dicasPacoteSituacao(p){
   const minhas=(db.dicas||[]).filter(d=>d.pacote===p.id);
   if(!minhas.length)return{tipo:'novo',n:0};
@@ -20155,18 +20195,19 @@ function dicasPacoteLinhaHTML(p){
       ?`<button class="btn btn-xs btn-primary" onclick="dicasPacoteAplicar('${pid}')"><i class="fa fa-rotate"></i> Atualizar para a v${p.versao||1}</button>`
       :`<span class="dica-selo-sei">✅ em dia (v${s.versao})</span>`);
   return`<div class="banco-edit-linha dicas-ligar-linha dicas-pacote" data-pacote="${escapeHtml(p.id)}">
-    <div class="dicas-ligar-nome"><b>📦 ${escapeHtml(p.nome)}</b><span> · v${p.versao||1} · ${n} ${n===1?'dica':'dicas'}${data?' · '+escapeHtml(data):''}</span>
+    <div class="dicas-ligar-nome"><b>📦 ${escapeHtml(p.nome)}</b><span> · v${p.versao||1} · ${n} ${n===1?'dica':'dicas'}${data?' · '+escapeHtml(data):''}${p.doVale?' · pronto do Vale':''}</span>
       ${p.descricao?`<div class="dicas-pacote-desc">${escapeHtml(p.descricao)}</div>`:''}</div>
     ${acao}
-    ${isAdmin()?`<button class="btn btn-xs btn-ghost" style="color:var(--red-t)" onclick="dicasPacoteRemover('${pid}')" title="Tira o pacote do ar. Quem já adicionou continua com as dicas.">Remover</button>`:''}
+    ${isAdmin()&&!p.doVale?`<button class="btn btn-xs btn-ghost" style="color:var(--red-t)" onclick="dicasPacoteRemover('${pid}')" title="Tira o pacote do ar. Quem já adicionou continua com as dicas.">Remover</button>`:''}
   </div>`;
 }
 function dicasPacotesHTML(){
   const st=dicasPacotesEstado;
+  const lista=st.lista||[];
   const corpo=st.carregando?`<div class="flash-empty"><i class="fa fa-spinner fa-spin"></i> Carregando os pacotes...</div>`
-    :st.erro?`<div class="dicas-pacote-erro">⚠️ ${escapeHtml(st.erro)}</div>`
-    :(!st.lista||!st.lista.length)?`<div class="dicas-sub" style="margin:0">Nenhum pacote publicado ainda.</div>`
-    :st.lista.map(dicasPacoteLinhaHTML).join('');
+    :(st.erro?`<div class="dicas-pacote-erro">⚠️ ${escapeHtml(st.erro)}</div>`:'')
+     +(lista.length?lista.map(dicasPacoteLinhaHTML).join('')
+       :(st.erro?'':`<div class="dicas-sub" style="margin:0">Nenhum pacote publicado ainda.</div>`));
   return`<div class="banco-item banco-item-editando dica-form" id="dicas-pacotes">
     <div class="dica-form-tit">📦 Pacotes publicados</div>
     <div class="dicas-sub" style="margin:0">Dicas prontas, publicadas para todos os assinantes. Adicionar traz as dicas pra sua lista;
@@ -20256,7 +20297,9 @@ function dicasPacotePublicarContaHTML(n){
 }
 function dicasPacotePublicarHTML(){
   const pool=dicasPacotePublicavel();
-  const lista=dicasPacotesEstado.lista||[];
+  // O pronto do Vale fica fora do "Atualizar": publicar por cima dele com o filtro do momento
+  // (uma dica de outra matéria, por exemplo) trocaria as 25 de todo mundo por essa uma.
+  const lista=(dicasPacotesEstado.lista||[]).filter(p=>!p.doVale);
   return`<div class="dicas-pacote-admin" id="dicas-pacote-publicar">
     <div class="dica-form-tit">📤 Publicar <span class="dicas-sub" style="margin:0">(só você vê isto)</span></div>
     <div class="dicas-sub" style="margin:0" id="dicas-pub-conta">${dicasPacotePublicarContaHTML(pool.length)}</div>
