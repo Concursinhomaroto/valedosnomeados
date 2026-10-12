@@ -49,7 +49,7 @@ async def main():
           await new Promise(r=>setTimeout(r,1200));
           const caminhos=window.__updateCalls.map(c=>c.path);
           return {saves:caminhos.length,
-                  noAcervo:caminhos.filter(c=>/vdn_acervo/.test(c)).length,
+                  noAcervo:caminhos.filter(c=>/vdn_acervo$/.test(c)).length,
                   noRegistro:caminhos.filter(c=>/vdn_v1/.test(c)).length};}""")
         print('   5 saveDB → %s gravações no registro, %s no nó do banco'
               %(r['noRegistro'],r['noAcervo']))
@@ -64,7 +64,7 @@ async def main():
             subName:'Choque septico',kingdomId:'k1',kingdomName:'Enfermagem'}],tentativas:[]};
           const novas=acervoGuardarProva(prova);
           await new Promise(r=>setTimeout(r,ACERVO_SALVA_MS+400));
-          const c=window.__updateCalls.filter(x=>/vdn_acervo/.test(x.path));
+          const c=window.__updateCalls.filter(x=>/vdn_acervo$/.test(x.path));
           const noServidor=window.__root.users.TEST_UID_LEO.vdn_acervo||[];
           return {novas,gravacoes:c.length,caminho:c[0]&&c[0].path,
                   noServidor:noServidor.length,

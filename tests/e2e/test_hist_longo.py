@@ -112,7 +112,7 @@ async def main():
           window.__updateCalls=[];
           histSalvar(true);
           await new Promise(r=>setTimeout(r,300));
-          const c=window.__updateCalls.filter(x=>/vdn_historico/.test(x.path));
+          const c=window.__updateCalls.filter(x=>/vdn_historico$/.test(x.path));
           const antes={g:db.hist.geral.length,s:db.hist.sessoes.length,u:db.hist.subs.length};
           await histCarregar();               // como se o app reabrisse
           const depois={g:db.hist.geral.length,s:db.hist.sessoes.length,u:db.hist.subs.length};
