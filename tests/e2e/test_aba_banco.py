@@ -12,7 +12,7 @@ async def main():
         b,page,errs=await setup_page(p,seed())
         await page.evaluate("(f)=>{window.QS=eval('('+f+')');window.confirm=()=>true;return true;}",QS)
 
-        print('=== A) a aba existe, esta na barra das outras, e e a 4a ===')
+        print('=== A) a aba existe, esta na barra das outras, e e a 4a (a 5a e Dicas) ===')
         r=await page.evaluate("""()=>{
           const barras=[...document.querySelectorAll('.screen .rd-conectivos-tabs')]
             .filter(t=>t.parentElement.id.startsWith('screen-')&&
@@ -21,7 +21,7 @@ async def main():
           const ordem=[...barras[0].querySelectorAll('button')].map(x=>x.textContent.trim());
           return {telas:barras.map(t=>t.parentElement.id),
                   ordem,
-                  todasTem4:barras.every(t=>t.querySelectorAll('button').length===4),
+                  todasTem4:barras.every(t=>t.querySelectorAll('button').length===5),   // + Dicas (test_aba_dicas)
                   cadaUmaTemUmAtivo:barras.every(t=>t.querySelectorAll('button.active').length===1),
                   existeATela:!!document.getElementById('screen-banco'),
                   existeOAlvo:!!document.getElementById('banco-content')};}""")

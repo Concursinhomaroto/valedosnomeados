@@ -1,0 +1,656 @@
+[
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Pronomes indefinidos",
+    "grupo": "Classes e pronomes",
+    "titulo": "Pronome indefinido × advérbio de intensidade",
+    "regra": "Muito, pouco, tanto e quanto mudam de classe conforme a palavra vizinha: junto de substantivo, são pronomes indefinidos e concordam com ele; junto de adjetivo, verbo ou advérbio, são advérbios de intensidade e não variam.",
+    "aplicar": "Olhe a palavra que vem logo depois. É um ser ou uma coisa? Concorde: “poucas vagas”, “tantos recursos”. É uma qualidade ou uma ação? Deixe no masculino singular: “as provas foram muito difíceis”.",
+    "cuidado": "A banca flexiona o advérbio para parecer concordância: em “elas estavam muitas cansadas”, “cansadas” é adjetivo, então o certo é “muito cansadas”.",
+    "exemplos": [
+      {
+        "txt": "Havia poucas candidatas na sala de prova.",
+        "ok": true
+      },
+      {
+        "txt": "As instruções eram pouco claras.",
+        "ok": true
+      },
+      {
+        "txt": "As instruções eram poucas claras.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Pronomes indefinidos",
+    "grupo": "Classes e pronomes",
+    "titulo": "Bastante × bastantes",
+    "regra": "Se der para trocar por “muitos” ou “muitas”, a palavra acompanha um substantivo e vai ao plural com ele. Se der para trocar por “muito”, no sentido de intensidade, é advérbio e não muda.",
+    "aplicar": "Faça a troca na hora: “resolvi bastantes questões” → “resolvi muitas questões” (plural). “Eles estavam bastante tranquilos” → “estavam muito tranquilos” (sem plural).",
+    "cuidado": "“Bastante” no sentido de “suficiente” também concorda: “as provas reunidas são bastantes para a condenação”. “Bastantes”, com s, não é erro automático.",
+    "exemplos": [
+      {
+        "txt": "Fizemos bastantes simulados neste mês.",
+        "ok": true
+      },
+      {
+        "txt": "Os candidatos pareciam bastante confiantes.",
+        "ok": true
+      },
+      {
+        "txt": "Os candidatos pareciam bastantes confiantes.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Pronomes relativos",
+    "grupo": "Classes e pronomes",
+    "titulo": "“Que”: conjunção integrante × pronome relativo",
+    "regra": "O “que” pronome relativo retoma um nome dito antes e pode ser trocado por “o qual”, “a qual”, “os quais” ou “as quais”. O “que” conjunção integrante não retoma nada: ele abre uma oração com valor de substantivo, que pode ser trocada por “isso”.",
+    "aplicar": "Teste as duas trocas. “O edital que saiu ontem” → “o edital o qual saiu ontem”: relativo. “Espero que você passe” → “espero isso”: integrante.",
+    "cuidado": "A troca por “isso” vale para a oração inteira, do “que” até o fim dela — não para a palavra “que” sozinha. Trocando só a palavra, quase tudo parece integrante.",
+    "exemplos": [
+      {
+        "txt": "Em “a questão que caiu na prova”, o “que” é relativo (= a qual).",
+        "ok": true
+      },
+      {
+        "txt": "Em “ficou claro que o item será anulado”, o “que” é integrante (= ficou claro isso).",
+        "ok": true
+      },
+      {
+        "txt": "Em “o livro que comprei”, o “que” é conjunção integrante.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Pronomes relativos",
+    "grupo": "Classes e pronomes",
+    "titulo": "Cujo",
+    "regra": "“Cujo” liga um possuidor à coisa possuída e concorda com a coisa possuída: “o autor cujas obras estudei”. Nunca vem seguido de artigo.",
+    "aplicar": "Desfaça a frase com “de”: “as obras do autor” → “o autor cujas obras”. Se o verbo seguinte pedir preposição, ela vem antes do cujo: “o concurso a cujas vagas concorri” (concorrer a).",
+    "cuidado": "“Cujo o”, “cuja a” e “cujos os” estão sempre errados. E “que… dele” no lugar de “cujo” (“o servidor que o chefe dele saiu”) é registro coloquial, errado na norma-padrão.",
+    "exemplos": [
+      {
+        "txt": "Esta é a lei cujos artigos foram alterados.",
+        "ok": true
+      },
+      {
+        "txt": "O concurso a cujas vagas concorri foi homologado.",
+        "ok": true
+      },
+      {
+        "txt": "O candidato cujo o nome foi chamado saiu da sala.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Concordância nominal",
+    "grupo": "Classes e pronomes",
+    "titulo": "Meio × meia",
+    "regra": "No sentido de “metade”, “meio” é numeral e concorda com o substantivo: “meia hora”, “meio quilo”. No sentido de “um pouco”, é advérbio e fica sempre “meio”.",
+    "aplicar": "Troque por “um pouco”. Se couber, não varia: “a porta estava meio aberta” = um pouco aberta.",
+    "cuidado": "“Meio-dia e meia” está certo: subentende-se “e meia hora”. Errado é “meio-dia e meio”.",
+    "exemplos": [
+      {
+        "txt": "Ela ficou meio nervosa antes da prova.",
+        "ok": true
+      },
+      {
+        "txt": "A reunião começou ao meio-dia e meia.",
+        "ok": true
+      },
+      {
+        "txt": "Ela ficou meia nervosa antes da prova.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Conjunções",
+    "grupo": "Classes e pronomes",
+    "titulo": "Conjunções adversativas",
+    "regra": "Mas, porém, contudo, todavia, entretanto e no entanto ligam ideias que se opõem e têm o mesmo valor: trocar uma pela outra mantém o sentido.",
+    "aplicar": "Em questão de reescrita, troque pelo “mas”: se o contraste continua, a troca está certa. O “mas” fica no começo da oração; as outras podem mudar de lugar entre vírgulas: “Estudou; não foi, contudo, aprovado”.",
+    "cuidado": "Conclusivas (portanto, logo, por isso) não são adversativas: trocar “contudo” por “portanto” muda o sentido. E o “e” pode ter valor de “mas”: “estudou muito e não passou”.",
+    "exemplos": [
+      {
+        "txt": "O edital saiu; a prova, no entanto, foi adiada.",
+        "ok": true
+      },
+      {
+        "txt": "Estudou o ano inteiro e não passou (o “e” vale “mas”).",
+        "ok": true
+      },
+      {
+        "txt": "“Estudou muito, portanto não passou” expressa oposição.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Preposições",
+    "grupo": "Regência e preposições",
+    "titulo": "Preposição sozinha × preposição + artigo",
+    "regra": "Preposição liga palavras (a, de, em, por, com, para…). Quando encontra o artigo, pode se fundir com ele: a + o = ao, de + a = da, em + os = nos, por + o = pelo. A crase é um desses encontros: a + a = à.",
+    "aplicar": "Troque o termo feminino por um masculino. Se surgir “ao”, havia preposição + artigo (no feminino, crase): “assisti à aula” → “assisti ao jogo”. Se surgir só “a”, era só preposição: “cheguei a tempo”.",
+    "cuidado": "Antes de sujeito de infinitivo, a preposição não se funde com o artigo na norma-padrão: “apesar de o prazo ter acabado”, e não “apesar do prazo ter acabado”.",
+    "exemplos": [
+      {
+        "txt": "Assisti à palestra e ao debate.",
+        "ok": true
+      },
+      {
+        "txt": "Apesar de o prazo ter terminado, o recurso foi aceito.",
+        "ok": true
+      },
+      {
+        "txt": "Fiz referência à ele na petição.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Crase",
+    "grupo": "Regência e preposições",
+    "titulo": "Crase antes de horas",
+    "regra": "Hora determinada é feminina e leva artigo: “às 14h”, “à 1h”, “à meia-noite”. Se a frase pede a preposição “a”, há crase.",
+    "aplicar": "Troque por “meio-dia”: “às 10h” → “ao meio-dia”. Apareceu “ao”? Há crase. Em intervalo, mantenha o par: “das 8h às 12h” (com artigo nas duas pontas) ou “de 8h a 12h” (sem artigo nas duas).",
+    "cuidado": "Depois de “desde”, “após”, “para” e “entre” não há crase: “desde as 8h”, “após as 18h”. Com “até”, a crase é facultativa: “até as 18h” ou “até às 18h”. E duração não leva crase: “daqui a duas horas”.",
+    "exemplos": [
+      {
+        "txt": "A prova começa às 13h e termina às 17h.",
+        "ok": true
+      },
+      {
+        "txt": "O atendimento vai de 8h a 12h.",
+        "ok": true
+      },
+      {
+        "txt": "O portão ficará aberto desde às 7h.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Regência verbal",
+    "grupo": "Regência e preposições",
+    "titulo": "Implicar (= acarretar)",
+    "regra": "No sentido de “acarretar” ou “ter como consequência”, “implicar” é transitivo direto: implica alguma coisa, sem preposição.",
+    "aplicar": "Troque por “acarretar”: “a falta implica desconto” → “acarreta desconto”. Se “acarretar em” soa errado, “implicar em” também está.",
+    "cuidado": "“Implicar em” é muito comum e é justamente o que a banca cobra. Outros sentidos têm outra regência: “implicar com alguém” (antipatizar) e “implicar-se em algo” (envolver-se).",
+    "exemplos": [
+      {
+        "txt": "O atraso implica a perda da vaga.",
+        "ok": true
+      },
+      {
+        "txt": "O atraso implica na perda da vaga.",
+        "ok": false
+      },
+      {
+        "txt": "O fiscal vivia implicando com os candidatos.",
+        "ok": true
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Regência verbal",
+    "grupo": "Regência e preposições",
+    "titulo": "Lembrar e esquecer",
+    "regra": "Na norma-padrão tradicional, sem pronome, “lembrar” e “esquecer” são transitivos diretos (“lembrei o prazo”); com pronome, pedem “de” (“lembrei-me do prazo”).",
+    "aplicar": "Pronome e preposição andam juntos. Tem “me”, “se” ou “te”? Use “de”. Não tem pronome? Tire o “de”.",
+    "cuidado": "“Esqueci do documento” (sem pronome e com “de”) é a forma que a cobrança clássica considera errada, embora apareça muito na fala. As seguras são “esqueci o documento” e “esqueci-me do documento”.",
+    "exemplos": [
+      {
+        "txt": "Esqueci o horário da prova.",
+        "ok": true
+      },
+      {
+        "txt": "Lembrei-me da regra na hora.",
+        "ok": true
+      },
+      {
+        "txt": "Lembrei da regra na hora.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Regência verbal",
+    "grupo": "Regência e preposições",
+    "titulo": "Preferir",
+    "regra": "Quem prefere, prefere uma coisa a outra: o verbo pede um complemento direto e outro introduzido pela preposição “a”.",
+    "aplicar": "Monte sempre “preferir X a Y”: “prefiro estudar de manhã a estudar à noite”. Antes de palavra feminina com artigo, aparece a crase: “prefiro a prova objetiva à discursiva”.",
+    "cuidado": "“Preferir mais”, “preferir antes” e “preferir do que” estão errados: o próprio verbo já carrega a ideia de “mais”.",
+    "exemplos": [
+      {
+        "txt": "Prefiro questões comentadas a videoaulas.",
+        "ok": true
+      },
+      {
+        "txt": "Prefiro a prova objetiva à discursiva.",
+        "ok": true
+      },
+      {
+        "txt": "Prefiro mais revisar do que ler teoria.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Regência verbal",
+    "grupo": "Regência e preposições",
+    "titulo": "Concordar × discordar",
+    "regra": "Concorda-se com alguém ou com algo, e em fazer algo. Discorda-se de alguém ou de algo. Os dois são transitivos indiretos.",
+    "aplicar": "Guarde o par: concordo COM, discordo DE. “Concordo com o relator”; “discordo do relator”.",
+    "cuidado": "“Discordo com você” troca a preposição — é o erro cobrado. Em “concordar em”, o complemento é uma ação: “concordaram em adiar a prova”.",
+    "exemplos": [
+      {
+        "txt": "A comissão concordou com o recurso.",
+        "ok": true
+      },
+      {
+        "txt": "O candidato discordou do gabarito preliminar.",
+        "ok": true
+      },
+      {
+        "txt": "O candidato discordou com o gabarito preliminar.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Concordância verbal",
+    "grupo": "Verbos e concordância",
+    "titulo": "Haver no sentido de existir",
+    "regra": "Com sentido de existir, acontecer ou de tempo decorrido, “haver” é impessoal: não tem sujeito e fica na 3ª pessoa do singular — “houve problemas”, “há anos”.",
+    "aplicar": "Troque por “existir”: se cabe “existiram problemas”, com “haver” fica “houve problemas”. O auxiliar da locução também fica no singular: “deve haver vagas”, “vai haver provas”.",
+    "cuidado": "“Existir”, “ocorrer” e “acontecer” têm sujeito e concordam normalmente: “existem vagas”, “ocorreram falhas”. A banca troca um verbo pelo outro para testar a concordância.",
+    "exemplos": [
+      {
+        "txt": "Houve muitas reclamações sobre o gabarito.",
+        "ok": true
+      },
+      {
+        "txt": "Devem existir outras soluções.",
+        "ok": true
+      },
+      {
+        "txt": "Haviam muitas vagas no edital.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Concordância verbal",
+    "grupo": "Verbos e concordância",
+    "titulo": "Coletivo partitivo",
+    "regra": "Com expressão partitiva (a maioria de, grande parte de, a metade de, um grupo de) seguida de plural, o verbo pode ficar no singular, concordando com o núcleo, ou ir ao plural, concordando com o termo especificador.",
+    "aplicar": "As duas formas estão certas: “a maioria dos candidatos faltou” e “a maioria dos candidatos faltaram”. Em item de certo ou errado, não marque erro só por causa do plural.",
+    "cuidado": "Sem o especificador no plural não há escolha: “a maioria faltou”. E o coletivo simples, sem “de + plural”, pede singular: “a turma saiu”.",
+    "exemplos": [
+      {
+        "txt": "Grande parte dos inscritos não compareceu.",
+        "ok": true
+      },
+      {
+        "txt": "Grande parte dos inscritos não compareceram.",
+        "ok": true
+      },
+      {
+        "txt": "A turma chegaram atrasados.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Termos da oração",
+    "grupo": "Verbos e concordância",
+    "titulo": "Sujeito oculto × indeterminado",
+    "regra": "Sujeito oculto (desinencial) existe e se identifica pela terminação do verbo ou pelo contexto: “Estudamos ontem” (nós). Sujeito indeterminado existe, mas não se pode ou não se quer dizer quem é.",
+    "aplicar": "Pergunte: dá para dizer quem é? Se dá, pela desinência ou pela frase anterior, é oculto. O indeterminado aparece de dois jeitos: verbo na 3ª pessoa do plural sem referente (“Roubaram o carro”) ou verbo + “se” quando o verbo não é transitivo direto (“Precisa-se de técnicos”).",
+    "cuidado": "Com verbo transitivo direto, o “se” é partícula apassivadora e o sujeito existe: “vendem-se casas” (casas são vendidas). Já “precisa-se de técnicos” fica no singular.",
+    "exemplos": [
+      {
+        "txt": "Falaram mal de você na reunião (sujeito indeterminado).",
+        "ok": true
+      },
+      {
+        "txt": "Chegamos cedo (sujeito oculto: nós).",
+        "ok": true
+      },
+      {
+        "txt": "Precisam-se de técnicos.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Vozes verbais",
+    "grupo": "Verbos e concordância",
+    "titulo": "Voz passiva analítica × sintética",
+    "regra": "Analítica: ser + particípio (“as provas foram corrigidas”). Sintética: verbo transitivo direto + “se” (“corrigiram-se as provas”). Nas duas, quem sofre a ação é o sujeito, e o verbo concorda com ele.",
+    "aplicar": "Para conferir a concordância da sintética, passe para a analítica: “alugam-se salas” → “salas são alugadas”. Sujeito no plural, verbo no plural.",
+    "cuidado": "Só verbo transitivo direto forma voz passiva. “Trata-se de questões difíceis” fica no singular porque “tratar de” é transitivo indireto: ali o “se” indetermina o sujeito.",
+    "exemplos": [
+      {
+        "txt": "Divulgaram-se os resultados (= os resultados foram divulgados).",
+        "ok": true
+      },
+      {
+        "txt": "Trata-se de temas recorrentes.",
+        "ok": true
+      },
+      {
+        "txt": "Divulgou-se os resultados.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Formas nominais",
+    "grupo": "Verbos e concordância",
+    "titulo": "Gerúndio, particípio e infinitivo",
+    "regra": "São as formas nominais do verbo. Infinitivo termina em -r (estudar) e funciona como substantivo. Gerúndio termina em -ndo (estudando), indica processo em curso e funciona como advérbio. Particípio termina em -do ou -to (estudado, escrito), indica ação concluída e funciona como adjetivo.",
+    "aplicar": "Na oração reduzida, pergunte que circunstância ela traz: “Terminando a prova, saiu” = quando terminou (tempo). “Aprovado o edital, abriram as inscrições” = depois que o edital foi aprovado.",
+    "cuidado": "Gerúndio para ação futura e pontual (“vou estar enviando”) é vício de linguagem, o gerundismo. E o particípio que funciona como adjetivo concorda: “aprovadas as contas”.",
+    "exemplos": [
+      {
+        "txt": "Concluída a correção, o resultado saiu.",
+        "ok": true
+      },
+      {
+        "txt": "Estudando todos os dias, você avança.",
+        "ok": true
+      },
+      {
+        "txt": "Vamos estar analisando o seu recurso amanhã.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Modos verbais",
+    "grupo": "Verbos e concordância",
+    "titulo": "Modos verbais",
+    "regra": "Indicativo exprime certeza (estudo, estudei, estudarei). Subjuntivo exprime dúvida, hipótese ou desejo e costuma vir depois de “que”, “se” ou “quando” (que eu estude, se eu estudasse, quando eu estudar). Imperativo exprime ordem, pedido ou conselho (estude).",
+    "aplicar": "Use a muleta: presente com “que” (que eu faça), pretérito imperfeito com “se” (se eu fizesse), futuro com “quando” (quando eu fizer). Isso evita “se eu fazer” e “quando eu ver”.",
+    "cuidado": "O futuro do subjuntivo dos irregulares é o mais cobrado: “quando eu vir” (ver), “se ele puser” (pôr), “quando eles mantiverem” (manter). E o imperativo negativo vem do subjuntivo: “não faça”, e não “não faz”.",
+    "exemplos": [
+      {
+        "txt": "Se você vir o fiscal, avise.",
+        "ok": true
+      },
+      {
+        "txt": "Quando eles mantiverem o ritmo, serão aprovados.",
+        "ok": true
+      },
+      {
+        "txt": "Quando eu ver o resultado, aviso você.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Colocação pronominal",
+    "grupo": "Colocação pronominal",
+    "titulo": "Colocação pronominal: as 3 proibições",
+    "regra": "Na norma-padrão, o pronome oblíquo átono (me, te, se, o, a, lhe, nos, vos) não pode: 1) iniciar a frase; 2) vir depois de verbo no futuro do presente ou do pretérito; 3) vir depois de particípio.",
+    "aplicar": "Início de frase → ênclise: “Disseram-me a nota”. Verbo no futuro → mesóclise (“far-lhe-ei a pergunta”) ou próclise, se houver palavra atrativa (“não lhe farei”). Particípio → o pronome se apoia no auxiliar: “eles tinham-me avisado” ou “eles me tinham avisado”.",
+    "cuidado": "Depois de particípio, nunca: “tinham avisado-me” está errado. E “Me empresta”, comum na fala, é erro na prova: pronome átono não abre frase.",
+    "exemplos": [
+      {
+        "txt": "Entregaram-me o cartão-resposta.",
+        "ok": true
+      },
+      {
+        "txt": "Dir-se-ia que o prazo acabou.",
+        "ok": true
+      },
+      {
+        "txt": "Me informaram o local da prova.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Colocação pronominal",
+    "grupo": "Colocação pronominal",
+    "titulo": "Colocação pronominal: a regra da atração",
+    "regra": "Havendo antes do verbo uma palavra atrativa, o pronome vem antes dele (próclise). Atraem: palavras negativas (não, nunca, ninguém), pronomes relativos, indefinidos e demonstrativos, advérbios e conjunções subordinativas.",
+    "aplicar": "Olhe a palavra imediatamente anterior ao verbo. É atrativa? Próclise: “Nunca me disseram”, “o fiscal que nos atendeu”, “quando se aproximou”. Sem atrativa, no meio da frase, a próclise (“ele me entregou”) e a ênclise (“ele entregou-me”) costumam ser aceitas.",
+    "cuidado": "Em reescrita, a banca tira a palavra atrativa e mantém a próclise, ou acrescenta a atrativa e mantém a ênclise. Frases de desejo também pedem próclise: “Deus te acompanhe”.",
+    "exemplos": [
+      {
+        "txt": "Ninguém me avisou da mudança de local.",
+        "ok": true
+      },
+      {
+        "txt": "Os candidatos que se inscreveram receberam o e-mail.",
+        "ok": true
+      },
+      {
+        "txt": "Ninguém avisou-me da mudança de local.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Colocação pronominal",
+    "grupo": "Colocação pronominal",
+    "titulo": "Colocação pronominal: as 2 exceções",
+    "regra": "Duas situações afrouxam a regra da atração: 1) com infinitivo não flexionado, mesmo havendo palavra atrativa, a ênclise também é aceita; 2) advérbio separado do verbo por vírgula deixa de atrair.",
+    "aplicar": "“Para não o prejudicar” e “para não prejudicá-lo”: as duas estão certas. “Aqui se estuda” (advérbio colado atrai) × “Aqui, estuda-se” (a vírgula corta a atração).",
+    "cuidado": "Na segunda exceção, quem manda é a vírgula: sem ela, o advérbio atrai e a ênclise vira erro — “aqui estuda-se” é condenado pela regra tradicional.",
+    "exemplos": [
+      {
+        "txt": "Decidiu não se inscrever no concurso.",
+        "ok": true
+      },
+      {
+        "txt": "Decidiu não inscrever-se no concurso.",
+        "ok": true
+      },
+      {
+        "txt": "Ontem, entregaram-me o resultado.",
+        "ok": true
+      },
+      {
+        "txt": "Ontem entregaram-me o resultado.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Ortografia",
+    "grupo": "Ortografia e sentido",
+    "titulo": "Os porquês",
+    "regra": "“Por que” (separado, sem acento) pergunta ou equivale a “pelo qual”. “Por quê” (separado, com acento) aparece no fim da frase ou antes de pausa forte. “Porque” (junto) explica e equivale a “pois”. “Porquê” (junto, com acento) é substantivo e vem com artigo ou outro determinante.",
+    "aplicar": "Faça as trocas: é pergunta ou cabe “pelo qual”? Por que. Cabe “pois”? Porque. Tem “o”, “um” ou “seu” antes? Porquê. Está no fim da frase? Por quê.",
+    "cuidado": "Pergunta indireta, sem ponto de interrogação, também usa “por que”: “não sei por que ele faltou”. E “o motivo por que recorri” = “pelo qual”, separado.",
+    "exemplos": [
+      {
+        "txt": "Por que a questão foi anulada?",
+        "ok": true
+      },
+      {
+        "txt": "Ele faltou, mas não disse por quê.",
+        "ok": true
+      },
+      {
+        "txt": "Ninguém entendeu o porquê da anulação.",
+        "ok": true
+      },
+      {
+        "txt": "Estudo todos os dias por que quero passar.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Semântica",
+    "grupo": "Ortografia e sentido",
+    "titulo": "Homônimos × parônimos",
+    "regra": "Homônimos têm a mesma pronúncia (ou a mesma grafia) e sentidos diferentes: sessão (reunião), seção (divisão), cessão (ato de ceder). Parônimos são parecidos, mas não iguais, na escrita e no som: ratificar (confirmar) e retificar (corrigir), descrição e discrição.",
+    "aplicar": "Prenda cada palavra a um sinônimo curto e reconheça pelo sinônimo: cessão → ceder; sessão → reunião; seção → setor; ratificar → confirmar; retificar → corrigir.",
+    "cuidado": "A banca troca uma palavra pela vizinha e o texto continua com cara de certo. Leia com o sinônimo no lugar: “o juiz retificou a sentença” é corrigir; “ratificou” seria confirmar.",
+    "exemplos": [
+      {
+        "txt": "A sessão do júri começou às 9h.",
+        "ok": true
+      },
+      {
+        "txt": "Assinou o termo de cessão de direitos.",
+        "ok": true
+      },
+      {
+        "txt": "Procure a sessão de achados e perdidos.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "par",
+    "materia": "Português",
+    "assunto": "Semântica",
+    "grupo": "Ortografia e sentido",
+    "titulo": "Eminente × iminente",
+    "a": "eminente",
+    "b": "iminente",
+    "diferenca": "Eminente é quem se destaca, ilustre: “um eminente jurista”. Iminente é o que está prestes a acontecer: “risco iminente”. Para lembrar: iminente começa com i, como “imediato”.",
+    "exemplos": [
+      {
+        "txt": "O desabamento era iminente.",
+        "ok": true
+      },
+      {
+        "txt": "O eminente perigo obrigou a evacuação do prédio.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  },
+  {
+    "tipo": "dica",
+    "materia": "Português",
+    "assunto": "Figuras de linguagem",
+    "grupo": "Ortografia e sentido",
+    "titulo": "Figuras de linguagem",
+    "regra": "Figura de linguagem é um desvio intencional do sentido ou da construção comum. As mais cobradas: metáfora (comparação sem conectivo), metonímia (troca por uma relação real, como o autor pela obra), hipérbole (exagero), eufemismo (suavização), antítese (ideias opostas), ironia (dizer o contrário do que se pensa) e prosopopeia (dar ação humana a coisa ou animal).",
+    "aplicar": "Pergunte o que aconteceu com o sentido. Comparação sem “como”? Metáfora. Troca por algo ligado de verdade (autor, lugar, marca, parte pelo todo)? Metonímia. Exagero? Hipérbole. Suavização? Eufemismo.",
+    "cuidado": "Comparação com “como”, “tal qual” ou “feito” é comparação (símile), não metáfora. E “ler Machado de Assis” é metonímia (o autor pela obra), não metáfora.",
+    "exemplos": [
+      {
+        "txt": "“Aquele prazo é uma muralha” é metáfora.",
+        "ok": true
+      },
+      {
+        "txt": "“Li três vezes o Graciliano” é metonímia.",
+        "ok": true
+      },
+      {
+        "txt": "“Ele é forte como um touro” é metáfora.",
+        "ok": false
+      }
+    ],
+    "origem": "ia",
+    "fonte": "Pacote Português 25 pontos (Vale)"
+  }
+]
