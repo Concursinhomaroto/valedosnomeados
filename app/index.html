@@ -4786,19 +4786,42 @@ function idbLer(chave){
     }catch(e){resolve(null);}
   }));
 }
-// ===== NÓS GRANDES COM VERSÃO (banco de questões, histórico, arquivo de provas) =====
+// ===== NÓS GRANDES COM VERSÃO (banco de questões e arquivo de provas) =====
 // Cada abertura do app baixava os três inteiros, mesmo com a cópia igualzinha no
 // IndexedDB. Agora cada nó tem um irmão minúsculo <nó>_ver = {ts}. Ao gravar: a versão
 // local é invalidada ANTES de subir e só volta depois que a nuvem confirmou (gravação
 // não confirmada = próxima abertura baixa e junta, como sempre foi). Ao abrir: versão da
 // nuvem == versão local -> usa a cópia local e não baixa nada.
-function noVerLer(no,chaveCache,ms){
+// Além da versão, confere o TAMANHO da lista na nuvem lendo só o último item: um aparelho
+// ainda na versão antiga do app grava a lista sem atualizar o _ver — se ele acrescentou ou
+// apagou questões, o tamanho muda e a abertura baixa e junta, como sempre foi.
+function noLerComTimeout(q,ms){
+  return new Promise(res=>{const t=setTimeout(()=>res(undefined),ms||5000);
+    q.once('value').then(sn=>{clearTimeout(t);res(sn.val());},()=>{clearTimeout(t);res(undefined);});});
+}
+function noVerLer(no,chaveCache,tamLocal){
   const ref=userRef(no+'_ver');
   return Promise.all([
     idbLer(chaveCache+'_ver').catch(()=>null),
-    ref?new Promise(res=>{const t=setTimeout(()=>res(null),ms||5000);
-      ref.once('value').then(sn=>{clearTimeout(t);res(sn.val());},()=>{clearTimeout(t);res(null);});}):Promise.resolve(null)
-  ]).then(([local,nuvem])=>({local,nuvem,igual:!!(local&&nuvem&&local.ts&&local.ts===nuvem.ts)}));
+    ref?noLerComTimeout(ref):Promise.resolve(null)
+  ]).then(async([local,nuvem])=>{
+    let igual=!!(local&&nuvem&&local.ts&&local.ts===nuvem.ts);
+    if(igual){
+      const dados=userRef(no);
+      if(!dados){igual=false;}
+      else{
+        const base=dados.orderByKey?dados.orderByKey():dados;
+        const cauda=await noLerComTimeout(base.limitToLast?base.limitToLast(1):base);
+        if(cauda===undefined)igual=false;
+        else{
+          const ks=cauda?Object.keys(cauda).map(Number).filter(n=>!isNaN(n)):[];
+          const tam=ks.length?Math.max(...ks)+1:0;
+          igual=tam===tamLocal;
+        }
+      }
+    }
+    return {local,nuvem,igual};
+  });
 }
 // Sobe o nó e, confirmado, carimba a versão nova na nuvem e na cópia local.
 function noGravarComVersao(ref,no,chaveCache,dados){
@@ -15668,7 +15691,7 @@ async function acervoCarregar(){
   let local=null;
   try{local=await idbLer(acervoChaveCache());}catch(e){}
   let nuvem=null;
-  const ver=ACERVO_REF?await noVerLer('vdn_acervo',acervoChaveCache()):{igual:false};
+  const ver=ACERVO_REF?await noVerLer('vdn_acervo',acervoChaveCache(),Array.isArray(local)?local.length:-1):{igual:false};
   if(ver.igual&&Array.isArray(local))nuvem=local;   // nada mudou na nuvem: não baixa
   else if(ACERVO_REF){
     try{
@@ -15745,7 +15768,7 @@ function histSalvar(agora){
     try{if(cacheIdbOk)idbGravar(histChaveCache(),d);}catch(e){}
     if(!HIST_REF)return;
     try{
-      const r=noGravarComVersao(HIST_REF,'vdn_historico',histChaveCache(),d);
+      const r=HIST_REF.set(d);
       if(r&&r.catch)r.catch(e=>console.warn('Falha ao salvar o histórico:',e));
     }catch(e){console.warn('Falha síncrona ao salvar o histórico:',e);}
   };
@@ -15770,9 +15793,7 @@ async function histCarregar(){
   HIST_REF=userRef('vdn_historico');
   let local=null,nuvem=null;
   try{local=await idbLer(histChaveCache());}catch(e){}
-  const ver=HIST_REF?await noVerLer('vdn_historico',histChaveCache()):{igual:false};
-  if(ver.igual&&local)nuvem=local;   // nada mudou na nuvem: não baixa
-  else if(HIST_REF){
+  if(HIST_REF){
     try{
       nuvem=await new Promise(res=>{
         const t=setTimeout(()=>res(null),8000);
@@ -15789,7 +15810,6 @@ async function histCarregar(){
   };
   db.hist.geral.sort((x,y)=>new Date(y.data||0)-new Date(x.data||0));
   db.hist.subs.sort((x,y)=>new Date(y.data||0)-new Date(x.data||0));
-  if(!ver.igual&&HIST_REF)noCarimbarLocal('vdn_historico',histChaveCache(),sanitizeForFirebase(db.hist),ver.nuvem);
   return db.hist.geral.length+db.hist.sessoes.length+db.hist.subs.length;
 }
 function histGuardar(lista,itens){
@@ -15860,7 +15880,7 @@ async function provarqCarregar(){
   PROVARQ_REF=userRef('vdn_provas_arq');
   let local=null,nuvem=null;
   try{local=await idbLer(provarqChaveCache());}catch(e){}
-  const ver=PROVARQ_REF?await noVerLer('vdn_provas_arq',provarqChaveCache()):{igual:false};
+  const ver=PROVARQ_REF?await noVerLer('vdn_provas_arq',provarqChaveCache(),Array.isArray(local)?local.length:-1):{igual:false};
   if(ver.igual&&Array.isArray(local))nuvem=local;   // nada mudou na nuvem: não baixa
   else if(PROVARQ_REF){
     try{

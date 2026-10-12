@@ -28,10 +28,12 @@ async def main():
 
         print('=== B) entrar tempo de estudo que bate a meta da o XP de sempre ===')
         r=await page.evaluate("""async()=>{
-          db.sessions={};db.goalHitDays=[];const xpAntes=db.xp;
+          db.sessions={};db.goalHitDays=[];const xpAntes=db.xp;const log0=(db.achievementsLog||[]).length;
           logStudySeconds(31*60);
           await new Promise(r=>setTimeout(r,20));
-          return {ganhou:db.xp-xpAntes,meta:db.goalHitDays.includes(todayStr())};}""")
+          // desconta conquista destravada no mesmo instante (ex.: estudar em feriado)
+          const xpConq=(db.achievementsLog||[]).slice(log0).reduce((s,x)=>s+(x.xp||0),0);
+          return {ganhou:db.xp-xpAntes-xpConq,meta:db.goalHitDays.includes(todayStr())};}""")
         print('   %s'%r)
         assert r['ganhou']==20 and r['meta']
         print('   OK\n')

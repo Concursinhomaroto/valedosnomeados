@@ -96,6 +96,20 @@ async def main():
         assert r['verNuvem'] and r['igual'] and not r['baixou1'] and r['baixou2'] and r['n']==1
         print('   OK\n')
 
+        print('=== G) aparelho na versão ANTIGA acrescenta questão sem mexer no _ver: a abertura percebe e baixa ===')
+        r=await page.evaluate("""async(uid)=>{
+          await acervoCarregar();   // cópia local em dia
+          const q={questao:'Q2 do aparelho antigo: julgue.',correta:'E',formato:'certoerrado',alternativas:[{letra:'C',texto:'Certo'},{letra:'E',texto:'Errado'}],
+            explicacao:'.',subId:'s0',subName:'Assunto 0',topicName:'Urgência',kingdomId:'k1',kingdomName:'Enfermagem',kingdomIcon:'💉'};
+          const lista=(window.__root.users[uid].vdn_acervo||[]).slice();
+          lista.push({...q,_chaveForte:acervoChave2(q),...acervoCamposNovos('ia')});
+          window.__root.users[uid].vdn_acervo=lista;   // set antigo: sem _ver novo
+          await acervoCarregar();
+          return {n:db.acervo.length,tem:db.acervo.some(x=>x.questao.startsWith('Q2 do aparelho antigo'))};}""",UID)
+        print('   %s'%r)
+        assert r['tem'] and r['n']==2
+        print('   OK\n')
+
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))
         assert not graves, graves

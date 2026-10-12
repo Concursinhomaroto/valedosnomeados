@@ -128,7 +128,7 @@ async def main():
           window.__updateCalls=[];
           provarqSalvar(true);
           await new Promise(r=>setTimeout(r,200));
-          const c=window.__updateCalls.filter(x=>/vdn_provas_arq/.test(x.path));
+          const c=window.__updateCalls.filter(x=>/vdn_provas_arq$/.test(x.path));
           const noServidor=window.__root.users.TEST_UID_LEO.vdn_provas_arq||[];
           return {gravou:c.length,
                   temMapa:JSON.stringify(noServidor).includes('_mapa'),
