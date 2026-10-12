@@ -13574,6 +13574,14 @@ function treinoMarcarProblema(){
   toast('🚩 Marcada com problema — sai da conta a partir de agora.','var(--orange)');
   renderSimGeralScreen();
 }
+// Errou no treino: a pegadinha vira dica na hora, com o Cuidado já preenchido pelo
+// comentário — o mesmo caminho do Banco de Erros e do resultado do simulado.
+function treinoVirarDica(){
+  const s=treinoSessao;
+  const item=s&&s.itens[s.idx];
+  if(!item)return;
+  dicaAbrirDeQuestao(item,item.subId,'treino');
+}
 function treinoEnviarFlashcard(){
   const s=treinoSessao;
   if(!s)return;
@@ -13676,6 +13684,7 @@ function treinoAcoesHTML(item){
     <button class="btn btn-xs ${item.favorita?'btn-gold':'btn-ghost'}" onclick="treinoFavoritar()"><i class="fa fa-star"></i> ${item.favorita?'Favoritada':'Favoritar'}</button>
     <button class="btn btn-xs btn-ghost" onclick="treinoMarcarProblema()"><i class="fa fa-flag"></i> Marcar problema</button>
     <button class="btn btn-xs btn-ghost" onclick="treinoEnviarFlashcard()"><i class="fa fa-layer-group"></i> Mandar pro flashcard</button>
+    ${item.userAnswer!==item.correta?`<span id="treino-virar-dica">${dicaVirarBotaoHTML(item,'treinoVirarDica()')}</span>`:''}
     ${tavilyAtivo()?`<button class="btn btn-xs btn-ghost" onclick="treinoBuscarFonte()"><i class="fa fa-magnifying-glass"></i> Buscar fonte</button>`:''}
     ${item.subId?`<button class="btn btn-xs btn-ghost" onclick="treinoIrParaAssunto()"><i class="fa fa-book"></i> Ir para o assunto</button>`:''}
   </div>`;
@@ -19733,6 +19742,12 @@ function dicasModalSalvar(){
   if(d.subId)dicasSubRefrescar(d.subId);
   if(ctx.depois==='erros')renderErrosScreen();
   if(ctx.depois==='simgeral'&&simGeralActive&&simGeralActive.corrected)renderSimGeralScreen();
+  if(ctx.depois==='treino'){
+    // Só o botão vira "Já virou dica": redesenhar a tela levaria a nota ainda não guardada.
+    const item=treinoSessao&&treinoSessao.itens[treinoSessao.idx];
+    const el=document.getElementById('treino-virar-dica');
+    if(el&&item)el.innerHTML=dicaVirarBotaoHTML(item,'treinoVirarDica()');
+  }
   dicasRefrescarSeAberta();
   toast(ctx.extras&&ctx.extras.deQuestao?'💡 Dica criada a partir deste erro.':'✅ Dica criada.','var(--green)');
 }
@@ -33645,6 +33660,7 @@ window.dicaNovaDoSub=dicaNovaDoSub;
 window.dicasModalSalvar=dicasModalSalvar;
 window.dicaVirarDoErro=dicaVirarDoErro;
 window.simVirarDica=simVirarDica;
+window.treinoVirarDica=treinoVirarDica;
 window.provaRestaurar=provaRestaurar;
 window.montarQtdGravar=montarQtdGravar;
 window.comentarProva=comentarProva;
