@@ -30,7 +30,7 @@ async def main():
           return out;}""")
         for k,v in r.items():
             print('   %-9s %s abas · ativa: %r'%(k,v['n'],(v['ativa'] or '').strip()))
-            assert v['n']==4, v   # entraram "Caderno da Banca" e "Banco de Questões"; Banco de Erros virou secao em Treinar
+            assert v['n']==5, v   # entraram "Caderno da Banca", "Banco de Questões" e "Dicas"; Banco de Erros virou secao em Treinar
             assert any('Minhas Provas' in l for l in v['labels']), v['labels']
         assert 'Minhas Provas' in (r['provas']['ativa'] or '')
         print('   OK\n')

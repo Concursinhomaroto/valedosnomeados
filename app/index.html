@@ -2867,6 +2867,83 @@ body.missao-ligada #dash-overdue-revs{display:none;}
   .banco-acoes{margin-left:0;}
 }
 
+/* ===== DICAS (etapa 1) =====
+   Só tokens e peças que já existem (section-card, sec-title, banco-chip, banco-tag, btn,
+   inp). O cartão lê como o comentário das questões: rótulo curto à esquerda, texto à
+   direita, e certo/errado marcado por sinal + palavra + cor — nunca só pela cor. */
+.dicas-sub{font-size:var(--fs-leitura);color:var(--muted);font-weight:600;margin-bottom:var(--sp-3);line-height:1.55;}
+.dicas-conta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:var(--fs-leitura);font-weight:700;color:var(--muted);margin-top:var(--sp-3);}
+.dicas-conta b{color:var(--text);}
+.dicas-chips{gap:var(--sp-2) 18px;}
+.dica-grupo{margin-bottom:var(--sp-5);}
+.dica-grupo-tit{margin-bottom:var(--sp-3);flex-wrap:wrap;gap:6px;}
+.dica-grupo-mat{color:var(--muted);}
+.dica-grupo-n{color:var(--muted);letter-spacing:0;}
+.dica-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:var(--sp-3);align-items:start;}
+.dica-numeros{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:var(--sp-3);}
+.dica-grade+.dica-numeros{margin-top:var(--sp-3);}
+.dica-grade>.dica-form,.dica-numeros>.dica-form{grid-column:1/-1;margin:0;}
+.dica-card{background:var(--panel);border:1.5px solid var(--border);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-4);
+  display:flex;flex-direction:column;gap:var(--sp-2);min-width:0;box-shadow:var(--shadow);}
+.dica-card.dica-sei{opacity:.72;}
+.dica-cab{display:flex;flex-direction:column;gap:6px;}
+.dica-titulo{font-size:var(--fs-titulo);font-weight:900;color:var(--text);line-height:1.3;}
+.dica-etiquetas{display:flex;flex-wrap:wrap;gap:var(--sp-1);align-items:center;}
+.dica-etq{font-size:var(--fs-selo);font-weight:700;color:var(--muted);border:1px solid var(--border);border-radius:var(--r-full);
+  padding:1px 8px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+.dica-etq-sem{color:var(--orange-t);border-color:currentColor;}
+.dica-selo-sei{font-size:var(--fs-selo);font-weight:800;color:var(--green-t);}
+.dica-linhas{display:flex;flex-direction:column;gap:6px;}
+.dica-linha{display:grid;grid-template-columns:7.6em minmax(0,1fr);gap:var(--sp-2);align-items:baseline;}
+.dica-linha dt{font-size:var(--fs-selo);font-weight:900;text-transform:uppercase;letter-spacing:.4px;color:var(--accent);line-height:1.4;}
+.dica-linha dd{font-size:var(--fs-corpo);color:var(--text);line-height:1.5;white-space:pre-line;overflow-wrap:break-word;}
+.dica-exemplos{list-style:none;display:flex;flex-direction:column;gap:4px;}
+.dica-ex{font-size:var(--fs-leitura);line-height:1.5;color:var(--text);background:var(--panel2);border-left:3px solid var(--border);
+  border-radius:0 var(--r-sm) var(--r-sm) 0;padding:5px 9px;overflow-wrap:break-word;}
+.dica-ex-ok{border-left-color:var(--green-t);}
+.dica-ex-nok{border-left-color:var(--red-t);}
+.dica-ex-sinal{font-size:var(--fs-selo);font-weight:900;text-transform:uppercase;letter-spacing:.4px;margin-right:4px;white-space:nowrap;}
+.dica-ex-ok .dica-ex-sinal{color:var(--green-t);}
+.dica-ex-nok .dica-ex-sinal{color:var(--red-t);}
+.dica-rodape{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:var(--sp-2);border-top:1px solid var(--border);}
+.dica-origem{flex:1;min-width:0;font-size:var(--fs-selo);font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dica-par{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:var(--sp-2);align-items:center;}
+.dica-par-lado{text-align:center;font-size:var(--fs-md);font-weight:900;color:var(--text);background:var(--panel2);
+  border:1px solid var(--border);border-radius:var(--r-sm);padding:6px 8px;overflow-wrap:break-word;}
+.dica-par-x{font-weight:900;color:var(--muted);}
+.dica-num{gap:4px;}
+.dica-num-tit{font-size:var(--fs-rotulo);font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+.dica-num-valor{font-size:var(--fs-xl);font-weight:900;color:var(--accent);line-height:1.15;font-variant-numeric:tabular-nums;overflow-wrap:break-word;}
+.dica-num-rotulo{font-size:var(--fs-leitura);font-weight:700;color:var(--text2);line-height:1.4;}
+.dica-form{display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-3);padding:var(--sp-3);}
+.dica-form [hidden]{display:none!important;}
+.dica-so{display:flex;flex-direction:column;gap:var(--sp-2);}
+.dica-form-tit{font-size:var(--fs-corpo);font-weight:900;color:var(--text);}
+.dica-form-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr));gap:var(--sp-2);}
+.dica-campo{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.dica-campo>span{font-size:var(--fs-rotulo);font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.dica-campo .inp{width:100%;min-width:0;font-size:var(--fs-leitura);padding:7px 10px;}
+.dica-campo textarea.inp{line-height:1.5;resize:vertical;min-height:52px;font-family:inherit;}
+.dica-apagar{margin-left:auto;color:var(--red-t)!important;}
+.dicas-formato{font-size:var(--fs-leitura);color:var(--muted);line-height:1.6;}
+.dicas-formato summary{cursor:pointer;font-weight:700;color:var(--text2);}
+.dicas-relatorio{margin-top:var(--sp-3);padding:var(--sp-3);display:flex;flex-direction:column;gap:6px;background:var(--panel);}
+.dicas-rel-lista,.dicas-rel-recusas{list-style:none;display:flex;flex-direction:column;gap:3px;font-size:var(--fs-leitura);color:var(--text2);font-weight:600;}
+.dicas-rel-recusas{color:var(--muted);max-height:160px;overflow:auto;border-top:1px solid var(--border);padding-top:6px;}
+.dicas-rel-aprox-tit{font-size:var(--fs-leitura);font-weight:700;color:var(--text2);}
+.dicas-ligar-linha{padding:6px 0;border-bottom:1px solid var(--border);}
+.dicas-ligar-linha:last-child{border-bottom:0;}
+.dicas-ligar-nome{flex:1;min-width:160px;font-size:var(--fs-leitura);color:var(--text);}
+.dicas-ligar-nome span{color:var(--muted);font-weight:600;}
+.dicas-ligar-linha select.inp{max-width:100%;}
+.dicas-vazio-txt{font-size:var(--fs-leitura)!important;font-weight:600;line-height:1.6;max-width:440px;margin:8px auto 0;}
+.dicas-vazio-acoes{display:flex;justify-content:center;gap:var(--sp-2);flex-wrap:wrap;}
+@media(max-width:600px){
+  .dica-linha{grid-template-columns:5.9em minmax(0,1fr);}
+  .dica-card{padding:var(--sp-3);}
+  .dica-grupo{margin-bottom:var(--sp-4);}
+}
+
 /* ===== TIPOGRAFIA E ACERTOS (rodada 2, item 8) =====
    Mínimo de 12px no Painel, Treinar, Acervo e menu. */
 #screen-dashboard .gamify-lbl,#screen-dashboard .gamify-sub,#screen-dashboard .goal-ring-pct,
@@ -3415,6 +3492,7 @@ body.missao-ligada .dash-v2 .div-btn:hover{text-decoration:underline;filter:none
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
     <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Acervo</button>
+    <button onclick="showScreen('dicas')"><i class="fa fa-lightbulb"></i> Dicas</button>
   </div>
   <div id="simgeral-content"></div>
 </div>
@@ -3429,6 +3507,7 @@ body.missao-ligada .dash-v2 .div-btn:hover{text-decoration:underline;filter:none
     <button class="active"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
     <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Acervo</button>
+    <button onclick="showScreen('dicas')"><i class="fa fa-lightbulb"></i> Dicas</button>
   </div>
   <div id="provas-content"></div>
 </div>
@@ -3442,6 +3521,7 @@ body.missao-ligada .dash-v2 .div-btn:hover{text-decoration:underline;filter:none
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button class="active"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
     <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Acervo</button>
+    <button onclick="showScreen('dicas')"><i class="fa fa-lightbulb"></i> Dicas</button>
   </div>
   <div id="caderno-content"></div>
 </div>
@@ -3457,8 +3537,24 @@ body.missao-ligada .dash-v2 .div-btn:hover{text-decoration:underline;filter:none
     <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
     <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
     <button class="active"><i class="fa fa-layer-group"></i> Acervo</button>
+    <button onclick="showScreen('dicas')"><i class="fa fa-lightbulb"></i> Dicas</button>
   </div>
   <div id="banco-content"></div>
+</div>
+
+<!-- ===== DICAS ===== -->
+<!-- A revisão rápida de véspera (regras, macetes, pegadinhas e números de cada matéria)
+     ganhou aba própria em vez de virar chefão dentro da matéria: chefão é assunto de
+     estudo, entra em revisão espaçada e no mapa — dica não. -->
+<div class="screen" id="screen-dicas">
+  <div class="rd-conectivos-tabs" style="margin-bottom:14px">
+    <button onclick="showScreen('simgeral')"><i class="fa fa-bullseye"></i> Treinar</button>
+    <button onclick="showScreen('provas')"><i class="fa fa-file-lines"></i> Minhas Provas</button>
+    <button onclick="showScreen('caderno')"><i class="fa fa-file-pdf"></i> Caderno da Banca</button>
+    <button onclick="showScreen('banco')"><i class="fa fa-layer-group"></i> Acervo</button>
+    <button class="active"><i class="fa fa-lightbulb"></i> Dicas</button>
+  </div>
+  <div id="dicas-content"></div>
 </div>
 
 <!-- ===== DASHBOARD ===== -->
@@ -4719,8 +4815,8 @@ function cacheLocalOutrasChaves(){
 }
 function gravarCacheLocal(){
   // Mesmo motivo do payload: o banco tem a sua propria chave de cache, gravada so
-  // quando ele muda. Sem isto, cada saveDB copiaria o banco inteiro de novo.
-  const {acervo,provasArquivo,hist,...semAcervo}=db;
+  // quando ele muda. Sem isto, cada saveDB copiaria o banco inteiro de novo. Dicas idem.
+  const {acervo,provasArquivo,hist,dicas,...semAcervo}=db;
   const copia=sanitizeForFirebase(semAcervo);   // já é uma cópia profunda; não mexe no db
   if(currentUser&&currentUser.uid)copia._uid=currentUser.uid;
   const chave=lsKey();
@@ -5072,6 +5168,12 @@ function applyDefaults(){
   if(!db.hist||typeof db.hist!=='object')db.hist=histVazio();
   ['geral','sessoes','subs'].forEach(k=>{if(!Array.isArray(db.hist[k]))db.hist[k]=[];});
   if(typeof db.provaSeq!=='number')db.provaSeq=0;
+  // ===== Dicas =====
+  // db.dicas é o conteúdo e mora no nó próprio (vdn_dicas, ver dicasCarregar); aqui só
+  // garante a lista em memória. db.dicasEstado ({id: {sei, vistaEm}}) é o "já sei" de cada
+  // pessoa e vai no registro principal, junto com o saveDB.
+  if(!Array.isArray(db.dicas))db.dicas=[];
+  if(!db.dicasEstado||typeof db.dicasEstado!=='object'||Array.isArray(db.dicasEstado))db.dicasEstado={};
   if(Array.isArray(db.provas)){
     // O maior numero ja usado manda: numero de prova nao pode se repetir, senao o
     // rotulo deixa de identificar — que e a unica coisa que ele faz.
@@ -6319,8 +6421,10 @@ function restoreFromBackup(slot){
     // criado depois daquele dia) — zera os campos de conteúdo conhecidos antes de aplicar,
     // pra "restaurar" ser de fato uma substituição, não uma mistura dos dois estados.
     ['kingdoms','topics','times','revisions','flashcards','redacoes','repertorio','sessions'].forEach(k=>{delete db[k];});
+    const dicasAntes=db.dicas||[];   // o nó próprio não vem no Object.assign — ver dicasRestaurarDoBackup
     Object.assign(db,backup);
     applyDefaults();
+    dicasRestaurarDoBackup(backup.dicas,dicasAntes);
     saveDB();
     closeModal();
     const c=countDataSummary(backup);
@@ -6453,6 +6557,8 @@ function bootApp(){
     // Depois do registro principal, e em paralelo com o resto da tela: o banco de
     // questoes so e preciso quando a pessoa abre Provas, nao no primeiro frame.
     acervoCarregar().catch(e=>console.warn('Falha ao carregar o banco de questões:',e));
+    // As dicas também têm nó próprio e não seguram a primeira tela.
+    dicasCarregar().catch(e=>{dicasCarregou=true;console.warn('Falha ao carregar as dicas:',e);});
     renderHeader();
     renderMap();
     updateRevBadge();
@@ -6529,11 +6635,12 @@ function isAfterExam(dateStr){return db.examDate&&dateStr>db.examDate;}
 // Depois de expirar, tudo trava (ver LOCKED_SCREENS) exceto o Painel do Herói
 // (dashboard), que continua visível pra pessoa lembrar do progresso e ser convidada a
 // assinar. Ver applyDefaults() pra como db.plan/db.trialStartedAt são definidos.
-const LOCKED_SCREENS=['map','revisions','simgeral','provas','caderno','banco','editais','flashcards','redacoes','repertorio','conquistas'];
+const LOCKED_SCREENS=['map','revisions','simgeral','provas','caderno','banco','dicas','editais','flashcards','redacoes','repertorio','conquistas'];
 const LOCKED_SCREEN_INFO={
   map:{icon:'🗺️',title:'Mapa dos Reinos é um recurso do plano completo',desc:'O mapa de progresso por reino/chefão libera junto com o plano completo.'},
   revisions:{icon:'🔔',title:'Revisões é um recurso do plano completo',desc:'A fila de revisões espaçadas (SM-2) — atrasadas, de hoje e dos próximos dias — libera junto com o plano completo.'},
   simgeral:{icon:'🏛️',title:'Simulado Geral é um recurso do plano completo',desc:'O simulado cronometrado multi-matéria libera junto com o plano completo.'},
+  dicas:{icon:'💡',title:'Dicas é um recurso do plano completo',desc:'As dicas por matéria (regras, macetes, pegadinhas e números pra revisão de véspera) liberam junto com o plano completo.'},
   editais:{icon:'📋',title:'Editais é um recurso do plano completo',desc:'O acompanhamento de editais libera junto com o plano completo.'},
   flashcards:{icon:'🃏',title:'Flashcards é um recurso do plano completo',desc:'A criação e o estudo de flashcards com revisão espaçada liberam junto com o plano completo.'},
   redacoes:{icon:'📝',title:'Redações é um recurso do plano completo',desc:'A correção de redação por IA com cálculo de NPD libera junto com o plano completo.'},
@@ -6599,7 +6706,8 @@ function guardarPlanoDoServidor(data){
 function payloadParaFirebase(){
   // O banco de questoes tem no proprio (vdn_acervo) e nao entra aqui: e o que mantem o
   // registro principal pequeno, e o registro principal e o que sobe a cada saveDB.
-  const {acervo,provasArquivo,hist,...semAcervo}=db;
+  // O conteudo das dicas idem (vdn_dicas); o estado delas (dicasEstado) fica.
+  const {acervo,provasArquivo,hist,dicas,...semAcervo}=db;
   const copia=sanitizeForFirebase(semAcervo);
   CAMPOS_PLANO.forEach(k=>{
     if(planoDoServidor[k]!==undefined)copia[k]=planoDoServidor[k];
@@ -7156,9 +7264,9 @@ function showScreen(name){
   if((name==='admin'||name==='mapaeditor')&&!isAdmin())name='dashboard'; // proteção extra, além do item ficar oculto no menu
   // Repertório não tem botão próprio no menu — virou aba dentro de Redação, desde a
   // fusão das telas relacionadas, então o destaque do menu segue apontando pro botão
-  // "pai". Minhas Provas, Caderno e Acervo idem, dentro de Treinar.
+  // "pai". Minhas Provas, Caderno, Acervo e Dicas idem, dentro de Treinar.
   const navName=name==='repertorio'?'redacoes'
-    :((name==='provas'||name==='caderno'||name==='banco')?'simgeral':name);
+    :((name==='provas'||name==='caderno'||name==='banco'||name==='dicas')?'simgeral':name);
   if(LOCKED_SCREENS.includes(name)&&!hasFullAccess()){
     document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -7175,6 +7283,7 @@ function showScreen(name){
   if(name==='provas')renderProvasScreen();
   if(name==='caderno')renderCadernoScreen();
   if(name==='banco')renderBancoScreen();
+  if(name==='dicas')renderDicasScreen();
   if(name==='revisions')renderRevisions();
   if(name==='dashboard')renderDashboard();
   if(name==='editais'){renderEditais();updateEditaisBadge();}
@@ -18267,6 +18376,890 @@ function bancoHTML(){
     ${bancoCriando?bancoEditorHTML(null,'criar')+bancoAssuntoLinhaHTML('banco-novo-assunto',''):''}
     ${bancoImportando?bancoImportarHTML():''}
   </div>`;
+}
+// ===== DICAS =====
+// A revisão rápida que faltava em Treinar: as regras, os macetes, as pegadinhas e os
+// números de cada matéria, do tipo que se relê na véspera da prova. Antes isso era
+// improvisado como chefão ("Foco para não errar!") dentro da matéria, o que misturava
+// dica com assunto de estudo — e chefão entra em revisão espaçada, em progresso e no
+// mapa, coisas que dica não é.
+//
+// CONTEÚDO e ESTADO moram em lugares diferentes de propósito. O conteúdo (db.dicas) tem
+// nó próprio (vdn_dicas), no mesmo padrão do vdn_acervo: mais adiante ele pode vir de um
+// pacote publicado, e não pode pesar no saveDB, que regrava o registro principal inteiro
+// a cada clique. O estado ("já sei", db.dicasEstado) é pequeno, é de cada pessoa e vai no
+// registro principal — o mesmo pacote publicado vai ter um "já sei" diferente em cada conta.
+//
+// A diferença de verdade em relação ao acervo: dica é EDITADA e APAGADA. O acervo pode unir
+// as cópias às cegas porque só cresce; aqui, unir às cegas ressuscitaria a dica apagada no
+// celular assim que o computador (com a cópia antiga no cache) abrisse o app. Por isso cada
+// dica carrega editadaEm (a versão mais nova vence) e apagar deixa uma LÁPIDE {id, apagada,
+// editadaEm} no nó, que vence qualquer cópia viva mais antiga.
+const DICAS_TIPOS=[{id:'dica',lbl:'Dica'},{id:'numero',lbl:'Número'},{id:'par',lbl:'Par (x × y)'}];
+// Campos de cada tipo: trocar o tipo no editor não deixa sobra do tipo anterior.
+const DICAS_CAMPOS_TIPO={dica:['regra','aplicar','cuidado'],numero:['valor','rotulo'],par:['a','b','diferenca']};
+const DICAS_ORIGENS={
+  minha:{icone:'✍️',lbl:'minha'},
+  material:{icone:'📘',lbl:'do material'},
+  erro:{icone:'❌',lbl:'de um erro'},
+  ia:{icone:'🤖',lbl:'gerada por IA'},
+};
+// O vocabulário do comentário das questões (EXPL_MARCAS): quem lê "📐 REGRA" no
+// comentário e no cartão está lendo a mesma coisa.
+const DICAS_LINHAS=[
+  {campo:'regra',lbl:'Regra',marca:'REGRA'},
+  {campo:'aplicar',lbl:'Como aplicar',marca:'MACETE'},
+  {campo:'cuidado',lbl:'Cuidado',marca:'CUIDADO'},
+];
+const DICAS_SEM_GRUPO='Sem grupo';
+const DICAS_SALVA_MS=1500;
+// A lápide só existe pra impedir que um aparelho parado com a cópia antiga ressuscite a
+// dica. Seis meses sem abrir o app num aparelho é o limite aceito pra isso; depois ela sai,
+// senão o nó cresceria com o histórico de tudo que um dia foi apagado.
+const DICAS_LAPIDE_DIAS=180;
+let DICAS_REF=null;
+let dicasSalvarTimer=null;
+let dicasLapides={};          // id -> ISO de quando foi apagada
+let dicasNuvemLida=false;     // a leitura da nuvem voltou nesta sessão?
+let dicasUltimoHash='';       // o que está na nuvem agora — não regrava o que já está lá
+let dicasCarregou=false;
+function dicasChaveCache(){return lsKey()+'_dicas';}
+function dicasAgora(){return new Date().toISOString();}
+function dicaMomento(x){
+  const t=Date.parse((x&&(x.editadaEm||x.criadaEm))||'');
+  return isNaN(t)?0:t;
+}
+// O Firebase devolve array como array, mas um nó mexido à mão pelo console pode voltar
+// como objeto de chaves numéricas — trata os dois.
+function dicasComoLista(v){
+  if(Array.isArray(v))return v;
+  return(v&&typeof v==='object')?Object.values(v):[];
+}
+// Junta por id; quando o mesmo id aparece em duas cópias, fica a mais nova (lápide
+// inclusive). A ordem é a da primeira cópia em que o id apareceu — a nuvem vem primeiro,
+// então a ordem de um pacote importado é a mesma em todos os aparelhos.
+function dicasUnir(...listas){
+  const porId=new Map();
+  listas.forEach(l=>dicasComoLista(l).forEach(x=>{
+    if(!x||typeof x!=='object'||!x.id)return;
+    const ja=porId.get(x.id);
+    if(!ja||dicaMomento(x)>dicaMomento(ja))porId.set(x.id,x);
+  }));
+  return[...porId.values()];
+}
+function dicasParaGravar(){
+  const lapides=Object.keys(dicasLapides).map(id=>({id,apagada:true,editadaEm:dicasLapides[id]}));
+  return(db.dicas||[]).concat(lapides);
+}
+// Une o que chegou de fora (nuvem, cache) com o que já está em memória e separa vivas de
+// lápides. dicaNormalizar sempre devolve objeto NOVO: o que vem de snap.val() não é
+// mexido no lugar.
+function dicasAbsorver(...listas){
+  const limite=Date.now()-DICAS_LAPIDE_DIAS*86400000;
+  const vivas=[],lapides={};
+  dicasUnir(...listas,dicasParaGravar()).forEach(x=>{
+    if(x.apagada){if(dicaMomento(x)>=limite)lapides[x.id]=x.editadaEm;return;}
+    vivas.push(dicaNormalizar(x));
+  });
+  db.dicas=vivas;
+  dicasLapides=lapides;
+}
+function dicasLerNuvem(){
+  return new Promise(res=>{
+    if(!DICAS_REF)return res({ok:false,val:null});
+    const t=setTimeout(()=>res({ok:false,val:null}),8000);   // rede ruim não trava o boot
+    try{
+      DICAS_REF.once('value').then(snap=>{clearTimeout(t);res({ok:true,val:snap.val()});},
+                                   ()=>{clearTimeout(t);res({ok:false,val:null});});
+    }catch(e){clearTimeout(t);res({ok:false,val:null});}
+  });
+}
+function dicasSalvar(agora){
+  if(dicasSalvarTimer){clearTimeout(dicasSalvarTimer);dicasSalvarTimer=null;}
+  const grava=()=>{
+    dicasSalvarTimer=null;
+    const lista=sanitizeForFirebase(dicasParaGravar());
+    // Cópia local primeiro, como no acervo: é a que funciona sem internet.
+    try{if(cacheIdbOk)idbGravar(dicasChaveCache(),lista);}catch(e){}
+    if(!DICAS_REF)return;
+    if(!dicasNuvemLida){
+      // A leitura do boot não voltou (rede ruim). Gravar agora a lista DESTE aparelho
+      // apagaria o que outro aparelho gravou e este ainda não viu: lê, une e só então grava.
+      dicasLerNuvem().then(r=>{
+        if(!r.ok){warnSyncIssue('⚠️ Não consegui salvar as dicas na nuvem agora. Elas continuam guardadas neste aparelho.');return;}
+        dicasNuvemLida=true;
+        dicasUltimoHash=backupHash(dicasComoLista(r.val));
+        dicasAbsorver(r.val);
+        dicasSalvar(true);
+        dicasRefrescarSeAberta();
+      });
+      return;
+    }
+    const h=backupHash(lista);
+    if(h===dicasUltimoHash)return;   // só sobe quando mudou
+    try{
+      const r=DICAS_REF.set(lista);
+      dicasUltimoHash=h;
+      if(r&&r.catch)r.catch(e=>{
+        dicasUltimoHash='';          // a próxima mudança tenta de novo
+        console.warn('Falha ao salvar as dicas:',e);
+        warnSyncIssue('⚠️ Não consegui salvar as dicas na nuvem agora. Elas continuam guardadas neste aparelho.');
+      });
+    }catch(e){dicasUltimoHash='';console.warn('Falha síncrona ao salvar as dicas:',e);}
+  };
+  if(agora)grava(); else dicasSalvarTimer=setTimeout(grava,DICAS_SALVA_MS);
+}
+async function dicasCarregar(){
+  DICAS_REF=userRef('vdn_dicas');
+  let local=null;
+  try{local=await idbLer(dicasChaveCache());}catch(e){}
+  const nuvem=await dicasLerNuvem();
+  if(nuvem.ok){dicasNuvemLida=true;dicasUltimoHash=backupHash(dicasComoLista(nuvem.val));}
+  dicasAbsorver(nuvem.val,local);
+  dicasCarregou=true;
+  // Regrava só se a união trouxe o que a nuvem não tinha (dica criada sem internet, lápide
+  // vinda do cache): dicasSalvar compara com o hash da nuvem e não sobe nada se for igual.
+  dicasSalvar(true);
+  dicasRefrescarSeAberta();
+  return db.dicas.length;
+}
+// Restaurar backup: a cópia de segurança leva db.dicas junto (ela copia o db inteiro), mas
+// o Object.assign do restaurar não toca o nó próprio. Aqui a dica do backup volta — também
+// a que foi apagada depois, com data nova pra a lápide dos outros aparelhos não apagá-la de
+// novo — sem apagar a criada depois do backup: com conteúdo editado em mais de um aparelho,
+// "restaurar" que some com o mais novo seria perder dado calado.
+function dicasRestaurarDoBackup(doBackup,atuais){
+  const agora=dicasAgora();
+  const vindas=dicasComoLista(doBackup).filter(x=>x&&x.id&&!x.apagada).map(x=>{
+    if(!dicasLapides[x.id])return x;
+    delete dicasLapides[x.id];
+    return{...x,editadaEm:agora};
+  });
+  db.dicas=dicasUnir(atuais,vindas).filter(x=>!x.apagada).map(x=>dicaNormalizar(x));
+  dicasSalvar(true);
+  dicasRefrescarSeAberta();
+}
+
+// ---- Uma dica, do jeito que fica guardada ----
+function dicaNormalizarExemplos(v){
+  const arr=Array.isArray(v)?v:(typeof v==='string'?v.split('\n'):[]);
+  return arr.map(e=>{
+    if(typeof e==='string')return dicaExemploDeLinha(e);
+    if(!e||typeof e!=='object')return null;
+    const txt=String(e.txt!=null?e.txt:(e.texto!=null?e.texto:(e.frase||''))).trim();
+    if(!txt)return null;
+    const okv=('ok' in e)?e.ok:(('certo' in e)?e.certo:e.correto);
+    const ok=!(okv===false||okv===0||/^(false|errado|e|nao|não)$/i.test(String(okv==null?'':okv)));
+    return{txt,ok};
+  }).filter(Boolean);
+}
+// No editor os exemplos são uma linha cada: ✔ (ou +) é certo, ✖ (ou -) é errado. Linha sem
+// sinal conta como certa — é o caso comum de quem só quer anotar um exemplo de uso.
+function dicaExemploDeLinha(l){
+  let s=String(l||'').trim();
+  if(!s)return null;
+  let ok=true;
+  const nok=s.match(/^(?:✖️?|✗|×|❌|-|–|errado\s*[:–-]|e\s*[:)–-])\s*/i);
+  const sim=!nok&&s.match(/^(?:✔️?|✓|✅|\+|certo\s*[:–-]|c\s*[:)–-])\s*/i);
+  if(nok){ok=false;s=s.slice(nok[0].length);}
+  else if(sim)s=s.slice(sim[0].length);
+  s=s.trim();
+  return s?{txt:s,ok}:null;
+}
+function dicaNormalizarBancas(v){
+  const arr=Array.isArray(v)?v:String(v||'').split(/[,;]/);
+  const vistas=new Set();
+  return arr.map(b=>String(b==null?'':b).trim()).filter(b=>{
+    const k=b.toLowerCase();
+    if(!b||vistas.has(k))return false;
+    vistas.add(k);return true;
+  });
+}
+// Forma compacta: campo vazio não é gravado. É o que o Firebase devolveria de qualquer
+// jeito (ele descarta string e lista vazias), e assim a comparação com a nuvem bate.
+function dicaNormalizar(x,origemPadrao){
+  x=x||{};
+  const tipo=normalizeForDedup(String(x.tipo||'dica'));   // "Número" -> "numero"
+  const d={id:String(x.id||genId()),tipo,kingdomId:String(x.kingdomId||'')};
+  if(x.subId)d.subId=String(x.subId);
+  const campos=['grupo','titulo','fonte'].concat(DICAS_CAMPOS_TIPO[tipo]||[]);
+  // O assunto como estava escrito no pacote fica guardado só enquanto não houver miniboss:
+  // é o que permite resolver "sem assunto" em grupo, pelo nome que o pacote pretendia.
+  if(!d.subId)campos.push('assuntoNome');
+  campos.forEach(c=>{const v=x[c]==null?'':String(x[c]).trim();if(v)d[c]=v;});
+  if(tipo==='numero'&&!d.titulo&&d.rotulo)d.titulo=d.rotulo;
+  if(tipo!=='numero'){const ex=dicaNormalizarExemplos(x.exemplos);if(ex.length)d.exemplos=ex;}
+  const bancas=dicaNormalizarBancas(x.bancas);
+  if(bancas.length)d.bancas=bancas;
+  const origem=String(x.origem||'').trim().toLowerCase();
+  d.origem=DICAS_ORIGENS[origem]?origem:(origemPadrao||'minha');
+  d.criadaEm=x.criadaEm?String(x.criadaEm):dicasAgora();
+  d.editadaEm=x.editadaEm?String(x.editadaEm):d.criadaEm;
+  return d;
+}
+// O mesmo motivo serve pra recusar no formulário e pra explicar a recusa na importação.
+function dicaValidar(d){
+  if(!DICAS_CAMPOS_TIPO[d.tipo])return`tipo "${d.tipo}" não existe (use dica, numero ou par)`;
+  if(!d.kingdomId)return'sem matéria';
+  if(!d.titulo)return'sem título';
+  if(d.tipo==='dica'&&!d.regra&&!d.aplicar&&!d.cuidado)return'dica sem regra, sem "como aplicar" e sem cuidado';
+  if(d.tipo==='numero'&&!d.valor)return'número sem valor';
+  if(d.tipo==='par'&&(!d.a||!d.b))return'par sem os dois lados (a e b)';
+  return'';
+}
+// Duplicata = mesma matéria + mesmo título normalizado (sem acento, caixa e pontuação).
+function dicaDuplicada(d,ignorarId){
+  const t=normalizeForDedup(d.titulo||'');
+  return(db.dicas||[]).find(x=>x.id!==ignorarId&&x.kingdomId===d.kingdomId
+    &&normalizeForDedup(x.titulo||'')===t)||null;
+}
+function dicaGrupo(d){return(d&&d.grupo)||DICAS_SEM_GRUPO;}
+function dicaSei(id){const e=(db.dicasEstado||{})[id];return!!(e&&e.sei);}
+// Índice de miniboss refeito a cada render: o mapa muda (miniboss novo, renomeado) e a
+// dica guarda só o subId.
+let dicasSubs=new Map();
+function dicasMapaSubs(){dicasSubs=new Map(simIndiceAssuntos().map(c=>[c.sub.id,c]));return dicasSubs;}
+function dicaAssunto(d){return(d&&d.subId&&dicasSubs.get(d.subId))||null;}
+function dicasReino(id){return(db.kingdoms||[]).find(k=>k.id===id)||null;}
+// Matéria escrita -> reino. Exato primeiro; depois um nome contido no outro, com tamanho
+// parecido e um candidato só (a mesma folga do simCasarAssunto: "Direito" não pode
+// engolir "Direito Administrativo" e "Direito Constitucional" ao mesmo tempo).
+function dicasCasarMateria(nome){
+  const n=revNorm(nome);
+  if(!n)return null;
+  const ks=db.kingdoms||[];
+  const exato=ks.find(k=>revNorm(k.name)===n);
+  if(exato)return exato;
+  const contidos=ks.filter(k=>{
+    const m=revNorm(k.name);
+    if(!m||!(m.includes(n)||n.includes(m)))return false;
+    return Math.min(m.length,n.length)/Math.max(m.length,n.length)>=0.45;
+  });
+  return contidos.length===1?contidos[0]:null;
+}
+
+// ---- Filtros ----
+const DICAS_FILTRO_VAZIO={materia:'',grupo:'',banca:'',texto:'',jaSei:false,semAssunto:false};
+let dicasFiltro={...DICAS_FILTRO_VAZIO};
+let dicasCriando=false,dicasEditando=null,dicasImportando=false;
+function dicaBuscavel(d){
+  const c=dicaAssunto(d);
+  return normalizeForDedup([d.titulo,d.grupo,d.regra,d.aplicar,d.cuidado,d.valor,d.rotulo,
+    d.a,d.b,d.diferenca,d.fonte,c?c.sub.name:d.assuntoNome,(d.bancas||[]).join(' '),
+    (d.exemplos||[]).map(e=>e.txt).join(' ')].filter(Boolean).join(' '));
+}
+function dicaTemBanca(d,b){const k=String(b).toLowerCase();return(d.bancas||[]).some(x=>x.toLowerCase()===k);}
+function dicasAplicarFiltros(f){
+  f=f||dicasFiltro;
+  let out=db.dicas||[];
+  if(f.materia)out=out.filter(d=>d.kingdomId===f.materia);
+  if(f.grupo)out=out.filter(d=>dicaGrupo(d)===f.grupo);
+  if(f.banca)out=out.filter(d=>dicaTemBanca(d,f.banca));
+  if(f.semAssunto)out=out.filter(d=>!dicaAssunto(d));
+  // "Já sei" tira a dica da lista padrão — a revisão de véspera é do que ainda não está firme.
+  if(!f.jaSei)out=out.filter(d=>!dicaSei(d.id));
+  if(f.texto){
+    const alvo=normalizeForDedup(f.texto);
+    if(alvo)out=out.filter(d=>dicaBuscavel(d).includes(alvo));
+  }
+  return out;
+}
+function dicasTemFiltro(){
+  const f=dicasFiltro;
+  return!!(f.materia||f.grupo||f.banca||f.texto||f.semAssunto);
+}
+function dicasFiltrarMateria(id){dicasFiltro.materia=(id&&dicasFiltro.materia!==id)?id:'';dicasFiltro.grupo='';dicasRefrescar();}
+function dicasFiltrarGrupo(g){dicasFiltro.grupo=dicasFiltro.grupo===g?'':g;dicasRefrescar();}
+function dicasFiltrarBanca(b){dicasFiltro.banca=b||'';dicasRefrescar();}
+// Só a contagem, os chips e a lista se refazem — o campo de busca não, senão perderia o
+// foco a cada letra (mesmo cuidado do bancoFiltroMudouTexto).
+function dicasBuscar(el){dicasFiltro.texto=el.value;dicasRefrescar();}
+function dicasAlternarJaSei(){dicasFiltro.jaSei=!dicasFiltro.jaSei;dicasRefrescar();}
+function dicasAlternarSemAssunto(){dicasFiltro.semAssunto=!dicasFiltro.semAssunto;dicasRefrescar();}
+function dicasFiltroLimpar(){dicasFiltro={...DICAS_FILTRO_VAZIO};renderDicasScreen();}
+
+// ---- Tela ----
+function renderDicasScreen(){
+  const el=document.getElementById('dicas-content');
+  if(!el)return;
+  el.innerHTML=dicasHTML();
+}
+function dicasRefrescar(){
+  const chips=document.getElementById('dicas-chips');
+  const conta=document.getElementById('dicas-conta');
+  const corpo=document.getElementById('dicas-corpo');
+  if(!chips||!conta||!corpo||!(db.dicas||[]).length){renderDicasScreen();return;}
+  dicasMapaSubs();
+  const pool=dicasAplicarFiltros();
+  chips.innerHTML=dicasChipsHTML();
+  conta.innerHTML=dicasContaHTML(pool);
+  corpo.innerHTML=dicasCorpoHTML(pool);
+}
+function dicasRefrescarSeAberta(){
+  const tela=document.getElementById('screen-dicas');
+  if(tela&&tela.classList.contains('active'))dicasRefrescar();
+}
+function dicasHTML(){
+  dicasMapaSubs();
+  if(!(db.dicas||[]).length)return dicasVazioHTML();
+  const pool=dicasAplicarFiltros();
+  return`<div class="section-card">
+    <div class="sec-title" style="margin-bottom:4px">💡 Dicas</div>
+    <div class="dicas-sub">Regras, macetes, pegadinhas e números de cada matéria — o que se relê na véspera da prova.</div>
+    <div class="banco-filtros-linha">
+      <input id="dicas-busca" class="inp" type="search" placeholder="Buscar nas dicas..." aria-label="Buscar nas dicas"
+        value="${escapeHtml(dicasFiltro.texto)}" oninput="dicasBuscar(this)" style="flex:2;min-width:160px">
+      ${dicasBancaSelectHTML()}
+      <span class="banco-acoes">
+        <button class="btn btn-xs btn-ghost" onclick="dicasCriarAbrir()"><i class="fa fa-plus"></i> Nova dica</button>
+        <button class="btn btn-xs btn-ghost" onclick="dicasImportarAbrir()"><i class="fa fa-file-import"></i> Importar em lote</button>
+      </span>
+    </div>
+    <div id="dicas-chips">${dicasChipsHTML()}</div>
+    ${dicasPaineisHTML()}
+    <div id="dicas-conta" class="dicas-conta">${dicasContaHTML(pool)}</div>
+  </div>
+  <div id="dicas-corpo">${dicasCorpoHTML(pool)}</div>`;
+}
+// Vazio não pode deixar criar e importar inalcançáveis: são as duas portas da primeira dica.
+function dicasVazioHTML(){
+  if(!dicasCarregou)return`<div class="section-card">
+    <div class="sec-title" style="margin-bottom:4px">💡 Dicas</div>
+    <div class="empty"><i class="fa fa-spinner fa-spin"></i><p>Carregando suas dicas…</p></div>
+  </div>`;
+  return`<div class="section-card">
+    <div class="sec-title" style="margin-bottom:4px">💡 Dicas</div>
+    <div class="empty"><i class="fa fa-lightbulb"></i>
+      <p>Nenhuma dica ainda.</p>
+      <p class="dicas-vazio-txt">Aqui ficam as regras, os macetes, as pegadinhas e os números de cada
+        matéria — o que se relê na véspera da prova. Importe um pacote pronto (um array JSON) ou
+        escreva a primeira dica.</p>
+    </div>
+    <div class="dicas-vazio-acoes">
+      <button class="btn btn-sm btn-primary" onclick="dicasImportarAbrir()"><i class="fa fa-file-import"></i> Importar em lote</button>
+      <button class="btn btn-sm btn-ghost" onclick="dicasCriarAbrir()"><i class="fa fa-plus"></i> Nova dica</button>
+    </div>
+    ${dicasPaineisHTML()}
+  </div>`;
+}
+function dicasPaineisHTML(){
+  return(dicasImportarRelatorio?dicasRelatorioHTML():'')
+    +dicasImportarPendentesHTML()
+    +(dicasCriando?dicaEditorHTML(null,'criar'):'')
+    +(dicasImportando?dicasImportarHTML():'');
+}
+function dicasBancasExistentes(){
+  const m=new Map();
+  (db.dicas||[]).forEach(d=>(d.bancas||[]).forEach(b=>{const k=b.toLowerCase();if(!m.has(k))m.set(k,b);}));
+  return[...m.values()].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+}
+function dicasBancaSelectHTML(){
+  const bs=dicasBancasExistentes();
+  const atual=dicasFiltro.banca.toLowerCase();
+  return`<select id="dicas-filtro-banca" class="inp" style="width:auto" onchange="dicasFiltrarBanca(this.value)" aria-label="Filtrar por banca"${bs.length?'':' disabled title="Nenhuma dica tem banca marcada ainda"'}>
+    <option value="">${bs.length?'Qualquer banca':'Sem banca marcada'}</option>
+    ${bs.map(b=>`<option value="${escapeHtml(b)}"${b.toLowerCase()===atual?' selected':''}>${escapeHtml(b)}</option>`).join('')}
+  </select>`;
+}
+// Contagem viva, como os chips do Acervo: o número é quantas você veria clicando agora.
+function dicasChipsHTML(){
+  const f=dicasFiltro;
+  const chip=(ativo,onclick,html,titulo)=>`<button type="button" class="banco-chip${ativo?' ativo':''}" onclick="${onclick}"${titulo?` title="${escapeHtml(titulo)}"`:''}>${html}</button>`;
+  const baseMat=dicasAplicarFiltros({...f,materia:'',grupo:''});
+  const porMat=new Map();
+  baseMat.forEach(d=>porMat.set(d.kingdomId,(porMat.get(d.kingdomId)||0)+1));
+  const comDica=new Set((db.dicas||[]).map(d=>d.kingdomId));
+  const ordem=(db.kingdoms||[]).map(k=>k.id).filter(id=>comDica.has(id))
+    .concat([...comDica].filter(id=>!dicasReino(id)));
+  const chipsMat=[chip(!f.materia,"dicasFiltrarMateria('')",`Todas · <b>${baseMat.length}</b>`)]
+    .concat(ordem.map(id=>{
+      const k=dicasReino(id);
+      const nome=k?`${iconeReino(k.icon)} ${escapeHtml(k.name)}`:'❓ matéria apagada';
+      return chip(f.materia===id,`dicasFiltrarMateria('${escapeAttrJs(id)}')`,`${nome} · <b>${porMat.get(id)||0}</b>`);
+    }));
+  const baseGrupo=dicasAplicarFiltros({...f,grupo:''});
+  const porGrupo=new Map();
+  baseGrupo.forEach(d=>porGrupo.set(dicaGrupo(d),(porGrupo.get(dicaGrupo(d))||0)+1));
+  if(f.grupo&&!porGrupo.has(f.grupo))porGrupo.set(f.grupo,0);
+  const sabidas=dicasAplicarFiltros({...f,jaSei:true}).filter(d=>dicaSei(d.id)).length;
+  const semAssunto=dicasAplicarFiltros({...f,semAssunto:false}).filter(d=>!dicaAssunto(d)).length;
+  const mostrar=[chip(f.jaSei,'dicasAlternarJaSei()',`✅ mostrar as que já sei · <b>${sabidas}</b>`,'As que você marcou como "já sei" saem da lista padrão')];
+  if(semAssunto||f.semAssunto)mostrar.push(chip(f.semAssunto,'dicasAlternarSemAssunto()',`⚠️ sem assunto · <b>${semAssunto}</b>`,'Dicas que ainda não estão ligadas a um miniboss'));
+  return`<div class="banco-chips-faixa dicas-chips">
+    <div class="banco-chip-grupo" id="dicas-chips-materia"><span class="banco-chip-rotulo">Matéria</span><div class="banco-chips">${chipsMat.join('')}</div></div>
+    ${porGrupo.size>1||f.grupo?`<div class="banco-chip-grupo" id="dicas-chips-grupo"><span class="banco-chip-rotulo">Grupo</span><div class="banco-chips">${
+      [...porGrupo.entries()].map(([g,n])=>chip(f.grupo===g,`dicasFiltrarGrupo('${escapeAttrJs(g)}')`,`${escapeHtml(g)} · <b>${n}</b>`)).join('')}</div></div>`:''}
+    <div class="banco-chip-grupo" id="dicas-chips-mostrar"><span class="banco-chip-rotulo">Mostrar</span><div class="banco-chips">${mostrar.join('')}</div></div>
+  </div>`;
+}
+function dicasContaHTML(pool){
+  const escondidas=dicasFiltro.jaSei?0:dicasAplicarFiltros({...dicasFiltro,jaSei:true}).filter(d=>dicaSei(d.id)).length;
+  return`<span><b>${pool.length}</b> ${pool.length===1?'dica':'dicas'}${dicasTemFiltro()?' com este filtro':''}</span>`
+    +(escondidas?`<span>· ${escondidas} que você já sabe ${escondidas===1?'está escondida':'estão escondidas'}</span>`:'')
+    +(dicasTemFiltro()?`<button class="sg-mais" style="margin:0" onclick="dicasFiltroLimpar()">limpar filtro</button>`:'');
+}
+// Agrupado por matéria + grupo, na ordem em que as dicas aparecem — a ordem do pacote.
+function dicasCorpoHTML(pool){
+  const resolver=dicasFiltro.semAssunto?dicasSemAssuntoHTML(pool):'';
+  if(!pool.length)return resolver+`<div class="section-card"><div class="empty" style="padding:24px 12px">
+    <i class="fa fa-filter"></i><p>Nenhuma dica com esse filtro.</p></div></div>`;
+  const grupos=new Map();
+  pool.forEach(d=>{
+    const k=d.kingdomId+'\u0001'+dicaGrupo(d);
+    if(!grupos.has(k))grupos.set(k,{kId:d.kingdomId,nome:dicaGrupo(d),itens:[]});
+    grupos.get(k).itens.push(d);
+  });
+  const variasMaterias=new Set(pool.map(d=>d.kingdomId)).size>1;
+  return resolver+[...grupos.values()].map(g=>{
+    const k=dicasReino(g.kId);
+    const cartoes=g.itens.filter(d=>d.tipo!=='numero');
+    const numeros=g.itens.filter(d=>d.tipo==='numero');
+    return`<section class="dica-grupo">
+      <div class="sec-title dica-grupo-tit">${variasMaterias?`<span class="dica-grupo-mat">${k?iconeReino(k.icon)+' '+escapeHtml(k.name):'❓'} ›</span>`:''}
+        <span>${escapeHtml(g.nome)}</span> <b class="dica-grupo-n">${g.itens.length}</b></div>
+      ${cartoes.length?`<div class="dica-grade">${cartoes.map(dicaCardHTML).join('')}</div>`:''}
+      ${numeros.length?`<div class="dica-numeros">${numeros.map(dicaCardHTML).join('')}</div>`:''}
+    </section>`;
+  }).join('');
+}
+function dicaEtiquetasHTML(d){
+  const c=dicaAssunto(d);
+  const sem=d.assuntoNome?`O assunto escrito ("${d.assuntoNome}") não casou com nenhum miniboss`:'Ainda não ligada a um miniboss';
+  return(d.bancas||[]).map(b=>`<span class="banco-tag">${escapeHtml(b)}</span>`).join('')
+    +(c?`<span class="dica-etq" title="Assunto">${escapeHtml(c.sub.name)}</span>`
+       :`<span class="dica-etq dica-etq-sem" title="${escapeHtml(sem)}">sem assunto</span>`);
+}
+function dicaExemplosHTML(d){
+  const ex=d.exemplos||[];
+  if(!ex.length)return'';
+  return`<ul class="dica-exemplos">${ex.map(e=>`<li class="dica-ex ${e.ok?'dica-ex-ok':'dica-ex-nok'}"><span class="dica-ex-sinal">${e.ok?'✔ certo':'✖ errado'}</span> ${escapeHtml(e.txt)}</li>`).join('')}</ul>`;
+}
+function dicaRodapeHTML(d,sei){
+  const o=DICAS_ORIGENS[d.origem]||DICAS_ORIGENS.minha;
+  const id=escapeAttrJs(d.id);
+  const origem=o.lbl+(d.fonte?' · '+d.fonte:'');
+  return`<div class="dica-rodape">
+    <span class="dica-origem" title="${escapeHtml('Origem: '+origem)}">${o.icone} ${escapeHtml(origem)}</span>
+    <button class="btn btn-xs btn-ghost dica-btn-sei" onclick="dicaJaSei('${id}')">${sei?'↩️ Rever':'✅ Já sei'}</button>
+    <button class="btn btn-xs btn-ghost dica-btn-editar" onclick="dicaEditarAbrir('${id}')"><i class="fa fa-pen"></i> Editar</button>
+  </div>`;
+}
+function dicaCardHTML(d){
+  if(dicasEditando===d.id)return dicaEditorHTML(d,'edit');
+  const sei=dicaSei(d.id);
+  const cls='dica-card'+(sei?' dica-sei':'');
+  const selo=sei?'<span class="dica-selo-sei">✅ já sei</span>':'';
+  const idHtml=escapeHtml('dica-'+d.id);
+  if(d.tipo==='numero'){
+    return`<article class="${cls} dica-num" id="${idHtml}">
+      ${d.titulo&&d.titulo!==d.rotulo?`<div class="dica-num-tit">${escapeHtml(d.titulo)}</div>`:''}
+      <div class="dica-num-valor">${escapeHtml(d.valor||'')}</div>
+      <div class="dica-num-rotulo">${escapeHtml(d.rotulo||d.titulo||'')}</div>
+      <div class="dica-etiquetas">${selo}${dicaEtiquetasHTML(d)}</div>
+      ${dicaRodapeHTML(d,sei)}
+    </article>`;
+  }
+  let corpo='';
+  if(d.tipo==='par'){
+    corpo=`<div class="dica-par"><span class="dica-par-lado">${escapeHtml(d.a||'')}</span><span class="dica-par-x" aria-label="versus">×</span><span class="dica-par-lado">${escapeHtml(d.b||'')}</span></div>
+      ${d.diferenca?`<dl class="dica-linhas"><div class="dica-linha"><dt>${explIcone('REGRA')} Diferença</dt><dd>${escapeHtml(d.diferenca)}</dd></div></dl>`:''}`;
+  }else{
+    const linhas=DICAS_LINHAS.filter(l=>d[l.campo]);
+    corpo=linhas.length?`<dl class="dica-linhas">${linhas.map(l=>`<div class="dica-linha dica-linha-${l.campo}"><dt>${explIcone(l.marca)} ${l.lbl}</dt><dd>${escapeHtml(d[l.campo])}</dd></div>`).join('')}</dl>`:'';
+  }
+  return`<article class="${cls}" id="${idHtml}">
+    <header class="dica-cab">
+      <h4 class="dica-titulo">${escapeHtml(d.titulo||'')}</h4>
+      <div class="dica-etiquetas">${selo}${dicaEtiquetasHTML(d)}</div>
+    </header>
+    ${corpo}
+    ${dicaExemplosHTML(d)}
+    ${dicaRodapeHTML(d,sei)}
+  </article>`;
+}
+function dicaJaSei(id){
+  if(!db.dicasEstado||typeof db.dicasEstado!=='object'||Array.isArray(db.dicasEstado))db.dicasEstado={};
+  const sei=!dicaSei(id);
+  db.dicasEstado[id]={sei,vistaEm:dicasAgora()};
+  saveDB();
+  dicasRefrescar();
+  toast(sei
+    ?(dicasFiltro.jaSei?'✅ Marcada como "já sei".':'✅ Marcada como "já sei" — ela sai da lista. O chip "mostrar as que já sei" traz de volta.')
+    :'↩️ Voltou pra lista de revisão.',sei?'var(--green)':'var(--accent)');
+}
+
+// ---- Criar e editar ----
+function dicasOpcoesReinoHTML(sel){
+  return(db.kingdoms||[]).map(k=>`<option value="${escapeHtml(k.id)}"${k.id===sel?' selected':''}>${iconeReino(k.icon)} ${escapeHtml(k.name)}</option>`).join('');
+}
+// Miniboss da matéria, agrupado por chefão — mesma árvore do simIndiceAssuntos.
+function dicasAssuntoOpcoesHTML(kId,selecionado,vazio){
+  const porChefao=new Map();
+  simIndiceAssuntos().filter(c=>c.kingdom.id===kId).forEach(c=>{
+    if(!porChefao.has(c.topic.id))porChefao.set(c.topic.id,{nome:c.topic.name,subs:[]});
+    porChefao.get(c.topic.id).subs.push(c.sub);
+  });
+  return`<option value="">${escapeHtml(vazio||'— sem assunto —')}</option>`
+    +[...porChefao.values()].map(g=>`<optgroup label="${escapeHtml(g.nome)}">${
+      g.subs.map(s=>`<option value="${escapeHtml(s.id)}"${s.id===selecionado?' selected':''}>${escapeHtml(s.name)}</option>`).join('')}</optgroup>`).join('');
+}
+function dicasGruposDe(kId){
+  const s=new Set();
+  (db.dicas||[]).forEach(d=>{if(d.kingdomId===kId&&d.grupo)s.add(d.grupo);});
+  return[...s];
+}
+function dicaEditorHTML(d,modo){
+  const p=modo==='criar'?'dica-novo-':'dica-edit-';
+  const tipo=(d&&d.tipo)||'dica';
+  const kId=(d&&d.kingdomId)||dicasFiltro.materia||((db.kingdoms||[])[0]||{}).id||'';
+  const v=c=>escapeHtml((d&&d[c])||'');
+  const so=(tipos,html)=>`<div class="dica-so" data-so="${tipos}"${tipos.split(' ').includes(tipo)?'':' hidden'}>${html}</div>`;
+  const campo=(id,lbl,html)=>`<label class="dica-campo" for="${p}${id}"><span>${lbl}</span>${html}</label>`;
+  const area=(id,lbl,ph)=>campo(id,lbl,`<textarea id="${p}${id}" class="inp" rows="2" placeholder="${escapeHtml(ph)}">${v(id)}</textarea>`);
+  const linha=(id,lbl,ph,val)=>campo(id,lbl,`<input id="${p}${id}" class="inp" placeholder="${escapeHtml(ph)}" value="${val!=null?escapeHtml(val):v(id)}">`);
+  const exemplos=((d&&d.exemplos)||[]).map(e=>(e.ok?'✔ ':'✖ ')+e.txt).join('\n');
+  const idJs=d?escapeAttrJs(d.id):'';
+  return`<div class="banco-item banco-item-editando dica-form" id="${p}form" data-tipo="${tipo}">
+    <div class="dica-form-tit">${modo==='criar'?'✍️ Nova dica':'✏️ Editar dica'}</div>
+    <div class="dica-form-grade">
+      ${campo('tipo','Tipo',`<select id="${p}tipo" class="inp" onchange="dicaFormTipo('${p}')">${DICAS_TIPOS.map(t=>`<option value="${t.id}"${t.id===tipo?' selected':''}>${t.lbl}</option>`).join('')}</select>`)}
+      ${campo('materia','Matéria',`<select id="${p}materia" class="inp" onchange="dicaFormMateria('${p}')">${dicasOpcoesReinoHTML(kId)}</select>`)}
+      ${campo('assunto','Assunto',`<select id="${p}assunto" class="inp">${dicasAssuntoOpcoesHTML(kId,(d&&d.subId)||'')}</select>`)}
+      ${campo('grupo','Grupo',`<input id="${p}grupo" class="inp" list="${p}grupos" placeholder="Ex.: Regência e preposições" value="${v('grupo')}"><datalist id="${p}grupos">${dicasGruposDe(kId).map(g=>`<option value="${escapeHtml(g)}">`).join('')}</datalist>`)}
+    </div>
+    ${linha('titulo','Título','Curto: o nome do macete')}
+    ${so('dica',area('regra',explIcone('REGRA')+' Regra','Uma frase.')
+      +area('aplicar',explIcone('MACETE')+' Como aplicar','O macete, com um exemplo.')
+      +area('cuidado',explIcone('CUIDADO')+' Cuidado','A pegadinha.'))}
+    ${so('numero',`<div class="dica-form-grade">${linha('valor','Valor','Ex.: +2 a +8 °C')}${linha('rotulo','Rótulo','Ex.: Rede de frio, instância local')}</div>`)}
+    ${so('par',`<div class="dica-form-grade">${linha('a','A','Ex.: mau')}${linha('b','B','Ex.: mal')}</div>`
+      +area('diferenca','Diferença','O que separa um do outro.'))}
+    ${so('dica par',campo('exemplos','Exemplos',`<textarea id="${p}exemplos" class="inp" rows="3" placeholder="Um por linha. Comece com ✔ (ou +) para certo e ✖ (ou -) para errado.">${escapeHtml(exemplos)}</textarea>`))}
+    <div class="dica-form-grade">
+      ${linha('bancas','Bancas','Separadas por vírgula',((d&&d.bancas)||[]).join(', '))}
+      ${campo('origem','Origem',`<select id="${p}origem" class="inp">${Object.entries(DICAS_ORIGENS).map(([id,o])=>`<option value="${id}"${((d&&d.origem)||'minha')===id?' selected':''}>${o.icone} ${o.lbl}</option>`).join('')}</select>`)}
+      ${linha('fonte','Fonte','Norma ou material (opcional)')}
+    </div>
+    <div class="banco-edit-linha">
+      <button class="btn btn-sm btn-primary" onclick="${modo==='criar'?'dicasCriarSalvar()':`dicaEditarSalvar('${idJs}')`}"><i class="fa fa-check"></i> Salvar</button>
+      <button class="btn btn-sm btn-ghost" onclick="${modo==='criar'?'dicasCriarCancelar()':'dicaEditarCancelar()'}">Cancelar</button>
+      ${modo==='criar'?'':`<button class="btn btn-sm btn-ghost dica-apagar" onclick="dicaApagar('${idJs}')"><i class="fa fa-trash"></i> Apagar dica</button>`}
+    </div>
+  </div>`;
+}
+function dicaFormTipo(p){
+  const f=document.getElementById(p+'form');
+  const t=(document.getElementById(p+'tipo')||{}).value||'dica';
+  if(!f)return;
+  f.dataset.tipo=t;
+  f.querySelectorAll('[data-so]').forEach(el=>{el.hidden=!el.dataset.so.split(' ').includes(t);});
+}
+function dicaFormMateria(p){
+  const kId=(document.getElementById(p+'materia')||{}).value||'';
+  const sel=document.getElementById(p+'assunto');
+  if(sel)sel.innerHTML=dicasAssuntoOpcoesHTML(kId,'');
+  const dl=document.getElementById(p+'grupos');
+  if(dl)dl.innerHTML=dicasGruposDe(kId).map(g=>`<option value="${escapeHtml(g)}">`).join('');
+}
+// Lê só os campos do tipo escolhido: o que ficou digitado num tipo escondido não vai junto.
+function dicaLerForm(p){
+  const v=id=>String((document.getElementById(p+id)||{}).value||'').trim();
+  const tipo=v('tipo')||'dica';
+  const d={tipo,kingdomId:v('materia'),subId:v('assunto'),grupo:v('grupo'),titulo:v('titulo'),
+           bancas:v('bancas'),origem:v('origem'),fonte:v('fonte')};
+  (DICAS_CAMPOS_TIPO[tipo]||[]).forEach(c=>{d[c]=v(c);});
+  if(tipo!=='numero')d.exemplos=v('exemplos');
+  return d;
+}
+function dicasCriarAbrir(){
+  dicasCriando=true;dicasImportando=false;
+  renderDicasScreen();
+  const el=document.getElementById('dica-novo-titulo');
+  if(el)el.focus();
+}
+function dicasCriarCancelar(){dicasCriando=false;renderDicasScreen();}
+function dicasCriarSalvar(){
+  const agora=dicasAgora();
+  const d=dicaNormalizar({...dicaLerForm('dica-novo-'),id:genId(),criadaEm:agora,editadaEm:agora},'minha');
+  const motivo=dicaValidar(d);
+  if(motivo){toast('⚠️ Não salvei: '+motivo+'.','var(--red)');return;}
+  if(dicaDuplicada(d)){toast('⚠️ Já existe uma dica com esse título nessa matéria. Edite a que existe ou mude o título.','var(--red)');return;}
+  db.dicas=db.dicas||[];
+  db.dicas.push(d);
+  dicasCriando=false;
+  // A dica recém-criada precisa aparecer: se o filtro em uso a esconderia, ele dá lugar à
+  // matéria dela.
+  dicasMapaSubs();
+  if(!dicasAplicarFiltros().some(x=>x.id===d.id))dicasFiltro={...DICAS_FILTRO_VAZIO,materia:d.kingdomId};
+  dicasSalvar();
+  renderDicasScreen();
+  toast('✅ Dica criada.','var(--green)');
+}
+function dicaEditarAbrir(id){
+  dicasEditando=id;dicasCriando=false;
+  dicasRefrescar();
+  const f=document.getElementById('dica-edit-form');
+  if(f&&f.scrollIntoView)f.scrollIntoView({block:'nearest'});
+}
+function dicaEditarCancelar(){dicasEditando=null;dicasRefrescar();}
+function dicaEditarSalvar(id){
+  const i=(db.dicas||[]).findIndex(x=>x.id===id);
+  if(i<0){toast('⚠️ Essa dica não existe mais.','var(--orange)');dicasEditando=null;dicasRefrescar();return;}
+  const velha=db.dicas[i];
+  const lido=dicaLerForm('dica-edit-');
+  const d=dicaNormalizar({...lido,id,criadaEm:velha.criadaEm,editadaEm:dicasAgora(),
+    assuntoNome:lido.subId?'':velha.assuntoNome},velha.origem);
+  const motivo=dicaValidar(d);
+  if(motivo){toast('⚠️ Não salvei: '+motivo+'.','var(--red)');return;}
+  if(dicaDuplicada(d,id)){toast('⚠️ Já existe outra dica com esse título nessa matéria.','var(--red)');return;}
+  db.dicas[i]=d;
+  dicasEditando=null;
+  dicasSalvar();
+  renderDicasScreen();
+  toast('✏️ Dica atualizada.','var(--green)');
+}
+function dicaApagar(id){
+  const d=(db.dicas||[]).find(x=>x.id===id);
+  if(!d)return;
+  if(!confirm(`Apagar a dica "${d.titulo}"?`))return;
+  db.dicas=db.dicas.filter(x=>x.id!==id);
+  dicasLapides[id]=dicasAgora();
+  // O estado dela no registro principal sai junto — registro principal pequeno.
+  if(db.dicasEstado&&db.dicasEstado[id]){delete db.dicasEstado[id];saveDB();}
+  if(dicasEditando===id)dicasEditando=null;
+  dicasSalvar();
+  renderDicasScreen();
+  toast('🗑️ Dica apagada.','var(--muted)');
+}
+
+// ---- Importar em lote ----
+// Um array JSON com os campos da dica, mas com "materia" e "assunto" escritos por nome.
+// Nada sai calado: cada item entra (com ou sem assunto), espera você escolher a matéria,
+// ou é recusado com o motivo — e o relatório diz quantos de cada.
+let dicasImportarPendentes=[];   // [{nome, itens:[{n,item}], rel}] — matéria que não casou
+let dicasImportarRelatorio=null;
+function dicasImportarAbrir(){dicasImportando=true;dicasCriando=false;renderDicasScreen();}
+function dicasImportarCancelar(){dicasImportando=false;renderDicasScreen();}
+function dicasImportarHTML(){
+  return`<div class="banco-item banco-item-editando dica-form" id="dicas-importar">
+    <div class="dica-form-tit">📥 Importar em lote</div>
+    <div class="dicas-sub" style="margin:0">Cole um array JSON (do <code>[</code> até o <code>]</code>) ou escolha o arquivo.
+      A <b>matéria</b> casa com o reino pelo nome; o <b>assunto</b>, com o miniboss. Dica cujo assunto
+      não casar entra só com a matéria, na lista "sem assunto".</div>
+    <details class="dicas-formato"><summary>Campos de cada item</summary>
+      <div><code>tipo</code> (dica, numero ou par) · <code>materia</code> · <code>assunto</code> · <code>grupo</code> ·
+      <code>titulo</code> · <code>regra</code> · <code>aplicar</code> · <code>cuidado</code> ·
+      <code>exemplos</code> [{<code>txt</code>, <code>ok</code>}] · <code>valor</code> · <code>rotulo</code> ·
+      <code>a</code> · <code>b</code> · <code>diferenca</code> · <code>bancas</code> [..] ·
+      <code>origem</code> (minha, material, erro, ia) · <code>fonte</code></div></details>
+    <textarea id="dicas-importar-txt" class="inp" spellcheck="false" placeholder="Cole aqui o array JSON de dicas..."
+      style="width:100%;min-height:120px;font-size:12px;font-family:monospace"></textarea>
+    <div class="banco-edit-linha">
+      <button class="btn btn-sm btn-primary" onclick="dicasImportarProcessar()"><i class="fa fa-file-import"></i> Importar</button>
+      <label class="btn btn-sm btn-ghost" for="dicas-importar-arq" style="cursor:pointer"><i class="fa fa-folder-open"></i> Escolher arquivo .json</label>
+      <input type="file" id="dicas-importar-arq" accept="application/json,.json" hidden onchange="dicasImportarArquivo(this)">
+      <button class="btn btn-sm btn-ghost" onclick="dicasImportarCancelar()">Cancelar</button>
+    </div>
+  </div>`;
+}
+function dicasImportarArquivo(input){
+  const file=input&&input.files&&input.files[0];
+  if(!file)return;
+  input.value='';
+  const r=new FileReader();
+  r.onload=ev=>dicasImportarProcessar(String((ev.target&&ev.target.result)||''));
+  r.onerror=()=>toast('⚠️ Não consegui ler o arquivo.','var(--red)');
+  r.readAsText(file);
+}
+function dicasImportarItem(item,k,ix,rel,n){
+  const nomeAss=String(item.assunto||item.assuntoNome||'').trim();
+  const doReino=ix.filter(c=>c.kingdom.id===k.id);
+  let c=item.subId?doReino.find(x=>x.sub.id===item.subId):null;
+  if(!c&&nomeAss){
+    // Apelido gravado quando você ligou esse nome a mão (aqui ou no Colar prova) vem antes
+    // do casamento por nome — mas só se o miniboss for da matéria certa.
+    const ap=simColarApelido(nomeAss);
+    c=ap&&doReino.find(x=>x.sub.id===ap);
+    if(!c){
+      c=simCasarAssunto(nomeAss,doReino);
+      // Casamento que não foi pelo nome exato vai pro relatório: com poucos miniboss na
+      // matéria, "Concordância verbal" casa com "Regência verbal" (a palavra em comum basta
+      // quando não há segundo colocado). Ligar errado e calado é pior que não ligar.
+      if(c&&c.norm!==revNorm(nomeAss)){
+        const k=nomeAss+'\u0001'+c.sub.name;
+        rel.aproximados[k]=(rel.aproximados[k]||0)+1;
+      }
+    }
+  }
+  const agora=dicasAgora();
+  const{id,materia,assunto,reino,...resto}=item;
+  const d=dicaNormalizar({...resto,id:genId(),kingdomId:k.id,subId:c?c.sub.id:'',
+    assuntoNome:c?'':nomeAss,criadaEm:agora,editadaEm:agora},'material');
+  const motivo=dicaValidar(d)||(dicaDuplicada(d)?'já existe uma dica com esse título nessa matéria':'');
+  if(motivo){rel.recusadas.push({n,titulo:d.titulo||'',motivo});return;}
+  db.dicas.push(d);
+  rel.entraram++;
+  if(c)rel.comAssunto++; else rel.semAssunto++;
+}
+function dicasImportarProcessar(textoArquivo){
+  const ta=document.getElementById('dicas-importar-txt');
+  const bruto=String(textoArquivo!=null?textoArquivo:(ta?ta.value:'')).trim();
+  if(!bruto){toast('⚠️ Cole o JSON primeiro (ou escolha o arquivo).','var(--red)');return;}
+  let arr=null;
+  try{arr=extractAIJson(bruto);}catch(e){arr=null;}
+  if(arr&&!Array.isArray(arr)&&Array.isArray(arr.dicas))arr=arr.dicas;
+  if(!Array.isArray(arr)){toast('❌ Não achei uma lista de dicas nesse texto. Cole um array JSON, do [ até o ].','var(--red)');return;}
+  db.dicas=db.dicas||[];
+  const ix=simIndiceAssuntos();
+  const rel={lidos:arr.length,entraram:0,comAssunto:0,semAssunto:0,recusadas:[],aguardando:0,aproximados:{}};
+  const pend=new Map();
+  arr.forEach((item,i)=>{
+    const n=i+1;
+    if(!item||typeof item!=='object'||Array.isArray(item)){rel.recusadas.push({n,titulo:'',motivo:'não é um objeto JSON'});return;}
+    const nomeMat=String(item.materia||item['matéria']||item.reino||'').trim();
+    const k=(item.kingdomId&&dicasReino(String(item.kingdomId)))||(nomeMat?dicasCasarMateria(nomeMat):null);
+    if(!k){
+      if(!nomeMat){rel.recusadas.push({n,titulo:String(item.titulo||'').trim(),motivo:'sem "materia"'});return;}
+      if(!pend.has(nomeMat))pend.set(nomeMat,[]);
+      pend.get(nomeMat).push({n,item});
+      rel.aguardando++;
+      return;
+    }
+    // Matéria casada por nome parecido ("Língua Portuguesa" → Português) também é contada.
+    if(nomeMat&&revNorm(k.name)!==revNorm(nomeMat)){
+      const kk=nomeMat+'\u0001'+k.name;
+      rel.aproximados[kk]=(rel.aproximados[kk]||0)+1;
+    }
+    dicasImportarItem(item,k,ix,rel,n);
+  });
+  pend.forEach((itens,nome)=>dicasImportarPendentes.push({nome,itens,rel}));
+  dicasImportarRelatorio=rel;
+  if(rel.entraram)dicasSalvar();
+  // Nada aproveitado: o painel fica aberto com o texto, pra corrigir e tentar de novo.
+  if(rel.entraram||rel.aguardando){dicasImportando=false;if(ta)ta.value='';}
+  renderDicasScreen();
+  const partes=[`${rel.entraram} ${rel.entraram===1?'dica entrou':'dicas entraram'}`];
+  if(rel.semAssunto)partes.push(`${rel.semAssunto} sem assunto`);
+  if(rel.recusadas.length)partes.push(`${rel.recusadas.length} ${rel.recusadas.length===1?'recusada':'recusadas'}`);
+  if(rel.aguardando)partes.push(`${rel.aguardando} esperando você escolher a matéria`);
+  toast('📥 '+partes.join(' · ')+'.',(rel.recusadas.length||rel.aguardando)?'var(--orange)':'var(--green)');
+}
+function dicasImportarPendentesHTML(){
+  if(!dicasImportarPendentes.length)return'';
+  return`<div class="banco-item banco-item-editando dica-form" id="dicas-importar-pendentes">
+    <div class="dica-form-tit">⚠️ ${dicasImportarPendentes.length===1?'Uma matéria não casou':dicasImportarPendentes.length+' matérias não casaram'} com nenhum reino</div>
+    <div class="dicas-sub" style="margin:0">Escolha o reino de cada uma — o assunto é procurado dentro dele — ou descarte.</div>
+    ${dicasImportarPendentes.map((p,i)=>`<div class="banco-edit-linha dicas-ligar-linha">
+      <div class="dicas-ligar-nome"><b>"${escapeHtml(p.nome)}"</b><span> · ${p.itens.length} ${p.itens.length===1?'dica':'dicas'}</span></div>
+      <select id="dicas-pend-${i}" class="inp" style="width:auto" aria-label="Reino para ${escapeHtml(p.nome)}"><option value="">Escolha o reino...</option>${dicasOpcoesReinoHTML('')}</select>
+      <button class="btn btn-xs btn-primary" onclick="dicasImportarPendenteUsar(${i})"><i class="fa fa-check"></i> Usar</button>
+      <button class="btn btn-xs btn-ghost" onclick="dicasImportarPendenteDescartar(${i})">Descartar</button>
+    </div>`).join('')}
+  </div>`;
+}
+function dicasImportarPendenteUsar(i){
+  const p=dicasImportarPendentes[i];
+  if(!p)return;
+  const k=dicasReino((document.getElementById('dicas-pend-'+i)||{}).value||'');
+  if(!k){toast('⚠️ Escolha o reino.','var(--red)');return;}
+  const rel=p.rel,antes=rel.entraram,recusadasAntes=rel.recusadas.length;
+  const ix=simIndiceAssuntos();
+  p.itens.forEach(({n,item})=>dicasImportarItem(item,k,ix,rel,n));
+  rel.aguardando-=p.itens.length;
+  dicasImportarPendentes.splice(i,1);
+  if(rel.entraram>antes)dicasSalvar();
+  renderDicasScreen();
+  const rec=rel.recusadas.length-recusadasAntes;
+  toast(`📥 "${p.nome}" → ${k.name}: ${rel.entraram-antes} ${rel.entraram-antes===1?'entrou':'entraram'}${rec?` · ${rec} recusada(s)`:''}.`,rec?'var(--orange)':'var(--green)');
+}
+function dicasImportarPendenteDescartar(i){
+  const p=dicasImportarPendentes[i];
+  if(!p)return;
+  p.itens.forEach(({n,item})=>p.rel.recusadas.push({n,titulo:String(item.titulo||'').trim(),
+    motivo:`a matéria "${p.nome}" não existe no seu mapa (descartada por você)`}));
+  p.rel.aguardando-=p.itens.length;
+  dicasImportarPendentes.splice(i,1);
+  renderDicasScreen();
+  toast(`🗑️ "${p.nome}" descartada (${p.itens.length} ${p.itens.length===1?'dica':'dicas'}).`,'var(--muted)');
+}
+const DICAS_RELATORIO_MAX=30;
+function dicasRelatorioHTML(){
+  const r=dicasImportarRelatorio;
+  const rec=r.recusadas;
+  const aprox=Object.entries(r.aproximados||{});
+  return`<div class="banco-item dicas-relatorio" id="dicas-relatorio">
+    <div class="dica-form-tit">📥 Importação: ${r.lidos} ${r.lidos===1?'item lido':'itens lidos'}</div>
+    <ul class="dicas-rel-lista">
+      <li>✅ <b>${r.entraram}</b> ${r.entraram===1?'entrou':'entraram'}${r.entraram?` — ${r.comAssunto} já ${r.comAssunto===1?'ligada':'ligadas'} a um assunto, ${r.semAssunto} só com a matéria`:''}</li>
+      <li>⛔ <b>${rec.length}</b> ${rec.length===1?'recusada':'recusadas'}</li>
+      ${r.aguardando?`<li>⏳ <b>${r.aguardando}</b> esperando você escolher a matéria</li>`:''}
+    </ul>
+    ${rec.length?`<ul class="dicas-rel-recusas">${rec.slice(0,DICAS_RELATORIO_MAX).map(x=>`<li>item ${x.n}${x.titulo?` · "${escapeHtml(x.titulo)}"`:''}: ${escapeHtml(x.motivo)}</li>`).join('')}${rec.length>DICAS_RELATORIO_MAX?`<li>… e mais ${rec.length-DICAS_RELATORIO_MAX}</li>`:''}</ul>`:''}
+    ${aprox.length?`<div class="dicas-rel-aprox-tit">≈ Ligadas por nome parecido, não igual — confira (dá pra trocar o assunto no Editar):</div>
+      <ul class="dicas-rel-recusas" id="dicas-rel-aprox">${aprox.map(([k,n])=>{const[de,para]=k.split('\u0001');
+        return`<li>"${escapeHtml(de)}" → ${escapeHtml(para)} · ${n} ${n===1?'dica':'dicas'}</li>`;}).join('')}</ul>`:''}
+    <div class="banco-edit-linha">
+      ${r.semAssunto?`<button class="btn btn-xs btn-ghost" onclick="dicasVerSemAssunto()"><i class="fa fa-link"></i> Ligar as sem assunto</button>`:''}
+      <button class="btn btn-xs btn-ghost" onclick="dicasRelatorioFechar()">Fechar</button>
+    </div>
+  </div>`;
+}
+function dicasRelatorioFechar(){dicasImportarRelatorio=null;renderDicasScreen();}
+function dicasVerSemAssunto(){dicasFiltro={...DICAS_FILTRO_VAZIO,semAssunto:true};renderDicasScreen();}
+
+// ---- Sem assunto: ligar ao miniboss em grupo ----
+// Agrupa pelo assunto que o pacote escreveu: as quatro dicas de "Regência verbal" se ligam
+// com uma escolha só. O miniboss que o casamento por nome acharia hoje (o mapa pode ter
+// ganho o miniboss depois da importação) já vem sugerido — mas só liga quando você manda.
+let dicasResolverGrupos=[];
+function dicasSemAssuntoHTML(pool){
+  const grupos=new Map();
+  pool.forEach(d=>{
+    if(dicaAssunto(d))return;
+    const k=d.kingdomId+'\u0001'+(d.assuntoNome||'');
+    if(!grupos.has(k))grupos.set(k,{kId:d.kingdomId,nome:d.assuntoNome||'',ids:[]});
+    grupos.get(k).ids.push(d.id);
+  });
+  dicasResolverGrupos=[...grupos.values()];
+  if(!dicasResolverGrupos.length)return'';
+  const ix=simIndiceAssuntos();
+  return`<div class="section-card" id="dicas-resolver">
+    <div class="sec-title" style="margin-bottom:4px">🔗 Ligar ao assunto</div>
+    <div class="dicas-sub">Estas dicas estão só com a matéria. Escolha o miniboss — vale pra todas as dicas da linha.</div>
+    ${dicasResolverGrupos.map((g,i)=>{
+      const k=dicasReino(g.kId);
+      const ap=g.nome?simColarApelido(g.nome):null;
+      const doReino=ix.filter(c=>c.kingdom.id===g.kId);
+      const sug=g.nome?((ap&&doReino.find(c=>c.sub.id===ap))||simCasarAssunto(g.nome,doReino)):null;
+      return`<div class="banco-edit-linha dicas-ligar-linha">
+        <div class="dicas-ligar-nome"><b>${g.nome?'"'+escapeHtml(g.nome)+'"':'sem assunto indicado'}</b><span> · ${k?escapeHtml(k.name):'matéria apagada'} · ${g.ids.length} ${g.ids.length===1?'dica':'dicas'}</span></div>
+        <select id="dicas-ligar-${i}" class="inp" style="width:auto" aria-label="Miniboss">${dicasAssuntoOpcoesHTML(g.kId,sug?sug.sub.id:'','Escolha o miniboss...')}</select>
+        <button class="btn btn-xs btn-primary" onclick="dicasLigarAssunto(${i})"><i class="fa fa-link"></i> Ligar</button>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function dicasLigarAssunto(i){
+  const g=dicasResolverGrupos[i];
+  const subId=(document.getElementById('dicas-ligar-'+i)||{}).value||'';
+  if(!g||!subId){toast('⚠️ Escolha o miniboss.','var(--red)');return;}
+  const c=dicasMapaSubs().get(subId);
+  if(!c)return;
+  const agora=dicasAgora();
+  const ids=new Set(g.ids);
+  let n=0;
+  db.dicas=(db.dicas||[]).map(d=>{
+    if(!ids.has(d.id))return d;
+    n++;
+    const{assuntoNome,...resto}=d;
+    return{...resto,subId,editadaEm:agora};
+  });
+  // O nome passa a resolver sozinho na próxima importação (e no Colar prova, que usa o
+  // mesmo caderno de apelidos).
+  if(g.nome)simColarGravarApelido(g.nome,subId);
+  dicasSalvar();
+  dicasRefrescar();
+  toast(`🔗 ${n} ${n===1?'dica ligada':'dicas ligadas'} a "${c.sub.name}".`,'var(--green)');
 }
 function montarHTML(){
   const acervo=montarAcervo();
@@ -31304,6 +32297,33 @@ window.bancoCriarSalvar=bancoCriarSalvar;
 window.bancoImportarAbrir=bancoImportarAbrir;
 window.bancoImportarCancelar=bancoImportarCancelar;
 window.bancoImportarProcessar=bancoImportarProcessar;
+window.renderDicasScreen=renderDicasScreen;
+window.dicasFiltrarMateria=dicasFiltrarMateria;
+window.dicasFiltrarGrupo=dicasFiltrarGrupo;
+window.dicasFiltrarBanca=dicasFiltrarBanca;
+window.dicasBuscar=dicasBuscar;
+window.dicasAlternarJaSei=dicasAlternarJaSei;
+window.dicasAlternarSemAssunto=dicasAlternarSemAssunto;
+window.dicasFiltroLimpar=dicasFiltroLimpar;
+window.dicaJaSei=dicaJaSei;
+window.dicaEditarAbrir=dicaEditarAbrir;
+window.dicaEditarCancelar=dicaEditarCancelar;
+window.dicaEditarSalvar=dicaEditarSalvar;
+window.dicaApagar=dicaApagar;
+window.dicasCriarAbrir=dicasCriarAbrir;
+window.dicasCriarCancelar=dicasCriarCancelar;
+window.dicasCriarSalvar=dicasCriarSalvar;
+window.dicaFormTipo=dicaFormTipo;
+window.dicaFormMateria=dicaFormMateria;
+window.dicasImportarAbrir=dicasImportarAbrir;
+window.dicasImportarCancelar=dicasImportarCancelar;
+window.dicasImportarProcessar=dicasImportarProcessar;
+window.dicasImportarArquivo=dicasImportarArquivo;
+window.dicasImportarPendenteUsar=dicasImportarPendenteUsar;
+window.dicasImportarPendenteDescartar=dicasImportarPendenteDescartar;
+window.dicasRelatorioFechar=dicasRelatorioFechar;
+window.dicasVerSemAssunto=dicasVerSemAssunto;
+window.dicasLigarAssunto=dicasLigarAssunto;
 window.provaRestaurar=provaRestaurar;
 window.montarQtdGravar=montarQtdGravar;
 window.comentarProva=comentarProva;
