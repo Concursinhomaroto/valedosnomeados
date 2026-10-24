@@ -2,7 +2,7 @@
 // (HTML/manifest/ícones). NUNCA intercepta o Firebase Realtime Database:
 // os dados em tempo real trafegam por WebSocket, que passa por fora do
 // evento 'fetch' de qualquer forma, então a sincronização não é afetada.
-const CACHE_NAME = 'vdn-shell-v260';
+const CACHE_NAME = 'vdn-shell-v261';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -48,8 +48,10 @@ self.addEventListener('fetch', (event) => {
     // aqui prendia o usuário na versão antiga no carregamento logo após um deploy —
     // a atualização do cache rodava em segundo plano, tarde demais pra afetar a
     // página que já tinha acabado de carregar (só valia a partir do 2º carregamento).
+    // cache:'no-cache' — o GitHub Pages manda max-age=600, e sem isso o navegador servia
+    // o HTML guardado por até 10 min depois de um deploy, mesmo com rede.
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-cache' })
         .then((res) => {
           if (res && res.ok) {
             const copy = res.clone();
