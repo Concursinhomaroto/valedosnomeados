@@ -14455,23 +14455,51 @@ function treinoDestaqueHTML(){
   </div>`;
 }
 // ===== Montar meu treino (secao 1.3) — filtros combinaveis, contagem ao vivo, sem prova =====
-let treinoFiltro={materia:'',assunto:'',formato:'',estado:'',nivel:''};
+let treinoFiltro={materia:'',chefao:'',assunto:'',formato:'',estado:'',nivel:''};
+// Reino → Chefão → Miniboss: o chefão de cada questão sai da ÁRVORE do edital (assunto →
+// chefão atual), com o nome gravado na questão de reserva — assim renomear/mover um
+// miniboss não deixa a questão no chefão errado. Filtrar só pelo chefão = revisão do
+// chefão inteiro.
+function treinoMapaChefoes(){
+  const m={};
+  (db.kingdoms||[]).forEach(k=>(db.topics[k.id]||[]).forEach(t=>(t.subtopics||[]).forEach(s=>{
+    m[s.id]={id:t.id,nome:t.name||'',reino:k.name||''};
+  })));
+  return m;
+}
+function treinoChefaoDe(q,mapa){
+  const c=q.subId&&mapa[q.subId];
+  if(c)return c;
+  return q.topicName?{id:'nome:'+q.topicName,nome:q.topicName,reino:q.kingdomName||''}:null;
+}
+function treinoFiltroOpcoesChefoes(){
+  const mapa=treinoMapaChefoes(),nomes=new Map();
+  treinoPoolCompleto().forEach(q=>{
+    if(treinoFiltro.materia&&q.kingdomName!==treinoFiltro.materia)return;
+    const c=treinoChefaoDe(q,mapa);
+    if(c)nomes.set(c.id,c.nome);
+  });
+  return[...nomes.entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+}
 function treinoFiltroOpcoesMaterias(){
   const nomes=new Set();
   treinoPoolCompleto().forEach(q=>{if(q.kingdomName)nomes.add(q.kingdomName);});
   return[...nomes].sort((a,b)=>a.localeCompare(b));
 }
 function treinoFiltroOpcoesAssuntos(){
-  const nomes=new Map();
+  const nomes=new Map(),mapa=treinoMapaChefoes();
   treinoPoolCompleto().forEach(q=>{
     if(treinoFiltro.materia&&q.kingdomName!==treinoFiltro.materia)return;
+    if(treinoFiltro.chefao){const c=treinoChefaoDe(q,mapa);if(!c||c.id!==treinoFiltro.chefao)return;}
     if(q.subId)nomes.set(q.subId,q.subName||q.subId);
   });
   return[...nomes.entries()].sort((a,b)=>a[1].localeCompare(b[1]));
 }
 function treinoFiltroAplicar(){
+  const mapa=treinoFiltro.chefao?treinoMapaChefoes():null;
   return treinoPoolCompleto().filter(q=>{
     if(treinoFiltro.materia&&q.kingdomName!==treinoFiltro.materia)return false;
+    if(mapa){const c=treinoChefaoDe(q,mapa);if(!c||c.id!==treinoFiltro.chefao)return false;}
     if(treinoFiltro.assunto&&q.subId!==treinoFiltro.assunto)return false;
     if(treinoFiltro.formato&&(q.formato||'multipla')!==treinoFiltro.formato)return false;
     if(treinoFiltro.nivel&&q.dificuldadeAferida!==treinoFiltro.nivel)return false;
@@ -14483,28 +14511,36 @@ function treinoFiltroAplicar(){
 }
 function treinoFiltroMudou(campo,valor){
   treinoFiltro[campo]=valor;
-  if(campo==='materia')treinoFiltro.assunto='';
+  if(campo==='materia'){treinoFiltro.chefao='';treinoFiltro.assunto='';}
+  if(campo==='chefao')treinoFiltro.assunto='';
   const el=document.getElementById('treino-montar-bar');
   if(el)el.outerHTML=treinoMontarBarHTML();
 }
 function treinoFiltroTreinar(){
   const pool=treinoFiltroAplicar();
-  if(!treinoIniciar(pool,{titulo:'Treino montado'}))return;
+  const chefao=treinoFiltro.chefao&&(treinoFiltroOpcoesChefoes().find(([id])=>id===treinoFiltro.chefao)||[])[1];
+  if(!treinoIniciar(pool,{titulo:chefao?`Chefão · ${chefao}`:'Treino montado'}))return;
   renderSimGeralScreen();
   window.scrollTo(0,0);
 }
 function treinoMontarBarHTML(){
   const materias=treinoFiltroOpcoesMaterias();
+  const chefoes=treinoFiltroOpcoesChefoes();
+  if(treinoFiltro.chefao&&!chefoes.some(([id])=>id===treinoFiltro.chefao))treinoFiltro.chefao='';
   const assuntos=treinoFiltroOpcoesAssuntos();
   const n=treinoFiltroAplicar().length;
   return`<div class="treino-montar-bar" id="treino-montar-bar">
     <span class="treino-montar-titulo"><i class="fa fa-sliders"></i> Montar meu treino</span>
-    <select class="inp" onchange="treinoFiltroMudou('materia',this.value)">
-      <option value="">Matéria</option>
+    <select class="inp" onchange="treinoFiltroMudou('materia',this.value)" title="Reino">
+      <option value="">Reino</option>
       ${materias.map(m=>`<option value="${escapeHtml(m)}"${treinoFiltro.materia===m?' selected':''}>${escapeHtml(m)}</option>`).join('')}
     </select>
-    <select class="inp" onchange="treinoFiltroMudou('assunto',this.value)">
-      <option value="">Assunto</option>
+    <select class="inp treino-sel-chefao" onchange="treinoFiltroMudou('chefao',this.value)" title="Chefão — escolha só ele pra treinar o chefão inteiro">
+      <option value="">Chefão</option>
+      ${chefoes.map(([id,nome])=>`<option value="${escapeHtml(id)}"${treinoFiltro.chefao===id?' selected':''}>${escapeHtml(nome)}</option>`).join('')}
+    </select>
+    <select class="inp" onchange="treinoFiltroMudou('assunto',this.value)" title="Miniboss">
+      <option value="">Miniboss</option>
       ${assuntos.map(([id,nome])=>`<option value="${escapeHtml(id)}"${treinoFiltro.assunto===id?' selected':''}>${escapeHtml(nome)}</option>`).join('')}
     </select>
     <select class="inp" onchange="treinoFiltroMudou('formato',this.value)">
