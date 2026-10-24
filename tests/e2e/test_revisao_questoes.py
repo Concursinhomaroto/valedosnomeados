@@ -115,6 +115,20 @@ async def main():
         assert r['missao']==r['ordem'][:len(r['missao'])]
         print('   OK\n')
 
+        print('=== F) por chefão: todos os assuntos estudados do chefão, vencidos primeiro; vazio volta à fila ===')
+        r=await page.evaluate("""()=>{treinoSessao=null;treinoResumo=null;showScreen('simgeral');renderSimGeralScreen();
+          const ops=[...document.querySelectorAll('.treino-destaque select.maq-sel option')].map(o=>o.value);
+          trevEscolherChefao('t1');const m=trevMontar();
+          const sel=document.querySelector('.treino-destaque select.maq-sel').value;
+          trevComecar();const titulo=treinoSessao?treinoSessao.titulo:null;treinoSessao=null;treinoResumo=null;
+          trevEscolherChefao('');const m2=trevMontar();
+          return {ops,subs:m.assuntos.map(a=>a.subId),chefao:m.chefao,sel,titulo,volta:m2.chefao};}""")
+        print('   %s'%r)
+        assert 't1' in r['ops'] and r['sel']=='t1' and r['chefao']=='Urgência'
+        assert r['titulo']=='🔁 Revisão por questões · Urgência' and r['volta']==''
+        assert len(r['subs'])>=2
+        print('   OK\n')
+
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))
         assert not graves, graves

@@ -3248,6 +3248,10 @@ span.ti-meta{cursor:default;}
 .cd-cat small{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;}
 @media(max-width:1000px){.cd-cols{grid-template-columns:minmax(0,1fr);}.cd-topo{grid-template-columns:repeat(2,minmax(0,1fr));}}
 
+.maq-sel{width:100%;padding:7px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);
+  color:#fff;font:inherit;font-size:13px;font-weight:700;}
+.maq-sel option,.maq-sel optgroup{color:#1b1730;background:#fff;}
+
 /* ===== PAINEL (rodada 2): densidade, sem vão vazio =====
    "Hoje" e Diagnóstico com a mesma altura; a Agenda sai da coluna e vira uma faixa de
    7 colunas na largura inteira; "Hoje" ganha duas colunas por dentro. */
@@ -14314,6 +14318,35 @@ function revOrdemDoDia(){
 }
 // Os assuntos de hoje são os primeiros da ordem do dia até a cota. Os que têm questão
 // entram na sessão; os que não têm ficam listados pra revisar pelo resumo.
+// Revisão por chefão (reta final): em vez da fila de hoje, TODOS os minibosses estudados
+// do chefão escolhido (fora os dominados), sem limite de cota — primeiro os vencidos (mais
+// atrasado primeiro), depois os que estão há mais tempo sem revisão. '' = fila de hoje.
+let trevChefao='';
+function trevChefoesOpcoes(){
+  const fila=new Set(revCandidatos().map(c=>c.sub.id));
+  const out=[];
+  (db.kingdoms||[]).forEach(k=>(db.topics[k.id]||[]).forEach(t=>{
+    const subs=(t.subtopics||[]).filter(s=>s.studied&&!s.revDominado);
+    if(subs.length)out.push({id:t.id,nome:t.name||'',reino:k.name||'',n:subs.length,naVez:subs.filter(s=>fila.has(s.id)).length});
+  }));
+  return out;
+}
+function trevEscolherChefao(id){
+  trevChefao=id||'';
+  const el=document.querySelector('.treino-destaque');
+  if(el)el.outerHTML=treinoDestaqueHTML();
+}
+function trevCandidatosDoChefao(topicId){
+  let k=null,t=null;
+  (db.kingdoms||[]).some(kk=>{const tt=(db.topics[kk.id]||[]).find(x=>x.id===topicId);if(tt){k=kk;t=tt;}return !!tt;});
+  if(!t)return{lista:[],nome:''};
+  const daFila=revOrdemDoDia().filter(c=>c.topic&&c.topic.id===topicId);
+  const ja=new Set(daFila.map(c=>c.sub.id));
+  const resto=(t.subtopics||[]).filter(s=>s.studied&&!s.revDominado&&!ja.has(s.id))
+    .map(s=>({sub:s,topic:t,kingdom:k,atraso:0}))
+    .sort((a,b)=>(revDiasParado(b.sub)||0)-(revDiasParado(a.sub)||0));
+  return{lista:daFila.concat(resto),nome:t.name||''};
+}
 function trevMontar(){
   const nd=numerosDoDia();
   const cota=Math.max(1,nd.cabemHoje);
@@ -14323,13 +14356,16 @@ function trevMontar(){
   const ordem=q=>(q.ultimoResultado==='X'?0:!q.vezesRespondida?1:2);
   const quando=q=>q.ultimaVezEm?new Date(q.ultimaVezEm).getTime():0;
   const assuntos=[],semQuestao=[];
-  revOrdemDoDia().slice(0,cota).forEach(c=>{
+  const doChefao=trevChefao?trevCandidatosDoChefao(trevChefao):null;
+  if(doChefao&&!doChefao.lista.length&&!doChefao.nome)trevChefao='';
+  (doChefao&&doChefao.nome?doChefao.lista:revOrdemDoDia().slice(0,cota)).forEach(c=>{
     const qs=(porSub[c.sub.id]||[]).filter(q=>missaoHojeStr(q.ultimaVezEm)!==hoje);
     if(qs.length<TREV_MIN_QUESTOES){semQuestao.push(c);return;}
     const esc=qs.slice().sort((a,b)=>ordem(a)-ordem(b)||quando(a)-quando(b)).slice(0,TREV_POR_ASSUNTO);
     assuntos.push({subId:c.sub.id,nome:c.sub.name,atraso:c.atraso||0,itens:esc});
   });
-  return {assuntos,semQuestao,itens:assuntos.flatMap(a=>a.itens),cota,naVez:nd.naVez};
+  return {assuntos,semQuestao,itens:assuntos.flatMap(a=>a.itens),cota,naVez:nd.naVez,
+    chefao:doChefao&&doChefao.nome?doChefao.nome:''};
 }
 function trevSemQuestaoAbrir(){
   const m=trevMontar();
@@ -14342,7 +14378,7 @@ function trevSemQuestaoAbrir(){
 function trevComecar(){
   const m=trevMontar();
   if(!m.itens.length){toast('Nenhum assunto da fila de hoje tem questões no banco — revise pelo resumo na tela Revisões.','var(--muted)');return;}
-  if(!treinoIniciar(m.itens,{titulo:'🔁 Revisão por questões',
+  if(!treinoIniciar(m.itens,{titulo:m.chefao?`🔁 Revisão por questões · ${m.chefao}`:'🔁 Revisão por questões',
     revisao:m.assuntos.map(a=>({subId:a.subId,nome:a.nome}))}))return;
   renderSimGeralScreen();
   window.scrollTo(0,0);
@@ -14431,9 +14467,15 @@ function treinoDestaqueHTML(){
     <div class="maq-passos">
       <div class="maq-passo ti-passo">
         <div class="maq-cab"><span class="ti-passo-n">1</span><b>Revisar por questões</b></div>
+        <select class="maq-sel" onchange="trevEscolherChefao(this.value)" title="Fila de hoje ou um chefão inteiro">
+          <option value="">📅 Fila de hoje (os mais atrasados, até a cota)</option>
+          ${(()=>{const ops=trevChefoesOpcoes();const reinos=[...new Set(ops.map(o=>o.reino))];
+            return reinos.map(r=>`<optgroup label="${escapeHtml(r)}">${ops.filter(o=>o.reino===r).map(o=>`<option value="${escapeHtml(o.id)}"${trevChefao===o.id?' selected':''}>⚔️ ${escapeHtml(o.nome)} · ${o.n} assunto${o.n===1?'':'s'}${o.naVez?` (${o.naVez} na vez)`:''}</option>`).join('')}</optgroup>`).join('');})()}
+        </select>
         <div class="treino-destaque-sub">${rv.assuntos.length
-          ?`${rv.assuntos.length} assunto${rv.assuntos.length===1?'':'s'} da fila de hoje · ${rv.itens.length} questões — no fim você registra a revisão de cada um`
-          :(rv.semQuestao.length?'Os assuntos na vez hoje ainda não têm questões no banco.':'✓ Nada na vez hoje.')}</div>
+          ?(rv.chefao?`Chefão ${escapeHtml(rv.chefao)}: ${rv.assuntos.length} assunto${rv.assuntos.length===1?'':'s'} · ${rv.itens.length} questões — vencidos primeiro; no fim você registra a revisão de cada um`
+            :`${rv.assuntos.length} assunto${rv.assuntos.length===1?'':'s'} da fila de hoje · ${rv.itens.length} questões — no fim você registra a revisão de cada um`)
+          :(rv.chefao?'Nenhum miniboss deste chefão tem questões no banco ainda.':(rv.semQuestao.length?'Os assuntos na vez hoje ainda não têm questões no banco.':'✓ Nada na vez hoje.'))}</div>
         ${prox.length?`<div class="maq-prox">${prox.map((a,i)=>`<span><i>${i+1}</i>${escapeHtml(a.nome)}</span>`).join('')}${rv.assuntos.length>5?`<span class="maq-mais">+${rv.assuntos.length-5} assuntos</span>`:''}</div>`:''}
         <div class="maq-acoes">
           <button class="btn treino-destaque-btn" onclick="trevComecar()" ${rv.itens.length?'':'disabled'}><i class="fa fa-rotate"></i> Revisar agora</button>
