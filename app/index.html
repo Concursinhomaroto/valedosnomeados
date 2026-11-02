@@ -2879,6 +2879,8 @@ body.missao-ligada #dash-overdue-revs{display:none;}
 .dicas-materia-nome{font-size:var(--fs-titulo);font-weight:900;line-height:1.3;}
 .dicas-materia-n{font-size:var(--fs-corpo);color:var(--accent);}
 .dicas-materia-extra{font-size:var(--fs-selo);color:var(--muted);font-weight:600;}
+.dica-btn-fc-on{color:var(--green-t)!important;border-color:var(--green-t)!important;}
+.dicas-conta .dicas-fc-enviar,.dicas-conta .dicas-fc-ir{margin-right:6px;}
 .dicas-sub{font-size:var(--fs-leitura);color:var(--muted);font-weight:600;margin-bottom:var(--sp-3);line-height:1.55;}
 .dicas-conta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:var(--fs-leitura);font-weight:700;color:var(--muted);margin-top:var(--sp-3);}
 .dicas-conta b{color:var(--text);}
@@ -18756,6 +18758,7 @@ function dicasLerNuvem(){
   });
 }
 function dicasSalvar(agora){
+  dicasFlashSincronizar();
   if(dicasSalvarTimer){clearTimeout(dicasSalvarTimer);dicasSalvarTimer=null;}
   const grava=()=>{
     dicasSalvarTimer=null;
@@ -19163,8 +19166,9 @@ function dicasContaHTML(pool){
     return`<span><b>${n}</b> ${n===1?'número':'números'}${dicasTemFiltro()?' com este filtro':''} · as que você já sabe aparecem também</span>`
       +(dicasTemFiltro()?`<button class="sg-mais" style="margin:0" onclick="dicasFiltroLimpar()">limpar filtro</button>`:'');
   }
+  const fcBtn=dicasFlashBotaoHTML(pool);
   const escondidas=dicasFiltro.jaSei?0:dicasAplicarFiltros({...dicasFiltro,jaSei:true}).filter(d=>dicaSei(d.id)).length;
-  return`<span><b>${pool.length}</b> ${pool.length===1?'dica':'dicas'}${dicasTemFiltro()?' com este filtro':''}</span>`
+  return fcBtn+`<span><b>${pool.length}</b> ${pool.length===1?'dica':'dicas'}${dicasTemFiltro()?' com este filtro':''}</span>`
     +(escondidas?`<span>· ${escondidas} que você já sabe ${escondidas===1?'está escondida':'estão escondidas'}</span>`:'')
     +(dicasTemFiltro()?`<button class="sg-mais" style="margin:0" onclick="dicasFiltroLimpar()">limpar filtro</button>`:'');
 }
@@ -19229,6 +19233,11 @@ function dicaExemplosHTML(d){
   if(!ex.length)return'';
   return`<ul class="dica-exemplos">${ex.map(e=>`<li class="dica-ex ${e.ok?'dica-ex-ok':'dica-ex-nok'}"><span class="dica-ex-sinal">${e.ok?'✔ certo':'✖ errado'}</span> ${escapeHtml(e.txt)}</li>`).join('')}</ul>`;
 }
+function dicaFcBotaoHTML(d,id){
+  const tem=!!dicaFcCard(d);
+  const lig=!!dicaFcMb(d);
+  return`<button class="btn btn-xs btn-ghost dica-btn-fc${tem?' dica-btn-fc-on':''}" onclick="dicaFlashAlternar('${id}')"${lig||tem?'':' title="Ligue a dica a um assunto pra ela virar flashcard"'}>${tem?'📇 No flashcard ✓':'📇 Flashcard'}</button>`;
+}
 function dicaRodapeHTML(d,sei,ctx){
   const o=DICAS_ORIGENS[d.origem]||DICAS_ORIGENS.minha;
   const id=escapeAttrJs(d.id);
@@ -19238,6 +19247,7 @@ function dicaRodapeHTML(d,sei,ctx){
     ${d.rascunho
       ?`<button class="btn btn-xs btn-primary dica-btn-aprovar" onclick="dicaAprovar('${id}')">✅ Aprovar</button>`
       :`<button class="btn btn-xs btn-ghost dica-btn-sei" onclick="dicaJaSei('${id}','${ctx}')">${sei?'↩️ Rever':'✅ Já sei'}</button>`}
+    ${d.rascunho?'':dicaFcBotaoHTML(d,id)}
     <button class="btn btn-xs btn-ghost dica-btn-editar" onclick="${ctx==='aba'?`dicaEditarAbrir('${id}')`:`dicaIrPara('${id}',true)`}"><i class="fa fa-pen"></i> Editar</button>
     ${d.rascunho?`<button class="btn btn-xs btn-ghost dica-btn-descartar" style="color:var(--red-t)" onclick="dicaApagar('${id}')"><i class="fa fa-trash"></i> Descartar</button>`:''}
   </div>`;
@@ -19299,6 +19309,116 @@ function dicaJaSei(id,ctx){
   toast(sei
     ?((ctx&&ctx!=='aba')||dicasFiltro.jaSei?'✅ Marcada como "já sei".':'✅ Marcada como "já sei" — ela sai da lista. O chip "mostrar as que já sei" traz de volta.')
     :'↩️ Voltou pra lista de revisão.',sei?'var(--green)':'var(--accent)');
+}
+
+// ===== DICAS -> FLASHCARDS =====
+// O "vira e desvira" já existe: o Flashcard, com agendamento FSRS, fila do dia, limite de
+// novos e badge. A dica não ganha um modo de revisão próprio — ela vira card do mesmo deck.
+// Frente = a "pergunta" da dica (título, rótulo do número, os dois lados do par); verso = o
+// conteúdo. O card tem id fixo (fcd_<id da dica>), então mandar de novo não duplica, e
+// editar a dica atualiza o card sem perder o histórico de revisão. Card mora num chefão
+// (mbId), por isso dica sem assunto ligado não entra.
+const DICAS_FC_TAG='dica';
+function dicaFcId(d){return'fcd_'+d.id;}
+function dicaFcCard(d){return(db.flashcards||{})[dicaFcId(d)]||null;}
+function dicaFcMb(d){
+  if(!d)return'';
+  if(d.subId)return dicasBossDoSub(d.subId);
+  return dicaBoss(d)?d.topicId:'';
+}
+function dicaFcTexto(d){
+  if(d.tipo==='numero'){
+    const q=d.rotulo||d.titulo||'';
+    return d.valor&&q?{pergunta:q,resposta:d.valor}:null;
+  }
+  if(d.tipo==='par'){
+    return d.a&&d.b&&d.diferenca?{pergunta:`${d.a} × ${d.b}\nQual é a diferença?`,resposta:d.diferenca}:null;
+  }
+  const partes=DICAS_LINHAS.filter(l=>d[l.campo]).map(l=>`${l.lbl}\n${d[l.campo]}`);
+  const ex=(d.exemplos||[]).map(e=>`${e.ok?'✔':'✖'} ${e.txt}`);
+  if(ex.length)partes.push('Exemplos\n'+ex.join('\n'));
+  return d.titulo&&partes.length?{pergunta:d.titulo,resposta:partes.join('\n\n')}:null;
+}
+function dicaFcAplicar(c,d,t,mb){
+  const sub=d.subId?simFindSub(d.subId):null;
+  let mudou=false;
+  const set=(k,v)=>{if(c[k]!==v){c[k]=v;mudou=true;}};
+  set('pergunta',t.pergunta);set('resposta',t.resposta);set('mbId',mb);
+  if(d.subId){set('subId',d.subId);set('subNome',sub?sub.name:(c.subNome||''));}
+  else if(c.subId){delete c.subId;delete c.subNome;mudou=true;}
+  return mudou;
+}
+// 'criado' | 'ja' | 'sem-assunto' | 'sem-conteudo' | 'rascunho'
+function dicaParaFlashcard(d){
+  if(d.rascunho)return'rascunho';
+  if(dicaFcCard(d))return'ja';
+  const mb=dicaFcMb(d);
+  if(!mb)return'sem-assunto';
+  const t=dicaFcTexto(d);
+  if(!t)return'sem-conteudo';
+  if(!db.flashcards)db.flashcards={};
+  const id=dicaFcId(d);
+  db.flashcards[id]={id,mbId:mb,pergunta:'',resposta:'',tags:DICAS_FC_TAG,dicaId:d.id,dificuldade:2,
+    acertos:0,erros:0,lastConf:0,criacao:new Date().toISOString(),ultimaRevisao:null};
+  dicaFcAplicar(db.flashcards[id],d,t,mb);
+  return'criado';
+}
+function dicasFlashAtualizarTela(id){
+  if(typeof updateFCBadge==='function')updateFCBadge();
+  dicasRefrescarSeAberta();
+  if(id)dicasRefrescarFora(id);
+}
+function dicaFlashAlternar(id){
+  const d=(db.dicas||[]).find(x=>x.id===id);
+  if(!d)return;
+  const c=dicaFcCard(d);
+  if(c){
+    if(!confirm('Tirar esta dica dos flashcards?\n\nO histórico de revisão dela se perde.'))return;
+    delete db.flashcards[dicaFcId(d)];
+    saveDB();dicasFlashAtualizarTela(id);
+    toast('↩️ A dica saiu dos flashcards.','var(--muted)');
+    return;
+  }
+  const r=dicaParaFlashcard(d);
+  if(r==='criado'){saveDB();toast('📇 Virou flashcard — entra na sua fila de revisão.','var(--green)');}
+  else toast(r==='sem-assunto'?'⚠️ Ligue a dica a um assunto antes: o flashcard precisa de um chefão.'
+    :'⚠️ Esta dica não tem conteúdo suficiente pra virar flashcard.','var(--orange)');
+  dicasFlashAtualizarTela(id);
+}
+// Só o que está na tela (filtro atual), pra mandar uma matéria ou um assunto de cada vez.
+function dicasFlashElegiveis(pool){return pool.filter(d=>!d.rascunho&&!dicaFcCard(d)&&dicaFcMb(d)&&dicaFcTexto(d));}
+function dicasFlashEnviar(){
+  const pool=dicasAplicarFiltros({...dicasFiltro,semAssunto:false,rascunhos:false});
+  const cont={criado:0,ja:0,'sem-assunto':0,'sem-conteudo':0,rascunho:0};
+  pool.forEach(d=>{cont[dicaParaFlashcard(d)]++;});
+  if(cont.criado)saveDB();
+  const partes=[`📇 ${cont.criado} ${cont.criado===1?'dica virou':'dicas viraram'} flashcard`];
+  if(cont.ja)partes.push(`${cont.ja} já ${cont.ja===1?'era':'eram'}`);
+  if(cont['sem-assunto'])partes.push(`${cont['sem-assunto']} sem assunto ficaram de fora`);
+  toast(partes.join(' · '),cont.criado?'var(--green)':'var(--orange)');
+  dicasFlashAtualizarTela();
+}
+function dicasFlashBotaoHTML(pool){
+  const n=dicasFlashElegiveis(pool).length;
+  if(n)return`<button class="btn btn-xs btn-primary dicas-fc-enviar" onclick="dicasFlashEnviar()" title="Cria um flashcard por dica, no deck do assunto — a revisão é a do Flashcard">📇 Mandar <b>${n}</b> pro flashcard</button>`;
+  const jaNoDeck=pool.some(d=>dicaFcCard(d));
+  return jaNoDeck?`<button class="btn btn-xs btn-ghost dicas-fc-ir" onclick="showScreen('flashcards')">🎴 Estudar nos flashcards</button>`:'';
+}
+// Chamado a cada gravação das dicas: texto novo vai pro card; dica apagada leva o card junto.
+// Só apaga com a lápide da dica — lista parcial (carregando, aparelho atrasado) não pode
+// varrer o histórico de revisão de ninguém.
+function dicasFlashSincronizar(){
+  if(!dicasCarregou||!db.flashcards)return;
+  let mudou=false;
+  Object.values(db.flashcards).forEach(c=>{
+    if(!c||!c.dicaId)return;
+    const d=(db.dicas||[]).find(x=>x.id===c.dicaId);
+    if(!d){if(dicasLapides[c.dicaId]){delete db.flashcards[c.id];mudou=true;}return;}
+    if(d.rascunho)return;
+    const mb=dicaFcMb(d),t=dicaFcTexto(d);
+    if(mb&&t&&dicaFcAplicar(c,d,t,mb))mudou=true;
+  });
+  if(mudou){saveDB();if(typeof updateFCBadge==='function')updateFCBadge();}
 }
 
 // ---- Criar e editar ----
@@ -33815,6 +33935,9 @@ window.bancoImportarProcessar=bancoImportarProcessar;
 window.renderDicasScreen=renderDicasScreen;
 window.dicasFiltrarMateria=dicasFiltrarMateria;
 window.dicasFiltrarGrupo=dicasFiltrarGrupo;
+window.dicasEscolherGrupo=dicasEscolherGrupo;
+window.dicaFlashAlternar=dicaFlashAlternar;
+window.dicasFlashEnviar=dicasFlashEnviar;
 window.dicasFiltrarBanca=dicasFiltrarBanca;
 window.dicasBuscar=dicasBuscar;
 window.dicasAlternarJaSei=dicasAlternarJaSei;
