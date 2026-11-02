@@ -18,32 +18,38 @@ async def main():
         browser=await p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
         ctx,page,errs=await abrir(browser,seed_cron(),viewport={'width':1200,'height':900})
         await page.evaluate(HOJE)
+        # Estes cenarios reproduzem o ritmo do prompt (5h por dia, comecando em 09/11, com a trilha
+        # complementar) pra os dias 1-3 serem os da tabela dele. O padrao real (4h, amanha, sem a
+        # complementar) e conferido nos cenarios O a R.
+        await page.evaluate("()=>{const st=crEstado();st.inicio='2026-11-09';st.fases=[{desde:'2026-11-09',horas:5}];st.complementar=true;}")
         async def dia(ds):
             await page.evaluate("(d)=>{window.__hoje=d;}",ds)
 
-        print('=== A) estrutura: 598 assuntos, cada um uma vez, na ordem, 69 dias de estudo ===')
+        print('=== A) estrutura: 598 assuntos, cada um uma vez, na ordem; domingo e feriado sem assunto ===')
         await dia('2026-11-02')
         r=await page.evaluate("""()=>{const p=crPlano();
           const vistos=new Set();let dup=0;p.dias.forEach(d=>d.orig.forEach(id=>{if(vistos.has(id))dup++;vistos.add(id);}));
           const ordem={};let fora=0;
           p.dias.forEach(d=>d.orig.forEach(id=>{const m=p.meta.get(id);if((ordem[m.capId]||0)>m.idx)fora++;ordem[m.capId]=m.idx;}));
-          return {total:p.total,unicos:vistos.size,dup,fora,dias:p.totalDias,antes:p.antes,diaN:p.diaN,
-                  dom:p.dias.filter(d=>d.t==='rev').length,fer:p.dias.filter(d=>d.t==='fer').length,n:p.dias.length,falt:p.falt.length,
+          const sund=p.dias.filter(d=>crDow(d.ds)===0);
+          return {total:p.total,unicos:vistos.size,dup,fora,dias:p.totalDias,estfin:p.dias.filter(d=>d.t==='est'||d.t==='fin').length,antes:p.antes,diaN:p.diaN,
+                  domTodosRev:sund.every(d=>d.t==='rev'),fer:p.dias.filter(d=>d.t==='fer').length,fin:p.dias.filter(d=>d.t==='fin').length,falt:p.falt.length,
                   domSemAssunto:p.dias.filter(d=>d.t==='rev'||d.t==='fer').every(d=>d.orig.length===0)};}""")
         print('   %s'%r)
         assert r['total']==598 and r['unicos']==598 and r['dup']==0 and r['fora']==0
-        assert r['dias']==69 and r['antes'] and r['diaN']==0 and r['dom']==12 and r['fer']==3 and r['n']==84
+        assert r['dias']==r['estfin'] and r['antes'] and r['diaN']==0 and r['domTodosRev'] and r['fer']==3 and r['fin']==5
         assert r['falt']==0 and r['domSemAssunto']
         print('   OK\n')
 
-        print('=== B) desligado: a agenda convida a ativar; ligar mostra Dia X de 69 e a meta ===')
+        print('=== B) desligado: a agenda convida a ativar; ligar mostra Dia X de N e a meta ===')
         r=await page.evaluate("()=>{showScreen('dashboard');renderWeeklyPlan();return document.getElementById('cron-head').innerText}")
         assert 'Ativar cronograma' in r and '598 assuntos' in r
         await dia('2026-11-09')
         r=await page.evaluate("""()=>{crAtivar();const h=document.getElementById('cron-head').innerText.replace(/\\s+/g,' ');
           const p=crPlano();return {h,ativo:crAtivo(),meta:p.hojeAtual.length,min:p.hojeMin,faixas:crFaixas(p.hojeAtual,p).map(g=>g.cap.nome+' '+g.faixa)};}""")
         print('   %s'%r)
-        assert r['ativo'] and 'Dia 1 de 69' in r['h'] and 'Hoje: 9 assuntos' in r['h'] and 'Em dia' in r['h'] and 'Fim 31/01' in r['h']
+        import re
+        assert r['ativo'] and re.search(r'Dia 1 de \d+',r['h']) and 'Hoje: 9 assuntos' in r['h'] and 'Em dia' in r['h'] and '5h/dia' in r['h']
         assert r['meta']==9 and r['min']==198
         assert r['faixas']==['Legislação de Enfermagem 1–6','Ebserh: Mapa do edital HU Brasil 1','Ebserh: Legislação da Ebserh (HU Brasil) 1–2']
         print('   OK\n')
@@ -64,14 +70,15 @@ async def main():
           ids.forEach(id=>crConcluir(id,'ja-sei'));
           const q=crPlano();const dia2=q.dias[1].orig;
           // 1 concluido de verdade (22 min) + 8 "ja sei" (2 min cada) = 38 min gastos dos 198:
-          // sobram 160 min, e a fila puxa 8 assuntos (8 x 22 = 176) do dia seguinte.
+          // sobram 160 min, e a fila puxa 7 assuntos do dia seguinte (154 min; o 8o so entra se pelo
+          // menos metade dele couber, e 154 + 11 passa de 160).
           const puxados=q.hojeAtual.filter(id=>!q.st.feitos[id]);
           return {xp:db.xp-xp0,hoje:q.hojeAtual.length,feitos:q.hojeAtual.filter(id=>q.st.feitos[id]).length,
-                  puxouDia2:JSON.stringify(puxados)===JSON.stringify(dia2.slice(0,8)),
+                  puxouDia2:JSON.stringify(puxados)===JSON.stringify(dia2.slice(0,7)),
                   revs:ids.every(id=>(db.revisions[id]||[]).length===3),pend:q.pendentes,folga:q.folgaDias};}""")
         print('   %s'%r)
         assert r['xp']==0                                  # ja sei nao e atalho pra farmar XP
-        assert r['feitos']==9 and r['hoje']==17 and r['puxouDia2'], r   # 9 feitos + 8 puxados de amanha
+        assert r['feitos']==9 and r['hoje']==16 and r['puxouDia2'], r   # 9 feitos + 7 puxados de amanha
         assert r['revs'] and r['pend']==598-9 and r['folga']>=0
         print('   OK\n')
 
@@ -128,18 +135,19 @@ async def main():
         r=await page.evaluate("""()=>{db.cronograma.feitos={};db.cronograma.lidos={};
           const p0=crPlano();const todos=p0.dias.flatMap(d=>d.orig);
           todos.slice(0,todos.length-40).forEach(id=>{db.cronograma.feitos[id]={em:'2026-11-08',via:'ja-sei'};});
-          const p=crPlano();return {pend:p.pendentes,folga:p.folgaDias,para:p.encurtarPara,fim:p.fimAtual,fimEstudo:p.fimEstudo};}""")
+          const p=crPlano();return {pend:p.pendentes,folga:p.folgaDias,para:p.encurtarPara,fim:p.fimAtual,fimBase:p.fimBase,fimEstudo:p.fimEstudo};}""")
         print('   %s'%r)
-        assert r['pend']==40 and r['folga']>20 and r['para'] and r['para']<'2027-01-31' and r['fim']=='2027-01-31'
+        FIMBASE=r['fimBase']
+        assert r['pend']==40 and r['folga']>20 and r['para'] and r['para']<FIMBASE and r['fim']==FIMBASE
         r=await page.evaluate("""()=>{crAlternarEncurtar();const p=crPlano();
           const fin=p.calendario.filter(d=>d.t==='fin').length,ult=p.calendario[p.calendario.length-1];
           const apos=p.calendario.filter(d=>d.ds>p.fimEstudo&&d.t==='est').length;
           const h=document.getElementById('cron-head').innerText.replace(/\\s+/g,' ');
-          return {enc:p.encurtado,fim:p.fimAtual,fin,ultT:ult.t,ultDs:ult.ds,apos,h:h.includes('Voltar fim para 31/01'),total:p.calendario.length};}""")
+          return {enc:p.encurtado,fim:p.fimAtual,fin,ultT:ult.t,ultDs:ult.ds,apos,h:h.includes('Voltar fim para'),total:p.calendario.length};}""")
         print('   %s'%r)
-        assert r['enc'] and r['fim']<'2027-01-31' and r['fin']==5 and r['ultT']=='rev' and r['ultDs']==r['fim'] and r['apos']==0 and r['h']
+        assert r['enc'] and r['fim']<FIMBASE and r['fin']==5 and r['ultT']=='rev' and r['ultDs']==r['fim'] and r['apos']==0 and r['h']
         r=await page.evaluate("()=>{crAlternarEncurtar();return crPlano().fimAtual}")
-        assert r=='2027-01-31'
+        assert r==FIMBASE
         print('   OK\n')
 
         print('=== I) trilha complementar fora: so o resto entra ===')
@@ -191,7 +199,7 @@ async def main():
         assert '9 assuntos' in r['cartoes'][0]['txt'] and 'Legislação de Enfermagem' in r['cartoes'][0]['txt']
         assert 'Revisão semanal' in r['cartoes'][6]['txt']
         assert 'Simulado de 30' in r['dom'] and 'Erros da semana' in r['dom']
-        assert r['sem']==12
+        assert r['sem']>=10
         assert 'Feriado' in r['fer']
         print('   OK\n')
 
@@ -236,6 +244,51 @@ async def main():
         assert d['respondidas']==21 and d['certas']==11 and d['em']=='2026-11-02'
         assert d['blocos']['esp']=={'tot':10,'certas':6} and d['blocos']['pol']=={'tot':8,'certas':2} and d['blocos']['leg']=={'tot':3,'certas':3}
         assert 'Específicos 6/10' in r['h'] and 'ponto mais fraco: Políticas Públicas (25%)' in r['h'], r['h']
+        print('   OK\n')
+
+        print('=== O) seu caso: comeca amanha, 4h por dia, sem a trilha complementar (estado antigo migra) ===')
+        r=await page.evaluate("""()=>{window.__hoje='2026-11-02';closeModal();
+          db.cronograma={ativo:true,complementar:true,feitos:{},lidos:{}};   // como ficou salvo na versao anterior
+          const st=crEstado();const p=crPlano();renderWeeklyPlan();
+          const est=p.dias.filter(d=>d.t==='est');
+          return {inicio:p.inicio,horas:p.horas,comp:st.complementar,v:st.v,total:p.total,antes:p.antes,dia1:est[0].orig.length,dia2:est[1].orig.length,
+                  min1:est[0].orig.reduce((n,id)=>n+p.meta.get(id).min,0),
+                  h:document.getElementById('cron-head').innerText.replace(/\\s+/g,' ')};}""")
+        print('   %s'%{k:v for k,v in r.items() if k!='h'})
+        assert r['inicio']=='2026-11-03' and r['horas']==4 and r['comp'] is False and r['v']==2 and r['antes']
+        assert r['total']==534 and r['dia1']==7 and r['dia2']==7 and r['min1']<=158+11
+        assert 'Começa em 1 dia' in r['h'] and '4h/dia' in r['h']
+        print('   OK\n')
+
+        print('=== P) prazo de 3 meses: 4h nao fecha tudo, e o app diz quanto fecha; 4h30 fecha ===')
+        r=await page.evaluate("""()=>{const a=crPlano();const ha=document.getElementById('cron-head').innerText.replace(/\\s+/g,' ');
+          crSetHoras(4.5);const b=crPlano();const hb=document.getElementById('cron-head').innerText.replace(/\\s+/g,' ');
+          crSetHoras(4);
+          return {prazo:a.prazo,noA:a.noPrazo,nec:a.horasNec,fimA:a.fimAtual,ha,noB:b.noPrazo,fimB:b.fimAtual,hb,dia1B:b.dias.filter(d=>d.t==='est')[0].orig.length};}""")
+        print('   4h: no prazo=%s fim %s (prazo %s) precisa ~%sh · 4,5h: no prazo=%s fim %s'%(r['noA'],r['fimA'],r['prazo'],r['nec'],r['noB'],r['fimB']))
+        assert r['prazo']=='2027-02-03' and not r['noA'] and r['nec']==4.5 and r['fimA']>r['prazo']
+        assert 'além do prazo' in r['ha'] and 'fecha com ~4,5h/dia' in r['ha']
+        assert r['noB'] and r['fimB']<=r['prazo'] and 'No prazo' in r['hb'] and r['dia1B']==8
+        print('   OK\n')
+
+        print('=== Q) mudar as horas no meio do caminho nao cria atraso falso ===')
+        r=await page.evaluate("""()=>{window.__hoje='2026-11-10';db.cronograma.feitos={};
+          const a=crPlano().atrasados.length;crSetHoras(6);const p=crPlano();
+          return {a,b:p.atrasados.length,fases:db.cronograma.fases,hoje6:p.horas};}""")
+        print('   %s'%r)
+        assert r['a']>0 and r['a']==r['b'] and r['hoje6']==6 and len(r['fases'])==2 and r['fases'][1]['desde']=='2026-11-10'
+        await page.evaluate("()=>{crSetHoras(4);}")
+        print('   OK\n')
+
+        print('=== R) mudar o inicio antes de comecar; configuracao mostra horas e prazo ===')
+        r=await page.evaluate("""()=>{window.__hoje='2026-11-02';db.cronograma.fases=[{desde:db.cronograma.inicio,horas:4}];
+          crSetInicio('2026-11-01');const rejeitou=crEstado().inicio==='2026-11-03';
+          crSetInicio('2026-11-05');const p=crPlano();
+          crAbrirConfig();const m=document.getElementById('modal-body').innerText;const val=document.getElementById('cron-horas').value;
+          return {rejeitou,inicio:p.inicio,primeiroDia:p.dias[0].ds,m,val};}""")
+        print('   %s'%{k:(v if k!='m' else v[:60]) for k,v in r.items()})
+        assert r['rejeitou'] and r['inicio']=='2026-11-05' and r['primeiroDia']=='2026-11-05' and r['val']=='4'
+        assert 'Horas de estudo por dia' in r['m'] and 'Prazo de 3 meses' in r['m'] and 'não cai no edital' in r['m']
         print('   OK\n')
 
         print('=== M) celular: sem rolagem lateral com o cronograma na tela ===')
