@@ -37,7 +37,8 @@ suas, em ⚙️ na Agenda:
   de hoje (`db.cronograma.fases`): o que já passou continua no ritmo antigo, então não vira atraso falso.
 - **Prazo de 3 meses** a partir do início. A semana final (7 dias) fica antes dele. A faixa mostra "No prazo" ou
   "N dias além do prazo · fecha com ~Xh/dia".
-- **Trilha complementar fora por padrão**: Dir. Administrativo, História de Campina Grande e Informática não caem no edital do HU Brasil.
+- **Trilha complementar fora por padrão**: Dir. Administrativo, História de Campina Grande e Informática não estavam no último edital (Ebserh/FGV 03/2024). O edital novo ainda não saiu; quando sair, confira.
+- **Edital ainda não publicado**: o plano segue o último edital. A faixa avisa isso até você tocar em "O edital saiu" (`db.cronograma.editalSaiu`).
 
 Capacidade do dia = horas × 0,66 (do prompt: ~3h18 de assunto novo num dia de 5h; o resto é revisão D+1/D+7/D+30, erros e
 flashcards). Um assunto entra no dia se pelo menos metade dele couber. Com 4h são ~7 assuntos novos por dia.

@@ -25598,6 +25598,10 @@ function crAlternarEncurtar(){
   const p=crPlano();
   toast(st.encurtar&&p.encurtado?`⏩ Data final encurtada para ${crFmtData(p.fimAtual)}.`:`Data final de volta a ${crFmtData(p.fimBase)}.`,'var(--green)');
 }
+function crEditalSaiu(){
+  crEstado().editalSaiu=true;saveDB();crRefrescar();
+  toast('📋 Confira no edital novo: o que entra, a ordem e o peso de cada bloco. Depois ajuste o cronograma.','var(--accent)');
+}
 function crSetHoras(v){
   const h=Math.round(parseFloat(String(v).replace(',','.'))*2)/2;
   if(!isFinite(h)||h<1||h>12){toast('⚠️ Use entre 1 e 12 horas por dia.','var(--orange)');return;}
@@ -25887,7 +25891,8 @@ function crCabecalhoHTML(){
   const encurta=p.encurtarPara||p.encurtado
     ?`<button class="btn btn-xs btn-ghost" onclick="crAlternarEncurtar()">${p.encurtado?'↩ Voltar fim para '+crFmtData(p.fimBase):'⏩ Encurtar fim para '+crFmtData(p.encurtarPara)}</button>`:'';
   const prova=p.prova?`<span class="cron-pill">🎯 Prova ${crFmtData(p.prova.data)} · em ${Math.max(0,daysDiff(p.hoje,p.prova.data))} dias</span>`
-    :`<span class="cron-pill cron-pill-mudo" title="Cadastre a data em Editais">🎯 Cadastre a data da prova em Editais</span>`;
+    :(p.st.editalSaiu?`<span class="cron-pill cron-pill-mudo" title="Cadastre a data em Editais">🎯 Cadastre a data da prova em Editais</span>`
+      :`<span class="cron-pill cron-pill-mudo" title="O edital da Ebserh ainda não foi publicado, então não há data de prova.">🎯 Prova sem data (edital não publicado)</span>`);
   const meta=p.hojeAtual.length?`<span class="cron-pill cron-pill-meta">📌 Hoje: ${p.hojeAtual.length} assunto${p.hojeAtual.length>1?'s':''} · ~${crFmtMin(p.hojeMin)}</span>`
     :`<span class="cron-pill cron-pill-mudo">${p.antes?'Semana de preparação':p.hojeDia&&p.hojeDia.t==='rev'?'Domingo: revisão e simulado':p.hojeDia&&p.hojeDia.t==='fer'?'Feriado: revisão leve':p.hojeDia&&p.hojeDia.t==='fin'?'Semana final':'Sem assunto novo hoje'}</span>`;
   const bl=Object.keys(CRON_BLOCOS).filter(b=>p.blocos[b].tot).map(b=>{
@@ -25898,6 +25903,8 @@ function crCabecalhoHTML(){
   const prep=diag?crDiagnosticoHTML(diag,p)
     :(p.antes?`<div class="cron-prep">📋 <b>Antes de começar:</b> faça o simulado diagnóstico de 30 questões (10 específicos, 8 SUS e Saúde Pública, 6 Legislação Ebserh e Português, 6 mistas). <button class="btn btn-xs btn-primary" onclick="crSimuladoDiagnostico()">▶ Abrir diagnóstico</button></div>`:'');
   const falt=p.falt.length?`<div class="cron-aviso">${p.falt.length} capítulo${p.falt.length>1?'s':''} do prompt não ${p.falt.length>1?'estão':'está'} no seu Mapa: ${escapeHtml(p.falt.slice(0,4).join('; '))}${p.falt.length>4?'…':''}</div>`:'';
+  // Enquanto o edital não sai, a ordem, os pesos e o que entra são os do último (Ebserh/FGV 03/2024).
+  const edital=p.st.editalSaiu?'':`<div class="cron-aviso">⚠️ <b>O edital da Ebserh ainda não foi publicado.</b> Este plano segue o último (Ebserh/FGV 03/2024, prova de 16/03/2025). Quando o novo sair, a ordem, os pesos de cada bloco e o que entra podem mudar — revise o cronograma. <button class="btn btn-xs btn-ghost" onclick="crEditalSaiu()">O edital saiu</button></div>`;
   const hoje=p.hojeAtual.length?`<details class="cron-hoje" open><summary>📌 Hoje · ${p.hojeAtual.filter(id=>p.st.feitos[id]).length}/${p.hojeAtual.length} concluídos</summary>${crChecklistHTML(p.hojeAtual,p,p.hoje)}</details>`
     :(p.hojeDia&&(p.hojeDia.t==='rev'||p.hojeDia.t==='fer'||p.hojeDia.t==='fin')?`<div class="cron-hoje-esp">${crDiaEspecialHTML(p.hojeDia,p,true)}</div>`:'');
   return`<div class="cron-card">
@@ -25907,7 +25914,7 @@ function crCabecalhoHTML(){
       <span class="cron-total">${p.feitosN}/${p.total} assuntos</span>${encurta}
       <button class="btn btn-xs btn-ghost" onclick="crAbrirPlano()">🗓️ Cronograma completo</button>
       <button class="btn btn-xs btn-ghost" onclick="crAbrirConfig()" title="Opções">⚙️</button>
-    </div>${prep}${falt}${hoje}</div>`;
+    </div>${edital}${prep}${falt}${hoje}</div>`;
 }
 function crAbrirPlano(){
   const p=crPlano();crModalDia=null;
@@ -25943,8 +25950,8 @@ function crAbrirConfig(){
     <div class="cron-conf-linha" style="margin-top:12px"><label for="cron-inicio"><b>Começa em</b></label>
       <input id="cron-inicio" class="inp" type="date" value="${p.inicio}" min="${todayStr()}" ${p.antes?'':'disabled title="Já começou"'} onchange="crSetInicio(this.value)"></div>
     <div class="cron-sub">Prazo de ${CRON_MESES_PRAZO} meses: até <b>${crFmtData(p.prazo)}</b>, com a semana final antes dele. Hoje o plano termina em <b>${crFmtData(p.fimAtual)}</b>${p.noPrazo?' — dentro do prazo.':` — ${daysDiff(p.prazo,p.fimAtual)} dias além${p.horasNec?`; com ~${fh(p.horasNec)} por dia fecha no prazo`:''}.`}</div>
-    <label class="banco-check" style="margin-top:12px"><input type="checkbox" ${st.complementar?'checked':''} onchange="crAlternarComplementar()"> Incluir a trilha complementar (Dir. Administrativo, História de Campina Grande, Informática) — <b>não cai no edital do HU Brasil</b></label>
-    <div class="cron-sub" style="margin:6px 0 14px">Fica de fora por padrão. Se sobrar tempo, ligue; se faltar, o Português é o próximo a reduzir.</div>
+    <label class="banco-check" style="margin-top:12px"><input type="checkbox" ${st.complementar?'checked':''} onchange="crAlternarComplementar()"> Incluir a trilha complementar (Dir. Administrativo, História de Campina Grande, Informática) — <b>não estava no último edital (03/2024)</b></label>
+    <div class="cron-sub" style="margin:6px 0 14px">Fica de fora por padrão porque o último edital não cobrava. Quando o novo sair, confira se algum desses assuntos entrou. Se sobrar tempo, ligue; se faltar, o Português é o próximo a reduzir.</div>
     <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
       <button class="btn btn-xs btn-ghost" style="color:var(--red-t)" onclick="crDesativar()">Desativar cronograma</button>
       <button class="btn btn-sm btn-primary" onclick="closeModal()">Fechar</button></div></div>`);
