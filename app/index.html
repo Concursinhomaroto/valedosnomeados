@@ -2284,6 +2284,22 @@ nav{
   /* quatro colunas numa tela de 393px dao 85px cada; em duas o numero respira */
   .fc-boss-stats{grid-template-columns:repeat(2,1fr)!important;}
 }
+.fora-painel>summary{cursor:pointer;font-size:14px;list-style:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fora-painel>summary::-webkit-details-marker{display:none}
+.fora-badge{font-size:11px;font-weight:800;color:var(--orange-t);border:1.5px solid var(--orange-t);border-radius:999px;padding:1px 9px}
+.fora-sub{font-size:12px;color:var(--muted);font-weight:600;line-height:1.55;margin:8px 0 10px}
+.fora-topo{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.fora-topo .inp{flex:1;min-width:160px}
+.fora-reino{margin-bottom:10px}
+.fora-reino-tit{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;font-weight:900;color:var(--text);margin-bottom:3px}
+.fora-reino-tit small{font-weight:700;color:var(--muted);margin-left:4px}
+.fora-reino-acoes{display:flex;gap:4px}
+.fora-linha{display:flex;align-items:center;gap:8px;padding:5px 4px;border-top:1px solid var(--border);font-size:12.5px;cursor:pointer}
+.fora-nome{flex:1;min-width:0;font-weight:700;color:var(--text);overflow-wrap:anywhere}
+.fora-n{color:var(--muted);font-weight:700;white-space:nowrap}
+.fora-tag{font-size:11px;font-weight:800;color:var(--orange-t);white-space:nowrap}
+.fora-off .fora-nome{color:var(--muted);text-decoration:line-through}
+.fora-vazio{font-size:12.5px;color:var(--muted);padding:8px 0}
 .cron-card{border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:var(--panel2);display:flex;flex-direction:column;gap:8px}
 .cron-off{flex-direction:row;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .cron-sub{font-size:12px;color:var(--muted);font-weight:600;line-height:1.5;margin-top:2px}
@@ -13305,7 +13321,8 @@ function treinoQuestaoUtilizavel(q){
   return alts.every(a=>a&&a.letra&&a.texto!=null&&String(a.texto).trim());
 }
 function treinoPoolCompleto(){
-  return montarAcervo().filter(x=>(x.q.status||'ativa')==='ativa'&&treinoQuestaoUtilizavel(x.q)).map(x=>x.q);
+  const fora=foraSubsSet();   // matérias de prova que já passou saem daqui — de uma vez pra todo o app
+  return montarAcervo().filter(x=>(x.q.status||'ativa')==='ativa'&&treinoQuestaoUtilizavel(x.q)&&!(fora&&fora.has(x.q.subId))).map(x=>x.q);
 }
 function treinarPoolAtivo(){
   return treinoPoolCompleto();
@@ -14007,6 +14024,97 @@ function treinoPlacarGeral(){
   const erradas=respondidas-certas;
   return{respondidas,certas,erradas,liquida:certas-erradas,
          pct:respondidas?Math.round(certas/respondidas*100):0};
+}
+// ===== MATÉRIAS QUE JÁ PASSARAM (fora das questões) =====
+// Prova feita não volta: Direito Administrativo da SESAU-AL, por exemplo, não cai mais. Em vez de
+// apagar questão (e perder o histórico), a matéria — um chefão ou o reino todo — é marcada "fora":
+// treinoPoolCompleto() e montarPool() pulam as questões dela, e com isso saem do Treinar, do
+// Treino inteligente, da Revisão por questões, dos simulados do cronograma e do "Treinar" das
+// dicas. O Acervo continua guardando tudo; desmarcar devolve. db.materiasFora[topicId]={em,motivo}.
+let foraBusca='',foraAberto=false,foraMotivo='';
+function foraMaterias(){
+  if(!db.materiasFora||typeof db.materiasFora!=='object'||Array.isArray(db.materiasFora))db.materiasFora={};
+  return db.materiasFora;
+}
+// Quem está fora, como conjunto de miniboss — montado uma vez por chamada, sem varrer a árvore por questão.
+function foraSubsSet(){
+  const f=db.materiasFora;
+  if(!f||typeof f!=='object'||!Object.keys(f).length)return null;
+  const set=new Set();
+  (db.kingdoms||[]).forEach(k=>(db.topics[k.id]||[]).forEach(t=>{if(f[t.id])(t.subtopics||[]).forEach(sb=>set.add(sb.id));}));
+  return set;
+}
+// Quantas questões ativas cada chefão tem (conta as que estão fora também: é o que sairia ou voltaria).
+function foraContagens(){
+  const dono=new Map();
+  (db.kingdoms||[]).forEach(k=>(db.topics[k.id]||[]).forEach(t=>(t.subtopics||[]).forEach(sb=>dono.set(sb.id,t.id))));
+  const n={};
+  montarAcervo().forEach(x=>{
+    const q=x.q;
+    if((q.status||'ativa')!=='ativa'||!treinoQuestaoUtilizavel(q))return;
+    const t=dono.get(q.subId);
+    if(t)n[t]=(n[t]||0)+1;
+  });
+  return n;
+}
+function foraChefoesDoReino(k,n,f){
+  const busca=normalizeForDedup(foraBusca);
+  return(db.topics[k.id]||[]).filter(t=>(n[t.id]||f[t.id])&&(!busca||normalizeForDedup(t.name+' '+k.name).includes(busca)));
+}
+function foraCorpoHTML(){
+  const f=foraMaterias(),n=foraContagens();
+  const html=(db.kingdoms||[]).map(k=>{
+    const ts=foraChefoesDoReino(k,n,f);
+    if(!ts.length)return'';
+    const fora=ts.filter(t=>f[t.id]).length,kid=escapeAttrJs(k.id);
+    return`<div class="fora-reino">
+      <div class="fora-reino-tit"><span>${iconeReino(k.icon)} ${escapeHtml(k.name)} <small>${fora}/${ts.length} fora</small></span>
+        <span class="fora-reino-acoes"><button class="btn btn-xs btn-ghost" onclick="foraLote('${kid}',true)"${fora===ts.length?' disabled':''}>Tirar ${foraBusca?'os filtrados':'todos'}</button>
+        <button class="btn btn-xs btn-ghost" onclick="foraLote('${kid}',false)"${fora?'':' disabled'}>Voltar</button></span></div>
+      ${ts.map(t=>{const x=f[t.id];
+        return`<label class="fora-linha${x?' fora-off':''}"><input type="checkbox"${x?' checked':''} onchange="foraAlternar('${escapeAttrJs(t.id)}')">
+          <span class="fora-nome">${escapeHtml(t.name)}</span><span class="fora-n">${n[t.id]||0} questões</span>
+          ${x?`<span class="fora-tag">fora${x.motivo?' · '+escapeHtml(x.motivo):''}</span>`:''}</label>`;}).join('')}
+    </div>`;
+  }).join('');
+  return html||`<div class="fora-vazio">${foraBusca?'Nenhuma matéria com esse nome.':'Nenhuma matéria com questões ainda.'}</div>`;
+}
+function foraPainelHTML(){
+  const f=foraMaterias(),nCh=Object.keys(f).length;
+  let nq=0;
+  if(nCh){const n=foraContagens();nq=Object.keys(f).reduce((a,id)=>a+(n[id]||0),0);}
+  return`<details class="section-card fora-painel" id="fora-painel"${foraAberto?' open':''} ontoggle="foraAberto=this.open">
+    <summary><b>🚫 Matérias que já passaram</b>${nCh?` <span class="fora-badge">${nCh} fora · ${nq} questões</span>`:''}</summary>
+    <div class="fora-sub">Marque o que já caiu numa prova que você fez (ex.: Direito Administrativo da SESAU-AL). Sai do Treinar, dos simulados e da revisão por questões. <b>Nada é apagado</b>: desmarque e volta.</div>
+    <div class="fora-topo">
+      <input class="inp" placeholder="Qual prova já passou? (opcional, ex.: SESAU-AL)" maxlength="40" value="${escapeHtml(foraMotivo)}" oninput="foraMotivo=this.value">
+      <input class="inp" type="search" placeholder="Filtrar matérias..." aria-label="Filtrar matérias" value="${escapeHtml(foraBusca)}" oninput="foraBuscar(this)">
+    </div>
+    <div id="fora-corpo">${foraCorpoHTML()}</div>
+  </details>`;
+}
+// Só o corpo se refaz ao digitar: o campo de busca não perde o foco.
+function foraBuscar(el){foraBusca=el.value;const c=document.getElementById('fora-corpo');if(c)c.innerHTML=foraCorpoHTML();}
+function foraAplicar(ids,fora){
+  const f=foraMaterias(),hoje=todayStr(),motivo=(foraMotivo||'').trim().slice(0,40);
+  let mudou=0;
+  ids.forEach(id=>{
+    if(fora&&!f[id]){f[id]={em:hoje,...(motivo?{motivo}:{})};mudou++;}
+    else if(!fora&&f[id]){delete f[id];mudou++;}
+  });
+  if(!mudou)return;
+  saveDB();
+  const n=foraContagens(),qs=ids.reduce((a,id)=>a+(n[id]||0),0);
+  renderSimGeralScreen();
+  toast(fora?`🚫 ${mudou} matéria${mudou>1?'s':''} fora — ${qs} questões saíram do treino.`:`↩️ ${mudou} matéria${mudou>1?'s':''} de volta — ${qs} questões voltaram.`,fora?'var(--orange)':'var(--green)');
+}
+function foraAlternar(id){foraAplicar([id],!foraMaterias()[id]);}
+// Tirar (ou devolver) o reino todo, ou só os que o filtro de busca está mostrando.
+function foraLote(kId,fora){
+  const k=(db.kingdoms||[]).find(x=>x.id===kId);
+  if(!k)return;
+  const f=foraMaterias(),n=foraContagens();
+  foraAplicar(foraChefoesDoReino(k,n,f).map(t=>t.id).filter(id=>fora?!f[id]:!!f[id]),fora);
 }
 function treinoPlacarHTML(){
   const p=treinoPlacarGeral();
@@ -14776,6 +14884,7 @@ function treinarEntradaHTML(){
       ${treinoMontarBarHTML()}
       <button class="btn btn-sm btn-ghost treino-topo-simulado" onclick="treinarAbrirAvancado()"><i class="fa fa-stopwatch"></i> Fazer simulado</button>
     </div>
+    ${foraPainelHTML()}
     ${treinoRodapeHTML()}
     <div id="treinar-avancado" style="display:none">${simGeralConfigHTML()}</div>
     <div class="treino-grid-2 treino-grid-listas">
@@ -17707,7 +17816,8 @@ function montarAssuntosDoGargalo(motivo){
   return nomes;
 }
 function montarPool(modo,motivo){
-  const acervo=montarAcervo();
+  const fora=foraSubsSet();
+  const acervo=montarAcervo().filter(x=>!(fora&&fora.has(x.q.subId)));
   if(modo==='todas')return acervo;
   if(modo==='errei')return acervo.filter(x=>x.errou);
   if(modo==='gargalo'){
@@ -26299,6 +26409,8 @@ function changeEditalStatus(id,newStatus){
   if(eraFoco)db.editalFoco=null;
   saveDB();renderEditais();updateEditaisBadge();
   toast(eraFoco?'🎯 Prova realizada — saiu do foco da Fila de Hoje.':`Status atualizado: ${ED_STATUS_MAP[newStatus]?.label||newStatus}`,'var(--green)');
+  // Prova feita: as matérias dela podem não cair mais. O lembrete aparece logo depois do aviso.
+  if(newStatus==='realizado')setTimeout(()=>toast('🎯 Prova realizada. Se alguma matéria dela não cai mais, tire em Treinar → "Matérias que já passaram".','var(--accent)'),2800);
 }
 
 function filterEditais(f){
