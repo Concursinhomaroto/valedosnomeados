@@ -40,7 +40,7 @@ async def main():
                   fora:/saiu da conta|saíram da conta/.test(t)};}"""%LOTE,0)
         print('   banner: %s/%s (%s%%) · saldo %s · aviso de item fora: %s'
               %(r['banner'][0],r['banner'][1],r['banner'][2],r['saldo'],r['fora']))
-        assert r['banner']==['6','10','60'] and r['saldo']=='+3' and not r['fora']
+        assert r['banner']==['6','10','60'] and r['saldo'] is None and not r['fora']      # o saldo Cebraspe saiu da tela
         print('   OK\n')
 
         print('=== B) marcar um ERRO como desatualizado refaz o placar na hora ===')
@@ -59,9 +59,9 @@ async def main():
         print('   aviso "1 item saiu da conta": %s · cartão aceso: %s · faixa no cartão: %s'
               %(r['aviso'],r['cartaoAceso'],r['bannerCartao']))
         assert r['banner']==['6','9','67'], r['banner']
-        assert r['saldo']=='+4', r['saldo']   # o erro sumiu: 6 acertos - 2 erros
+        assert r['saldo'] is None, r['saldo']   # sem saldo na tela; o placar acima ja diz tudo
         assert r['aviso'] and r['cartaoAceso'] and r['bannerCartao']
-        print('   o erro deixou de pesar: 6/10 virou 6/9, e o saldo subiu de +3 pra +4')
+        print('   o erro deixou de pesar: 6/10 virou 6/9')
         print('   OK\n')
 
         print('=== C) desmarcar devolve o item pro placar ===')
@@ -74,7 +74,7 @@ async def main():
                         .classList.contains('sim-q-flagged')};}""")
         print('   %s/%s · saldo %s · cartão aceso: %s'
               %(r['banner'][0],r['banner'][1],r['saldo'],r['aceso']))
-        assert r['banner']==['6','10'] and r['saldo']=='+3' and not r['aceso']
+        assert r['banner']==['6','10'] and r['saldo'] is None and not r['aceso']
         print('   OK\n')
 
         print('=== D) marcar um ACERTO como desatualizado tira ele tambem ===')
@@ -84,7 +84,7 @@ async def main():
           return {banner:t.match(/(\\d+)\\/(\\d+) acertos/).slice(1,3),
                   saldo:(t.match(/saldo Cebraspe: ([+-]?\\d+)/)||[])[1]};}""")
         print('   %s/%s · saldo %s'%(r['banner'][0],r['banner'][1],r['saldo']))
-        assert r['banner']==['5','9'] and r['saldo']=='+2'
+        assert r['banner']==['5','9'] and r['saldo'] is None
         print('   acerto contra norma revogada também não é conhecimento')
         print('   OK\n')
 

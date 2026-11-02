@@ -77,10 +77,9 @@ async def main():
             ce=[g for g in r['globais'] if g['f']=='certoerrado'][0]
             mu=[g for g in r['globais'] if g['f']=='multipla'][0]
             assert ce['pct']==60 and ce['corr']==20, ce    # 2*60-100
-            assert ce['saldo']==2, ce                       # 6 acertos - 4 erros
             assert mu['pct']==80 and mu['corr']==80, mu     # múltipla não se corrige
             assert r['efetivo']['bruto']==70 and r['efetivo']['corrigido']==50, r['efetivo']
-            print('  ✓ C/E 60% bruto vira 20% corrigido e saldo +2; múltipla fica em 80%')
+            print('  ✓ C/E 60% bruto vira 20% corrigido; múltipla fica em 80%')
 
             fila=await page.evaluate("()=>computeStudyRecommendations().map(i=>({n:i.subName,t:i.tipo,r:i.reason}))")
             alvo=[f for f in fila if 'Séptico' in f['n']]
@@ -93,7 +92,7 @@ async def main():
             linhas=await page.evaluate(LINHAS)
             print('  linhas no painel:',linhas)
             assert len(linhas)==2, linhas
-            assert any('Certo/Errado' in l and 'saldo +2' in l for l in linhas), linhas
+            assert any('Certo/Errado' in l and 'saldo' not in l for l in linhas), linhas   # sem saldo Cebraspe
             assert any('Múltipla escolha' in l for l in linhas), linhas
             print('  ✓ painel separa os dois formatos')
 
