@@ -2879,29 +2879,6 @@ body.missao-ligada #dash-overdue-revs{display:none;}
 .dicas-materia-nome{font-size:var(--fs-titulo);font-weight:900;line-height:1.3;}
 .dicas-materia-n{font-size:var(--fs-corpo);color:var(--accent);}
 .dicas-materia-extra{font-size:var(--fs-selo);color:var(--muted);font-weight:600;}
-.dicas-conta .dicas-rev-ini{margin-right:6px;}
-.dicas-rev-ok{font-size:var(--fs-selo);font-weight:800;color:var(--green-t);}
-.dicas-rev{max-width:720px;margin-left:auto;margin-right:auto;}
-.dicas-rev-topo{margin-bottom:var(--sp-2);}
-.dicas-rev-prog{height:6px;border-radius:var(--r-full);background:var(--panel2);overflow:hidden;}
-.dicas-rev-prog i{display:block;height:100%;background:var(--accent);transition:width .25s;}
-.dicas-rev-cont{font-size:var(--fs-selo);font-weight:700;color:var(--muted);margin:6px 0 var(--sp-3);}
-.dicas-rev-card{gap:var(--sp-3);padding:var(--sp-4);}
-.dicas-rev-ctx{font-size:var(--fs-selo);font-weight:700;color:var(--muted);}
-.dicas-rev-q{font-size:var(--fs-xl);font-weight:900;color:var(--text);line-height:1.3;overflow-wrap:break-word;}
-.dicas-rev-dica{font-size:var(--fs-leitura);color:var(--muted);font-weight:600;}
-.dicas-rev-resp{border-top:1.5px dashed var(--border);padding-top:var(--sp-3);}
-.dicas-rev-mostrar{align-self:stretch;padding:14px;font-size:var(--fs-md);}
-.dicas-rev-mostrar span,.dicas-rev-notas .btn span{display:block;font-size:var(--fs-selo);font-weight:600;opacity:.8;}
-.dicas-rev-notas{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-2);}
-.dicas-rev-notas .btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 6px;}
-.dicas-rev-erro{color:var(--red-t)!important;}
-.dicas-rev-notas .btn span{font-style:normal;white-space:nowrap;}
-.dicas-rev-notas em{font-style:normal;}
-@media(max-width:700px){.dicas-rev-tecla{display:none!important;}}
-.dicas-rev-fim{text-align:center;padding:var(--sp-4) 0;}
-.dicas-rev-fim-tit{font-size:var(--fs-xl);font-weight:900;}
-.dicas-rev-fim-num{display:flex;justify-content:center;gap:var(--sp-4);margin:var(--sp-3) 0;font-size:var(--fs-md);}
 .dicas-sub{font-size:var(--fs-leitura);color:var(--muted);font-weight:600;margin-bottom:var(--sp-3);line-height:1.55;}
 .dicas-conta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:var(--fs-leitura);font-weight:700;color:var(--muted);margin-top:var(--sp-3);}
 .dicas-conta b{color:var(--text);}
@@ -19044,10 +19021,9 @@ function dicasFiltroLimpar(){dicasFiltro={...DICAS_FILTRO_VAZIO};renderDicasScre
 function renderDicasScreen(){
   const el=document.getElementById('dicas-content');
   if(!el)return;
-  el.innerHTML=dicasRev?dicasRevHTML():dicasHTML();
+  el.innerHTML=dicasHTML();
 }
 function dicasRefrescar(){
-  if(dicasRev)return;   // sessão de revisão aberta: a lista não se refaz por baixo dela
   const chips=document.getElementById('dicas-chips');
   const conta=document.getElementById('dicas-conta');
   const corpo=document.getElementById('dicas-corpo');
@@ -19182,9 +19158,6 @@ function dicasChipsHTML(){
   </div>`;
 }
 function dicasContaHTML(pool){
-  return dicasRevBotaoHTML()+dicasContaTextoHTML(pool);
-}
-function dicasContaTextoHTML(pool){
   if(dicasVista==='numeros'){
     const n=dicasNumerosFiltrados().length;
     return`<span><b>${n}</b> ${n===1?'número':'números'}${dicasTemFiltro()?' com este filtro':''} · as que você já sabe aparecem também</span>`
@@ -19319,10 +19292,7 @@ function dicaCardHTML(d,ctx){
 function dicaJaSei(id,ctx){
   if(!db.dicasEstado||typeof db.dicasEstado!=='object'||Array.isArray(db.dicasEstado))db.dicasEstado={};
   const sei=!dicaSei(id);
-  const prev=db.dicasEstado[id]||{};
-  // "Já sei" manual também entra no agendamento da revisão: sobe pra caixa 3 (ou volta pro começo).
-  const caixa=sei?Math.max(prev.caixa||0,3):0;
-  db.dicasEstado[id]={...prev,sei,caixa,proxima:dicasRevSomaDias(todayStr(),DICAS_REV_INTERVALOS[caixa]),vistaEm:dicasAgora()};
+  db.dicasEstado[id]={sei,vistaEm:dicasAgora()};
   saveDB();
   dicasRefrescarSeAberta();
   dicasRefrescarFora(id);
@@ -19330,137 +19300,6 @@ function dicaJaSei(id,ctx){
     ?((ctx&&ctx!=='aba')||dicasFiltro.jaSei?'✅ Marcada como "já sei".':'✅ Marcada como "já sei" — ela sai da lista. O chip "mostrar as que já sei" traz de volta.')
     :'↩️ Voltou pra lista de revisão.',sei?'var(--green)':'var(--accent)');
 }
-
-// ===== REVISAR: recordação ativa + repetição espaçada =====
-// Ler a dica não fixa; tentar lembrar antes de ver a resposta e rever em intervalos
-// crescentes, sim. Mostra só a "pergunta" (título, rótulo do número ou os dois lados do
-// par), a pessoa tenta lembrar, revela e se avalia. Caixas de Leitner sobre o db.dicasEstado
-// que já existia ({sei, vistaEm}) — ganha caixa, proxima (AAAA-MM-DD), vezes e erros.
-// "sei" fica verdadeiro da caixa 3 em diante, então o filtro "já sei" segue fazendo sentido.
-const DICAS_REV_INTERVALOS=[0,1,3,7,16,35];
-const DICAS_REV_LOTE=20;
-let dicasRev=null;
-function dicasRevSomaDias(base,n){
-  const d=new Date(String(base).slice(0,10)+'T12:00:00');
-  d.setDate(d.getDate()+n);
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-}
-// Quem marcou "já sei" antes de existir o agendamento entra na caixa 3, a partir do dia marcado.
-function dicasRevEstado(d){
-  const e=(db.dicasEstado||{})[d.id]||{};
-  if(e.proxima)return{caixa:e.caixa||0,proxima:e.proxima,nova:false};
-  if(e.sei)return{caixa:3,proxima:dicasRevSomaDias(e.vistaEm||todayStr(),DICAS_REV_INTERVALOS[3]),nova:false};
-  return{caixa:0,proxima:'',nova:true};
-}
-function dicasRevAplicarNota(est,nota){
-  let caixa=est.caixa;
-  if(nota==='erro')caixa=0;
-  else if(nota==='facil')caixa=est.nova?2:Math.min(DICAS_REV_INTERVALOS.length-1,caixa+1);
-  else caixa=Math.max(1,caixa);   // difícil: repete o intervalo em que está
-  return{caixa,dias:DICAS_REV_INTERVALOS[caixa]};
-}
-function dicasRevPendentes(){
-  const hoje=todayStr();
-  return dicasAplicarFiltros({...dicasFiltro,jaSei:true,semAssunto:false,rascunhos:false})
-    .map(d=>({d,e:dicasRevEstado(d)}))
-    .filter(x=>x.e.nova||x.e.proxima<=hoje)
-    .sort((a,b)=>(a.e.nova-b.e.nova)||(a.e.caixa-b.e.caixa)||String(a.e.proxima).localeCompare(String(b.e.proxima)))
-    .map(x=>x.d);
-}
-function dicasRevBotaoHTML(){
-  const n=dicasRevPendentes().length;
-  return n?`<button class="btn btn-xs btn-primary dicas-rev-ini" onclick="dicasRevIniciar()" title="Uma dica por vez: você tenta lembrar, depois confere">▶ Revisar · <b>${n}</b> pra hoje</button>`
-    :`<span class="dicas-rev-ok" title="Nada vence hoje neste recorte">✅ nada pra revisar hoje</span>`;
-}
-function dicasRevIniciar(){
-  const pend=dicasRevPendentes();
-  if(!pend.length){toast('✅ Nada vence hoje neste recorte.','var(--green)');return;}
-  const fila=pend.slice(0,DICAS_REV_LOTE).map(d=>d.id);
-  dicasRev={fila,i:0,revelada:false,lembrou:0,errou:0,total:fila.length,restam:pend.length-fila.length,errados:new Set(),fim:false};
-  dicasCriando=false;dicasImportando=false;
-  renderDicasScreen();window.scrollTo(0,0);
-}
-function dicasRevSair(){dicasRev=null;renderDicasScreen();}
-function dicasRevRevelar(){if(!dicasRev||dicasRev.fim)return;dicasRev.revelada=true;renderDicasScreen();}
-function dicasRevNota(nota){
-  const r=dicasRev;
-  if(!r||r.fim||!r.revelada)return;
-  const id=r.fila[r.i];
-  const d=(db.dicas||[]).find(x=>x.id===id);
-  if(d){
-    const prev=(db.dicasEstado||{})[id]||{};
-    const est=dicasRevEstado(d);
-    const {caixa,dias}=dicasRevAplicarNota(est,nota);
-    if(!db.dicasEstado||typeof db.dicasEstado!=='object'||Array.isArray(db.dicasEstado))db.dicasEstado={};
-    db.dicasEstado[id]={...prev,caixa,sei:caixa>=3,proxima:dicasRevSomaDias(todayStr(),dias),
-      vezes:(prev.vezes||0)+1,erros:(prev.erros||0)+(nota==='erro'?1:0),vistaEm:dicasAgora()};
-    saveDB();
-  }
-  if(nota==='erro'){
-    r.errou++;
-    if(!r.errados.has(id)){r.errados.add(id);r.fila.push(id);r.total++;}   // volta uma vez no fim da sessão
-  }else r.lembrou++;
-  r.i++;r.revelada=false;
-  if(r.i>=r.fila.length)r.fim=true;
-  renderDicasScreen();window.scrollTo(0,0);
-}
-function dicasRevRotuloDias(dias){return dias===0?'hoje':dias===1?'amanhã':'em '+dias+' dias';}
-function dicasRevPerguntaHTML(d){
-  if(d.tipo==='numero')return`<div class="dicas-rev-q">${escapeHtml(d.rotulo||d.titulo||'')}</div><div class="dicas-rev-dica">Qual é o número?</div>`;
-  if(d.tipo==='par')return`<div class="dica-par"><span class="dica-par-lado">${escapeHtml(d.a||'')}</span><span class="dica-par-x">×</span><span class="dica-par-lado">${escapeHtml(d.b||'')}</span></div><div class="dicas-rev-dica">Qual é a diferença?</div>`;
-  return`<div class="dicas-rev-q">${escapeHtml(d.titulo||'')}</div><div class="dicas-rev-dica">Diga de cabeça: a regra, como aplicar e o cuidado.</div>`;
-}
-function dicasRevRespostaHTML(d){
-  if(d.tipo==='numero')return`<div class="${dicaValorClasse(d.valor)}">${escapeHtml(d.valor||'')}</div>`;
-  if(d.tipo==='par')return d.diferenca?`<dl class="dica-linhas"><div class="dica-linha"><dt>${explIcone('REGRA')} Diferença</dt><dd>${escapeHtml(d.diferenca)}</dd></div></dl>`:'';
-  const linhas=DICAS_LINHAS.filter(l=>d[l.campo]);
-  return(linhas.length?`<dl class="dica-linhas">${linhas.map(l=>`<div class="dica-linha"><dt>${explIcone(l.marca)} ${l.lbl}</dt><dd>${escapeHtml(d[l.campo])}</dd></div>`).join('')}</dl>`:'')+dicaExemplosHTML(d);
-}
-function dicasRevHTML(){
-  const r=dicasRev;
-  const topo=`<div class="flash-header dicas-rev-topo"><div class="sec-title" style="margin:0">💡 Revisar dicas</div>
-    <button class="btn btn-xs btn-ghost" onclick="dicasRevSair()"><i class="fa fa-xmark"></i> Sair</button></div>`;
-  if(r.fim){
-    const resta=dicasRevPendentes().length;
-    return`<div class="section-card dicas-rev">${topo}
-      <div class="dicas-rev-fim"><div class="dicas-rev-fim-tit">🎉 Sessão concluída</div>
-        <div class="dicas-rev-fim-num"><span><b>${r.lembrou}</b> lembrou</span><span><b>${r.errou}</b> ${r.errou===1?'erro':'erros'}</span></div>
-        <p class="dicas-vazio-txt">${r.errou?'O que você errou volta amanhã até firmar. ':''}As que lembrou voltam em intervalos cada vez maiores — é isso que fixa.</p>
-        <div class="dicas-vazio-acoes">
-          ${resta?`<button class="btn btn-sm btn-primary" onclick="dicasRevIniciar()">▶ Mais uma sessão · ${resta} pra hoje</button>`:'<span class="dicas-rev-ok">✅ nada mais vence hoje</span>'}
-          <button class="btn btn-sm btn-ghost" onclick="dicasRevSair()">Voltar às dicas</button>
-        </div></div></div>`;
-  }
-  const d=(db.dicas||[]).find(x=>x.id===r.fila[r.i]);
-  if(!d){r.i++;if(r.i>=r.fila.length)r.fim=true;return dicasRevHTML();}   // apagada no meio da sessão
-  const k=dicasReino(d.kingdomId),c=dicaAssunto(d);
-  const ctx=[k?iconeReino(k.icon)+' '+k.name:'',dicaGrupo(d)!==DICAS_SEM_GRUPO?dicaGrupo(d):'',c?c.sub.name:''].filter(Boolean).map(escapeHtml).join(' › ');
-  const est=dicasRevEstado(d);
-  const bt=(nota,cls,txt,tecla)=>{const x=dicasRevAplicarNota(est,nota);
-    return`<button class="btn btn-sm ${cls}" onclick="dicasRevNota('${nota}')"><b>${txt}</b><span>${dicasRevRotuloDias(x.dias)}<em class="dicas-rev-tecla"> · tecla ${tecla}</em></span></button>`;};
-  return`<div class="section-card dicas-rev">${topo}
-    <div class="dicas-rev-prog" role="progressbar" aria-valuemin="0" aria-valuemax="${r.total}" aria-valuenow="${r.i}"><i style="width:${Math.round(100*r.i/r.total)}%"></i></div>
-    <div class="dicas-rev-cont">${r.i+1} de ${r.total}${r.restam>0?` · +${r.restam} ficam pra outra sessão`:''}${est.nova?' · <b>nova</b>':''}</div>
-    <article class="dica-card dicas-rev-card">
-      <div class="dicas-rev-ctx">${ctx}</div>
-      ${dicasRevPerguntaHTML(d)}
-      ${r.revelada
-        ?`<div class="dicas-rev-resp">${dicasRevRespostaHTML(d)}</div>
-          <div class="dicas-rev-notas">${bt('erro','btn-ghost dicas-rev-erro','😕 Errei','1')}${bt('dificil','btn-ghost','😐 Difícil','2')}${bt('facil','btn-primary','😄 Lembrei','3')}</div>`
-        :`<button class="btn btn-primary dicas-rev-mostrar" onclick="dicasRevRevelar()">👁️ Mostrar resposta <span class="dicas-rev-tecla">espaço</span></button>`}
-    </article></div>`;
-}
-document.addEventListener('keydown',e=>{
-  if(!dicasRev||e.ctrlKey||e.metaKey||e.altKey)return;
-  const tela=document.getElementById('screen-dicas');
-  if(!tela||!tela.classList.contains('active'))return;
-  if(/^(INPUT|TEXTAREA|SELECT)$/.test((e.target||{}).tagName||''))return;
-  if(e.key==='Escape'){dicasRevSair();return;}
-  if(dicasRev.fim)return;
-  if(!dicasRev.revelada){if(e.key===' '||e.key==='Enter'){e.preventDefault();dicasRevRevelar();}return;}
-  const nota={'1':'erro','2':'dificil','3':'facil'}[e.key];
-  if(nota){e.preventDefault();dicasRevNota(nota);}
-});
 
 // ---- Criar e editar ----
 function dicasOpcoesReinoHTML(sel){
@@ -33976,11 +33815,6 @@ window.bancoImportarProcessar=bancoImportarProcessar;
 window.renderDicasScreen=renderDicasScreen;
 window.dicasFiltrarMateria=dicasFiltrarMateria;
 window.dicasFiltrarGrupo=dicasFiltrarGrupo;
-window.dicasEscolherGrupo=dicasEscolherGrupo;
-window.dicasRevIniciar=dicasRevIniciar;
-window.dicasRevSair=dicasRevSair;
-window.dicasRevRevelar=dicasRevRevelar;
-window.dicasRevNota=dicasRevNota;
 window.dicasFiltrarBanca=dicasFiltrarBanca;
 window.dicasBuscar=dicasBuscar;
 window.dicasAlternarJaSei=dicasAlternarJaSei;
