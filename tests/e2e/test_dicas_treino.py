@@ -31,7 +31,7 @@ async def main():
         await page.evaluate("(t)=>{dicasImportarProcessar(t);dicasRelatorioFechar();}",open(PACOTE,encoding='utf-8').read())
 
         print('=== A) o cartao mostra o Acervo do assunto ===')
-        r=await page.evaluate("""()=>{showScreen('dicas');
+        r=await page.evaluate("""()=>{showScreen('dicas');dicasTudoAberto=true;renderDicasScreen();
           const linha=t=>{const d=db.dicas.find(x=>x.titulo===t);const c=document.getElementById('dica-'+d.id);
             const l=c&&c.querySelector('.dica-treino');return l?{txt:l.innerText.replace(/\\s+/g,' ').trim(),botao:!!l.querySelector('button')}:null;};
           return {crase:linha('Crase antes de horas'),col:linha('Colocação pronominal: as 3 proibições'),
