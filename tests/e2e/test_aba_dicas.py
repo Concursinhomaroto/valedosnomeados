@@ -156,7 +156,7 @@ async def main():
           return {num,par,
                   valorTela:cn&&cn.querySelector('.dica-num-valor').textContent,
                   rotuloTela:cn&&cn.querySelector('.dica-num-rotulo').textContent,
-                  numNaGrade:!!(cn&&cn.closest('.dica-numeros')),
+                  numNaGrade:!!(cn&&cn.closest('.dica-grade')),
                   ladosPar:cp?[...cp.querySelectorAll('.dica-par-lado')].map(x=>x.textContent):[]};}""")
         print('   número: "%s" / "%s" (em grade: %s) · sobra do campo escondido: %s'
               %(r['valorTela'],r['rotuloTela'],r['numNaGrade'],'regra' in r['num']))
