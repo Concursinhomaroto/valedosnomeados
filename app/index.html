@@ -11472,7 +11472,7 @@ function simPanelHTML(s){
         .map(f=>simResumoFormato(f,stats.porFormato[f]));
       return`<div style="text-align:center"><span class="sim-stat-badge"><i class="fa fa-chart-simple"></i> Histórico: ${stats.acertosTotal}/${stats.questoesTotal} acertos (${Math.round(stats.acertosTotal/stats.questoesTotal*100)}%) em ${stats.tentativas} simulado${stats.tentativas>1?'s':''}${ext.questoes?` · ${ext.questoes} de fora`:''}</span></div>
       ${linhas.length>1?`<div class="sim-fmt-split">${linhas.map(f=>
-        `<span><b style="color:${f.cor}">${f.corrigido}%</b> ${f.lbl} <i>(${f.acertos}/${f.questoes}${f.formato==='certoerrado'?` · bruto ${f.pct}% · saldo ${f.saldo>0?'+':''}${f.saldo}${f.brancos?` · ${f.brancos} em branco`:''}`:''})</i></span>`).join('')}</div>`:''}`;
+        `<span><b style="color:${f.cor}">${f.corrigido}%</b> ${f.lbl} <i>(${f.acertos}/${f.questoes}${f.formato==='certoerrado'?` · bruto ${f.pct}%${f.brancos?` · ${f.brancos} em branco`:''}`:''})</i></span>`).join('')}</div>`:''}`;
     })():''}
     <div class="sim-empty">Gere questões pra treinar este assunto.${(s.note||'').trim()?' <b style="color:var(--pink-t)">Vai usar sua anotação como referência.</b>':' <span title="Adicione uma anotação neste miniboss pra deixar as questões mais precisas ao seu recorte de estudo">Sem anotação — a IA vai gerar com base só no nome do assunto.</span>'}${tavilyAtivo()?' <b style="color:var(--accent)">🔎 Vai pesquisar na internet antes de elaborar.</b>':''}</div>
     <div class="sim-config-row">
@@ -13754,6 +13754,7 @@ function treinoEncerrar(){
     tempoSec:s.segLancado,
     revisao:s.revisao?trevResultado(s):null};
   if(s.respondidas>0)treinoRegistrarSessaoNoHistorico(treinoResumo);
+  if(s.titulo===CRON_TITULO_DIAG&&s.respondidas>0)crRegistrarDiagnostico(s);   // cronograma: ponto de partida
   treinoSessao=null;
   renderSimGeralScreen();
   window.scrollTo(0,0);
@@ -13945,7 +13946,6 @@ function treinoSessaoLateralHTML(){
 }
 function treinoSessaoHTML(){
   const s=treinoSessao;
-  const liquida=s.certas-s.erradas;
   return`<div class="treino-sessao-wrap">
     <div class="section-card treino-sessao">
       <div class="treino-topo">
@@ -13954,7 +13954,7 @@ function treinoSessaoHTML(){
         <div class="treino-placar-sessao">
           <span class="treino-relogio" id="treino-relogio" title="Tempo desta sessão — entra no seu estudo do dia">⏱ ${fmtHMS(Math.floor(s.seg||0))}</span>
           <span>${s.respondidas} respondidas</span><span class="pill-ok">${s.certas} certas</span>
-          <span class="pill-bad">${s.erradas} erradas</span><span class="pill-neutro">líquida ${liquida>0?'+':''}${liquida}</span>
+          <span class="pill-bad">${s.erradas} erradas</span>
         </div>
       </div>
       ${treinoQuestaoHTML()}
@@ -13972,7 +13972,7 @@ function treinoResumoHTML(){
   const pct=r.respondidas?Math.round(r.certas/r.respondidas*100):0;
   return`<div class="section-card">
     <div class="sec-title">🏁 Sessão encerrada — ${escapeHtml(r.titulo)}</div>
-    <div class="sim-score-banner ${pct>=60?'sim-good':'sim-bad'}">${r.certas}/${r.respondidas} acertos (${pct}%) · líquida ${r.liquida>0?'+':''}${r.liquida}</div>
+    <div class="sim-score-banner ${pct>=60?'sim-good':'sim-bad'}">${r.certas}/${r.respondidas} acertos (${pct}%)</div>
     ${r.tempoSec?`<div class="treino-resumo-tempo">⏱ ${fmtHMS(r.tempoSec)} de treino${r.respondidas?` · ${Math.round(r.tempoSec/r.respondidas)}s por questão`:''} — já somado ao seu estudo de hoje</div>`:''}
     ${r.itensErrados.length?`<div style="margin-top:10px;font-size:12px;color:var(--muted);font-weight:700">Errou ${r.itensErrados.length} questão${r.itensErrados.length>1?'ões':''}:</div>
       <ul style="margin:6px 0 0;padding-left:18px;font-size:12px">
@@ -14017,7 +14017,6 @@ function treinoPlacarHTML(){
         <span><b>${p.respondidas}</b> respondidas</span>
         <span class="pill-ok">${p.certas} certas</span>
         <span class="pill-bad">${p.erradas} erradas</span>
-        <span class="pill-neutro">nota líquida ${p.liquida>0?'+':''}${p.liquida}</span>
       </div>
     </div>
     <div class="treinar-progresso-seg" style="margin-top:12px">
@@ -21448,15 +21447,11 @@ function simGeralResultsHTML(){
   // chute. O banner passa a julgar pelo aproveitamento ja corrigido.
   const efetivo=simPctCorrigido(pct,active.formato);
   const good=efetivo>=60;
-  // A CAPA DO CADERNO DIZ: "A ausencia de marcacao nao sera apenada". O saldo estava
-  // contando TODO nao-acerto como -1, inclusive o item em branco — ou seja, o app punia
-  // deixar em branco exatamente como punia errar. Num certo/errado isso ensina o
-  // contrario do que a prova cobra: quem chuta perde ponto que ja tinha.
+  // Sem desconto por erro: a prova que o app acompanha agora (FGV) não anula acerto por
+  // erro. Só se separa o item em branco do errado, porque os dois diagnósticos diferem.
   const marcadas=vale.filter(q=>q.userAnswer).length;
   const brancos=total-marcadas;
   const erros=marcadas-acertos;
-  const saldo=acertos-erros;
-  const saldoAntigo=acertos-(total-acertos);
 
   const bySub={};
   vale.forEach(q=>{
@@ -21466,15 +21461,6 @@ function simGeralResultsHTML(){
     if(q.userAnswer)bySub[q.subId].marcadas++;
     if(q.userAnswer===q.correta)bySub[q.subId].acertos++;
   });
-  // Onde marcar te custou ponto: assunto em que voce errou mais do que acertou tem
-  // saldo negativo — ali, ter deixado tudo em branco daria MAIS pontos. E o unico
-  // numero da prova que aponta um erro de decisao, nao de conteudo.
-  const caros=Object.values(bySub)
-    .map(b=>({...b,saldo:b.acertos-(b.marcadas-b.acertos)}))
-    .filter(b=>b.marcadas>0&&b.saldo<0)
-    .sort((a,b)=>a.saldo-b.saldo);
-  const perdidos=caros.reduce((n,b)=>n-b.saldo,0);
-
   return`
   <div class="section-card">
     <div class="sec-title" style="margin-bottom:10px">${active.revisando?`🔎 Revisão da ${active.tentativaNum}ª tentativa`:(active.refazendo?'🔁 Resultado da refação':'🏁 Resultado do Simulado Geral')}</div>
@@ -21483,28 +21469,17 @@ function simGeralResultsHTML(){
     <div class="sim-score-banner ${good?'sim-good':'sim-bad'}">${acertos}/${total} acertos (${pct}%) · ⏱ ${fmtHMS(active.tempoGastoSec||0)}</div>
     ${fora?`<div class="sg-fora-conta">🕰️ <b>${fora}</b> ${fora>1?'itens saíram':'item saiu'} da conta (desatualizado ou com problema). O placar acima já é sem ${fora>1?'eles':'ele'}.</div>`:''}
     <div class="sg-formato-linha">${ce?'✔️✖️ Certo/Errado':'🔤 Múltipla escolha'} · ${simNivelLbl(active.nivel)}${
-      ce?` · <b title="No certo/errado 50% é o que o chute dá; o corrigido desconta esse acaso (2×${pct}−100)">corrigido: ${efetivo}%</b> · <b title="Acertos menos erros. Item em branco não conta contra — é o que diz a capa do caderno.">saldo Cebraspe: ${saldo>0?'+':''}${saldo}</b>${brancos?` · ${brancos} em branco`:''}`:''}</div>
-    ${ce?`<div class="sg-liquido">
-      <div class="sg-liquido-linha"><span>${acertos} acertos</span><span>−</span><span>${erros} erros</span>${brancos?`<span>·</span><span>${brancos} em branco (não pesam)</span>`:''}<span>=</span><b style="color:${saldo>=0?'var(--green-t)':'var(--red-t)'}">${saldo>0?'+':''}${saldo} líquidos</b></div>
-      ${brancos?`<div class="sg-liquido-nota">Pela conta antiga do app, esses ${brancos} em branco valiam <b>${saldoAntigo}</b>. A prova não faz isso — em branco é zero, não é menos um.</div>`:''}
-      ${caros.length?`<div class="sg-liquido-nota">
-        <b style="color:var(--red-t)">Marcar custou ${perdidos} ponto${perdidos>1?'s':''} nestes assuntos</b> — neles você errou mais do que acertou, então deixar em branco teria rendido mais:
-        <div style="margin-top:5px">${caros.slice(0,5).map(b=>`<div style="display:flex;gap:8px;justify-content:space-between"><span>${b.kingdomIcon} ${escapeHtml(b.subName)}</span><span style="white-space:nowrap"><b style="color:var(--red-t)">${b.saldo}</b> · ${b.acertos}/${b.marcadas} marcadas</span></div>`).join('')}</div>
-        <div style="margin-top:5px;color:var(--muted)">Não é falta de conteúdo: é decisão. Nesses assuntos, o seu "acho que é" está errando mais do que acertando.</div>
-      </div>`:(brancos?'':`<div class="sg-liquido-nota">Você marcou todos os itens. Numa prova de verdade, item que você não sabe e marca mesmo assim apaga um que você acertou.</div>`)}
-    </div>`:''}
+      ce?` · <b title="No certo/errado 50% é o que o chute dá; o corrigido desconta esse acaso (2×${pct}−100)">corrigido: ${efetivo}%</b>${brancos?` · ${brancos} em branco`:''}`:''}</div>
     ${active.refazendo?(()=>{
       const ant=provaTentativaAnterior(active);
       if(!ant)return`<div class="sg-refaz-nota"><i class="fa fa-rotate-left"></i> <b>${active.tentativaNum}ª tentativa desta prova.</b> Refação não entra nas estatísticas por assunto.</div>`;
       const d=acertos-(ant.acertos||0);
-      const antSaldo=provaPlacar(provaAchar(active.provaId),ant).liquido;
-      const dl=saldo-antSaldo;
       const cor=d>0?'var(--green-t)':d<0?'var(--red-t)':'var(--muted)';
       return`<div class="sg-refaz-nota">
         <i class="fa fa-rotate-left"></i> <b>${active.tentativaNum}ª tentativa.</b>
-        Antes: ${ant.acertos}/${total}${ce?` · líq. ${antSaldo>0?'+':''}${antSaldo}`:''}
+        Antes: ${ant.acertos}/${total}
         → agora: ${acertos}/${total}
-        <b style="color:${cor}">(${d>0?'+':''}${d} acerto${Math.abs(d)===1?'':'s'}${ce?` · ${dl>0?'+':''}${dl} no líquido`:''})</b>
+        <b style="color:${cor}">(${d>0?'+':''}${d} acerto${Math.abs(d)===1?'':'s'})</b>
         <span style="color:var(--muted)">— refação não entra nas estatísticas por assunto.</span>
       </div>`;})():''}
     </div>
@@ -23488,7 +23463,7 @@ function renderSimGlobalStats(){
         <span class="sim-fmt-qtd">${f.acertos}/${f.questoes}</span>
         <div class="faixa-trilho"><i style="width:${f.corrigido}%;background:${f.cor}"></i></div>
         <span class="sim-fmt-pct" style="color:${f.cor}">${f.corrigido}%</span>
-        ${f.formato==='certoerrado'?`<span class="sim-fmt-extra">bruto ${f.pct}% · saldo ${f.saldo>0?'+':''}${f.saldo}${f.brancos?` · ${f.brancos} em branco`:''}</span>`:''}
+        ${f.formato==='certoerrado'?`<span class="sim-fmt-extra">bruto ${f.pct}%${f.brancos?` · ${f.brancos} em branco`:''}</span>`:''}
       </div>`).join(''):'';
   }
   renderSimKingdomBreakdown();
@@ -25337,6 +25312,7 @@ const CRON_DADOS={"inicio":"2026-11-09","fim":"2027-01-31","cap":[{"id":"_loi52d
 const CRON_REVISOES=[1,7,30];                 // D+1, D+7, D+30
 const CRON_MIN_JASEI=2;                       // "já sei" gasta ~2 min do dia, não os 22 do assunto
 const CRON_LOTE_SIMULADO=30;
+const CRON_TITULO_DIAG='Simulado diagnóstico';
 const CRON_CURTOS=new Set(['_4sem8po','_22dn7iw','_d55qcvt','_qvv2s81','_rtonf3h','_uj2lmvo','_w9ug7mu','_hy5o3vh','_22y7dcf','_k97q44x','_k5ubi54','_zv00nw3','_uf4baim']);
 const CRON_VALORES=new Set(['_aca6z4h','_hvz2w7i','_sxqphyo','_y3yuyu6','_ohtr9oc']);
 const CRON_LEG=new Set(['_0silq67','_cc3d9an']);
@@ -25668,11 +25644,46 @@ function crErrosSemana(ds){
 function crSimuladoDiagnostico(){
   // Só o que cai na prova: a trilha complementar não entra no diagnóstico.
   const p=crPlano(),pool=treinoPoolCompleto().filter(q=>p.meta.has(q.subId)&&p.meta.get(q.subId).bloco!=='comp');
-  crAbrirTreino(crSelecionar(pool,30,{esp:10,pol:8,leg:3,por:3},p),'Simulado diagnóstico');
+  crAbrirTreino(crSelecionar(pool,30,{esp:10,pol:8,leg:3,por:3},p),CRON_TITULO_DIAG);
 }
 function crSimuladoCompleto(){
   const p=crPlano(),pool=treinoPoolCompleto().filter(q=>p.meta.has(q.subId)&&p.meta.get(q.subId).bloco!=='comp');
   crAbrirTreino(crSelecionar(pool,60,null,p),'Simulado completo · 60 questões');
+}
+// Chamado quando o treino do diagnóstico é encerrado: guarda o ponto de partida (total e por
+// bloco da prova) pro cronograma mostrar o resultado em vez de pedir de novo.
+function crRegistrarDiagnostico(sess){
+  const p=crPlano(),blocos={};
+  Object.keys(CRON_BLOCOS).forEach(b=>blocos[b]={tot:0,certas:0});
+  sess.itens.forEach((it,i)=>{
+    if(!sess.respondidasSet||!sess.respondidasSet.has(i)||!it.userAnswer)return;
+    const m=p.meta.get(it.subId),b=blocos[m?m.bloco:'esp'];
+    b.tot++;if(it.userAnswer===it.correta)b.certas++;
+  });
+  crEstado().diagnostico={em:todayStr(),respondidas:sess.respondidas,certas:sess.certas,blocos};
+  saveDB();
+}
+// O diagnóstico feito: o guardado pelo cronograma ou, se foi feito antes de existir esse
+// registro, o último "Simulado diagnóstico" do histórico do treino (sem a quebra por bloco).
+function crDiagnostico(){
+  const st=crEstado();
+  if(st.diagnostico&&st.diagnostico.respondidas)return st.diagnostico;
+  const h=(db.treinoHistorico||[]).find(x=>x.titulo===CRON_TITULO_DIAG&&x.respondidas>0);
+  return h?{em:String(h.data).slice(0,10),respondidas:h.respondidas,certas:h.certas,blocos:null}:null;
+}
+function crDiagnosticoHTML(d,p){
+  const pct=Math.round(100*d.certas/d.respondidas);
+  let blocos='',fraco='';
+  if(d.blocos){
+    const lista=Object.keys(CRON_BLOCOS).filter(b=>d.blocos[b]&&d.blocos[b].tot);
+    blocos=lista.map(b=>`<span class="cron-pill">${CRON_BLOCOS[b]} ${d.blocos[b].certas}/${d.blocos[b].tot}</span>`).join('');
+    const cand=lista.filter(b=>b!=='comp'&&d.blocos[b].tot>=3).sort((a,b)=>d.blocos[a].certas/d.blocos[a].tot-d.blocos[b].certas/d.blocos[b].tot)[0];
+    if(cand)fraco=` · ponto mais fraco: <b>${CRON_BLOCOS[cand]}</b> (${Math.round(100*d.blocos[cand].certas/d.blocos[cand].tot)}%)`;
+  }
+  return`<div class="cron-prep">✅ <b>Diagnóstico feito em ${crFmtData(d.em)}:</b> ${d.certas}/${d.respondidas} (${pct}%)${fraco}
+    ${blocos?`<div class="cron-linha" style="margin-top:6px">${blocos}</div>`:''}
+    ${p.antes?`<div class="cron-sub">Pronto para começar em ${crFmtData(CRON_DADOS.inicio)}. Esse é o seu ponto de partida; refaça no fim para comparar.</div>`:''}
+    <button class="btn btn-xs btn-ghost" onclick="crSimuladoDiagnostico()">↻ Refazer diagnóstico</button></div>`;
 }
 function crErrosPendentesN(ds,p){
   const subs=crSubsDaSemana(ds,p);
@@ -25788,7 +25799,9 @@ function crCabecalhoHTML(){
     const x=p.blocos[b],pc=Math.round(100*x.feito/x.tot);
     return`<div class="cron-bloco" title="${x.feito} de ${x.tot} assuntos"><div class="cron-bloco-top"><span>${CRON_BLOCOS[b]}</span><b>${pc}%</b></div><div class="cron-bloco-barra"><i style="width:${pc}%"></i></div></div>`;
   }).join('');
-  const prep=p.antes?`<div class="cron-prep">📋 <b>Antes de começar:</b> faça o simulado diagnóstico de 30 questões (10 específicos, 8 SUS e Saúde Pública, 6 Legislação Ebserh e Português, 6 mistas). <button class="btn btn-xs btn-primary" onclick="crSimuladoDiagnostico()">▶ Abrir diagnóstico</button></div>`:'';
+  const diag=crDiagnostico();
+  const prep=diag?crDiagnosticoHTML(diag,p)
+    :(p.antes?`<div class="cron-prep">📋 <b>Antes de começar:</b> faça o simulado diagnóstico de 30 questões (10 específicos, 8 SUS e Saúde Pública, 6 Legislação Ebserh e Português, 6 mistas). <button class="btn btn-xs btn-primary" onclick="crSimuladoDiagnostico()">▶ Abrir diagnóstico</button></div>`:'');
   const falt=p.falt.length?`<div class="cron-aviso">${p.falt.length} capítulo${p.falt.length>1?'s':''} do prompt não ${p.falt.length>1?'estão':'está'} no seu Mapa: ${escapeHtml(p.falt.slice(0,4).join('; '))}${p.falt.length>4?'…':''}</div>`:'';
   const hoje=p.hojeAtual.length?`<details class="cron-hoje" open><summary>📌 Hoje · ${p.hojeAtual.filter(id=>p.st.feitos[id]).length}/${p.hojeAtual.length} concluídos</summary>${crChecklistHTML(p.hojeAtual,p,p.hoje)}</details>`
     :(p.hojeDia&&(p.hojeDia.t==='rev'||p.hojeDia.t==='fer'||p.hojeDia.t==='fin')?`<div class="cron-hoje-esp">${crDiaEspecialHTML(p.hojeDia,p,true)}</div>`:'');
@@ -25922,7 +25935,7 @@ const RETA_SEMANA=[
   RETA_DIA_ESP, RETA_DIA_GER, RETA_DIA_ESP, RETA_DIA_GER, RETA_DIA_ESP,
   [{name:'🏁 3h30 · Prova de 120 itens, condições reais',cor:RETA_COR.prova},
    {name:'🏷️ Marcar cada item: sei / acho / não faço ideia',cor:RETA_COR.autopsia},
-   {name:'📊 30min · Corrigir e ler o saldo (branco não pesa)',cor:RETA_COR.prova}]
+   {name:'📊 30min · Corrigir e ler o resultado',cor:RETA_COR.prova}]
 ];
 // Idempotente: tira os blocos que ele mesmo escreveu (reta:true) antes de reescrever,
 // e nunca encosta no que voce marcou. Dar o botao duas vezes nao duplica nada.
