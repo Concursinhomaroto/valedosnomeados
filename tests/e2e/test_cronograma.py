@@ -288,7 +288,22 @@ async def main():
           return {rejeitou,inicio:p.inicio,primeiroDia:p.dias[0].ds,m,val};}""")
         print('   %s'%{k:(v if k!='m' else v[:60]) for k,v in r.items()})
         assert r['rejeitou'] and r['inicio']=='2026-11-05' and r['primeiroDia']=='2026-11-05' and r['val']=='4'
-        assert 'Horas de estudo por dia' in r['m'] and 'Prazo de 3 meses' in r['m'] and 'não cai no edital' in r['m']
+        assert 'Horas de estudo por dia' in r['m'] and 'Prazo de 3 meses' in r['m'] and 'não estava no último edital' in r['m']
+        print('   OK\n')
+
+        print('=== S) edital da Ebserh ainda nao saiu: o plano avisa, e o aviso some ao confirmar ===')
+        r=await page.evaluate("""()=>{window.__hoje='2026-11-02';closeModal();db.editais=[];db.editalFoco=null;
+          const st=crEstado();delete st.editalSaiu;renderWeeklyPlan();
+          const antes=document.getElementById('cron-head').innerText.replace(/\\s+/g,' ');
+          crAbrirConfig();const cfg=document.getElementById('modal-body').innerText;closeModal();
+          crEditalSaiu();
+          const depois=document.getElementById('cron-head').innerText.replace(/\\s+/g,' ');
+          return {antes,cfg,depois,flag:crEstado().editalSaiu};}""")
+        a,d=r['antes'],r['depois']
+        print('   antes: %s | depois tem aviso: %s'%('Prova sem data' in a,'ainda não foi publicado' in d))
+        assert 'O edital da Ebserh ainda não foi publicado' in a and 'último (Ebserh/FGV 03/2024' in a and 'Prova sem data (edital não publicado)' in a
+        assert 'não estava no último edital (03/2024)' in r['cfg'] and 'não cai no edital' not in r['cfg']
+        assert r['flag'] is True and 'ainda não foi publicado' not in d and 'Cadastre a data da prova em Editais' in d
         print('   OK\n')
 
         print('=== M) celular: sem rolagem lateral com o cronograma na tela ===')
