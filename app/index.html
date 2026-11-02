@@ -2881,6 +2881,34 @@ body.missao-ligada #dash-overdue-revs{display:none;}
 .dicas-materia-extra{font-size:var(--fs-selo);color:var(--muted);font-weight:600;}
 .dica-btn-fc-on{color:var(--green-t)!important;border-color:var(--green-t)!important;}
 .dicas-conta .dicas-fc-enviar,.dicas-conta .dicas-fc-ir{margin-right:6px;}
+.dicas-fc-enviar b{color:inherit;}
+/* Cartão fechado: título + etiqueta + rodapé. O título é o botão que abre. */
+.dica-toggle{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--sp-2);width:100%;text-align:left;background:none;border:0;
+  padding:0;font:inherit;color:inherit;cursor:pointer;}
+.dica-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-sm);}
+.dica-chevron{flex-shrink:0;margin-top:.35em;font-size:.75em;color:var(--muted);}
+.dica-fechada{gap:var(--sp-2);}
+.dica-fechada .dica-rodape{border-top:0;padding-top:0;}
+.dicas-menu{position:relative;}
+.dicas-menu>summary{list-style:none;cursor:pointer;}
+.dicas-menu>summary::-webkit-details-marker{display:none;}
+.dicas-menu-lista{position:absolute;right:0;top:calc(100% + 4px);z-index:20;display:flex;flex-direction:column;gap:2px;min-width:180px;
+  background:var(--panel);border:1.5px solid var(--border);border-radius:var(--r-md);padding:var(--sp-1);box-shadow:var(--shadow);}
+.dicas-menu-lista .btn{justify-content:flex-start;width:100%;}
+.dicas-gaveta{margin-top:var(--sp-2);}
+.dicas-gaveta>summary{cursor:pointer;font-size:var(--fs-leitura);font-weight:700;color:var(--text2);list-style:none;display:inline-flex;align-items:center;gap:6px;}
+.dicas-gaveta>summary::-webkit-details-marker{display:none;}
+.dicas-gaveta-n{background:var(--accent);color:#fff;border-radius:var(--r-full);font-size:var(--fs-selo);padding:0 7px;}
+.dicas-gaveta-corpo{display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-2);}
+@media(max-width:600px){
+  .dicas-lbl-longo{display:none;}
+  .dicas-busca-linha{flex-wrap:nowrap;gap:6px;}
+  .dicas-busca-linha #dicas-busca{flex:1 1 auto!important;min-width:0!important;}
+  .dicas-busca-linha .btn{flex:0 0 auto;}
+  .dicas-conta{gap:4px 6px;margin-top:var(--sp-2);}
+  .dicas-conta .btn{padding:4px 8px;}
+  .dicas-gaveta{margin-top:var(--sp-1);}
+}
 .dicas-sub{font-size:var(--fs-leitura);color:var(--muted);font-weight:600;margin-bottom:var(--sp-3);line-height:1.55;}
 .dicas-conta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:var(--fs-leitura);font-weight:700;color:var(--muted);margin-top:var(--sp-3);}
 .dicas-conta b{color:var(--text);}
@@ -18972,6 +19000,9 @@ function dicasCasarMateria(nome){
 const DICAS_FILTRO_VAZIO={materia:'',assunto:'',grupo:'',banca:'',texto:'',jaSei:false,semAssunto:false,rascunhos:false};
 let dicasFiltro={...DICAS_FILTRO_VAZIO};
 let dicasCriando=false,dicasEditando=null,dicasImportando=false;
+let dicasFiltrosAberto=false;     // gaveta de filtros (sobrevive ao refazer dos chips)
+const dicasAbertas=new Set();     // cartões expandidos na lista
+let dicasTudoAberto=false;
 function dicaBuscavel(d){
   const c=dicaAssunto(d);
   return normalizeForDedup([d.titulo,d.grupo,d.regra,d.aplicar,d.cuidado,d.valor,d.rotulo,
@@ -19051,17 +19082,17 @@ function dicasHTML(){
   const pool=dicasAplicarFiltros();
   return`<div class="section-card">
     <div class="sec-title" style="margin-bottom:4px">💡 Dicas</div>
-    <div class="dicas-sub">Regras, macetes, pegadinhas e números de cada matéria — o que se relê na véspera da prova.</div>
-    <div class="banco-filtros-linha">
+    <div class="dicas-sub dicas-lbl-longo">Regras, macetes, pegadinhas e números de cada matéria — o que se relê na véspera da prova.</div>
+    <div class="banco-filtros-linha dicas-busca-linha">
       <input id="dicas-busca" class="inp" type="search" placeholder="Buscar nas dicas..." aria-label="Buscar nas dicas"
         value="${escapeHtml(dicasFiltro.texto)}" oninput="dicasBuscar(this)" style="flex:2;min-width:160px">
-      ${dicasBancaSelectHTML()}
-      <span class="banco-acoes">
-        <button class="btn btn-xs btn-ghost" onclick="dicasCriarAbrir()"><i class="fa fa-plus"></i> Nova dica</button>
-        <button class="btn btn-xs btn-ghost" onclick="dicasImportarAbrir()"><i class="fa fa-file-import"></i> Importar em lote</button>
-        <button class="btn btn-xs btn-ghost" onclick="dicasPacotesAbrir()"><i class="fa fa-box-open"></i> Pacotes</button>
-        <button class="btn btn-xs btn-ghost" onclick="dicasColinhaAbrir()"><i class="fa fa-print"></i> Colinha</button>
-      </span>
+      <button class="btn btn-xs btn-ghost" onclick="dicasCriarAbrir()" aria-label="Nova dica" title="Nova dica"><b aria-hidden="true">+</b><span class="dicas-lbl-longo"> Nova dica</span></button>
+      <details class="dicas-menu"><summary class="btn btn-xs btn-ghost" aria-label="Mais ações">⋯<span class="dicas-lbl-longo"> Mais</span></summary>
+        <div class="dicas-menu-lista">
+          <button class="btn btn-xs btn-ghost" onclick="dicasMenuFechar(this);dicasImportarAbrir()"><i class="fa fa-file-import"></i> Importar em lote</button>
+          <button class="btn btn-xs btn-ghost" onclick="dicasMenuFechar(this);dicasPacotesAbrir()"><i class="fa fa-box-open"></i> Pacotes</button>
+          <button class="btn btn-xs btn-ghost" onclick="dicasMenuFechar(this);dicasColinhaAbrir()"><i class="fa fa-print"></i> Colinha</button>
+        </div></details>
     </div>
     <div id="dicas-chips">${dicasChipsHTML()}</div>
     ${dicasPaineisHTML()}
@@ -19096,6 +19127,7 @@ function dicasVazioHTML(){
     ${dicasPaineisHTML()}
   </div>`;
 }
+function dicasMenuFechar(el){const d=el.closest('details');if(d)d.open=false;}
 function dicasPaineisHTML(){
   return(dicasImportarRelatorio?dicasRelatorioHTML():'')
     +dicasImportarPendentesHTML()
@@ -19152,12 +19184,19 @@ function dicasChipsHTML(){
     ${f.assunto?`<div class="banco-chip-grupo" id="dicas-chips-assunto"><span class="banco-chip-rotulo">Assunto</span><div class="banco-chips">${
       chip(true,`dicasFiltrarAssunto('${escapeAttrJs(f.assunto)}')`,`${escapeHtml(assuntoAtivo?assuntoAtivo.sub.name:(bossAtivo?'👑 '+bossAtivo.topic.name+' (boss inteiro)':'assunto apagado'))} ✕`,'Tirar o filtro de assunto')
       +(assuntoAtivo?chip(false,`dicasGerarIA('${escapeAttrJs(f.assunto)}')`,dicasGerando.has(f.assunto)?'⏳ gerando…':'✨ gerar dicas deste assunto com IA','Gera rascunhos a partir do resumo e das questões do Acervo deste assunto'):'')}</div></div>`:''}
-    ${dicasVista!=='numeros'&&(f.materia||f.grupo)&&(porGrupo.size>1||f.grupo)?`<div class="banco-chip-grupo" id="dicas-chips-grupo"><span class="banco-chip-rotulo">Grupo</span>
+    ${(()=>{
+      const grupo=dicasVista!=='numeros'&&(f.materia||f.grupo)&&(porGrupo.size>1||f.grupo)?`<div class="banco-chip-grupo" id="dicas-chips-grupo"><span class="banco-chip-rotulo">Grupo</span>
       <select class="inp dicas-grupo-sel" aria-label="Filtrar por grupo" onchange="dicasEscolherGrupo(this.value)">
         <option value="">Todos os grupos · ${baseGrupo.length}</option>
         ${[...porGrupo.entries()].map(([g,n])=>`<option value="${escapeHtml(g)}"${f.grupo===g?' selected':''}>${escapeHtml(g)} · ${n}</option>`).join('')}
-      </select></div>`:''}
-    ${dicasVista==='numeros'?'':`<div class="banco-chip-grupo" id="dicas-chips-mostrar"><span class="banco-chip-rotulo">Mostrar</span><div class="banco-chips">${mostrar.join('')}</div></div>`}
+      </select></div>`:'';
+      const banca=dicasBancasExistentes().length?`<div class="banco-chip-grupo" id="dicas-chips-banca"><span class="banco-chip-rotulo">Banca</span>${dicasBancaSelectHTML()}</div>`:'';
+      const mostrarHtml=dicasVista==='numeros'?'':`<div class="banco-chip-grupo" id="dicas-chips-mostrar"><span class="banco-chip-rotulo">Mostrar</span><div class="banco-chips">${mostrar.join('')}</div></div>`;
+      const n=(f.grupo?1:0)+(f.banca?1:0)+(f.jaSei?1:0)+(f.semAssunto?1:0)+(f.rascunhos?1:0);
+      return`<details class="dicas-gaveta" id="dicas-filtros"${dicasFiltrosAberto?' open':''} ontoggle="dicasFiltrosAberto=this.open">
+        <summary>⚙️ Mais filtros${n?` <b class="dicas-gaveta-n">${n}</b>`:''}</summary>
+        <div class="dicas-gaveta-corpo">${grupo}${banca}${mostrarHtml}</div></details>`;
+    })()}
   </div>`;
 }
 function dicasContaHTML(pool){
@@ -19168,7 +19207,7 @@ function dicasContaHTML(pool){
   }
   const fcBtn=dicasFlashBotaoHTML(pool);
   const escondidas=dicasFiltro.jaSei?0:dicasAplicarFiltros({...dicasFiltro,jaSei:true}).filter(d=>dicaSei(d.id)).length;
-  return fcBtn+`<span><b>${pool.length}</b> ${pool.length===1?'dica':'dicas'}${dicasTemFiltro()?' com este filtro':''}</span>`
+  return fcBtn+dicasBotaoTudoHTML(pool)+`<span><b>${pool.length}</b> ${pool.length===1?'dica':'dicas'}${dicasTemFiltro()?' com este filtro':''}</span>`
     +(escondidas?`<span>· ${escondidas} que você já sabe ${escondidas===1?'está escondida':'estão escondidas'}</span>`:'')
     +(dicasTemFiltro()?`<button class="sg-mais" style="margin:0" onclick="dicasFiltroLimpar()">limpar filtro</button>`:'');
 }
@@ -19288,16 +19327,35 @@ function dicaCardHTML(d,ctx){
     const linhas=DICAS_LINHAS.filter(l=>d[l.campo]);
     corpo=linhas.length?`<dl class="dica-linhas">${linhas.map(l=>`<div class="dica-linha dica-linha-${l.campo}"><dt>${explIcone(l.marca)} ${l.lbl}</dt><dd>${escapeHtml(d[l.campo])}</dd></div>`).join('')}</dl>`:'';
   }
-  return`<article class="${cls}" id="${idHtml}">
+  // Na lista, a dica de texto vem fechada: só o título (dá pra tentar lembrar antes de abrir)
+  // e a etiqueta. Rascunho da IA vem aberto — precisa ser lido pra ser aprovado.
+  const recolhivel=ctx==='aba'&&d.tipo==='dica'&&!d.rascunho;
+  const aberta=!recolhivel||dicasTudoAberto||dicasAbertas.has(d.id);
+  const titulo=recolhivel
+    ?`<h4 class="dica-titulo"><button type="button" class="dica-toggle" aria-expanded="${aberta}" onclick="dicaAlternarAberta('${escapeAttrJs(d.id)}')"><span>${escapeHtml(d.titulo||'')}</span><i class="fa fa-chevron-${aberta?'up':'down'} dica-chevron" aria-hidden="true"></i></button></h4>`
+    :`<h4 class="dica-titulo">${escapeHtml(d.titulo||'')}</h4>`;
+  return`<article class="${cls}${aberta?'':' dica-fechada'}" id="${idHtml}">
     <header class="dica-cab">
-      <h4 class="dica-titulo">${escapeHtml(d.titulo||'')}</h4>
+      ${titulo}
       <div class="dica-etiquetas">${selo}${dicaEtiquetasHTML(d,ctx)}</div>
     </header>
-    ${corpo}
-    ${dicaExemplosHTML(d)}
-    ${dicaTreinoHTML(d)}
+    ${aberta?corpo+dicaExemplosHTML(d)+dicaTreinoHTML(d):''}
     ${dicaRodapeHTML(d,sei,ctx)}
   </article>`;
+}
+function dicaAlternarAberta(id){
+  const d=(db.dicas||[]).find(x=>x.id===id);
+  const el=document.getElementById('dica-'+id);
+  if(!d||!el)return;
+  if(dicasTudoAberto){dicasTudoAberto=false;(db.dicas||[]).forEach(x=>{if(x.id!==id)dicasAbertas.add(x.id);});dicasAbertas.delete(id);}
+  else if(dicasAbertas.has(id))dicasAbertas.delete(id);else dicasAbertas.add(id);
+  el.outerHTML=dicaCardHTML(d,'aba');   // só este cartão se refaz: a rolagem não pula
+  const t=document.querySelector('#dica-'+CSS.escape(id)+' .dica-toggle');if(t)t.focus({preventScroll:true});
+}
+function dicasAlternarTudo(){dicasTudoAberto=!dicasTudoAberto;dicasAbertas.clear();dicasRefrescar();}
+function dicasBotaoTudoHTML(pool){
+  if(dicasVista==='numeros'||dicasPorMateriaVisao(pool)||!pool.some(d=>d.tipo==='dica'&&!d.rascunho))return'';
+  return`<button class="btn btn-xs btn-ghost dicas-tudo" onclick="dicasAlternarTudo()">${dicasTudoAberto?'⏫ Fechar tudo':'⏬ Abrir tudo'}</button>`;
 }
 function dicaJaSei(id,ctx){
   if(!db.dicasEstado||typeof db.dicasEstado!=='object'||Array.isArray(db.dicasEstado))db.dicasEstado={};
@@ -19319,6 +19377,7 @@ function dicaJaSei(id,ctx){
 // editar a dica atualiza o card sem perder o histórico de revisão. Card mora num chefão
 // (mbId), por isso dica sem assunto ligado não entra.
 const DICAS_FC_TAG='dica';
+const DICAS_FC_CONFIRMA=40;   // acima disso o envio em lote pede confirmação
 function dicaFcId(d){return'fcd_'+d.id;}
 function dicaFcCard(d){return(db.flashcards||{})[dicaFcId(d)]||null;}
 function dicaFcMb(d){
@@ -19389,6 +19448,9 @@ function dicaFlashAlternar(id){
 function dicasFlashElegiveis(pool){return pool.filter(d=>!d.rascunho&&!dicaFcCard(d)&&dicaFcMb(d)&&dicaFcTexto(d));}
 function dicasFlashEnviar(){
   const pool=dicasAplicarFiltros({...dicasFiltro,semAssunto:false,rascunhos:false});
+  // O Flashcard não limita cards novos por dia: 150 dicas de uma vez viram 150 cards novos.
+  const n=dicasFlashElegiveis(pool).length;
+  if(n>DICAS_FC_CONFIRMA&&!confirm(`Isso cria ${n} flashcards novos de uma vez.\n\nPra estudar aos poucos, filtre por um assunto e mande de pouco em pouco. Continuar?`))return;
   const cont={criado:0,ja:0,'sem-assunto':0,'sem-conteudo':0,rascunho:0};
   pool.forEach(d=>{cont[dicaParaFlashcard(d)]++;});
   if(cont.criado)saveDB();
@@ -19400,7 +19462,7 @@ function dicasFlashEnviar(){
 }
 function dicasFlashBotaoHTML(pool){
   const n=dicasFlashElegiveis(pool).length;
-  if(n)return`<button class="btn btn-xs btn-primary dicas-fc-enviar" onclick="dicasFlashEnviar()" title="Cria um flashcard por dica, no deck do assunto — a revisão é a do Flashcard">📇 Mandar <b>${n}</b> pro flashcard</button>`;
+  if(n)return`<button class="btn btn-xs btn-primary dicas-fc-enviar" onclick="dicasFlashEnviar()" title="Cria um flashcard por dica, no deck do assunto — a revisão é a do Flashcard">📇 Mandar <b>${n}</b><span class="dicas-lbl-longo"> pro flashcard</span></button>`;
   const jaNoDeck=pool.some(d=>dicaFcCard(d));
   return jaNoDeck?`<button class="btn btn-xs btn-ghost dicas-fc-ir" onclick="showScreen('flashcards')">🎴 Estudar nos flashcards</button>`:'';
 }
@@ -19536,6 +19598,7 @@ function dicasCriarSalvar(){
   const d=dicaCriarDoForm('dica-novo-');
   if(!d)return;
   dicasCriando=false;
+  dicasAbertas.add(d.id);   // recém-criada vem aberta, pra você conferir o que escreveu
   // A dica recém-criada precisa aparecer: se o filtro em uso a esconderia, ele dá lugar à
   // matéria dela.
   dicasMapaSubs();
@@ -19566,6 +19629,7 @@ function dicaEditarSalvar(id){
   if(dicaDuplicada(d,id)){toast('⚠️ Já existe outra dica com esse título nessa matéria.','var(--red)');return;}
   db.dicas[i]=d;
   dicasEditando=null;
+  dicasAbertas.add(id);   // depois de editar, o cartão fica aberto
   dicasSalvar();
   renderDicasScreen();
   [velha.subId,d.subId].forEach(sid=>{if(sid)dicasSubRefrescar(sid);});
@@ -33937,6 +34001,9 @@ window.dicasFiltrarMateria=dicasFiltrarMateria;
 window.dicasFiltrarGrupo=dicasFiltrarGrupo;
 window.dicasEscolherGrupo=dicasEscolherGrupo;
 window.dicaFlashAlternar=dicaFlashAlternar;
+window.dicaAlternarAberta=dicaAlternarAberta;
+window.dicasAlternarTudo=dicasAlternarTudo;
+window.dicasMenuFechar=dicasMenuFechar;
 window.dicasFlashEnviar=dicasFlashEnviar;
 window.dicasFiltrarBanca=dicasFiltrarBanca;
 window.dicasBuscar=dicasBuscar;

@@ -203,6 +203,7 @@ async def main():
         print('   OK\n')
 
         print('=== E) importar o pacote de Portugues (pelo arquivo) ===')
+        await page.evaluate("()=>{document.querySelector('.dicas-menu').open=true;}")
         await page.click('#dicas-content button:has-text("Importar em lote")')
         await page.set_input_files('#dicas-importar-arq',PACOTE)
         await page.wait_for_function("()=>dicasImportarRelatorio&&dicasImportarRelatorio.lidos===25",timeout=5000)
@@ -344,6 +345,7 @@ async def main():
         print('   contagem: "%s"'%r['conta'])
         assert r['est']['sei'] is True and r['est']['vistaEm'] and not r['naTela']
         assert '1 que você já sabe está escondida' in r['conta'] and 'mostrar as que já sei · 1' in r['chip'][0]
+        await page.evaluate("()=>{document.getElementById('dicas-filtros').open=true;}")
         await page.click('#dicas-chips-mostrar .banco-chip:has-text("mostrar as que já sei")')
         r=await page.evaluate("""(id)=>{const c=document.getElementById('dica-'+id);
           return {volta:!!c,classe:c&&c.classList.contains('dica-sei'),selo:c&&c.innerText.includes('já sei'),
@@ -364,6 +366,7 @@ async def main():
         # o caso real: o miniboss que o pacote citava passa a existir DEPOIS da importacao
         await page.evaluate("""()=>{db.topics.kPt[0].subtopics.push({id:'sVoz',name:'Vozes verbais',priority:70,studied:false});
           db.topics.kPt[0].subtopics.push({id:'sFig',name:'Figuras de linguagem',priority:70,studied:false});}""")
+        await page.evaluate("()=>{document.getElementById('dicas-filtros').open=true;}")
         await page.click('#dicas-chips-mostrar .banco-chip:has-text("sem assunto")')
         r=await page.evaluate("""()=>({linhas:[...document.querySelectorAll('#dicas-resolver .dicas-ligar-nome')].map(x=>x.innerText),
           sug:dicasResolverGrupos.map((g,i)=>g.nome+'='+document.getElementById('dicas-ligar-'+i).value)})""")
