@@ -13754,6 +13754,7 @@ function treinoEncerrar(){
     tempoSec:s.segLancado,
     revisao:s.revisao?trevResultado(s):null};
   if(s.respondidas>0)treinoRegistrarSessaoNoHistorico(treinoResumo);
+  if(s.titulo===CRON_TITULO_DIAG&&s.respondidas>0)crRegistrarDiagnostico(s);   // cronograma: ponto de partida
   treinoSessao=null;
   renderSimGeralScreen();
   window.scrollTo(0,0);
@@ -25311,6 +25312,7 @@ const CRON_DADOS={"inicio":"2026-11-09","fim":"2027-01-31","cap":[{"id":"_loi52d
 const CRON_REVISOES=[1,7,30];                 // D+1, D+7, D+30
 const CRON_MIN_JASEI=2;                       // "já sei" gasta ~2 min do dia, não os 22 do assunto
 const CRON_LOTE_SIMULADO=30;
+const CRON_TITULO_DIAG='Simulado diagnóstico';
 const CRON_CURTOS=new Set(['_4sem8po','_22dn7iw','_d55qcvt','_qvv2s81','_rtonf3h','_uj2lmvo','_w9ug7mu','_hy5o3vh','_22y7dcf','_k97q44x','_k5ubi54','_zv00nw3','_uf4baim']);
 const CRON_VALORES=new Set(['_aca6z4h','_hvz2w7i','_sxqphyo','_y3yuyu6','_ohtr9oc']);
 const CRON_LEG=new Set(['_0silq67','_cc3d9an']);
@@ -25642,11 +25644,46 @@ function crErrosSemana(ds){
 function crSimuladoDiagnostico(){
   // Só o que cai na prova: a trilha complementar não entra no diagnóstico.
   const p=crPlano(),pool=treinoPoolCompleto().filter(q=>p.meta.has(q.subId)&&p.meta.get(q.subId).bloco!=='comp');
-  crAbrirTreino(crSelecionar(pool,30,{esp:10,pol:8,leg:3,por:3},p),'Simulado diagnóstico');
+  crAbrirTreino(crSelecionar(pool,30,{esp:10,pol:8,leg:3,por:3},p),CRON_TITULO_DIAG);
 }
 function crSimuladoCompleto(){
   const p=crPlano(),pool=treinoPoolCompleto().filter(q=>p.meta.has(q.subId)&&p.meta.get(q.subId).bloco!=='comp');
   crAbrirTreino(crSelecionar(pool,60,null,p),'Simulado completo · 60 questões');
+}
+// Chamado quando o treino do diagnóstico é encerrado: guarda o ponto de partida (total e por
+// bloco da prova) pro cronograma mostrar o resultado em vez de pedir de novo.
+function crRegistrarDiagnostico(sess){
+  const p=crPlano(),blocos={};
+  Object.keys(CRON_BLOCOS).forEach(b=>blocos[b]={tot:0,certas:0});
+  sess.itens.forEach((it,i)=>{
+    if(!sess.respondidasSet||!sess.respondidasSet.has(i)||!it.userAnswer)return;
+    const m=p.meta.get(it.subId),b=blocos[m?m.bloco:'esp'];
+    b.tot++;if(it.userAnswer===it.correta)b.certas++;
+  });
+  crEstado().diagnostico={em:todayStr(),respondidas:sess.respondidas,certas:sess.certas,blocos};
+  saveDB();
+}
+// O diagnóstico feito: o guardado pelo cronograma ou, se foi feito antes de existir esse
+// registro, o último "Simulado diagnóstico" do histórico do treino (sem a quebra por bloco).
+function crDiagnostico(){
+  const st=crEstado();
+  if(st.diagnostico&&st.diagnostico.respondidas)return st.diagnostico;
+  const h=(db.treinoHistorico||[]).find(x=>x.titulo===CRON_TITULO_DIAG&&x.respondidas>0);
+  return h?{em:String(h.data).slice(0,10),respondidas:h.respondidas,certas:h.certas,blocos:null}:null;
+}
+function crDiagnosticoHTML(d,p){
+  const pct=Math.round(100*d.certas/d.respondidas);
+  let blocos='',fraco='';
+  if(d.blocos){
+    const lista=Object.keys(CRON_BLOCOS).filter(b=>d.blocos[b]&&d.blocos[b].tot);
+    blocos=lista.map(b=>`<span class="cron-pill">${CRON_BLOCOS[b]} ${d.blocos[b].certas}/${d.blocos[b].tot}</span>`).join('');
+    const cand=lista.filter(b=>b!=='comp'&&d.blocos[b].tot>=3).sort((a,b)=>d.blocos[a].certas/d.blocos[a].tot-d.blocos[b].certas/d.blocos[b].tot)[0];
+    if(cand)fraco=` · ponto mais fraco: <b>${CRON_BLOCOS[cand]}</b> (${Math.round(100*d.blocos[cand].certas/d.blocos[cand].tot)}%)`;
+  }
+  return`<div class="cron-prep">✅ <b>Diagnóstico feito em ${crFmtData(d.em)}:</b> ${d.certas}/${d.respondidas} (${pct}%)${fraco}
+    ${blocos?`<div class="cron-linha" style="margin-top:6px">${blocos}</div>`:''}
+    ${p.antes?`<div class="cron-sub">Pronto para começar em ${crFmtData(CRON_DADOS.inicio)}. Esse é o seu ponto de partida; refaça no fim para comparar.</div>`:''}
+    <button class="btn btn-xs btn-ghost" onclick="crSimuladoDiagnostico()">↻ Refazer diagnóstico</button></div>`;
 }
 function crErrosPendentesN(ds,p){
   const subs=crSubsDaSemana(ds,p);
@@ -25762,7 +25799,9 @@ function crCabecalhoHTML(){
     const x=p.blocos[b],pc=Math.round(100*x.feito/x.tot);
     return`<div class="cron-bloco" title="${x.feito} de ${x.tot} assuntos"><div class="cron-bloco-top"><span>${CRON_BLOCOS[b]}</span><b>${pc}%</b></div><div class="cron-bloco-barra"><i style="width:${pc}%"></i></div></div>`;
   }).join('');
-  const prep=p.antes?`<div class="cron-prep">📋 <b>Antes de começar:</b> faça o simulado diagnóstico de 30 questões (10 específicos, 8 SUS e Saúde Pública, 6 Legislação Ebserh e Português, 6 mistas). <button class="btn btn-xs btn-primary" onclick="crSimuladoDiagnostico()">▶ Abrir diagnóstico</button></div>`:'';
+  const diag=crDiagnostico();
+  const prep=diag?crDiagnosticoHTML(diag,p)
+    :(p.antes?`<div class="cron-prep">📋 <b>Antes de começar:</b> faça o simulado diagnóstico de 30 questões (10 específicos, 8 SUS e Saúde Pública, 6 Legislação Ebserh e Português, 6 mistas). <button class="btn btn-xs btn-primary" onclick="crSimuladoDiagnostico()">▶ Abrir diagnóstico</button></div>`:'');
   const falt=p.falt.length?`<div class="cron-aviso">${p.falt.length} capítulo${p.falt.length>1?'s':''} do prompt não ${p.falt.length>1?'estão':'está'} no seu Mapa: ${escapeHtml(p.falt.slice(0,4).join('; '))}${p.falt.length>4?'…':''}</div>`:'';
   const hoje=p.hojeAtual.length?`<details class="cron-hoje" open><summary>📌 Hoje · ${p.hojeAtual.filter(id=>p.st.feitos[id]).length}/${p.hojeAtual.length} concluídos</summary>${crChecklistHTML(p.hojeAtual,p,p.hoje)}</details>`
     :(p.hojeDia&&(p.hojeDia.t==='rev'||p.hojeDia.t==='fer'||p.hojeDia.t==='fin')?`<div class="cron-hoje-esp">${crDiaEspecialHTML(p.hojeDia,p,true)}</div>`:'');

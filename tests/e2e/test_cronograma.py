@@ -207,6 +207,37 @@ async def main():
         assert 'Prova 01/03' in r['h'] and r['on']==3 and r['off']==['2026-11-16']
         print('   OK\n')
 
+        print('=== N) diagnostico: sem registro pede; com historico antigo mostra o resultado; ao encerrar grava por bloco ===')
+        r=await page.evaluate("""()=>{window.__hoje='2026-11-02';closeModal();db.cronograma.diagnostico=null;db.treinoHistorico=[];
+          renderWeeklyPlan();const sem=document.getElementById('cron-head').innerText.replace(/\\s+/g,' ');
+          // feito antes do registro existir: so o historico do treino sabe
+          db.treinoHistorico=[{id:'h1',data:'2026-11-02T13:00:00.000Z',titulo:'Simulado diagnóstico',respondidas:30,certas:18,liquida:6}];
+          renderWeeklyPlan();const hist=document.getElementById('cron-head').innerText.replace(/\\s+/g,' ');
+          return {sem,hist};}""")
+        print('   %s'%{k:v[v.find('Antes') if 'Antes' in v else v.find('Diagn'):][:150] for k,v in r.items()})
+        assert 'Abrir diagnóstico' in r['sem'] and 'Diagnóstico feito' not in r['sem']
+        assert 'Diagnóstico feito em 02/11: 18/30 (60%)' in r['hist'] and 'Abrir diagnóstico' not in r['hist'] and 'Refazer diagnóstico' in r['hist']
+        r=await page.evaluate("""()=>{
+          const p=crPlano();const ids=[...p.meta.keys()];
+          const porBloco=b=>ids.filter(id=>p.meta.get(id).bloco===b);
+          const esp=porBloco('esp'),pol=porBloco('pol'),leg=porBloco('leg');
+          const itens=[];const add=(id,ok)=>itens.push({subId:id,userAnswer:ok?'A':'B',correta:'A'});
+          for(let i=0;i<10;i++)add(esp[i],i<6);      // 6/10 em Especificos
+          for(let i=0;i<8;i++)add(pol[i],i<2);       // 2/8 em Politicas  (o ponto mais fraco)
+          for(let i=0;i<3;i++)add(leg[i],true);      // 3/3 em Legislacao
+          treinoSessao={itens,idx:0,titulo:'Simulado diagnóstico',seg:0,segPend:0,segLancado:0,ultimoTick:Date.now(),
+            iniciadoEm:Date.now(),respondidas:21,certas:11,erradas:10,puladas:new Set(),respondidasSet:new Set(itens.map((_,i)=>i)),revisao:null};
+          window.renderSimGeralScreen=()=>{};
+          treinoEncerrar();
+          const d=db.cronograma.diagnostico;renderWeeklyPlan();
+          return {d,h:document.getElementById('cron-head').innerText.replace(/\\s+/g,' '),tr:(db.treinoHistorico[0]||{}).titulo};}""")
+        print('   %s'%{'d':r['d']['blocos'],'certas':r['d']['certas']})
+        d=r['d']
+        assert d['respondidas']==21 and d['certas']==11 and d['em']=='2026-11-02'
+        assert d['blocos']['esp']=={'tot':10,'certas':6} and d['blocos']['pol']=={'tot':8,'certas':2} and d['blocos']['leg']=={'tot':3,'certas':3}
+        assert 'Específicos 6/10' in r['h'] and 'ponto mais fraco: Políticas Públicas (25%)' in r['h'], r['h']
+        print('   OK\n')
+
         print('=== M) celular: sem rolagem lateral com o cronograma na tela ===')
         await page.set_viewport_size({'width':375,'height':800})
         r=await page.evaluate("()=>{closeModal();showScreen('dashboard');renderWeeklyPlan();return {w:document.documentElement.scrollWidth,iw:innerWidth};}")
