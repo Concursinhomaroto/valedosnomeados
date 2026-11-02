@@ -54,6 +54,7 @@ async def main():
         await adm.evaluate("(t)=>{DICAS_PACOTES_PRONTOS.splice(0);dicasImportarProcessar(t);dicasRelatorioFechar();showScreen('dicas');}",open(PACOTE,encoding='utf-8').read())
 
         print('=== A) admin: painel vazio, com o formulario de publicar ===')
+        await adm.evaluate("()=>{const m=document.querySelector('.dicas-menu');if(m)m.open=true;}")
         await adm.click('#dicas-content button:has-text("Pacotes")')
         await adm.wait_for_timeout(200)
         r=await adm.evaluate("""()=>{const el=document.getElementById('dicas-pacotes');
@@ -152,6 +153,7 @@ async def main():
           db.dicas.push(dicaNormalizar({tipo:'dica',titulo:'Mal × mau',kingdomId:'kPt',grupo:'Ortografia e sentido',
             regra:'Mal se opõe a bem; mau se opõe a bom.',origem:'minha'}));
           dicasRefrescar();}""")
+        await adm.evaluate("()=>{const m=document.querySelector('.dicas-menu');if(m)m.open=true;}")
         await adm.click('#dicas-content button:has-text("Pacotes")')
         await adm.wait_for_timeout(300)
         await adm.select_option('#dicas-pub-alvo',PID)
