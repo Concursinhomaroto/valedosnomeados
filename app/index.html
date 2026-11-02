@@ -2284,6 +2284,61 @@ nav{
   /* quatro colunas numa tela de 393px dao 85px cada; em duas o numero respira */
   .fc-boss-stats{grid-template-columns:repeat(2,1fr)!important;}
 }
+.cron-card{border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:var(--panel2);display:flex;flex-direction:column;gap:8px}
+.cron-off{flex-direction:row;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.cron-sub{font-size:12px;color:var(--muted);font-weight:600;line-height:1.5;margin-top:2px}
+.cron-linha{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.cron-pill{font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px;border:1.5px solid var(--border);background:var(--panel);color:var(--text2);white-space:nowrap}
+.cron-pill-dia{background:var(--accent);border-color:var(--accent);color:#fff}
+.cron-pill-meta{border-color:var(--accent);color:var(--accent)}
+.cron-pill-bom{color:var(--green-t);border-color:var(--green-t)}
+.cron-pill-ruim{color:var(--red-t);border-color:var(--red-t);white-space:normal}
+.cron-pill-mudo{color:var(--muted);font-weight:700}
+.cron-progresso{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.cron-bloco-top{display:flex;justify-content:space-between;font-size:11px;font-weight:800;color:var(--text2)}
+.cron-bloco-barra{height:6px;border-radius:999px;background:var(--border);overflow:hidden;margin-top:3px}
+.cron-bloco-barra i{display:block;height:100%;background:var(--accent)}
+.cron-ferr{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.cron-total{font-size:12px;font-weight:800;color:var(--muted);margin-right:auto}
+.cron-aviso{font-size:12px;font-weight:700;color:var(--orange-t);line-height:1.5}
+.cron-prep{font-size:12.5px;line-height:1.6;color:var(--text2)}
+.cron-hoje>summary{cursor:pointer;font-size:13px;font-weight:900;color:var(--text);margin-bottom:6px}
+.cron-cap{margin:6px 0 10px}
+.cron-cap-tit{font-size:12.5px;font-weight:900;color:var(--text);margin-bottom:3px}
+.cron-cap-tit span{font-weight:700;color:var(--muted);margin-left:4px}
+.cron-ass{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 0;border-top:1px solid var(--border)}
+.cron-ass-nome{flex:1;min-width:140px;font-size:12.5px;font-weight:700;color:var(--text);overflow-wrap:anywhere}
+.cron-ass-st{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
+.cron-ass .btn{flex-shrink:0}
+@media(max-width:700px){
+  .cron-ass-nome{flex:1 1 100%}
+  .cron-ass-st{margin-right:auto}
+}
+.cron-ass-ok .cron-ass-nome{color:var(--muted);text-decoration:line-through}
+.cron-ass-ok .cron-ass-st{color:var(--green-t)}
+.cron-conf{font-size:10.5px;font-weight:800;color:var(--orange-t);text-decoration:none;display:inline-block}
+.cron-vazio,.cron-esp{font-size:13px;line-height:1.6;color:var(--text2)}
+.cron-esp-txt{font-size:12.5px;color:var(--muted);margin:4px 0 6px}
+.cron-esp-acoes{display:flex;gap:6px;flex-wrap:wrap}
+.cron-modal{max-height:70vh;overflow:auto}
+.cron-plano-sem{border:1.5px solid var(--border);border-radius:10px;margin-bottom:6px;padding:6px 10px}
+.cron-plano-sem>summary{cursor:pointer;font-size:13px;font-weight:900}
+.cron-plano-dia{display:flex;gap:8px;font-size:12px;padding:3px 4px;cursor:pointer;border-radius:6px}
+.cron-plano-dia:hover{background:var(--panel2)}
+.cron-plano-dia b{min-width:62px;color:var(--text)}
+.cron-plano-dia span{color:var(--text2);min-width:0}
+.cron-hoje-lin{background:var(--panel2)}
+.cron-dia{cursor:pointer;border-left:3px solid var(--accent);padding:3px 8px;border-radius:6px;background:var(--panel2);font-size:12px;line-height:1.35;min-width:0}
+.cron-dia:hover{background:var(--panel)}
+.cron-dia-topo{display:flex;justify-content:space-between;gap:6px;font-size:12px}
+.cron-dia-topo span{font-weight:800;color:var(--muted)}
+.cron-dia-lin{display:flex;gap:6px;justify-content:space-between;color:var(--text2);font-weight:600;min-width:0}
+.cron-dia-nome{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cron-dia-faixa{font-weight:800;color:var(--accent);white-space:nowrap}
+.cron-feito{opacity:.55;text-decoration:line-through}
+.cron-folga{border-left-color:var(--green-t);color:var(--green-t)}
+.cron-extra{border-left-color:var(--orange-t)}
+.cron-esp-card{border-left-color:var(--muted)}
 .ed-novo-sum{cursor:pointer;font-size:12px;font-weight:900;color:var(--accent);letter-spacing:1px;text-transform:uppercase;list-style:none;}
 .ed-novo-sum::-webkit-details-marker{display:none;}
 .ed-feitos{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
@@ -3798,6 +3853,7 @@ body.missao-ligada .dash-v2 .div-btn:hover{text-decoration:underline;filter:none
           <span class="dash-foot dash-foot-inline">Clique num dia para adicionar</span>
         </div>
       </div>
+      <div id="cron-head"></div>
       <div class="dash-scroll dash-grow" id="weekly-plan"></div>
     </div>
 
@@ -5329,6 +5385,7 @@ function applyDefaults(){
   if(!db.editais)db.editais=[];
   if(!db.freeSessions)db.freeSessions=[];
   if(!db.weeklyPlan)db.weeklyPlan={};
+  if(!db.cronograma||typeof db.cronograma!=='object'||Array.isArray(db.cronograma))db.cronograma={ativo:false};
   if(!db.flashcards)db.flashcards={};
   if(!db.redacoes)db.redacoes={topics:{},textos:{}};
   if(!db.repertorio)db.repertorio={eixos:[...EIXOS_DEFAULT],temas:{}};
@@ -21706,14 +21763,14 @@ function toggleTimer(subId,topicId){
         sub.studiedAt=todayStr(); // data do primeiro estudo
         // Gerar revisões espaçadas a partir da data do primeiro estudo
         if(!db.revisions[sub.id]||!db.revisions[sub.id].length){
-          db.revisions[sub.id]=[{date:addDays(sub.studiedAt,7),completed:false}];
+          db.revisions[sub.id]=crRevisoesIniciais(sub.studiedAt);
         }
         // Bônus de "abrir a porta" pra um assunto novo — menor que o de estudar de
         // verdade (1 XP/min no cronômetro), pra não ofuscar sessões longas de estudo.
         const xpGain=sub.priority===100?40:sub.priority===70?25:15;
         gainXP(xpGain);
         saveDB();
-        toast(`🎯 Primeiro estudo! Primeira revisão agendada em 7 dias — as próximas se ajustam à sua dificuldade. +${xpGain} XP!`,'var(--green)');
+        toast(`🎯 Primeiro estudo! ${crAtivo()?'Revisões em D+1, D+7 e D+30':'Primeira revisão agendada em 7 dias'} — as próximas se ajustam à sua dificuldade. +${xpGain} XP!`,'var(--green)');
         // Resumo e Fluxograma NAO sao mais gerados sozinhos aqui.
         // Cada "Estudar" num miniboss novo disparava duas chamadas ao Gemini (uma do
         // resumo, uma do fluxograma) sem ninguem ter pedido — e no nivel gratuito o teto
@@ -25266,9 +25323,526 @@ function setMbFilter(id,el){
   renderMBGrid(id);
 }
 
+// ===== CRONOGRAMA ATIVO (Ebserh / HU Brasil, 09/11/2026 a 31/01/2027) =====
+// Fonte: docs/cronograma/ebserh-2026-prompt.md (dados em docs/cronograma/ebserh-2026.json).
+// O cronograma NÃO grava uma tarefa por dia na agenda: ele é uma FILA ordenada de assuntos
+// (os 598 do prompt, cada um uma vez, na ordem do Mapa) e um calendário de CARGAS por dia.
+// O plano de cada dia é calculado na hora a partir do que já foi concluído — por isso
+// remarcar é automático (o que ficou pra trás desliza pro próximo dia de estudo), adiantar
+// também (concluir ou dar "já sei" libera tempo e a fila puxa os próximos assuntos pro mesmo
+// dia) e a revisão de domingo nunca é tocada (domingo e feriado não recebem assunto novo).
+// Concluído = db.cronograma.feitos[subId] — NÃO o sub.studied: assunto estudado antes do
+// cronograma continua aparecendo nele até você confirmar (nada é dado como estudado sozinho).
+const CRON_DADOS={"inicio":"2026-11-09","fim":"2027-01-31","cap":[{"id":"_loi52dk","nome":"Legislação de Enfermagem","n":38,"cat":"esp"},{"id":"_hvz2w7i","nome":"Procedimentos de Enfermagem","n":8,"cat":"esp"},{"id":"_y3yuyu6","nome":"Urgência e Emergência","n":34,"cat":"esp"},{"id":"_5gxfxh6","nome":"Doação de Órgãos","n":6,"cat":"esp"},{"id":"_aca6z4h","nome":"Unidade de Terapia Intensiva","n":16,"cat":"esp"},{"id":"_ohtr9oc","nome":"Farmacologia","n":2,"cat":"esp"},{"id":"_phikjc9","nome":"Saúde da Mulher","n":24,"cat":"esp"},{"id":"_ck380lj","nome":"Saúde da Criança","n":21,"cat":"esp"},{"id":"_sxqphyo","nome":"Vacinação","n":29,"cat":"esp"},{"id":"_ltdpn1i","nome":"Vigilância em Saúde","n":3,"cat":"esp"},{"id":"_mas9vs5","nome":"Doenças Infectocontagiosas","n":17,"cat":"esp"},{"id":"_7o8zcsx","nome":"Serviço de Controle de Infecção Hospitalar","n":6,"cat":"esp"},{"id":"_dinvssf","nome":"IRAS","n":4,"cat":"esp"},{"id":"_dy9888e","nome":"Gerenciamento de Resíduos","n":3,"cat":"esp"},{"id":"_e4wrzp7","nome":"CME","n":6,"cat":"esp"},{"id":"_iff1n5e","nome":"Centro Cirúrgico","n":28,"cat":"esp"},{"id":"_ppji5d8","nome":"Feridas e Curativos","n":5,"cat":"esp"},{"id":"_uvfg0dz","nome":"Clínica Médica","n":10,"cat":"esp"},{"id":"_cxh9ptc","nome":"Anatomia","n":13,"cat":"esp"},{"id":"_3p0bqza","nome":"Fisiologia Humana","n":7,"cat":"esp"},{"id":"_b4eu694","nome":"Microbiologia","n":1,"cat":"esp"},{"id":"_0o40vst","nome":"Saúde Mental","n":24,"cat":"esp"},{"id":"_jgypx6t","nome":"Saúde do Idoso","n":11,"cat":"esp"},{"id":"_n2t78tb","nome":"Oncologia","n":4,"cat":"esp"},{"id":"_9pbyjbz","nome":"Administração em Enfermagem","n":19,"cat":"esp"},{"id":"_6q7xml4","nome":"Saúde do Homem","n":1,"cat":"esp"},{"id":"_p3lv6bq","nome":"Saúde do Trabalhador","n":7,"cat":"esp"},{"id":"_m30edgi","nome":"Teorias de Enfermagem","n":15,"cat":"esp"},{"id":"_vii8m0g","nome":"Parasitologia","n":20,"cat":"esp"},{"id":"_0silq67","nome":"Ebserh: Mapa do edital HU Brasil","n":1,"cat":"bas"},{"id":"_cc3d9an","nome":"Ebserh: Legislação da Ebserh (HU Brasil)","n":6,"cat":"bas"},{"id":"_1p6k10s","nome":"Ebserh: Políticas Públicas de Saúde e Educação","n":11,"cat":"bas"},{"id":"_scn56um","nome":"SUS: Lei 8.080/90","n":10,"cat":"bas"},{"id":"_3m0ioxb","nome":"SUS: Decreto 8.142/90","n":1,"cat":"bas"},{"id":"_wwvpi0t","nome":"SUS: Decreto 7.508/11","n":1,"cat":"bas"},{"id":"_kji5ex8","nome":"SUS: Constituição Federal, arts. 194 a 200","n":1,"cat":"bas"},{"id":"_kp51w9z","nome":"SUS: Resolução CNS 453/2012","n":1,"cat":"bas"},{"id":"_5crssbn","nome":"SUS: História do SUS","n":4,"cat":"bas"},{"id":"_sgesid9","nome":"Saúde Pública: Políticas de Saúde","n":8,"cat":"bas"},{"id":"_rzmjfzz","nome":"Saúde Pública: Sistemas de Informação em Saúde","n":16,"cat":"bas"},{"id":"_e6z6ck9","nome":"Saúde Pública: Conceitos em Epidemiologia","n":1,"cat":"bas"},{"id":"_7jse5o9","nome":"Saúde Pública: Níveis de Atenção e de Prevenção","n":1,"cat":"bas"},{"id":"_7j3q4se","nome":"Saúde Pública: Cadeia de Transmissão de Doenças","n":1,"cat":"bas"},{"id":"_hk3isr8","nome":"Saúde Pública: Doenças de Notificação Compulsória","n":1,"cat":"bas"},{"id":"_g4verb1","nome":"Saúde Pública: Redes de atenção","n":1,"cat":"bas"},{"id":"_hffqldg","nome":"Saúde Pública: eMulti na APS","n":1,"cat":"bas"},{"id":"_9s0jv4u","nome":"Saúde Pública: Estatuto da Pessoa Idosa","n":1,"cat":"bas"},{"id":"_8s6ce0l","nome":"Saúde Pública: Nova Metodologia de Cofinanciamento","n":1,"cat":"bas"},{"id":"_zwzjf30","nome":"Saúde Pública: Preceptor e Residente na APS","n":1,"cat":"bas"},{"id":"_sc5w8uu","nome":"Saúde Pública: Programa de Interiorização","n":1,"cat":"bas"},{"id":"_4589jw2","nome":"Saúde Pública: Plano de Ações Estratégicas","n":1,"cat":"bas"},{"id":"_vfgklm5","nome":"Saúde Pública: Programa Saúde nas Escolas","n":1,"cat":"bas"},{"id":"_b5ba8vl","nome":"Saúde Pública: Telessaúde","n":2,"cat":"bas"},{"id":"_4sem8po","nome":"Português: Foco para não errar","n":1,"cat":"bas"},{"id":"_22dn7iw","nome":"Português: Interpretação Textual","n":9,"cat":"bas"},{"id":"_d55qcvt","nome":"Português: Sintaxe","n":40,"cat":"bas"},{"id":"_qvv2s81","nome":"Português: Morfologia","n":16,"cat":"bas"},{"id":"_rtonf3h","nome":"Português: Fonologia","n":12,"cat":"bas"},{"id":"_170a8lo","nome":"Dir. Administrativo: Ética no serviço público","n":5,"cat":"comp"},{"id":"_2jbii4q","nome":"Dir. Administrativo: Legislação aplicada ao serviço público","n":3,"cat":"comp"},{"id":"_qco97h9","nome":"Dir. Administrativo: Princípios da Administração Pública","n":2,"cat":"comp"},{"id":"_7pfixkn","nome":"Dir. Administrativo: Lei Estadual 6.754/2006","n":1,"cat":"comp"},{"id":"_2r36a0r","nome":"Dir. Administrativo: Lei Estadual 5.247/1991","n":1,"cat":"comp"},{"id":"_t5m5py3","nome":"Dir. Administrativo: Constituição de Alagoas","n":8,"cat":"comp"},{"id":"_9jp3654","nome":"História de Campina Grande - PB","n":6,"cat":"comp"},{"id":"_uj2lmvo","nome":"Informática: Hardware","n":2,"cat":"comp"},{"id":"_w9ug7mu","nome":"Informática: Sistemas operacionais","n":4,"cat":"comp"},{"id":"_hy5o3vh","nome":"Informática: Editor de textos","n":6,"cat":"comp"},{"id":"_22y7dcf","nome":"Informática: Planilhas","n":6,"cat":"comp"},{"id":"_k97q44x","nome":"Informática: Correio eletrônico","n":3,"cat":"comp"},{"id":"_k5ubi54","nome":"Informática: Comunicação e reuniões on-line","n":5,"cat":"comp"},{"id":"_zv00nw3","nome":"Informática: Internet e navegação","n":7,"cat":"comp"},{"id":"_uf4baim","nome":"Informática: TI e segurança da informação","n":5,"cat":"comp"}],"dias":[{"ds":"2026-11-09","t":"est","b":[["_loi52dk",1,6],["_0silq67",1,1],["_cc3d9an",1,2]]},{"ds":"2026-11-10","t":"est","b":[["_loi52dk",7,12],["_cc3d9an",3,5]]},{"ds":"2026-11-11","t":"est","b":[["_loi52dk",13,18],["_cc3d9an",6,6],["_1p6k10s",1,2]]},{"ds":"2026-11-12","t":"est","b":[["_loi52dk",19,24],["_1p6k10s",3,5]]},{"ds":"2026-11-13","t":"est","b":[["_loi52dk",25,30],["_1p6k10s",6,8]]},{"ds":"2026-11-14","t":"est","b":[["_loi52dk",31,36],["_1p6k10s",9,11]]},{"ds":"2026-11-15","t":"rev"},{"ds":"2026-11-16","t":"est","b":[["_loi52dk",37,38],["_hvz2w7i",1,4],["_scn56um",1,3]]},{"ds":"2026-11-17","t":"est","b":[["_hvz2w7i",5,8],["_y3yuyu6",1,2],["_scn56um",4,6]]},{"ds":"2026-11-18","t":"est","b":[["_y3yuyu6",3,8],["_scn56um",7,9]]},{"ds":"2026-11-19","t":"est","b":[["_y3yuyu6",9,14],["_scn56um",10,10],["_3m0ioxb",1,1],["_wwvpi0t",1,1]]},{"ds":"2026-11-20","t":"fer"},{"ds":"2026-11-21","t":"est","b":[["_y3yuyu6",15,20],["_kji5ex8",1,1],["_kp51w9z",1,1],["_5crssbn",1,1]]},{"ds":"2026-11-22","t":"rev"},{"ds":"2026-11-23","t":"est","b":[["_y3yuyu6",21,26],["_5crssbn",2,4]]},{"ds":"2026-11-24","t":"est","b":[["_y3yuyu6",27,32],["_sgesid9",1,3]]},{"ds":"2026-11-25","t":"est","b":[["_y3yuyu6",33,34],["_5gxfxh6",1,4],["_sgesid9",4,6]]},{"ds":"2026-11-26","t":"est","b":[["_5gxfxh6",5,6],["_aca6z4h",1,4],["_sgesid9",7,8],["_rzmjfzz",1,1]]},{"ds":"2026-11-27","t":"est","b":[["_aca6z4h",5,10],["_rzmjfzz",2,4]]},{"ds":"2026-11-28","t":"est","b":[["_aca6z4h",11,16],["_rzmjfzz",5,7]]},{"ds":"2026-11-29","t":"rev"},{"ds":"2026-11-30","t":"est","b":[["_ohtr9oc",1,2],["_phikjc9",1,4],["_rzmjfzz",8,10]]},{"ds":"2026-12-01","t":"est","b":[["_phikjc9",5,10],["_rzmjfzz",11,13]]},{"ds":"2026-12-02","t":"est","b":[["_phikjc9",11,16],["_rzmjfzz",14,16]]},{"ds":"2026-12-03","t":"est","b":[["_phikjc9",17,22],["_e6z6ck9",1,1],["_7jse5o9",1,1],["_7j3q4se",1,1]]},{"ds":"2026-12-04","t":"est","b":[["_phikjc9",23,24],["_ck380lj",1,4],["_hk3isr8",1,1],["_g4verb1",1,1],["_hffqldg",1,1]]},{"ds":"2026-12-05","t":"est","b":[["_ck380lj",5,10],["_9s0jv4u",1,1],["_8s6ce0l",1,1],["_zwzjf30",1,1]]},{"ds":"2026-12-06","t":"rev"},{"ds":"2026-12-07","t":"est","b":[["_ck380lj",11,16],["_sc5w8uu",1,1],["_4589jw2",1,1],["_vfgklm5",1,1]]},{"ds":"2026-12-08","t":"est","b":[["_ck380lj",17,21],["_sxqphyo",1,1],["_b5ba8vl",1,2],["_4sem8po",1,1]]},{"ds":"2026-12-09","t":"est","b":[["_sxqphyo",2,7],["_22dn7iw",1,3]]},{"ds":"2026-12-10","t":"est","b":[["_sxqphyo",8,13],["_22dn7iw",4,6]]},{"ds":"2026-12-11","t":"est","b":[["_sxqphyo",14,19],["_22dn7iw",7,9]]},{"ds":"2026-12-12","t":"est","b":[["_sxqphyo",20,25],["_d55qcvt",1,3]]},{"ds":"2026-12-13","t":"rev"},{"ds":"2026-12-14","t":"est","b":[["_sxqphyo",26,29],["_ltdpn1i",1,2],["_d55qcvt",4,6]]},{"ds":"2026-12-15","t":"est","b":[["_ltdpn1i",3,3],["_mas9vs5",1,5],["_d55qcvt",7,9]]},{"ds":"2026-12-16","t":"est","b":[["_mas9vs5",6,11],["_d55qcvt",10,12]]},{"ds":"2026-12-17","t":"est","b":[["_mas9vs5",12,17],["_d55qcvt",13,15]]},{"ds":"2026-12-18","t":"est","b":[["_7o8zcsx",1,6],["_d55qcvt",16,18]]},{"ds":"2026-12-19","t":"est","b":[["_dinvssf",1,4],["_dy9888e",1,2],["_d55qcvt",19,21]]},{"ds":"2026-12-20","t":"rev"},{"ds":"2026-12-21","t":"est","b":[["_dy9888e",3,3],["_e4wrzp7",1,5],["_d55qcvt",22,24]]},{"ds":"2026-12-22","t":"est","b":[["_e4wrzp7",6,6],["_iff1n5e",1,5],["_d55qcvt",25,27]]},{"ds":"2026-12-23","t":"est","b":[["_iff1n5e",6,11],["_d55qcvt",28,30]]},{"ds":"2026-12-24","t":"est","b":[["_iff1n5e",12,17],["_d55qcvt",31,33]]},{"ds":"2026-12-25","t":"fer"},{"ds":"2026-12-26","t":"est","b":[["_iff1n5e",18,23],["_d55qcvt",34,36]]},{"ds":"2026-12-27","t":"rev"},{"ds":"2026-12-28","t":"est","b":[["_iff1n5e",24,28],["_ppji5d8",1,1],["_d55qcvt",37,39]]},{"ds":"2026-12-29","t":"est","b":[["_ppji5d8",2,5],["_uvfg0dz",1,2],["_d55qcvt",40,40],["_qvv2s81",1,2]]},{"ds":"2026-12-30","t":"est","b":[["_uvfg0dz",3,8],["_qvv2s81",3,5]]},{"ds":"2026-12-31","t":"est","b":[["_uvfg0dz",9,10],["_cxh9ptc",1,4],["_qvv2s81",6,8]]},{"ds":"2027-01-01","t":"fer"},{"ds":"2027-01-02","t":"est","b":[["_cxh9ptc",5,10],["_qvv2s81",9,11]]},{"ds":"2027-01-03","t":"rev"},{"ds":"2027-01-04","t":"est","b":[["_cxh9ptc",11,13],["_3p0bqza",1,3],["_qvv2s81",12,14]]},{"ds":"2027-01-05","t":"est","b":[["_3p0bqza",4,7],["_b4eu694",1,1],["_0o40vst",1,1],["_qvv2s81",15,16],["_rtonf3h",1,1]]},{"ds":"2027-01-06","t":"est","b":[["_0o40vst",2,7],["_rtonf3h",2,4]]},{"ds":"2027-01-07","t":"est","b":[["_0o40vst",8,13],["_rtonf3h",5,7]]},{"ds":"2027-01-08","t":"est","b":[["_0o40vst",14,19],["_rtonf3h",8,10]]},{"ds":"2027-01-09","t":"est","b":[["_0o40vst",20,24],["_jgypx6t",1,1],["_rtonf3h",11,12],["_170a8lo",1,5]]},{"ds":"2027-01-10","t":"rev"},{"ds":"2027-01-11","t":"est","b":[["_jgypx6t",2,7],["_2jbii4q",1,3],["_qco97h9",1,2]]},{"ds":"2027-01-12","t":"est","b":[["_jgypx6t",8,11],["_n2t78tb",1,2],["_7pfixkn",1,1],["_2r36a0r",1,1],["_t5m5py3",1,3]]},{"ds":"2027-01-13","t":"est","b":[["_n2t78tb",3,4],["_9pbyjbz",1,4],["_t5m5py3",4,8]]},{"ds":"2027-01-14","t":"est","b":[["_9pbyjbz",5,10],["_9jp3654",1,5]]},{"ds":"2027-01-15","t":"est","b":[["_9pbyjbz",11,16],["_9jp3654",6,6],["_uj2lmvo",1,2],["_w9ug7mu",1,2]]},{"ds":"2027-01-16","t":"est","b":[["_9pbyjbz",17,19],["_6q7xml4",1,1],["_p3lv6bq",1,2],["_w9ug7mu",3,4],["_hy5o3vh",1,3]]},{"ds":"2027-01-17","t":"rev"},{"ds":"2027-01-18","t":"est","b":[["_p3lv6bq",3,7],["_m30edgi",1,1],["_hy5o3vh",4,6],["_22y7dcf",1,2]]},{"ds":"2027-01-19","t":"est","b":[["_m30edgi",2,7],["_22y7dcf",3,6],["_k97q44x",1,1]]},{"ds":"2027-01-20","t":"est","b":[["_m30edgi",8,13],["_k97q44x",2,3],["_k5ubi54",1,3]]},{"ds":"2027-01-21","t":"est","b":[["_m30edgi",14,15],["_vii8m0g",1,4],["_k5ubi54",4,5],["_zv00nw3",1,3]]},{"ds":"2027-01-22","t":"est","b":[["_vii8m0g",5,10],["_zv00nw3",4,7],["_uf4baim",1,1]]},{"ds":"2027-01-23","t":"est","b":[["_vii8m0g",11,16],["_uf4baim",2,5]]},{"ds":"2027-01-24","t":"rev"},{"ds":"2027-01-25","t":"est","b":[["_vii8m0g",17,20]]},{"ds":"2027-01-26","t":"fin"},{"ds":"2027-01-27","t":"fin"},{"ds":"2027-01-28","t":"fin"},{"ds":"2027-01-29","t":"fin"},{"ds":"2027-01-30","t":"fin"},{"ds":"2027-01-31","t":"rev"}]};
+const CRON_REVISOES=[1,7,30];                 // D+1, D+7, D+30
+const CRON_MIN_JASEI=2;                       // "já sei" gasta ~2 min do dia, não os 22 do assunto
+const CRON_LOTE_SIMULADO=30;
+const CRON_CURTOS=new Set(['_4sem8po','_22dn7iw','_d55qcvt','_qvv2s81','_rtonf3h','_uj2lmvo','_w9ug7mu','_hy5o3vh','_22y7dcf','_k97q44x','_k5ubi54','_zv00nw3','_uf4baim']);
+const CRON_VALORES=new Set(['_aca6z4h','_hvz2w7i','_sxqphyo','_y3yuyu6','_ohtr9oc']);
+const CRON_LEG=new Set(['_0silq67','_cc3d9an']);
+const CRON_POR=new Set(['_4sem8po','_22dn7iw','_d55qcvt','_qvv2s81','_rtonf3h']);
+const CRON_BLOCOS={esp:'Específicos',pol:'Políticas Públicas',por:'Português',leg:'Legislação Ebserh',comp:'Complementar'};
+// Peso de cada bloco na prova (60 questões): serve pra sortear os simulados nessa proporção.
+const CRON_PESOS={esp:30/60,pol:15/60,por:10/60,leg:5/60};
+const CRON_FINAL=[
+  ['📚','Legislação Ebserh e Políticas Públicas','Reler os 6 assuntos da Legislação Ebserh; revisar PNH, PNHOSP, CNS 553/2017, NOB/RH e Redes de Atenção.'],
+  ['🚑','Urgência, UTI e Procedimentos','Só os valores: PCR, Glasgow, gasometria, ventilação, sepse, sinais vitais, oxigenoterapia e cálculo de medicamentos.'],
+  ['👶','Materno-infantil e Vacinação','Pré-natal, parto, aleitamento, Rede Alyne e o calendário 2026 (HPV dose única, pneumo 20, rotavírus, dengue).'],
+  ['⚖️','Cofen, CME, IRAS, resíduos, Saúde Mental, Geriatria, Oncologia e Auditoria','Cofen 736/2024, 710/2022, 801/2026, Parecer Normativo 1/2024, RDC 15 e RDC 222.'],
+  ['📝','Simulado completo de 60 questões','4 horas, no formato FGV (afirmativas I a IV e V/F), com correção comentada.'],
+];
+const CRON_DESCANSO=['🌿','Descanso ativo','Só os erros do simulado e os itens marcados "conferir valores".'];
+
+function crEstado(){
+  if(!db.cronograma||typeof db.cronograma!=='object'||Array.isArray(db.cronograma))db.cronograma={ativo:false};
+  const c=db.cronograma;
+  if(!c.feitos||typeof c.feitos!=='object')c.feitos={};
+  if(!c.lidos||typeof c.lidos!=='object')c.lidos={};
+  if(c.complementar===undefined)c.complementar=true;
+  return c;
+}
+function crAtivo(){return!!(db.cronograma&&db.cronograma.ativo);}
+function crBloco(cap){return cap.cat==='comp'?'comp':cap.cat==='esp'?'esp':CRON_LEG.has(cap.id)?'leg':CRON_POR.has(cap.id)?'por':'pol';}
+function crMinCap(cap){return CRON_CURTOS.has(cap.id)?15:CRON_VALORES.has(cap.id)?28:22;}
+function crFmtData(ds){return ds.slice(8,10)+'/'+ds.slice(5,7);}
+function crDow(ds){return new Date(ds+'T12:00:00').getDay();}
+const CRON_DOW=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+function crFmtMin(m){const h=Math.floor(m/60),r=Math.round(m%60);return h?`${h}h${r?String(r).padStart(2,'0'):''}`:`${r} min`;}
+
+// Quem é cada capítulo no SEU Mapa: pelo id do prompt e, se o id não existir (conta
+// diferente, capítulo recriado), pelo nome.
+function crResolver(){
+  const porId=new Map(),porNome=new Map();
+  (db.kingdoms||[]).forEach(k=>(db.topics[k.id]||[]).forEach(t=>{
+    porId.set(t.id,{t,k});
+    const n=normalizeForDedup(t.name);if(!porNome.has(n))porNome.set(n,{t,k});
+  }));
+  const res=new Map(),falt=[];
+  CRON_DADOS.cap.forEach(c=>{
+    const r=porId.get(c.id)||porNome.get(normalizeForDedup(c.nome));
+    if(r)res.set(c.id,r);else falt.push(c.nome);
+  });
+  return{res,falt};
+}
+function crAcharSub(subId){
+  for(const k of db.kingdoms||[])for(const t of(db.topics[k.id]||[])){
+    const s=(t.subtopics||[]).find(x=>x.id===subId);
+    if(s)return{s,t,k};
+  }
+  return null;
+}
+// O resumo de quem foi criado ou reescrito com valores a checar traz [CONFERIR]: o aviso
+// aparece no dia em que o assunto é estudado e exige leitura antes de dar como concluído.
+function crConferir(sub){
+  const t=(sub&&sub.resumo&&sub.resumo.texto)||'';
+  return/\[CONFERIR\]/i.test(t)||/de mem[óo]ria,? conferir/i.test(t);
+}
+function crTrechosConferir(sub){
+  const t=(sub&&sub.resumo&&sub.resumo.texto)||'';
+  return t.split(/\n+/).map(l=>l.trim()).filter(l=>/\[CONFERIR\]|de mem[óo]ria,? conferir/i.test(l)).slice(0,6);
+}
+function crCusto(id,st,meta){
+  const f=st.feitos[id],m=meta.get(id);
+  return f&&f.via==='ja-sei'?CRON_MIN_JASEI:(m?m.min:22);
+}
+function crDataProva(hoje){
+  const ed=db.editalFoco?edFind(db.editalFoco):null;
+  const c=ed||(db.editais||[]).filter(e=>e.data&&e.data>=hoje&&e.status!=='realizado').sort((a,b)=>a.data.localeCompare(b.data))[0];
+  return c&&c.data?{nome:c.nome,data:c.data}:null;
+}
+
+function crPlano(hoje){
+  hoje=hoje||todayStr();
+  const st=crEstado();
+  const{res,falt}=crResolver();
+  const capPorId=new Map(CRON_DADOS.cap.map(c=>[c.id,c]));
+  const incl=cap=>cap.cat!=='comp'||st.complementar!==false;
+  const meta=new Map(),fila=[];
+  const dias=CRON_DADOS.dias.map(d=>{
+    const dia={ds:d.ds,t:d.t,orig:[],atual:[]};
+    if(d.t==='est')d.b.forEach(([cid,a,b])=>{
+      const cap=capPorId.get(cid),r=res.get(cid);
+      if(!r||!incl(cap))return;
+      const subs=r.t.subtopics||[];
+      for(let i=a;i<=b&&i<=subs.length;i++){
+        const s=subs[i-1];
+        meta.set(s.id,{capId:cid,idx:i,cap,sub:s,topic:r.t,k:r.k,min:crMinCap(cap),bloco:crBloco(cap)});
+        dia.orig.push(s.id);fila.push(s.id);
+      }
+    });
+    dia.carga=dia.orig.reduce((n,id)=>n+meta.get(id).min,0);
+    return dia;
+  });
+  const estDias=dias.filter(d=>d.t==='est');
+  const ultimoEst=estDias.length?estDias[estDias.length-1].ds:CRON_DADOS.inicio;
+  const cargaMedia=estDias.length?Math.round(estDias.reduce((n,d)=>n+d.carga,0)/estDias.length)||200:200;
+
+  // Atraso: o que estava planejado pra antes de hoje e não foi concluído.
+  const atrasados=[];
+  estDias.forEach(d=>{if(d.ds<hoje)d.orig.forEach(id=>{if(!st.feitos[id])atrasados.push(id);});});
+
+  // Preenche hoje e os dias seguintes com o que falta, na ordem. Hoje desconta o que já foi
+  // gasto: concluir "de verdade" gasta o tempo do assunto; "já sei" gasta quase nada e por
+  // isso puxa o próximo da fila pro mesmo dia.
+  const fica=fila.filter(id=>!st.feitos[id]);
+  const feitosHoje=Object.keys(st.feitos).filter(id=>st.feitos[id].em===hoje&&meta.has(id));
+  const gastoHoje=feitosHoje.reduce((n,id)=>n+crCusto(id,st,meta),0);
+  const q=fica.slice();
+  const preencher=(d,carga)=>{
+    let acc=0;
+    while(q.length&&acc<carga){const id=q.shift();d.atual.push(id);acc+=meta.get(id).min;}
+  };
+  estDias.filter(d=>d.ds>=hoje).forEach(d=>preencher(d,d.ds===hoje?d.carga-gastoHoje:d.carga));
+  // Sobrou fila depois do último dia de estudo: continua depois da data final (projeção).
+  const extras=[];
+  if(q.length){
+    let ds=addDays(ultimoEst<hoje?addDays(hoje,-1):CRON_DADOS.fim,1);
+    for(let n=0;q.length&&n<400;n++,ds=addDays(ds,1)){
+      if(crDow(ds)===0)continue;
+      const d={ds,t:'est',extra:true,orig:[],atual:[],carga:cargaMedia};
+      preencher(d,cargaMedia);extras.push(d);
+    }
+  }
+  const todos=estDias.concat(extras);
+  const comItens=todos.filter(d=>d.atual.length);
+  const fimEstudo=comItens.length?comItens[comItens.length-1].ds:null;
+  // Folga: dias de estudo que sobram depois que a fila acabou.
+  const folga=estDias.filter(d=>d.ds>=hoje&&!d.atual.length&&(!fimEstudo||d.ds>fimEstudo)&&d.ds<=ultimoEst);
+  const folgaDias=fica.length===0&&hoje<=ultimoEst?estDias.filter(d=>d.ds>=hoje).length:folga.length;
+
+  // Encurtar a data final: a semana final (26/01 em diante) vem logo depois do último
+  // assunto, em vez de esperar a data original.
+  let calendario=dias.concat(extras);
+  let fimAtual=extras.length?extras[extras.length-1].ds:CRON_DADOS.fim,encurtarPara=null;
+  const finais=dias.filter(d=>(d.t==='fin'||d.t==='rev')&&d.ds>ultimoEst);
+  const base=fica.length===0?addDays(hoje,-1):(fimEstudo||hoje);
+  const possivel=finais.length>0&&folgaDias>0&&addDays(base,finais.length)<CRON_DADOS.fim;
+  if(possivel)encurtarPara=addDays(base,finais.length);
+  if(st.encurtar&&possivel){
+    // Tudo entre o último assunto e a data original some; a semana final ocupa os dias
+    // logo depois do último assunto, na mesma ordem.
+    const novos=finais.map((d,i)=>({...d,ds:addDays(base,i+1),movido:true}));
+    calendario=calendario.filter(d=>d.ds<=base||d.ds>CRON_DADOS.fim).concat(novos);
+    fimAtual=novos[novos.length-1].ds;
+  }
+  calendario.sort((a,b)=>a.ds.localeCompare(b.ds));
+  // índice do dia de estudo (1..69) pelas datas ORIGINAIS: "Dia 23 de 69".
+  const diasEstudo=dias.filter(d=>d.t==='est'||d.t==='fin');
+  const diaN=diasEstudo.filter(d=>d.ds<=hoje).length;
+
+  const blocos={};
+  Object.keys(CRON_BLOCOS).forEach(b=>blocos[b]={tot:0,feito:0});
+  meta.forEach((m,id)=>{blocos[m.bloco].tot++;if(st.feitos[id])blocos[m.bloco].feito++;});
+  const hojeDia=calendario.find(d=>d.ds===hoje);
+  const hojeAtual=hojeDia&&hojeDia.t==='est'?feitosHoje.concat(hojeDia.atual.filter(id=>!feitosHoje.includes(id))):[];
+  return{st,meta,dias,calendario,falt,hoje,
+    antes:hoje<CRON_DADOS.inicio,depois:hoje>fimAtual,diaN,totalDias:diasEstudo.length,
+    atrasados,pendentes:fica.length,total:fila.length,feitosN:fila.length-fica.length,
+    fimEstudo,folgaDias,encurtarPara,encurtado:!!(st.encurtar&&possivel),fimAtual,blocos,
+    hojeDia,hojeAtual,hojeMin:hojeAtual.reduce((n,id)=>n+(meta.get(id)?meta.get(id).min:0),0),
+    prova:crDataProva(hoje),cargaMedia};
+}
+
+// Agrupa assuntos por capítulo e resume em faixas ("1–6", "1–3, 5").
+function crFaixas(ids,plano){
+  const por=new Map();
+  ids.forEach(id=>{
+    const m=plano.meta.get(id);if(!m)return;
+    if(!por.has(m.capId))por.set(m.capId,{cap:m.cap,topic:m.topic,idx:[],ids:[]});
+    const g=por.get(m.capId);g.idx.push(m.idx);g.ids.push(id);
+  });
+  return[...por.values()].map(g=>{
+    g.idx.sort((a,b)=>a-b);
+    const partes=[];let ini=g.idx[0],ant=ini;
+    for(let i=1;i<=g.idx.length;i++){
+      const v=g.idx[i];
+      if(v===ant+1){ant=v;continue;}
+      partes.push(ini===ant?String(ini):`${ini}–${ant}`);ini=v;ant=v;
+    }
+    const feitos=g.ids.filter(id=>plano.st.feitos[id]).length;
+    return{cap:g.cap,faixa:partes.join(', '),total:(g.topic.subtopics||[]).length,n:g.ids.length,feitos,ids:g.ids};
+  });
+}
+const crNomeCap=cap=>cap.nome.replace(/^(Ebserh|SUS|Saúde Pública|Português|Dir\. Administrativo|Informática): /,m=>m.slice(0,-2)+' · ');
+
+// ---- Ações ----
+function crAtivar(){
+  const st=crEstado();
+  st.ativo=true;st.ativadoEm=st.ativadoEm||todayStr();
+  saveDB();crRefrescar();
+  const p=crPlano();
+  toast(p.falt.length
+    ?`📅 Cronograma ativado — mas ${p.falt.length} capítulo${p.falt.length>1?'s':''} do prompt não ${p.falt.length>1?'foram achados':'foi achado'} no seu Mapa.`
+    :`📅 Cronograma ativado: ${p.total} assuntos em ${p.totalDias} dias de estudo.`,'var(--accent)');
+}
+function crDesativar(){
+  if(!confirm('Desativar o cronograma?\n\nO que você já concluiu nele continua guardado; só a agenda deixa de mostrá-lo.'))return;
+  crEstado().ativo=false;saveDB();closeModal();crRefrescar();
+  toast('Cronograma desativado.','var(--muted)');
+}
+function crAlternarComplementar(){
+  const st=crEstado();st.complementar=!st.complementar;saveDB();crRefrescar();crReabrirModal();
+  toast(st.complementar?'Trilha complementar incluída.':'Trilha complementar fora do cronograma — o resto adianta.','var(--accent)');
+}
+function crAlternarEncurtar(){
+  const st=crEstado();st.encurtar=!st.encurtar;saveDB();crRefrescar();
+  const p=crPlano();
+  toast(st.encurtar&&p.encurtado?`⏩ Data final encurtada para ${crFmtData(p.fimAtual)}.`:'Data final de volta a 31/01.','var(--green)');
+}
+function crRevisoesIniciais(base,forcar){
+  return(forcar||crAtivo()?CRON_REVISOES:[7]).map(n=>({date:addDays(base,n),completed:false}));
+}
+function crConcluir(subId,via,confirmado){
+  const st=crEstado();
+  if(st.feitos[subId])return;
+  const a=crAcharSub(subId);
+  if(!a)return;
+  // Nunca dá como concluído, sem leitura, o que tem valor a conferir.
+  if(crConferir(a.s)&&!st.lidos[subId]&&!confirmado){crAvisoAbrir(subId,via);return;}
+  const hoje=todayStr(),reg={em:hoje,via};
+  if(!a.s.studied){
+    a.s.studied=true;a.s.studiedAt=hoje;reg.novo=true;
+    // "Já sei" não rende XP: senão virava atalho pra farmar pontos sem estudar.
+    if(via!=='ja-sei')gainXP(a.s.priority===100?40:a.s.priority===70?25:15);
+  }
+  a.s.lastStudiedAt=hoje;
+  if(!db.revisions)db.revisions={};
+  if(!db.revisions[subId]||!db.revisions[subId].length){db.revisions[subId]=crRevisoesIniciais(hoje,true);reg.revs=true;}
+  st.feitos[subId]=reg;
+  if(confirmado)st.lidos[subId]=true;
+  saveDB();
+  if(typeof updateRevBadge==='function')updateRevBadge();
+  if(typeof renderMap==='function')renderMap();
+  crRefrescar();
+  if(confirmado){closeModal();const d=crDiaRetorno;crDiaRetorno=null;if(d)crAbrirDia(d);}else crReabrirModal();
+  toast(via==='ja-sei'?`⚡ "${a.s.name}" dado como sabido — revisões em D+1, D+7 e D+30.`:`✅ "${a.s.name}" concluído — revisões em D+1, D+7 e D+30.`,'var(--green)');
+}
+// Desfaz só o que o cronograma fez, e só se nenhuma revisão já foi cumprida.
+function crDesfazer(subId){
+  const st=crEstado(),f=st.feitos[subId];
+  if(!f)return;
+  const revs=db.revisions&&db.revisions[subId]||[];
+  if(revs.some(r=>r.completed)){toast('⚠️ Já tem revisão cumprida desse assunto — não dá pra desfazer.','var(--orange)');return;}
+  const a=crAcharSub(subId);
+  if(a&&f.novo){a.s.studied=false;delete a.s.studiedAt;}
+  if(f.revs&&db.revisions)delete db.revisions[subId];
+  delete st.feitos[subId];
+  saveDB();
+  if(typeof updateRevBadge==='function')updateRevBadge();
+  if(typeof renderMap==='function')renderMap();
+  crRefrescar();crReabrirModal();
+  toast('↩️ Desfeito.','var(--muted)');
+}
+function crAvisoFechar(){
+  closeModal();
+  const d=crDiaRetorno;crDiaRetorno=null;
+  if(d)crAbrirDia(d);
+}
+function crAvisoAbrir(subId,via){
+  const a=crAcharSub(subId);if(!a)return;
+  const tr=crTrechosConferir(a.s);
+  crDiaRetorno=crModalDia;crModalDia=null;   // o aviso ocupa o modal; depois volta pro dia
+  openModal('⚠️ Conferir valores',`<div style="font-size:13px;line-height:1.6">
+    <div style="font-weight:900;margin-bottom:6px">${escapeHtml(a.s.name)}</div>
+    <div style="color:var(--text2);margin-bottom:10px">Este assunto tem valores que não devem ser decorados sem checar a fonte oficial. Leia os trechos marcados e confira antes de dar como concluído.</div>
+    ${tr.length?`<ul style="margin:0 0 12px 18px">${tr.map(t=>`<li>${escapeHtml(t)}</li>`).join('')}</ul>`:''}
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="crAvisoFechar()">Ainda não</button>
+      <button class="btn btn-primary" onclick="crConcluir('${escapeAttrJs(subId)}','${via==='ja-sei'?'ja-sei':'estudado'}',true)">Li o aviso e conferi — concluir</button>
+    </div></div>`);
+}
+
+// ---- Simulados (domingo, diagnóstico e prova completa) ----
+function crEhFgv(q){return/fgv/i.test([q.banca,q.fonte,q.origem,q.provaBanca].filter(Boolean).join(' '));}
+// Sorteia n questões na proporção dos blocos da prova; FGV primeiro dentro de cada bloco.
+function crSelecionar(pool,n,alvosAbs,plano){
+  const embaralhar=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+  const grupos={};
+  Object.keys(CRON_BLOCOS).forEach(b=>grupos[b]=[]);
+  pool.forEach(q=>{const m=plano.meta.get(q.subId);grupos[m?m.bloco:'esp'].push(q);});
+  Object.keys(grupos).forEach(b=>{const l=embaralhar(grupos[b]);grupos[b]=l.filter(crEhFgv).concat(l.filter(q=>!crEhFgv(q)));});
+  // Maior resto: 30 questões em 50/25/17/8% dão 15/8/5/2, nunca 31.
+  let alvos=alvosAbs;
+  if(!alvos){
+    const base=Object.keys(CRON_PESOS).map(b=>({b,v:n*CRON_PESOS[b]}));
+    alvos={};let tot=0;
+    base.forEach(x=>{alvos[x.b]=Math.floor(x.v+1e-9);tot+=alvos[x.b];});
+    base.sort((a,b)=>(b.v-Math.floor(b.v+1e-9))-(a.v-Math.floor(a.v+1e-9)));
+    for(let i=0;tot<n;i=(i+1)%base.length){alvos[base[i].b]++;tot++;}
+  }
+  const out=[];
+  Object.keys(alvos).forEach(b=>{out.push(...grupos[b].splice(0,alvos[b]));});
+  // O que faltou (bloco sem questão suficiente) sai dos blocos que ainda têm, na ordem de peso.
+  const ordem=Object.keys(CRON_PESOS).concat(['comp']);
+  while(out.length<n&&ordem.some(b=>grupos[b].length)){
+    for(const b of ordem){if(out.length>=n)break;if(grupos[b].length)out.push(grupos[b].shift());}
+  }
+  return embaralhar(out).slice(0,n);
+}
+function crSubsDaSemana(ds,plano){
+  const ini=addDays(ds,-6),fim=addDays(ds,-1),ids=new Set();
+  plano.dias.forEach(d=>{if(d.t==='est'&&d.ds>=ini&&d.ds<=fim)d.orig.forEach(id=>ids.add(id));});
+  Object.keys(plano.st.feitos).forEach(id=>{const f=plano.st.feitos[id];if(f.em>=ini&&f.em<=fim)ids.add(id);});
+  return ids;
+}
+function crAbrirTreino(sel,titulo){
+  if(!sel.length){toast('Nenhuma questão no Acervo para esse recorte ainda.','var(--muted)');return false;}
+  showScreen('simgeral');
+  if(!document.getElementById('screen-simgeral').classList.contains('active'))return false;   // plano travado
+  if(!treinoIniciar(sel,{titulo}))return false;
+  renderSimGeralScreen();window.scrollTo(0,0);
+  return true;
+}
+function crSimuladoSemana(ds,n){
+  const p=crPlano(),subs=crSubsDaSemana(ds,p);
+  const pool=treinoPoolCompleto().filter(q=>subs.has(q.subId));
+  if(!pool.length){toast('Nenhuma questão no Acervo para os assuntos desta semana ainda.','var(--muted)');return;}
+  crAbrirTreino(crSelecionar(pool,n||CRON_LOTE_SIMULADO,null,p),`Simulado da semana · ${crFmtData(ds)}`);
+}
+function crErrosSemana(ds){
+  const p=crPlano(),subs=crSubsDaSemana(ds,p);
+  const pool=treinoPoolCompleto().filter(q=>subs.has(q.subId)&&q.ultimoResultado==='X');
+  if(!pool.length){toast('✅ Nenhum erro pendente nos assuntos desta semana.','var(--green)');return;}
+  crAbrirTreino(pool,`Erros da semana · ${crFmtData(ds)}`);
+}
+function crSimuladoDiagnostico(){
+  // Só o que cai na prova: a trilha complementar não entra no diagnóstico.
+  const p=crPlano(),pool=treinoPoolCompleto().filter(q=>p.meta.has(q.subId)&&p.meta.get(q.subId).bloco!=='comp');
+  crAbrirTreino(crSelecionar(pool,30,{esp:10,pol:8,leg:3,por:3},p),'Simulado diagnóstico');
+}
+function crSimuladoCompleto(){
+  const p=crPlano(),pool=treinoPoolCompleto().filter(q=>p.meta.has(q.subId)&&p.meta.get(q.subId).bloco!=='comp');
+  crAbrirTreino(crSelecionar(pool,60,null,p),'Simulado completo · 60 questões');
+}
+function crErrosPendentesN(ds,p){
+  const subs=crSubsDaSemana(ds,p);
+  return treinoPoolCompleto().filter(q=>subs.has(q.subId)&&q.ultimoResultado==='X').length;
+}
+
+// ---- Interface ----
+function crRefrescar(){
+  if(typeof renderWeeklyPlan==='function')renderWeeklyPlan();
+}
+let crModalDia=null,crDiaRetorno=null;
+function crReabrirModal(){
+  const m=document.getElementById('modal');
+  if(crModalDia&&m&&m.classList.contains('open'))crAbrirDia(crModalDia,true);
+}
+function crLinhaAssuntoHTML(id,p,ds){
+  const m=p.meta.get(id);if(!m)return'';
+  const f=p.st.feitos[id],aid=escapeAttrJs(id);
+  const conf=crConferir(m.sub);
+  const nome=`<div class="cron-ass-nome">${escapeHtml(m.sub.name)}${conf?' <span class="cron-conf" title="Tem valores marcados para conferir">⚠️ conferir valores</span>':''}</div>`;
+  if(f)return`<div class="cron-ass cron-ass-ok">${nome}<span class="cron-ass-st">${f.via==='ja-sei'?'⚡ já sabia':'✅ concluído'} · ${crFmtData(f.em)}</span>${f.em===todayStr()?`<button class="btn btn-xs btn-ghost" onclick="crDesfazer('${aid}')" title="Desfazer">↩</button>`:''}</div>`;
+  return`<div class="cron-ass">${nome}<span class="cron-ass-st">~${m.min} min</span>
+    <button class="btn btn-xs btn-primary" onclick="crConcluir('${aid}','estudado')">✓ Concluí</button>
+    <button class="btn btn-xs btn-ghost" onclick="crConcluir('${aid}','ja-sei')" title="Já sei: dá como concluído, gera as revisões e puxa o próximo da fila">⚡ Já sei</button></div>`;
+}
+function crChecklistHTML(ids,p,ds){
+  const faixas=crFaixas(ids,p);
+  return faixas.map(g=>`<div class="cron-cap"><div class="cron-cap-tit">${escapeHtml(crNomeCap(g.cap))} <span>assuntos ${g.faixa} de ${g.total} · ${g.feitos}/${g.n}</span></div>${g.ids.map(id=>crLinhaAssuntoHTML(id,p,ds)).join('')}</div>`).join('');
+}
+function crDiaTitulo(d,p){
+  const dn=CRON_DOW[crDow(d.ds)]+' '+crFmtData(d.ds);
+  return dn;
+}
+function crAbrirDia(ds,silencioso){
+  const p=crPlano();
+  crModalDia=ds;
+  const d=p.calendario.find(x=>x.ds===ds)||p.dias.find(x=>x.ds===ds);
+  if(!d)return;
+  let corpo='';
+  if(d.t==='est'){
+    const ids=ds===p.hoje?p.hojeAtual:(ds<p.hoje?d.orig:d.atual);
+    corpo=ids.length?crChecklistHTML(ids,p,ds):'<div class="cron-vazio">Sem assunto novo neste dia — folga para questões e revisão dos erros.</div>';
+    if(ds<p.hoje&&ids.some(id=>!p.st.feitos[id]))corpo='<div class="cron-aviso">O que ficou pra trás já foi remarcado para os próximos dias de estudo.</div>'+corpo;
+  }else corpo=crDiaEspecialHTML(d,p,true);
+  openModal('📅 '+crDiaTitulo(d,p),`<div class="cron-modal">${corpo}</div>`);
+}
+function crDiaEspecialHTML(d,p,completo){
+  if(d.t==='fer')return`<div class="cron-esp">🎉 <b>Feriado</b> — só revisão leve (flashcards e dicas) por 1 hora. O conteúdo desliza.</div>`;
+  if(d.t==='fin'){
+    const i=Math.max(0,p.calendario.filter(x=>x.t==='fin'&&x.ds<d.ds).length);
+    const f=CRON_FINAL[Math.min(i,CRON_FINAL.length-1)];
+    return`<div class="cron-esp">${f[0]} <b>${escapeHtml(f[1])}</b><div class="cron-esp-txt">${escapeHtml(f[2])}</div>${i===4?`<button class="btn btn-xs btn-primary" onclick="crSimuladoCompleto()">▶ Abrir o simulado de 60</button>`:''}</div>`;
+  }
+  if(d.t==='rev'){
+    const ultimo=!p.calendario.some(x=>x.ds>d.ds&&(x.t==='rev'||x.t==='fin'||x.t==='est'));
+    if(ultimo&&p.calendario.some(x=>x.t==='fin')){
+      return`<div class="cron-esp">${CRON_DESCANSO[0]} <b>${CRON_DESCANSO[1]}</b><div class="cron-esp-txt">${CRON_DESCANSO[2]}</div>
+        <button class="btn btn-xs btn-ghost" onclick="crErrosSemana('${d.ds}')">🩹 Erros da semana</button></div>`;
+    }
+    const n=crErrosPendentesN(d.ds,p);
+    return`<div class="cron-esp">📝 <b>Revisão semanal</b><div class="cron-esp-txt">Refazer os erros, revisar os assuntos da semana (D+1/D+7) e o simulado de 30. Sem assunto novo.</div>
+      <div class="cron-esp-acoes"><button class="btn btn-xs btn-primary" onclick="crSimuladoSemana('${d.ds}')">▶ Simulado de 30</button>
+      <button class="btn btn-xs btn-ghost" onclick="crErrosSemana('${d.ds}')">🩹 Erros da semana${n?' · '+n:''}</button></div></div>`;
+  }
+  return'';
+}
+// Cartão do cronograma dentro da coluna de cada dia da agenda.
+function crDiaCartaoHTML(ds,p){
+  const d=p.calendario.find(x=>x.ds===ds);
+  if(!d)return'';
+  if(d.t==='est'){
+    const ids=ds===p.hoje?p.hojeAtual:d.atual;
+    if(!ids.length)return`<div class="cron-dia cron-folga" onclick="crAbrirDia('${ds}')">🟢 <b>Folga</b> · questões e revisão de erros</div>`;
+    const faixas=crFaixas(ids,p),feitos=ids.filter(id=>p.st.feitos[id]).length;
+    const conf=ids.some(id=>{const m=p.meta.get(id);return m&&!p.st.feitos[id]&&crConferir(m.sub);});
+    const dn=p.dias.findIndex(x=>x.ds===ds);
+    return`<div class="cron-dia${d.extra?' cron-extra':''}" onclick="crAbrirDia('${ds}')" title="Abrir o dia">
+      <div class="cron-dia-topo"><b>${ids.length} assunto${ids.length>1?'s':''}</b><span>${feitos}/${ids.length}${conf?' ⚠️':''}</span></div>
+      ${faixas.map(g=>`<div class="cron-dia-lin${g.feitos===g.n?' cron-feito':''}"><span class="cron-dia-nome" title="${escapeHtml(g.cap.nome)}">${escapeHtml(crNomeCap(g.cap))}</span><span class="cron-dia-faixa">${g.faixa}</span></div>`).join('')}
+    </div>`;
+  }
+  return`<div class="cron-dia cron-esp-card" onclick="crAbrirDia('${ds}')">${crDiaEspecialMini(d,p)}</div>`;
+}
+function crDiaEspecialMini(d,p){
+  if(d.t==='fer')return'🎉 <b>Feriado</b> · revisão leve 1h';
+  if(d.t==='fin'){
+    const i=Math.min(p.calendario.filter(x=>x.t==='fin'&&x.ds<d.ds).length,CRON_FINAL.length-1);
+    return`${CRON_FINAL[i][0]} <b>${escapeHtml(CRON_FINAL[i][1])}</b>`;
+  }
+  const ultimo=!p.calendario.some(x=>x.ds>d.ds)&&p.calendario.some(x=>x.t==='fin');
+  return ultimo?`${CRON_DESCANSO[0]} <b>${CRON_DESCANSO[1]}</b>`:'📝 <b>Revisão semanal</b> · simulado de 30';
+}
+function crCabecalhoHTML(){
+  const p=crPlano();
+  if(!crAtivo()){
+    return`<div class="cron-card cron-off"><div><b>📅 Cronograma Ebserh · HU Brasil</b><div class="cron-sub">${crFmtData(CRON_DADOS.inicio)} → ${crFmtData(CRON_DADOS.fim)}/2027 · ${p.total} assuntos em ${p.totalDias} dias de estudo, com revisão e simulado todo domingo.</div>
+      ${p.falt.length?`<div class="cron-aviso">${p.falt.length} capítulo${p.falt.length>1?'s':''} do prompt não ${p.falt.length>1?'estão':'está'} no seu Mapa: ${escapeHtml(p.falt.slice(0,4).join('; '))}${p.falt.length>4?'…':''}</div>`:''}</div>
+      <button class="btn btn-sm btn-primary" onclick="crAtivar()">Ativar cronograma</button></div>`;
+  }
+  const dia=p.antes?`Começa em ${daysDiff(p.hoje,CRON_DADOS.inicio)} dia${daysDiff(p.hoje,CRON_DADOS.inicio)>1?'s':''}`
+    :p.depois?'Cronograma concluído':`Dia ${p.diaN} de ${p.totalDias}`;
+  const atraso=p.atrasados.length?`<span class="cron-pill cron-pill-ruim" title="Planejado pra antes de hoje e ainda não concluído. Já foi redistribuído nos próximos dias de estudo.">⏰ Atraso: ${p.atrasados.length} assunto${p.atrasados.length>1?'s':''} (~${(p.atrasados.length/Math.max(1,Math.round(p.total/p.totalDias))).toFixed(1).replace('.',',')} dia) · remarcado</span>`
+    :`<span class="cron-pill cron-pill-bom">✅ Em dia</span>`;
+  const folga=p.folgaDias>0&&p.pendentes>=0&&p.hoje>=CRON_DADOS.inicio
+    ?`<span class="cron-pill cron-pill-bom">🟢 Folga: ${p.folgaDias} dia${p.folgaDias>1?'s':''}</span>`:'';
+  const encurta=p.encurtarPara||p.encurtado
+    ?`<button class="btn btn-xs btn-ghost" onclick="crAlternarEncurtar()">${p.encurtado?'↩ Voltar fim para 31/01':'⏩ Encurtar fim para '+crFmtData(p.encurtarPara)}</button>`:'';
+  const prova=p.prova?`<span class="cron-pill">🎯 Prova ${crFmtData(p.prova.data)} · em ${Math.max(0,daysDiff(p.hoje,p.prova.data))} dias</span>`
+    :`<span class="cron-pill cron-pill-mudo" title="Cadastre a data em Editais">🎯 Cadastre a data da prova em Editais</span>`;
+  const meta=p.hojeAtual.length?`<span class="cron-pill cron-pill-meta">📌 Hoje: ${p.hojeAtual.length} assunto${p.hojeAtual.length>1?'s':''} · ~${crFmtMin(p.hojeMin)}</span>`
+    :`<span class="cron-pill cron-pill-mudo">${p.antes?'Semana de preparação':p.hojeDia&&p.hojeDia.t==='rev'?'Domingo: revisão e simulado':p.hojeDia&&p.hojeDia.t==='fer'?'Feriado: revisão leve':p.hojeDia&&p.hojeDia.t==='fin'?'Semana final':'Sem assunto novo hoje'}</span>`;
+  const bl=Object.keys(CRON_BLOCOS).filter(b=>p.blocos[b].tot).map(b=>{
+    const x=p.blocos[b],pc=Math.round(100*x.feito/x.tot);
+    return`<div class="cron-bloco" title="${x.feito} de ${x.tot} assuntos"><div class="cron-bloco-top"><span>${CRON_BLOCOS[b]}</span><b>${pc}%</b></div><div class="cron-bloco-barra"><i style="width:${pc}%"></i></div></div>`;
+  }).join('');
+  const prep=p.antes?`<div class="cron-prep">📋 <b>Antes de começar:</b> faça o simulado diagnóstico de 30 questões (10 específicos, 8 SUS e Saúde Pública, 6 Legislação Ebserh e Português, 6 mistas). <button class="btn btn-xs btn-primary" onclick="crSimuladoDiagnostico()">▶ Abrir diagnóstico</button></div>`:'';
+  const falt=p.falt.length?`<div class="cron-aviso">${p.falt.length} capítulo${p.falt.length>1?'s':''} do prompt não ${p.falt.length>1?'estão':'está'} no seu Mapa: ${escapeHtml(p.falt.slice(0,4).join('; '))}${p.falt.length>4?'…':''}</div>`:'';
+  const hoje=p.hojeAtual.length?`<details class="cron-hoje" open><summary>📌 Hoje · ${p.hojeAtual.filter(id=>p.st.feitos[id]).length}/${p.hojeAtual.length} concluídos</summary>${crChecklistHTML(p.hojeAtual,p,p.hoje)}</details>`
+    :(p.hojeDia&&(p.hojeDia.t==='rev'||p.hojeDia.t==='fer'||p.hojeDia.t==='fin')?`<div class="cron-hoje-esp">${crDiaEspecialHTML(p.hojeDia,p,true)}</div>`:'');
+  return`<div class="cron-card">
+    <div class="cron-linha"><span class="cron-pill cron-pill-dia">${dia}</span>${meta}${atraso}${folga}${prova}<span class="cron-pill cron-pill-mudo">Fim ${crFmtData(p.fimAtual)}</span></div>
+    <div class="cron-progresso">${bl}</div>
+    <div class="cron-ferr">
+      <span class="cron-total">${p.feitosN}/${p.total} assuntos</span>${encurta}
+      <button class="btn btn-xs btn-ghost" onclick="crAbrirPlano()">🗓️ Cronograma completo</button>
+      <button class="btn btn-xs btn-ghost" onclick="crAbrirConfig()" title="Opções">⚙️</button>
+    </div>${prep}${falt}${hoje}</div>`;
+}
+function crAbrirPlano(){
+  const p=crPlano();crModalDia=null;
+  const semanas=[];
+  p.calendario.forEach(d=>{
+    const ini=addDays(d.ds,-((crDow(d.ds)+6)%7));          // segunda da semana
+    let s=semanas.find(x=>x.ini===ini);if(!s){s={ini,dias:[]};semanas.push(s);}
+    s.dias.push(d);
+  });
+  const html=semanas.map((s,i)=>{
+    const ids=s.dias.filter(d=>d.t==='est').flatMap(d=>d.ds<p.hoje||d.ds===p.hoje?(d.ds===p.hoje?p.hojeAtual:d.orig):d.atual);
+    const feitos=ids.filter(id=>p.st.feitos[id]).length;
+    const linhas=s.dias.map(d=>{
+      const rot=CRON_DOW[crDow(d.ds)]+' '+crFmtData(d.ds);
+      let txt='';
+      if(d.t==='est'){const ids2=d.ds===p.hoje?p.hojeAtual:(d.ds<p.hoje?d.orig:d.atual);
+        txt=ids2.length?crFaixas(ids2,p).map(g=>`${escapeHtml(crNomeCap(g.cap))} ${g.faixa}`).join(' · '):'folga';}
+      else txt=d.t==='fer'?'Feriado · revisão leve':d.t==='fin'?'Semana final':'Revisão semanal + simulado de 30';
+      return`<div class="cron-plano-dia${d.ds===p.hoje?' cron-hoje-lin':''}" onclick="crAbrirDia('${d.ds}')"><b>${rot}</b> <span>${txt}</span></div>`;
+    }).join('');
+    return`<details class="cron-plano-sem"${s.dias.some(d=>d.ds===p.hoje)||(i===0&&p.antes)?' open':''}><summary>Semana ${i+1} · ${crFmtData(s.dias[0].ds)}–${crFmtData(s.dias[s.dias.length-1].ds)}${ids.length?` · ${feitos}/${ids.length}`:''}</summary>${linhas}</details>`;
+  }).join('');
+  openModal('🗓️ Cronograma completo',`<div class="cron-modal">${html}</div>`);
+}
+function crAbrirConfig(){
+  const st=crEstado();crModalDia=null;
+  openModal('⚙️ Cronograma',`<div class="cron-modal">
+    <label class="banco-check"><input type="checkbox" ${st.complementar?'checked':''} onchange="crAlternarComplementar()"> Incluir a trilha complementar (Dir. Administrativo, História de Campina Grande, Informática) — fora do edital da Ebserh</label>
+    <div class="cron-sub" style="margin:10px 0">Se faltar tempo, desmarque primeiro a trilha complementar e depois reduza o Português.</div>
+    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
+      <button class="btn btn-xs btn-ghost" style="color:var(--red-t)" onclick="crDesativar()">Desativar cronograma</button>
+      <button class="btn btn-sm btn-primary" onclick="closeModal()">Fechar</button></div></div>`);
+}
+function renderCronCabecalho(){
+  const el=document.getElementById('cron-head');
+  if(el)el.innerHTML=crCabecalhoHTML();
+}
+
 function renderWeeklyPlan(){
   const el=document.getElementById('weekly-plan');
   if(!el)return;
+  renderCronCabecalho();
+  const cronP=crAtivo()?crPlano():null;   // cronograma ativo: cada dia ganha o cartão dele
   if(!db.weeklyPlan)db.weeklyPlan={};
   // As datas saem de todayStr()/addDays, nao de new Date() do aparelho. O resto do app
   // (revisoes, fila, grafico) conta o dia em Brasilia; construir esta grade com a data
@@ -25301,6 +25875,7 @@ function renderWeeklyPlan(){
         <div class="plan-item-body"><div class="plan-item-text">${escapeHtml(item.name)}</div>${item.subId&&(item.topic||item.kingdom)?`<div class="plan-item-sub">${escapeHtml(item.topic||'')} · ${escapeHtml(item.kingdom||'')}</div>`:''}</div>
         <button class="plan-rm" onclick="removePlanItem('${day.ds}',${idx})" title="Remover">✕</button>
       </div>`).join('');
+    const cronHtml=cronP?crDiaCartaoHTML(day.ds,cronP):'';
     return`<div class="day-col${day.isToday?' today-col':''}">
       <div class="day-header" style="color:${day.isToday?'var(--accent)':'var(--text2)'}">
         <div class="day-when">
@@ -25310,7 +25885,7 @@ function renderWeeklyPlan(){
         ${day.isToday?'<span class="day-today-pill">HOJE</span>':''}
       </div>
       <button class="plan-add-btn" onclick="openAddPlanItem('${day.ds}')" title="Adicionar">＋</button>
-      <div class="day-items">${itemsHtml}${!itemsHtml
+      <div class="day-items">${cronHtml}${itemsHtml}${!itemsHtml&&!cronHtml
         ? (isSun
             ?`<div class="plan-empty-day" style="cursor:pointer" title="Domingo é dia de descanso — mas dá pra marcar alguma coisa, se quiser" onclick="openAddPlanItem('${day.ds}')">🌟<span class="plan-lbl"> Descanso</span></div>`
             :`<div class="plan-empty-day" style="cursor:pointer" title="Adicionar" onclick="openAddPlanItem('${day.ds}')">＋<span class="plan-lbl"> Adicionar</span></div>`)
