@@ -52,6 +52,7 @@ async def main():
             print('\n=== 4) digitar num campo comum, fora de modal ===')
             await page.evaluate("()=>showScreen('editais')")
             await page.wait_for_timeout(400)
+            await page.evaluate("()=>{document.getElementById('ed-novo').open=true;}")
             await page.click('#ed-nome')
             await page.fill('#ed-nome','')
             await page.type('#ed-nome',TXT,delay=20)

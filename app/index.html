@@ -2284,6 +2284,22 @@ nav{
   /* quatro colunas numa tela de 393px dao 85px cada; em duas o numero respira */
   .fc-boss-stats{grid-template-columns:repeat(2,1fr)!important;}
 }
+.ed-novo-sum{cursor:pointer;font-size:12px;font-weight:900;color:var(--accent);letter-spacing:1px;text-transform:uppercase;list-style:none;}
+.ed-novo-sum::-webkit-details-marker{display:none;}
+.ed-feitos{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
+.ed-feitos-tit{font-size:12px;font-weight:900;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:18px 0 8px;}
+.ed-feitos-dica{font-size:13px;font-weight:700;color:var(--muted);text-align:center;padding:10px 0;}
+.ed-feito{background:var(--panel);border:1.5px solid var(--border);border-radius:12px;}
+.ed-feito[open]{padding-bottom:10px;}
+.ed-feito>summary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 14px;cursor:pointer;list-style:none;font-size:13px;}
+.ed-feito>summary::-webkit-details-marker{display:none;}
+.ed-feito>.edital-card{margin:8px 10px 0;box-shadow:none;animation:none;}
+.ed-feito-icone{font-size:20px;}
+.ed-feito-nome{font-weight:900;color:var(--text);}
+.ed-feito-meta{color:var(--muted);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ed-feito-data{color:var(--text2);font-weight:700;font-variant-numeric:tabular-nums;}
+.ed-feito-ok{color:var(--green-t);font-weight:800;font-size:12px;}
+.ed-feito-aviso{color:var(--orange-t);font-weight:800;font-size:12px;}
 .edital-card{
   background:var(--panel);border:2px solid transparent;border-radius:18px;padding:20px;
   margin-bottom:12px;box-shadow:0 2px 12px rgba(0,0,0,0.05);
@@ -3843,8 +3859,9 @@ body.missao-ligada .dash-v2 .div-btn:hover{text-decoration:underline;filter:none
   <div class="sec-title">📋 Painel de Editais & Provas</div>
 
   <!-- Formulário de adição -->
-  <div class="section-card" style="margin-bottom:18px">
-    <div style="font-size:12px;font-weight:900;color:var(--accent);letter-spacing:1px;margin-bottom:14px;text-transform:uppercase">➕ Adicionar Novo Edital</div>
+  <details class="section-card ed-novo" id="ed-novo" style="margin-bottom:14px">
+    <summary class="ed-novo-sum">➕ Adicionar novo edital</summary>
+    <div style="height:12px"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px" class="edital-form-grid">
       <input class="inp" id="ed-nome" placeholder="Nome do concurso / órgão (ex: EBSERH Nordeste)">
       <input class="inp" id="ed-cargo" placeholder="Cargo (ex: Enfermeiro — Área Assistencial)">
@@ -3872,16 +3889,10 @@ body.missao-ligada .dash-v2 .div-btn:hover{text-decoration:underline;filter:none
       </div>
       <button class="btn btn-primary" onclick="addEdital()" style="margin-left:auto"><i class="fa fa-plus"></i> Adicionar Edital</button>
     </div>
-  </div>
+  </details>
 
   <!-- Filtros de status -->
-  <div class="filter-row" id="edital-filter-row">
-    <button class="chip active" onclick="filterEditais('all',this)">📋 Todos</button>
-    <button class="chip" onclick="filterEditais('inscricoes',this)">✏️ Inscrições</button>
-    <button class="chip" onclick="filterEditais('inscrito',this)">✅ Inscrito</button>
-    <button class="chip" onclick="filterEditais('aguardando',this)">⏳ Aguardando</button>
-    <button class="chip" onclick="filterEditais('realizado',this)">🎯 Realizados</button>
-  </div>
+  <div class="filter-row" id="edital-filter-row"></div>
 
   <!-- Contador rápido -->
   <div id="edital-counters" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px"></div>
@@ -25542,7 +25553,7 @@ function gainXP(n){
 }
 
 // ===== EDITAIS =====
-let edFilter='all';
+let edFilter='ativos';   // padrão: o que ainda vai acontecer; os já feitos saem da frente
 
 const ED_STATUS_MAP={
   previsto:  {label:'📅 Data prevista', cls:'ed-status-previsto'},
@@ -25570,6 +25581,7 @@ function addEdital(){
   ['ed-nome','ed-cargo','ed-banca','ed-data'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('ed-icon').value='';
   toast('📋 Edital adicionado!','var(--accent)');
+  const nov=document.getElementById('ed-novo');if(nov)nov.open=false;
   renderEditais();updateEditaisBadge();
 }
 
@@ -25584,14 +25596,15 @@ function changeEditalStatus(id,newStatus){
   const e=(db.editais||[]).find(x=>x.id===id);
   if(!e)return;
   e.status=newStatus;
+  // Prova feita não deve seguir puxando a Fila de Hoje.
+  const eraFoco=newStatus==='realizado'&&db.editalFoco===id;
+  if(eraFoco)db.editalFoco=null;
   saveDB();renderEditais();updateEditaisBadge();
-  toast(`Status atualizado: ${ED_STATUS_MAP[newStatus]?.label||newStatus}`,'var(--green)');
+  toast(eraFoco?'🎯 Prova realizada — saiu do foco da Fila de Hoje.':`Status atualizado: ${ED_STATUS_MAP[newStatus]?.label||newStatus}`,'var(--green)');
 }
 
-function filterEditais(f,el){
+function filterEditais(f){
   edFilter=f;
-  document.querySelectorAll('#edital-filter-row .chip').forEach(c=>c.classList.remove('active'));
-  el.classList.add('active');
   renderEditais();
 }
 
@@ -26165,50 +26178,28 @@ RESPONDA APENAS COM JSON, sem markdown:
   }
 }
 
-function renderEditais(){
-  (db.editais||[]).forEach(e=>edVincular(edMigrar(e)));
-  const today=todayStr();
-  let list=(db.editais||[]);
-  if(edFilter!=='all')list=list.filter(e=>e.status===edFilter);
-  list=[...list].sort((a,b)=>a.data.localeCompare(b.data));
+// "Feito" = a prova já foi (status realizado) OU a data já passou. O segundo caso pega
+// o edital que ficou como "Inscrito" depois da prova: antes ele aparecia no meio da lista
+// com o contador dizendo REALIZADO e o status dizendo outra coisa.
+function edFeito(e,hoje){return e.status==='realizado'||!!(e.data&&e.data<hoje);}
+function edDataCurta(d){return d?d.split('-').reverse().join('/'):'sem data';}
 
-  // Contadores rápidos
-  const all=db.editais||[];
-  const counts={
-    total:all.length,
-    inscricoes:all.filter(e=>e.status==='inscricoes').length,
-    inscrito:all.filter(e=>e.status==='inscrito').length,
-    aguardando:all.filter(e=>e.status==='aguardando').length,
-    realizado:all.filter(e=>e.status==='realizado').length,
-    proximos:all.filter(e=>e.status!=='realizado'&&e.data>=today&&daysDiff(today,e.data)<=30).length,
-  };
-  document.getElementById('edital-counters').innerHTML=[
-    {icon:'📋',val:counts.total,lbl:'Total',color:'var(--text2)'},
-    {icon:'✅',val:counts.inscrito,lbl:'Inscrito',color:'var(--green)'},
-    {icon:'⏳',val:counts.aguardando,lbl:'Aguardando',color:'var(--accent)'},
-    {icon:'🔥',val:counts.proximos,lbl:'Em 30 dias',color:'var(--red)'},
-  ].map(c=>`<div class="ed-counter-pill" style="border-color:${c.color}30"><span style="font-size:14px">${c.icon}</span><span style="color:${c.color};font-size:15px;font-weight:900">${c.val}</span><span>${c.lbl}</span></div>`).join('');
-
-  const el=document.getElementById('editais-list');
-  if(!list.length){
-    el.innerHTML=`<div class="empty"><i class="fa fa-file-circle-plus"></i><p>Nenhum edital cadastrado${edFilter!=='all'?' neste filtro':''}.<br>Adicione o primeiro acima!</p></div>`;return;
+function edCartaoHTML(e,today,feito){
+  const dias=e.data?daysDiff(today,e.data):0;
+  const passou=!!e.data&&dias<0;
+  const urgente=!passou&&e.data&&dias<=7&&e.status!=='realizado';
+  const st=ED_STATUS_MAP[e.status]||{label:e.status,cls:'ed-status-previsto'};
+  let diasHtml='';
+  if(passou){
+    diasHtml=`<div class="edital-countdown"><div class="edital-dias-num" style="color:var(--muted)">—</div><div class="edital-dias-lbl" style="color:var(--muted)">REALIZADO</div></div>`;
+  } else {
+    const diasColor=dias<=7?'var(--red-t)':dias<=30?'var(--orange-t)':'var(--accent)';
+    diasHtml=`<div class="edital-countdown ${urgente?'edital-urgente':''}">
+      <div class="edital-dias-num" style="color:${diasColor}">${dias}</div>
+      <div class="edital-dias-lbl" style="color:${diasColor}">DIAS</div>
+    </div>`;
   }
-  el.innerHTML=list.map(e=>{
-    const dias=daysDiff(today,e.data);
-    const passou=dias<0;
-    const urgente=!passou&&dias<=7&&e.status!=='realizado';
-    const st=ED_STATUS_MAP[e.status]||{label:e.status,cls:'ed-status-previsto'};
-    let diasHtml='';
-    if(passou){
-      diasHtml=`<div class="edital-countdown"><div class="edital-dias-num" style="color:var(--muted)">—</div><div class="edital-dias-lbl" style="color:var(--muted)">REALIZADO</div></div>`;
-    } else {
-      const diasColor=dias<=7?'var(--red-t)':dias<=30?'var(--orange-t)':'var(--accent)';
-      diasHtml=`<div class="edital-countdown ${urgente?'edital-urgente':''}">
-        <div class="edital-dias-num" style="color:${diasColor}">${dias}</div>
-        <div class="edital-dias-lbl" style="color:${diasColor}">DIAS</div>
-      </div>`;
-    }
-    return`<div class="edital-card${e.status==='realizado'?' ed-realizado':''}" style="border-color:${e.color}35">
+  return`<div class="edital-card${e.status==='realizado'?' ed-realizado':''}" style="border-color:${e.color}35">
       <div style="position:absolute;top:0;left:0;right:0;height:4px;background:${e.color};border-radius:18px 18px 0 0"></div>
       <div class="edital-top">
         <div class="edital-icon">${e.icon}</div>
@@ -26226,21 +26217,88 @@ function renderEditais(){
       <div class="edital-bottom">
         <div class="edital-date-chip">
           <i class="fa fa-calendar" style="color:${e.color}"></i>
-          <span>${new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</span>
+          <span>${e.data?new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}):'sem data'}</span>
         </div>
         <div class="edital-actions">
-          ${db.editalFoco===e.id
+          ${feito?'':(db.editalFoco===e.id
             ?`<button class="btn btn-xs" style="background:${e.color};color:#fff;border:none" onclick="edFocar(null)" title="Parar de priorizar este edital na Fila de Hoje"><i class="fa fa-crosshairs"></i> Em foco</button>`
-            :`<button class="btn btn-xs btn-ghost" onclick="edFocar('${e.id}')" title="A Fila de Hoje passa a priorizar o que cai neste edital"><i class="fa fa-crosshairs"></i> Focar</button>`}
+            :`<button class="btn btn-xs btn-ghost" onclick="edFocar('${e.id}')" title="A Fila de Hoje passa a priorizar o que cai neste edital"><i class="fa fa-crosshairs"></i> Focar</button>`)}
           <select class="inp" style="font-size:12px;padding:4px 8px;border-radius:8px" onchange="changeEditalStatus('${e.id}',this.value)">
             ${Object.entries(ED_STATUS_MAP).map(([k,v])=>`<option value="${k}"${e.status===k?' selected':''}>${v.label}</option>`).join('')}
           </select>
-          <button class="btn btn-xs btn-danger" onclick="deleteEdital('${e.id}')"><i class="fa fa-trash"></i></button>
+          <button class="btn btn-xs btn-danger" onclick="deleteEdital('${e.id}')" aria-label="Remover edital" title="Remover edital"><i class="fa fa-trash"></i></button>
         </div>
       </div>
       ${edConteudoHTML(e)}
     </div>`;
-  }).join('');
+}
+// Já feito: uma linha. Clicar abre o cartão inteiro (conteúdo, status, remover).
+function edLinhaFeitoHTML(e,today){
+  const realizado=e.status==='realizado';
+  return`<details class="ed-feito">
+    <summary>
+      <span class="ed-feito-icone">${escapeHtml(e.icon)}</span>
+      <span class="ed-feito-nome">${escapeHtml(e.nome)}</span>
+      <span class="ed-feito-meta">${escapeHtml([e.cargo,e.banca].filter(Boolean).join(' · '))}</span>
+      <span class="ed-feito-data">${edDataCurta(e.data)}</span>
+      ${realizado?'<span class="ed-feito-ok">🎯 realizado</span>'
+        :`<span class="ed-feito-aviso">⚠️ prova já passou</span><button type="button" class="btn btn-xs btn-primary" onclick="event.preventDefault();event.stopPropagation();changeEditalStatus('${e.id}','realizado')">Marcar realizado</button>`}
+    </summary>
+    ${edCartaoHTML(e,today,true)}
+  </details>`;
+}
+function renderEditais(){
+  (db.editais||[]).forEach(e=>edVincular(edMigrar(e)));
+  const today=todayStr();
+  const all=db.editais||[];
+  const ativos=all.filter(e=>!edFeito(e,today)).sort((a,b)=>(a.data||'9999').localeCompare(b.data||'9999'));
+  const feitos=all.filter(e=>edFeito(e,today)).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  const nov=document.getElementById('ed-novo');
+  // Sem edital nenhum o formulário é o que importa, então abre sozinho — e fecha sozinho quando
+  // os editais aparecem (a tela pode renderizar antes dos dados chegarem da nuvem). Se a
+  // pessoa abriu por conta própria, não mexe.
+  if(nov){
+    if(!all.length){if(!nov.open){nov.open=true;nov.dataset.auto='1';}}
+    else if(nov.dataset.auto){nov.open=false;delete nov.dataset.auto;}
+  }
+
+  // Filtros com a contagem dentro — substituem as duas fileiras que repetiam o mesmo número.
+  const nSt=k=>ativos.filter(e=>e.status===k).length;
+  const chips=[
+    {k:'ativos',lbl:`📋 Em andamento · ${ativos.length}`,sempre:true},
+    {k:'inscricoes',lbl:`✏️ Inscrições · ${nSt('inscricoes')}`,n:nSt('inscricoes')},
+    {k:'inscrito',lbl:`✅ Inscrito · ${nSt('inscrito')}`,n:nSt('inscrito')},
+    {k:'aguardando',lbl:`⏳ Aguardando · ${nSt('aguardando')}`,n:nSt('aguardando')},
+    {k:'feitos',lbl:`🎯 Já feitos · ${feitos.length}`,sempre:true},
+    {k:'all',lbl:'Todos',sempre:true},
+  ].filter(c=>c.sempre||c.n||edFilter===c.k);
+  document.getElementById('edital-filter-row').innerHTML=chips.map(c=>
+    `<button class="chip${edFilter===c.k?' active':''}" onclick="filterEditais('${c.k}')">${c.lbl}</button>`).join('');
+
+  // Uma linha só: a próxima prova. O resto da contagem já está nos filtros.
+  const prox=ativos.find(e=>e.data&&e.data>=today);
+  document.getElementById('edital-counters').innerHTML=prox
+    ?`<div class="ed-counter-pill" style="border-color:var(--accent)"><span style="font-size:14px">🔥</span><span>Próxima prova:</span><b style="color:var(--text)">${escapeHtml(prox.nome)}</b><span style="color:var(--accent);font-weight:900">${daysDiff(today,prox.data)===0?'hoje':'em '+daysDiff(today,prox.data)+(daysDiff(today,prox.data)===1?' dia':' dias')}</span></div>`:'';
+
+  const el=document.getElementById('editais-list');
+  const cartoes=lista=>lista.map(e=>edCartaoHTML(e,today,false)).join('');
+  const linhas=lista=>`<div class="ed-feitos">${lista.map(e=>edLinhaFeitoHTML(e,today)).join('')}</div>`;
+  const vazio=msg=>`<div class="empty"><i class="fa fa-file-circle-plus"></i><p>${msg}</p></div>`;
+  const dicaFeitos=feitos.length?`<div class="ed-feitos-dica">🎯 ${feitos.length} já ${feitos.length===1?'feito':'feitos'} — <button type="button" class="sg-mais" style="margin:0" onclick="filterEditais('feitos')">ver</button></div>`:'';
+  let html='';
+  if(edFilter==='feitos'){
+    html=feitos.length?linhas(feitos):vazio('Nenhum edital já feito ainda.');
+  }else if(edFilter==='all'){
+    html=(ativos.length?cartoes(ativos):'')
+      +(feitos.length?`<div class="ed-feitos-tit">🎯 Já feitos · ${feitos.length}</div>${linhas(feitos)}`:'')
+      ||vazio('Nenhum edital cadastrado.<br>Adicione o primeiro acima!');
+  }else{
+    const lista=edFilter==='ativos'?ativos:ativos.filter(e=>e.status===edFilter);
+    html=lista.length?cartoes(lista)+(edFilter==='ativos'?dicaFeitos:'')
+      :vazio(edFilter==='ativos'?(all.length?'Nenhum edital em andamento.':'Nenhum edital cadastrado.<br>Adicione o primeiro acima!')+(all.length?'<br>':'')+'':'Nenhum edital neste filtro.')
+        +(edFilter==='ativos'?dicaFeitos:'');
+  }
+  el.innerHTML=html;
 }
 
 // ---- A dobra de conteúdo dentro do cartão do edital ----
