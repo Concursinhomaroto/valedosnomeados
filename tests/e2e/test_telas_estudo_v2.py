@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Redesign, fase A4: o formulario de chefao virou "Novo chefao" (mesmos campos/ids), a
-# linha do miniboss destaca "Estudar" e guarda renomear/excluir no "⋯", e a fila de
+# linha do miniboss destaca "Estudar", deixa Resumo/Fluxograma/Flashcards/Simulado/Dicas/Anotar/Revisões à vista e guarda renomear/excluir no "⋯", e a fila de
 # revisoes separa "Revisar" das outras tres — sem nenhum botao sair do DOM.
 import asyncio, sys
 sys.path.insert(0,'.')
@@ -46,7 +46,16 @@ async def main():
         assert r['primeiro']=='toggleTimer' and r['menuFechado']
         await page.click('#si-s0 .sub-acoes-mais > summary')
         r=await page.evaluate("()=>[...document.querySelectorAll('#si-s0 .sub-acoes-mais-menu button')].map(b=>b.checkVisibility())")
-        assert r==[True]*5, r   # rodada 2: Revisões, Anotar, Fluxograma, Renomear, Excluir
+        assert r==[True]*2, r   # o ⋯ guarda só Renomear e Excluir
+        r=await page.evaluate("""()=>{const it=document.getElementById('si-s0');
+          const sec=[...it.querySelectorAll('.sub-acoes-sec > button')];
+          const menu=it.querySelector('.sub-acoes-mais-menu');const bs=[...menu.querySelectorAll('button')].map(b=>b.getBoundingClientRect());
+          return {ordem:sec.map(b=>(b.getAttribute('onclick')||'').split('(')[0]).concat(sec.length?[]:[]),
+                  visiveis:sec.every(b=>b.checkVisibility()),
+                  menuHorizontal:getComputedStyle(menu).flexDirection==='row'&&Math.abs(bs[0].top-bs[1].top)<4};}""")
+        print('   fileira: %s · ⋯ horizontal: %s'%(r['ordem'],r['menuHorizontal']))
+        assert r['visiveis'] and r['menuHorizontal']
+        assert r['ordem'][:3]==['toggleResumo','toggleFluxo','toggleFlash'] and 'toggleNote' in r['ordem'] and r['ordem'][-1]=='showSubRevisions', r['ordem']
         await page.click('#si-s0 .sub-acoes-mais-menu .btn-danger')
         await page.wait_for_timeout(300)
         r=await page.evaluate("()=>db.topics.k1[0].subtopics.map(s=>s.id)")
