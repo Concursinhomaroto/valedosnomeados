@@ -2862,14 +2862,15 @@ body.missao-ligada #dash-overdue-revs{display:none;}
 .sub-actions{gap:8px;}
 .sub-actions>.btn:first-child{padding:8px 18px;font-size:13px;}
 .sub-acoes-sec{display:flex;flex-wrap:wrap;gap:5px;align-items:center;min-width:0;}
-.sub-acoes-sec>button{padding:4px 10px!important;font-size:12px!important;font-weight:700!important;border-radius:999px!important;
+.sub-acoes-sec>button{display:inline-flex!important;align-items:center;justify-content:center;gap:5px;min-height:28px;line-height:1.2!important;
+  padding:4px 12px!important;font-size:12px!important;font-weight:700!important;border-radius:999px!important;white-space:nowrap;
   background:var(--panel2)!important;color:var(--text2)!important;border:1px solid var(--border)!important;box-shadow:none!important;}
 .sub-acoes-sec>button:hover{border-color:var(--accent)!important;color:var(--accent)!important;}
 /* Já tem conteúdo (anotação, resumo, flashcards, simulado, fluxograma): marca discreta em roxo. */
 .sub-acoes-sec>:is(.btn-gold,.btn-purple-s,.btn-pink,.resumo-badge-done,.fluxo-badge-done){
   border-color:var(--accent)!important;color:var(--accent)!important;background:var(--st-acao-bg)!important;}
 .sub-acoes-mais{position:relative;margin-left:auto;}
-.sub-acoes-mais>summary{list-style:none;cursor:pointer;padding:3px 12px;border-radius:999px;border:1px solid var(--border);
+.sub-acoes-mais>summary{list-style:none;cursor:pointer;min-height:28px;display:inline-flex;align-items:center;padding:3px 12px;box-sizing:border-box;border-radius:999px;border:1px solid var(--border);
   font-weight:900;font-size:14px;line-height:1.4;color:var(--muted);background:var(--panel2);}
 .sub-acoes-mais>summary::-webkit-details-marker{display:none;}
 .sub-acoes-mais[open]>summary{color:var(--accent);border-color:var(--accent);}
@@ -3139,16 +3140,12 @@ button.dica-etq-assunto:hover{border-color:var(--accent);color:var(--accent);}
 .treino-destaque-eyebrow,.pill-ok,.pill-bad,.pill-neutro,.treinar-progresso-legenda span,
 #screen-simgeral .chip,.treino-foco-pct,.banco-chip-rotulo,.banco-chip,.banco-chip b{font-size:12px!important;}
 #screen-dashboard .gamify-lbl{letter-spacing:.2px;}
-/* Linha do miniboss: o "⋯" agora guarda Revisões, Anotar e Fluxograma (mesmos botões e
-   ids); um ponto avisa quando há anotação ou fluxograma lá dentro. */
-.sub-acoes-mais-menu{flex-direction:column;align-items:stretch;min-width:170px;}
-.sub-acoes-mais-menu>button{justify-content:flex-start;text-align:left;padding:6px 12px!important;font-size:12px!important;
-  font-weight:700!important;border-radius:8px!important;}
+/* Linha do miniboss: Resumo, Fluxograma, Flashcards, Simulado, Dicas, Anotar e Revisões ficam à vista, na
+   horizontal; o "⋯" guarda só o que custa caro clicar errado — Renomear e Excluir, lado a lado. */
+.sub-acoes-mais-menu{flex-direction:row;align-items:center;}
+.sub-acoes-mais-menu>button{padding:5px 12px!important;font-size:12px!important;font-weight:700!important;border-radius:999px!important;}
 .sub-acoes-mais-menu>button:not(.btn-danger){background:var(--panel2)!important;color:var(--text2)!important;
   border:1px solid var(--border)!important;box-shadow:none!important;}
-.sub-acoes-mais>summary.sub-acoes-tem{position:relative;}
-.sub-acoes-mais>summary.sub-acoes-tem::after{content:'';position:absolute;top:2px;right:4px;width:7px;height:7px;
-  border-radius:50%;background:var(--accent);}
 /* Na tela do Reino, "Mapa" continua marcado no menu. */
 @media(min-width:769px){
   body:has(#screen-kingdom.active) #nav-map{color:#fff;background:rgba(255,255,255,0.2);border-left-color:#fb923c;
@@ -8726,18 +8723,18 @@ function subItemHTML(s,topicId){
       <button class="${hasResumo?'resumo-badge-done':'resumo-badge-todo'}" onclick="toggleResumo('${s.id}')" id="resumo-btn-${s.id}" title="Anexe um arquivo pra IA gerar um resumo completo, com opção de ouvir">
         ${hasResumo?'✅ Resumo':'📄 Resumo'}
       </button>
+      <button class="${hasFluxo?'fluxo-badge-done':'fluxo-badge-todo'}" onclick="toggleFluxo('${s.id}')" id="fluxo-btn-${s.id}" title="Resumo visual em forma de fluxograma — a IA gera um rascunho e você pode editar depois">
+            ${hasFluxo?'✅ Fluxograma':'🔀 Fluxograma'}
+      </button>
       <button class="btn btn-sm ${flashCountSub(s.id)?'btn-purple-s':'btn-ghost'}" onclick="toggleFlash('${s.id}')" id="flash-btn-${s.id}"><i class="fa fa-layer-group"></i> Flashcards${flashCountSub(s.id)?` (${flashCountSub(s.id)})`:''}</button>
       <button class="btn btn-sm ${s.simStats?'btn-pink':'btn-ghost'}" onclick="toggleSim('${s.id}')" id="sim-btn-${s.id}"><i class="fa fa-list-check"></i> Simulado</button>
       ${dicasSubBotaoHTML(s.id)}
+      <button class="btn btn-sm ${hasNote?'btn-gold':'btn-ghost'}" onclick="toggleNote('${s.id}')" id="note-btn-${s.id}"><i class="fa fa-note-sticky"></i> ${hasNote?'Anotação':'Anotar'}</button>
+      <button class="btn btn-sm btn-cyan" onclick="showSubRevisions('${s.id}','${topicId}')"><i class="fa fa-calendar-check"></i> Revisões${revLocked?' 🔒':''}</button>
       </div>
       <details class="sub-acoes-mais">
-        <summary class="${hasNote||hasFluxo?'sub-acoes-tem':''}" title="Revisões, anotação, fluxograma, renomear, excluir" aria-label="Mais ações do miniboss">⋯</summary>
+        <summary title="Renomear ou excluir o miniboss" aria-label="Mais ações do miniboss">⋯</summary>
         <div class="sub-acoes-mais-menu" onclick="if(event.target.closest('button'))this.closest('details').open=false">
-          <button class="btn btn-sm btn-cyan" onclick="showSubRevisions('${s.id}','${topicId}')"><i class="fa fa-calendar-check"></i> Revisões${revLocked?' 🔒':''}</button>
-          <button class="btn btn-sm ${hasNote?'btn-gold':'btn-ghost'}" onclick="toggleNote('${s.id}')" id="note-btn-${s.id}"><i class="fa fa-note-sticky"></i> ${hasNote?'Anotação':'Anotar'}</button>
-          <button class="${hasFluxo?'fluxo-badge-done':'fluxo-badge-todo'}" onclick="toggleFluxo('${s.id}')" id="fluxo-btn-${s.id}" title="Resumo visual em forma de fluxograma — a IA gera um rascunho e você pode editar depois">
-            ${hasFluxo?'✅ Fluxograma':'🔀 Fluxograma'}
-          </button>
           <button class="btn btn-sm" onclick="renameSubtopic('${topicId}','${s.id}')" title="Renomear miniboss"><i class="fa fa-pen"></i> Renomear</button>
           <button class="btn btn-sm btn-danger" onclick="deleteSub('${topicId}','${s.id}')" title="Excluir miniboss"><i class="fa fa-trash"></i> Excluir</button>
         </div>
