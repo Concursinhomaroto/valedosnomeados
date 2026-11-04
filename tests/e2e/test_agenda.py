@@ -17,7 +17,7 @@ def seed():
 async def main():
     async with async_playwright() as p:
         b,page,errs=await setup_page(p,seed())
-        await page.evaluate("()=>{showScreen('dashboard');return true;}")
+        await page.evaluate("()=>{showScreen('agenda');return true;}")
         hoje=await page.evaluate("()=>todayStr()")
 
         print('=== A) os 7 dias saem de todayStr(), nao do relogio do aparelho ===')

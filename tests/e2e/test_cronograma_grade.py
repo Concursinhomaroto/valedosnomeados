@@ -144,7 +144,7 @@ async def main():
 
         print('=== H) celular: a pagina nao rola de lado com a grade aberta ===')
         await page.set_viewport_size({'width':375,'height':800})
-        r=await page.evaluate("()=>{closeModal();renderCronCabecalho();const g=document.querySelector('.cron-grade');return {w:document.documentElement.scrollWidth,iw:innerWidth,rolaPorDentro:g.scrollWidth>g.clientWidth};}")
+        r=await page.evaluate("()=>{closeModal();showScreen('agenda');crAba='grade';renderCronCabecalho();const g=document.querySelector('.cron-grade');return {w:document.documentElement.scrollWidth,iw:innerWidth,rolaPorDentro:g.scrollWidth>g.clientWidth};}")
         print('   %s'%r)
         assert r['w']<=r['iw']+1 and r['rolaPorDentro']
         print('   OK\n')
