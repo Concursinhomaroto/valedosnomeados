@@ -25457,6 +25457,8 @@ const CRON_FRACAO=0.66;
 const CRON_HORAS_PADRAO=4;
 const CRON_RESERVA_FINAL=7;                   // dias que a semana final precisa antes do prazo
 const CRON_MESES_PRAZO=3;
+// "Português: Foco para não errar" virou a aba Dicas (saiu do Mapa de propósito): não é capítulo faltando.
+const CRON_AGORA_DICAS=new Set(['_4sem8po']);
 const CRON_FERIADOS=['2026-11-20','2026-12-25','2027-01-01'];
 const CRON_MIN_JASEI=2;                       // "já sei" gasta ~2 min do dia, não os 22 do assunto
 const CRON_LOTE_SIMULADO=30;
@@ -25504,6 +25506,13 @@ const crCapMin=h=>Math.round(h*60*CRON_FRACAO);
 // Cabe mais um assunto no dia? Entra se pelo menos metade dele cabe (sem isso o dia estourava
 // quase um assunto inteiro todo dia). O primeiro de cada dia entra sempre.
 const crCabe=(acc,min,cap)=>acc===0||acc+min/2<=cap;
+// Início que vale ao ativar: se a data guardada já passou e nada foi concluído, começa hoje (senão
+// o plano nasceria com dias de atraso que não existem).
+function crInicioEfetivo(st,hoje){
+  if(!st.inicio)return addDays(hoje,1);
+  if(st.inicio<hoje&&!Object.keys(st.feitos||{}).length)return hoje;
+  return st.inicio;
+}
 function crFases(st,inicio){
   const f=(Array.isArray(st.fases)&&st.fases.length?st.fases:[{desde:'',horas:CRON_HORAS_PADRAO}])
     .map(x=>({desde:x.desde||inicio,horas:Number(x.horas)>0?Number(x.horas):CRON_HORAS_PADRAO}))
@@ -25556,7 +25565,7 @@ function crResolver(){
   const res=new Map(),falt=[];
   CRON_DADOS.cap.forEach(c=>{
     const r=porId.get(c.id)||porNome.get(normalizeForDedup(c.nome));
-    if(r)res.set(c.id,r);else falt.push(c.nome);
+    if(r)res.set(c.id,r);else if(!CRON_AGORA_DICAS.has(c.id))falt.push(c.nome);
   });
   return{res,falt};
 }
@@ -25605,7 +25614,7 @@ function crRodizio(fila,meta){
 function crPlano(hoje){
   hoje=hoje||todayStr();
   const st=crEstado();
-  const inicio=st.inicio||addDays(hoje,1);
+  const inicio=st.ativo?(st.inicio||addDays(hoje,1)):crInicioEfetivo(st,hoje);
   const fases=crFases(st,inicio);
   const{res,falt}=crResolver();
   const capPorId=new Map(CRON_DADOS.cap.map(c=>[c.id,c]));
@@ -25737,7 +25746,7 @@ const crNomeCap=cap=>cap.nome.replace(/^(Ebserh|SUS|Saúde Pública|Português|D
 function crAtivar(){
   const st=crEstado();
   st.ativo=true;st.ativadoEm=st.ativadoEm||todayStr();
-  if(!st.inicio)st.inicio=addDays(todayStr(),1);   // começa amanhã
+  st.inicio=crInicioEfetivo(st,todayStr());   // sem nada concluído, começa hoje; senão mantém a data
   saveDB();crRefrescar();
   const p=crPlano();
   toast(p.falt.length
@@ -25783,7 +25792,8 @@ function crSetHoras(v){
 function crSetInicio(v){
   if(!/^\d{4}-\d\d-\d\d$/.test(v)||v<todayStr()){toast('⚠️ Escolha uma data a partir de hoje.','var(--orange)');return;}
   const st=crEstado(),p=crPlano();
-  st.inicio=v;st.fases=[{desde:v,horas:p.horas}];
+  if(!p.antes&&Object.keys(st.feitos||{}).length){toast('⚠️ Você já concluiu assuntos: a data de início não muda mais.','var(--orange)');return;}
+  st.inicio=v;st.fases=[{desde:v,horas:p.horas}];st.zero=null;
   saveDB();crRefrescar();crAbrirConfig();
   toast(`📅 O cronograma começa em ${crFmtData(v)}.`,'var(--accent)');
 }
@@ -26039,7 +26049,7 @@ function crDiaEspecialMini(d,p){
 function crCabecalhoHTML(){
   const p=crPlano();
   if(!crAtivo()){
-    return`<div class="cron-card cron-off"><div><b>📅 Cronograma Ebserh · HU Brasil</b><div class="cron-sub">começa amanhã (${crFmtData(p.inicio)}) · ${p.total} assuntos em ${p.totalDias} dias de estudo a ${String(p.horas).replace('.',',')}h por dia, com revisão e simulado todo domingo.</div>
+    return`<div class="cron-card cron-off"><div><b>📅 Cronograma Ebserh · HU Brasil</b><div class="cron-sub">${p.inicio>p.hoje?'começa em '+crFmtData(p.inicio):p.inicio===p.hoje?'começa hoje':'retoma de '+crFmtData(p.inicio)} · ${p.total} assuntos em ${p.totalDias} dias de estudo a ${String(p.horas).replace('.',',')}h por dia, com revisão e simulado todo domingo.</div>
       ${p.falt.length?`<div class="cron-aviso">${p.falt.length} capítulo${p.falt.length>1?'s':''} do prompt não ${p.falt.length>1?'estão':'está'} no seu Mapa: ${escapeHtml(p.falt.slice(0,4).join('; '))}${p.falt.length>4?'…':''}</div>`:''}</div>
       <button class="btn btn-sm btn-primary" onclick="crAtivar()">Ativar cronograma</button></div>`;
   }
@@ -26120,7 +26130,7 @@ function crAbrirConfig(){
     <label class="banco-check" style="margin-top:12px"><input type="checkbox" ${st.rodizio?'checked':''} onchange="crAlternarRodizio()"> <b>Rodízio:</b> todas as matérias avançam juntas, toda semana</label>
     <div class="cron-sub">Na ordem do prompt o Português só entra em dezembro e a Legislação Ebserh some depois da 2ª semana. O que você já concluiu continua concluído.</div>
     <div class="cron-conf-linha" style="margin-top:12px"><label for="cron-inicio"><b>Começa em</b></label>
-      <input id="cron-inicio" class="inp" type="date" value="${p.inicio}" min="${todayStr()}" ${p.antes?'':'disabled title="Já começou"'} onchange="crSetInicio(this.value)"></div>
+      <input id="cron-inicio" class="inp" type="date" value="${p.inicio}" min="${todayStr()}" ${p.antes||!Object.keys(st.feitos||{}).length?'':'disabled title="Já começou e você já concluiu assuntos"'} onchange="crSetInicio(this.value)"></div>
     <div class="cron-sub">Prazo de ${CRON_MESES_PRAZO} meses: até <b>${crFmtData(p.prazo)}</b>, com a semana final antes dele. Hoje o plano termina em <b>${crFmtData(p.fimAtual)}</b>${p.noPrazo?' — dentro do prazo.':` — ${daysDiff(p.prazo,p.fimAtual)} dias além${p.horasNec?`; com ~${fh(p.horasNec)} por dia fecha no prazo`:''}.`}</div>
     <label class="banco-check" style="margin-top:12px"><input type="checkbox" ${st.complementar?'checked':''} onchange="crAlternarComplementar()"> Incluir a trilha complementar (Dir. Administrativo, História de Campina Grande, Informática) — <b>não estava no último edital (03/2024)</b></label>
     <div class="cron-sub" style="margin:6px 0 14px">Fica de fora por padrão porque o último edital não cobrava. Quando o novo sair, confira se algum desses assuntos entrou. Se sobrar tempo, ligue; se faltar, o Português é o próximo a reduzir.</div>

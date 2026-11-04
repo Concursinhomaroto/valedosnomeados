@@ -307,6 +307,42 @@ async def main():
         assert r['flag'] is True and 'ainda não foi publicado' not in d and 'Cadastre a data da prova em Editais' in d
         print('   OK\n')
 
+        print('=== T) cronograma desligado com inicio que ja passou: frase certa, comeca hoje, Portugues/Dicas nao e capitulo faltando ===')
+        r=await page.evaluate("""()=>{window.__hoje='2026-11-04';closeModal();
+          db.cronograma={ativo:false,inicio:'2026-11-03',complementar:false,rodizio:false,v:2,feitos:{},lidos:{}};
+          // como no Mapa real: o chefao 'Foco para nao errar' virou a aba Dicas e saiu do Mapa
+          const kB=db.topics.kB;const guardado=kB.find(t=>t.id==='_4sem8po');db.topics.kB=kB.filter(t=>t.id!=='_4sem8po');
+          renderWeeklyPlan();
+          const sem=document.getElementById('cron-head').innerText.replace(/\\s+/g,' ');
+          const p=crPlano();const falt=p.falt.slice();
+          // outro capitulo sumido de verdade CONTINUA avisando
+          const outro=db.topics.kB.find(t=>t.id==='_22dn7iw');db.topics.kB=db.topics.kB.filter(t=>t.id!=='_22dn7iw');
+          const falt2=crPlano().falt.slice();db.topics.kB.push(outro);db.topics.kB.push(guardado);
+          crAtivar();const st=crEstado();const ativo=crAtivo(),ini=st.inicio,atraso=crPlano().atrasados.length;
+          return {sem,falt,falt2,ativo,ini,atraso};}""")
+        print('   %s'%{k:v for k,v in r.items() if k!='sem'})
+        print('   frase: %s'%r['sem'][:130])
+        assert 'começa hoje' in r['sem'] and 'amanhã' not in r['sem']
+        assert r['falt']==[] and r['falt2']==['Português: Interpretação Textual']
+        assert r['ativo'] and r['ini']=='2026-11-04' and r['atraso']==0        # nada concluido: comeca hoje, sem atraso inventado
+        print('   OK\n')
+
+        print('=== U) ja concluiu algo: mantem a data e a frase diz "retoma"; a data de inicio so muda enquanto nada foi concluido ===')
+        r=await page.evaluate("""()=>{window.__hoje='2026-11-04';
+          const st=crEstado();st.ativo=false;st.inicio='2026-11-03';st.feitos={};st.zero=null;
+          const p0=crPlano();const id=p0.dias[0].orig[0];st.feitos[id]={em:'2026-11-03',via:'estudado'};
+          renderWeeklyPlan();const sem=document.getElementById('cron-head').innerText.replace(/\\s+/g,' ');
+          crAtivar();const manteve=crEstado().inicio;
+          crAbrirConfig();const desabilitado=document.getElementById('cron-inicio').disabled;closeModal();
+          crSetInicio('2026-11-06');const aposTentar=crEstado().inicio;
+          st.feitos={};crAbrirConfig();const livre=!document.getElementById('cron-inicio').disabled;closeModal();
+          crSetInicio('2026-11-06');const mudou=crEstado().inicio;
+          return {sem,manteve,desabilitado,aposTentar,livre,mudou};}""")
+        print('   %s'%{k:v for k,v in r.items() if k!='sem'})
+        assert 'retoma de 03/11' in r['sem'] and r['manteve']=='2026-11-03'
+        assert r['desabilitado'] and r['aposTentar']=='2026-11-03' and r['livre'] and r['mudou']=='2026-11-06'
+        print('   OK\n')
+
         print('=== M) celular: sem rolagem lateral com o cronograma na tela ===')
         await page.set_viewport_size({'width':375,'height':800})
         r=await page.evaluate("()=>{closeModal();showScreen('dashboard');renderWeeklyPlan();return {w:document.documentElement.scrollWidth,iw:innerWidth};}")
