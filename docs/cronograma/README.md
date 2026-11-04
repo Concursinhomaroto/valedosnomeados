@@ -96,3 +96,9 @@ daquele instante e só conta a diferença a partir dali (`db.cronograma.zero`). 
 **Importar.** Aceita JSON `vale-agenda-v1`, CSV/planilha colada e .ics (até 2 MB). Sempre mostra prévia com `lidas = aplicadas + ignoradas (motivo)`. Só entra o que vem **a partir de amanhã**. Modos: somar, substituir só o futuro, criar como novo plano. Casa assunto por `subId` e depois pelo nome (do Mapa ou do edital); nome com mais de um candidato pergunta. Sobreposição só com confirmação. Eventos .ics viram bloqueio; dia inteiro vira dia indisponível; recorrência lê só a primeira ocorrência (avisa).
 
 **Limitações conhecidas.** O horário de um assunto dentro do dia não é fixável (só o dia); itens de revisão/questões/erros/simulado importados são ignorados porque o app os gera sozinho; domingo é sempre revisão + simulado; a IA externa é só por copiar/colar (não há chamada automática); `test_edital_peso` e `test_edital_pdf` já falhavam antes desta mudança.
+
+## Agenda manual e "Apagar agendas geradas"
+- Sem cronograma ativo a Agenda é **manual**: só a grade por hora com os seus blocos (nada da Ebserh aparece). "＋ Bloco" (ou o ＋ de cada dia) cria um bloco com título, dia, hora, duração e repetição semanal opcional; clicar no bloco edita ou exclui (um só ou a série).
+- Blocos manuais são os mesmos `db.cronograma.bloqueios`: com plano ativo, o estudo se reorganiza em volta deles.
+- ⚙️ → "🗑 Apagar agendas geradas" desliga a trilha da Ebserh e apaga os planos por edital (versões, assuntos movidos, ajustes do dia). Ficam: o que você concluiu, revisões, blocos manuais e o que você digitou na agenda. A Ebserh só volta se você ativar de novo.
+- A lista antiga dos 7 dias só aparece se ligada em ⚙️.

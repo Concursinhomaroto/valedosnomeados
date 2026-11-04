@@ -74,9 +74,11 @@ async def main():
         assert r['ontem']==1 and r['hoje']==0 and r['sab']==0 and not r['nota'] and '3 itens apagados' in r['toast']
         print('   OK\n')
 
-        print('=== E) sem cronograma, a agenda segue como era: lista visivel e itens do usuario aparecendo ===')
+        print('=== E) sem cronograma: agenda manual (so a grade); a lista antiga so volta se voce ligar ===')
         r=await page.evaluate("""()=>{db.cronograma.ativo=false;crEstado().listaDias=false;db.weeklyPlan={'2026-11-05':[{name:'Academia 18h',livre:true}]};crAba='grade';renderWeeklyPlan();
-          return {lista:getComputedStyle(document.getElementById('weekly-plan')).display!=='none',itens:document.querySelectorAll('#weekly-plan .plan-item').length,
+          const oculta=getComputedStyle(document.getElementById('weekly-plan')).display==='none';
+          crEstado().listaDias=true;renderWeeklyPlan();
+          return {lista:oculta&&getComputedStyle(document.getElementById('weekly-plan')).display!=='none',itens:document.querySelectorAll('#weekly-plan .plan-item').length,
                   abas:document.querySelectorAll('#cron-head .cron-aba').length};}""")
         print('   %s'%r)
         assert r['lista'] and r['itens']==1 and r['abas']==0
