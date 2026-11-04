@@ -82,3 +82,17 @@ daquele instante e só conta a diferença a partir dali (`db.cronograma.zero`). 
 - A grade por hora mostra o dia inteiro (06:00–23:00; estende só se o estudo passar das 23h) e já abre rolada para a hora de início.
 - A lista "Próximos 7 dias" fica oculta com o cronograma ativo; volta em ⚙️ → "Mostrar também a lista dos 7 dias" (`cronograma.listaDias`).
 - O "＋" no cabeçalho de cada dia adiciona compromissos; itens novos levam `criadoEm` e aparecem no cabeçalho do dia. Itens antigos (sem `criadoEm`) seguem escondidos/contáveis/apagáveis como antes.
+
+## Plano por edital, importar/exportar e ajuste do dia
+
+**Onde:** ⚙️ da Agenda → "Montar / ajustar plano", "Importar agenda", exportar JSON/CSV/.ics e "Copiar prompt para IA externa". O botão "⏱ Ajustar o dia" fica na aba Hoje.
+
+**Modelo (aditivo).** Contas atuais seguem na trilha da Ebserh (`CRON_DADOS`) até aplicarem um plano. `db.agendaPlanos = {ativoId, planos:{id:plano}, versoes:[últimas 5]}`; o plano guarda `editalIds, pct, pesos (min/dia por disciplina), minPorAssunto, excluidos {id: motivo}, prioridade, reforco, config{inicio,horasDia,horaInicio,diasSemana,prazo}`. Em `db.cronograma` ficam o que vale nas duas trilhas: `pins {subId:{ds,travado}}`, `bloqueios [{data,inicio,min,titulo}]`, `indisp [datas]`, `ajusteHoje`. Progresso (`feitos`), revisões, XP, resumos e flashcards não são tocados.
+
+**Regras do gerador.** Blocos = disciplinas do edital (mesmo nome em dois editais vira um bloco). Peso: minutos/dia definidos por você; senão fatia das questões declaradas; sem número nenhum aparece "peso não informado" (nunca estimado em silêncio). Duração padrão por assunto: **30 min** (a trilha da Ebserh continua em 22), ajustável por disciplina e por assunto. Assunto em dois editais entra uma vez (pelo `subId`) e concluir vale para todos. Assunto sem vínculo fica fora da fila, listado em "sem vínculo". Reconciliação por edital: total = na fila + sem vínculo + excluídos. Rodízio ponderado pelo peso; o último diagnóstico por disciplina e o 🎯 reforçam pontos fracos. `prev` (prevalência) nunca é preenchida pelo app.
+
+**Ajustes.** Mover assunto de dia, trocar de matéria e adiantar são "pinos": o resto desliza em volta, pino em dia sem estudo volta à fila e vira aviso. Compromissos e dias indisponíveis reduzem as horas do dia e a grade se reorganiza em volta. "Hoje só X horas / não vou estudar" usam `fases` por data: o calendário-base usa as mesmas horas, então não há atraso falso; o término muda e é mostrado. Revisões D+1/D+7/D+30 e o simulado de domingo não são tocados.
+
+**Importar.** Aceita JSON `vale-agenda-v1`, CSV/planilha colada e .ics (até 2 MB). Sempre mostra prévia com `lidas = aplicadas + ignoradas (motivo)`. Só entra o que vem **a partir de amanhã**. Modos: somar, substituir só o futuro, criar como novo plano. Casa assunto por `subId` e depois pelo nome (do Mapa ou do edital); nome com mais de um candidato pergunta. Sobreposição só com confirmação. Eventos .ics viram bloqueio; dia inteiro vira dia indisponível; recorrência lê só a primeira ocorrência (avisa).
+
+**Limitações conhecidas.** O horário de um assunto dentro do dia não é fixável (só o dia); itens de revisão/questões/erros/simulado importados são ignorados porque o app os gera sozinho; domingo é sempre revisão + simulado; a IA externa é só por copiar/colar (não há chamada automática); `test_edital_peso` e `test_edital_pdf` já falhavam antes desta mudança.

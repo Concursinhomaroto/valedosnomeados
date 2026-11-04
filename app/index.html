@@ -2334,6 +2334,14 @@ nav{
 .cron-aba{border-radius:999px!important}
 .cron-manuais{font-size:12px;font-weight:600;color:var(--text2);line-height:1.6;margin:0 0 10px;padding:8px 10px;border:1.5px dashed var(--border);border-radius:10px}
 .cron-grade{max-height:620px;overflow:auto}
+.ag-modal{max-width:880px}.ag-sec{border-top:1px solid var(--border);padding:10px 0;margin-top:8px}
+.ag-lin{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0}
+.ag-disc{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px dashed var(--border)}
+.ag-ctr{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.ag-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.ag-alerta{color:var(--red-t,#dc2626);font-weight:700}.ag-res{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.ag-acoes{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card,var(--bg));padding:10px 0;border-top:1px solid var(--border);margin-top:10px}
+.ag-det{margin:6px 0}.ag-fino{max-height:260px;overflow:auto}.ag-cfg{border-top:1px solid var(--border);margin-top:14px;padding-top:10px}
+.cron-ajuste{margin-top:8px}
 .cg-cab{position:sticky;top:0;z-index:4;background:var(--panel)}
 .cg-cab.cg-hoje{background:color-mix(in srgb,var(--accent) 8%,var(--panel))}
 .cg-add{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:6px;border:1px solid var(--border);background:var(--panel2);color:var(--muted);font-size:13px;line-height:1;cursor:pointer;padding:0}
@@ -25525,7 +25533,7 @@ function weeklyPlanNormalizar(){
   Object.keys(w).forEach(ds=>{if(!Array.isArray(w[ds]))w[ds]=crLista(w[ds]);});
 }
 function crAtivo(){return!!(db.cronograma&&db.cronograma.ativo);}
-function crBloco(cap){return cap.cat==='comp'?'comp':cap.cat==='esp'?'esp':CRON_LEG.has(cap.id)?'leg':CRON_POR.has(cap.id)?'por':'pol';}
+function crBloco(cap){return cap.bloco?cap.bloco:cap.cat==='comp'?'comp':cap.cat==='esp'?'esp':CRON_LEG.has(cap.id)?'leg':CRON_POR.has(cap.id)?'por':'pol';}
 function crMinCap(cap){return CRON_CURTOS.has(cap.id)?15:CRON_VALORES.has(cap.id)?28:22;}
 function crFmtData(ds){return ds.slice(8,10)+'/'+ds.slice(5,7);}
 function crDow(ds){return new Date(ds+'T12:00:00').getDay();}
@@ -25545,17 +25553,19 @@ function crInicioEfetivo(st,hoje){
 }
 function crFases(st,inicio){
   const f=(Array.isArray(st.fases)&&st.fases.length?st.fases:[{desde:'',horas:CRON_HORAS_PADRAO}])
-    .map(x=>({desde:x.desde||inicio,horas:Number(x.horas)>0?Number(x.horas):CRON_HORAS_PADRAO}))
+    .map(x=>({desde:x.desde||inicio,horas:(x.horas!==''&&x.horas!==null&&x.horas!==undefined&&Number(x.horas)>=0)?Number(x.horas):CRON_HORAS_PADRAO}))
     .sort((a,b)=>a.desde.localeCompare(b.desde));
   f[0].desde=inicio;
   return f;
 }
-function crHorasEm(ds,fases){let h=fases[0].horas;fases.forEach(f=>{if(f.desde<=ds)h=f.horas;});return h;}
+function crHorasBase(ds,fases){let h=fases[0].horas;fases.forEach(f=>{if(f.desde<=ds)h=f.horas;});return h;}
+// Horas que o dia realmente tem: tira dia indisponível e o que um compromisso (bloqueio) ocupa da janela de estudo.
+function crHorasEm(ds,fases){return agHorasEfetivas(ds,crHorasBase(ds,fases));}
 function crPrazo(inicio){
   const d=new Date(inicio+'T12:00:00');d.setMonth(d.getMonth()+CRON_MESES_PRAZO);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-const crUtil=ds=>crDow(ds)!==0&&!CRON_FERIADOS.includes(ds);
+function crUtil(ds){return crDow(ds)!==0&&!CRON_FERIADOS.includes(ds)&&agDiaUtil(agAtivo(),ds);}
 // Semana final (seção 7 do prompt): 5 dias de revisão e fechamento e um descanso ativo. Domingo
 // vira revisão semanal e feriado vira revisão leve — não consomem um dos 5.
 function crBlocoFinal(ds){
@@ -25576,9 +25586,10 @@ function crCalendarioBase(fila,meta,inicio,fases){
   for(let g=0;i<fila.length&&g<2000;g++,ds=addDays(ds,1)){
     if(crDow(ds)===0){dias.push({ds,t:'rev',orig:[],atual:[]});continue;}
     if(CRON_FERIADOS.includes(ds)){dias.push({ds,t:'fer',orig:[],atual:[]});continue;}
+    if(!crUtil(ds)){dias.push({ds,t:'fer',indisp:true,orig:[],atual:[]});continue;}   // dia indisponível (plano por edital)
     const cap=crCapMin(crHorasEm(ds,fases)),d={ds,t:'est',orig:[],atual:[],carga:cap};
     let acc=0;
-    while(i<fila.length&&crCabe(acc,meta.get(fila[i]).min,cap)){const id=fila[i++];d.orig.push(id);acc+=meta.get(id).min;}
+    while(cap>0&&i<fila.length&&crCabe(acc,meta.get(fila[i]).min,cap)){const id=fila[i++];d.orig.push(id);acc+=meta.get(id).min;}
     dias.push(d);
   }
   return dias.concat(crBlocoFinal(ds));
@@ -25629,6 +25640,8 @@ function crEditalDaProva(hoje){
   const st=crEstado(),eds=db.editais||[];
   if(st.provaId==='nenhum')return null;
   if(st.provaId)return eds.find(e=>e.id===st.provaId)||null;
+  const apl=agAtivo();   // plano por edital: a prova é a do primeiro edital escolhido que ainda tem data pela frente
+  if(apl){const c=apl.editalIds.map(id=>eds.find(e=>e.id===id)).filter(e=>e&&e.data&&e.data>=hoje).sort((a,b)=>a.data.localeCompare(b.data))[0];if(c)return c;}
   const ok=e=>e.data&&e.data>=hoje&&e.status!=='realizado'&&CRON_ED_RX.test([e.nome,e.orgao,e.cargo].filter(Boolean).join(' '));
   const foco=db.editalFoco?edFind(db.editalFoco):null;
   if(foco&&ok(foco))return foco;
@@ -25664,12 +25677,16 @@ function crPlano(hoje){
   const st=crEstado();
   const inicio=st.ativo?(st.inicio||addDays(hoje,1)):crInicioEfetivo(st,hoje);
   const fases=crFases(st,inicio);
-  const{res,falt}=crResolver();
+  const pl=agAtivo();
+  const{res,falt}=pl?{res:new Map(),falt:[]}:crResolver();
   const capPorId=new Map(CRON_DADOS.cap.map(c=>[c.id,c]));
   const incl=cap=>cap.cat!=='comp'||st.complementar!==false;
   // A fila: a ordem do prompt, bloco a bloco, cada assunto uma vez.
   const meta=new Map(),fila=[];
-  CRON_DADOS.dias.forEach(d=>{
+  let fonte=null;
+  if(pl){fonte=agFonte(pl,inicio,fases);fonte.meta.forEach((v,k)=>meta.set(k,v));fila.push(...fonte.fila);agBlocosAplicar(fonte.discs);}
+  else agBlocosAplicar(null);
+  if(!pl)CRON_DADOS.dias.forEach(d=>{
     if(d.t!=='est')return;
     d.b.forEach(([cid,a,b])=>{
       const cap=capPorId.get(cid),r=res.get(cid);
@@ -25682,7 +25699,7 @@ function crPlano(hoje){
       }
     });
   });
-  if(st.rodizio)crRodizio(fila,meta);
+  if(!pl&&st.rodizio)crRodizio(fila,meta);
   const dias=crCalendarioBase(fila,meta,inicio,fases);
   const estDias=dias.filter(d=>d.t==='est');
   const fimBase=dias[dias.length-1].ds;
@@ -25704,12 +25721,27 @@ function crPlano(hoje){
   const feitosHoje=Object.keys(st.feitos).filter(id=>st.feitos[id].em===hoje&&meta.has(id));
   const gastoHoje=feitosHoje.reduce((n,id)=>n+crCusto(id,st,meta),0);
   const q=fica.slice();
-  const preencher=(d,carga)=>{
+  // Ajustes que você fez (mover um assunto de dia, trocar de matéria, adiantar): ficam onde você pôs e
+  // o resto desliza em volta. Pino que cai em dia sem estudo volta pra fila e vira conflito (nunca some).
+  const pinsAt={},conflitos=[];
+  Object.keys(st.pins||{}).forEach(id=>{
+    const pn=st.pins[id];if(!meta.has(id)||st.feitos[id]||!pn||!pn.ds||pn.ds<hoje)return;
+    const i=q.indexOf(id);if(i<0)return;
+    if(!estDias.some(d=>d.ds===pn.ds&&crHorasEm(d.ds,fases)>0)){conflitos.push({id,ds:pn.ds,motivo:'dia sem estudo'});return;}
+    q.splice(i,1);(pinsAt[pn.ds]=pinsAt[pn.ds]||[]).push(id);
+  });
+  const preencher=(d,carga,acc0)=>{
     if(carga<=0)return;
-    let acc=0;
+    let acc=acc0||0;
     while(q.length&&crCabe(acc,meta.get(q[0]).min,carga)){const id=q.shift();d.atual.push(id);acc+=meta.get(id).min;}
   };
-  estDias.filter(d=>d.ds>=hoje).forEach(d=>preencher(d,d.ds===hoje?d.carga-gastoHoje:d.carga));
+  estDias.filter(d=>d.ds>=hoje).forEach(d=>{
+    const fx=pinsAt[d.ds]||[],gx=fx.reduce((n,id)=>n+meta.get(id).min,0);
+    fx.forEach(id=>d.atual.push(id));
+    const carga=(d.ds===hoje?d.carga-gastoHoje:d.carga);
+    preencher(d,carga,gx);
+  });
+  if(Object.keys(pinsAt).length){const ix=new Map(fila.map((id,i)=>[id,i]));estDias.forEach(d=>d.atual.sort((x,y)=>ix.get(x)-ix.get(y)));}   // ordem do dia sempre a da fila
   // Sobrou fila depois do último dia de estudo: continua depois da data final (projeção).
   const extras=[];
   if(q.length){
@@ -25747,7 +25779,7 @@ function crPlano(hoje){
   const diaN=diasEstudo.filter(d=>d.ds<=hoje).length;
 
   // Prazo (3 meses a partir do início) e o ritmo que ele pede.
-  const prazo=crPrazo(inicio);
+  const prazo=(pl&&agDataValida(pl.config.prazo))?pl.config.prazo:crPrazo(inicio);
   const limite=addDays(prazo,-CRON_RESERVA_FINAL);
   let uteis=0;
   for(let ds=hoje>inicio?hoje:inicio;ds<=limite&&uteis<500;ds=addDays(ds,1))if(crUtil(ds))uteis++;
@@ -25760,7 +25792,7 @@ function crPlano(hoje){
   const hojeDia=calendario.find(d=>d.ds===hoje);
   const hojeAtual=hojeDia&&hojeDia.t==='est'?feitosHoje.concat(hojeDia.atual.filter(id=>!feitosHoje.includes(id))):[];
   return{st,meta,dias,calendario,falt,hoje,inicio,fimBase,prazo,horasNec,previstos,noPrazo:fimAtual<=prazo,
-    horas:crHorasEm(hoje>inicio?hoje:inicio,fases),fases,horasEm:ds=>crHorasEm(ds,fases),
+    horas:crHorasBase(hoje>inicio?hoje:inicio,fases),fases,horasEm:ds=>crHorasEm(ds,fases),conflitos,agenda:fonte,plano:pl,
     antes:hoje<inicio,depois:hoje>fimAtual,diaN,totalDias:diasEstudo.length,
     atrasados,pendentes:fica.length,total:fila.length,feitosN:fila.length-fica.length,
     fimEstudo,folgaDias,encurtarPara,encurtado:!!(st.encurtar&&possivel),fimAtual,blocos,
@@ -25923,7 +25955,7 @@ function crSelecionar(pool,n,alvosAbs,plano){
   const embaralhar=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
   const grupos={};
   Object.keys(CRON_BLOCOS).forEach(b=>grupos[b]=[]);
-  pool.forEach(q=>{const m=plano.meta.get(q.subId);grupos[m?m.bloco:'esp'].push(q);});
+  pool.forEach(q=>{const m=plano.meta.get(q.subId),b=m?m.bloco:Object.keys(CRON_BLOCOS)[0];(grupos[b]||(grupos[b]=[])).push(q);});
   Object.keys(grupos).forEach(b=>{const l=embaralhar(grupos[b]);grupos[b]=l.filter(crEhFgv).concat(l.filter(q=>!crEhFgv(q)));});
   // Maior resto: 30 questões em 50/25/17/8% dão 15/8/5/2, nunca 31.
   let alvos=alvosAbs;
@@ -25935,11 +25967,11 @@ function crSelecionar(pool,n,alvosAbs,plano){
     for(let i=0;tot<n;i=(i+1)%base.length){alvos[base[i].b]++;tot++;}
   }
   const out=[];
-  Object.keys(alvos).forEach(b=>{out.push(...grupos[b].splice(0,alvos[b]));});
+  Object.keys(alvos).forEach(b=>{out.push(...(grupos[b]||[]).splice(0,alvos[b]));});
   // O que faltou (bloco sem questão suficiente) sai dos blocos que ainda têm, na ordem de peso.
   const ordem=Object.keys(CRON_PESOS).concat(['comp']);
-  while(out.length<n&&ordem.some(b=>grupos[b].length)){
-    for(const b of ordem){if(out.length>=n)break;if(grupos[b].length)out.push(grupos[b].shift());}
+  while(out.length<n&&ordem.some(b=>(grupos[b]||[]).length)){
+    for(const b of ordem){if(out.length>=n)break;if((grupos[b]||[]).length)out.push(grupos[b].shift());}
   }
   return embaralhar(out).slice(0,n);
 }
@@ -25985,7 +26017,7 @@ function crRegistrarDiagnostico(sess){
   Object.keys(CRON_BLOCOS).forEach(b=>blocos[b]={tot:0,certas:0});
   sess.itens.forEach((it,i)=>{
     if(!sess.respondidasSet||!sess.respondidasSet.has(i)||!it.userAnswer)return;
-    const m=p.meta.get(it.subId),b=blocos[m?m.bloco:'esp'];
+    const m=p.meta.get(it.subId),b=blocos[m?m.bloco:Object.keys(blocos)[0]];
     b.tot++;if(it.userAnswer===it.correta)b.certas++;
   });
   crEstado().diagnostico={em:todayStr(),respondidas:sess.respondidas,certas:sess.certas,blocos};
@@ -26104,7 +26136,7 @@ function crDiaEspecialMini(d,p){
 }
 function crHojeHTML(){
   const p=crPlano();
-  return p.hojeAtual.length?`<details class="cron-hoje" open><summary>📌 Hoje · ${p.hojeAtual.filter(id=>p.st.feitos[id]).length}/${p.hojeAtual.length} concluídos</summary>${crChecklistHTML(p.hojeAtual,p,p.hoje)}</details>`
+  return p.hojeAtual.length?`<details class="cron-hoje" open><summary>📌 Hoje · ${p.hojeAtual.filter(id=>p.st.feitos[id]).length}/${p.hojeAtual.length} concluídos</summary>${crChecklistHTML(p.hojeAtual,p,p.hoje)}<div class="cron-ajuste"><button class="btn btn-xs btn-ghost" onclick="agAbrirAjusteDia()" title="Hoje só X horas, não vou estudar, trocar de matéria, adiantar">⏱ Ajustar o dia</button></div></details>`
     :(p.hojeDia&&(p.hojeDia.t==='rev'||p.hojeDia.t==='fer'||p.hojeDia.t==='fin')?`<div class="cron-hoje-esp">${crDiaEspecialHTML(p.hojeDia,p,true)}</div>`:'');
 }
 function crCabecalhoHTML(){
@@ -26141,13 +26173,14 @@ function crCabecalhoHTML(){
     :(p.antes?`<div class="cron-prep">📋 <b>Antes de começar:</b> faça o simulado diagnóstico de 30 questões (10 específicos, 8 SUS e Saúde Pública, 6 Legislação Ebserh e Português, 6 mistas). <button class="btn btn-xs btn-primary" onclick="crSimuladoDiagnostico()">▶ Abrir diagnóstico</button></div>`:'');
   const falt=p.falt.length?`<div class="cron-aviso">${p.falt.length} capítulo${p.falt.length>1?'s':''} do prompt não ${p.falt.length>1?'estão':'está'} no seu Mapa: ${escapeHtml(p.falt.slice(0,4).join('; '))}${p.falt.length>4?'…':''}</div>`:'';
   // Enquanto o edital não sai, a ordem, os pesos e o que entra são os do último (Ebserh/FGV 03/2024).
-  const edital=p.st.editalSaiu?'':`<div class="cron-aviso">⚠️ <b>O edital da Ebserh ainda não foi publicado.</b> Este plano segue o último (Ebserh/FGV 03/2024, prova de 16/03/2025). Quando o novo sair, a ordem, os pesos de cada bloco e o que entra podem mudar — revise o cronograma. <button class="btn btn-xs btn-ghost" onclick="crEditalSaiu()">O edital saiu</button></div>`;
+  const edital=(p.st.editalSaiu||p.plano)?'':`<div class="cron-aviso">⚠️ <b>O edital da Ebserh ainda não foi publicado.</b> Este plano segue o último (Ebserh/FGV 03/2024, prova de 16/03/2025). Quando o novo sair, a ordem, os pesos de cada bloco e o que entra podem mudar — revise o cronograma. <button class="btn btn-xs btn-ghost" onclick="crEditalSaiu()">O edital saiu</button></div>`;
   return`<div class="cron-card">
     <div class="cron-linha"><span class="cron-pill cron-pill-dia">${dia}</span>${meta}${ritmo}${atraso}${folga}${prazo}${prova}</div>
     <div class="cron-progresso">${bl}</div>
     <div class="cron-ferr">
       <span class="cron-total">${p.feitosN}/${p.total} assuntos</span>${encurta}
       <button class="btn btn-xs btn-ghost" onclick="crAbrirPlano()">🗓️ Cronograma completo</button>
+      <button class="btn btn-xs btn-ghost" onclick="agAbrirAssistente()" title="Montar o plano a partir dos seus editais">🧭 Plano por edital</button>
       <button class="btn btn-xs btn-ghost" onclick="crAbrirConfig()" title="Opções">⚙️</button>
     </div>${edital}${prep}${falt}</div>`;
 }
@@ -26201,7 +26234,15 @@ function crAbrirConfig(){
     <div class="cron-sub">Só a data mostrada na faixa. Os seus outros editais seguem normais em Editais.</div>
     <label class="banco-check" style="margin-top:12px"><input type="checkbox" ${st.complementar?'checked':''} onchange="crAlternarComplementar()"> Incluir a trilha complementar (Dir. Administrativo, História de Campina Grande, Informática) — <b>não estava no último edital (03/2024)</b></label>
     <div class="cron-sub" style="margin:6px 0 14px">Fica de fora por padrão porque o último edital não cobrava. Quando o novo sair, confira se algum desses assuntos entrou. Se sobrar tempo, ligue; se faltar, o Português é o próximo a reduzir.</div>
-    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
+    <div class="ag-cfg"><b>🧭 Plano por edital e agenda</b>
+      <div class="cron-sub">${agAtivo()?`Plano ativo: <b>${escapeHtml(agAtivo().nome||'Meu plano')}</b> (${agAtivo().editalIds.length} edital${agAtivo().editalIds.length===1?'':'is'}).`:'Hoje o plano é a trilha da Ebserh.'}</div>
+      <div class="ag-lin"><button class="btn btn-xs btn-primary" onclick="agAbrirAssistente()">🧭 Montar / ajustar plano</button>
+      <button class="btn btn-xs btn-ghost" onclick="agImportarAbrir()">📥 Importar agenda</button>
+      <button class="btn btn-xs btn-ghost" onclick="agExportar('json')">📤 JSON</button><button class="btn btn-xs btn-ghost" onclick="agExportar('csv')">CSV</button><button class="btn btn-xs btn-ghost" onclick="agExportar('ics')">.ics</button>
+      <button class="btn btn-xs btn-ghost" onclick="agCopiarPrompt()">🤖 Copiar prompt para IA externa</button>
+      ${agPlanos().versoes.length?`<button class="btn btn-xs btn-ghost" onclick="agVoltar()">↩ Voltar ao plano anterior</button>`:''}
+      ${agAtivo()?`<button class="btn btn-xs btn-ghost" onclick="agVoltarEbserh()">Voltar à trilha da Ebserh</button>`:''}</div></div>
+    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:12px">
       <button class="btn btn-xs btn-ghost" style="color:var(--red-t)" onclick="crDesativar()">Desativar cronograma</button>
       <button class="btn btn-sm btn-primary" onclick="closeModal()">Fechar</button></div></div>`);
 }
@@ -26213,6 +26254,751 @@ const CRON_PAUSA_APOS=80,CRON_PAUSA=15;
 const CRON_EIXO_INI=6*60,CRON_EIXO_FIM=23*60;   // a grade mostra o dia: 06:00 às 23:00
 const CRON_COR={esp:'#7c3aed',pol:'#2563eb',por:'#db2777',leg:'#059669',comp:'#ea580c',revisao:'#0891b2',questoes:'#d97706',erros:'#dc2626',simulado:'#4338ca',leve:'#64748b',final:'#7c3aed',folga:'#16a34a',pausa:'#94a3b8'};
 const CRON_CAT={esp:'Específicos',pol:'Políticas Públicas',por:'Português',leg:'Legislação Ebserh',comp:'Complementar',revisao:'Revisões e flashcards',questoes:'Questões',erros:'Erros e simulado'};
+// ===== PLANO POR EDITAL =====
+// A fila deixa de vir só do calendário fixo da Ebserh: pode vir de um ou mais editais seus. Cada disciplina do
+// edital vira um bloco; o peso vem das questões que o edital declara (ou dos minutos por dia que você definir) e
+// NUNCA é estimado em silêncio: sem número, a disciplina aparece como "peso não informado". O progresso continua em
+// db.cronograma.feitos[subId] e as revisões em db.revisions — trocar de plano não apaga nada.
+const CRON_BLOCOS_0={...CRON_BLOCOS},CRON_PESOS_0={...CRON_PESOS},CRON_COR_0={...CRON_COR},CRON_CAT_0={...CRON_CAT};
+const AG_CORES=['#7c3aed','#2563eb','#db2777','#059669','#ea580c','#0891b2','#d97706','#dc2626','#4338ca','#16a34a','#9333ea','#0d9488'];
+const AG_MIN_PADRAO=30;           // minutos por assunto quando nada foi definido (a trilha da Ebserh usa 22)
+const AG_VERSOES=5;
+function agPlanos(){
+  if(!db.agendaPlanos||typeof db.agendaPlanos!=='object'||Array.isArray(db.agendaPlanos))db.agendaPlanos={ativoId:null,planos:{},versoes:[]};
+  const a=db.agendaPlanos;
+  if(!a.planos||typeof a.planos!=='object'||Array.isArray(a.planos))a.planos={};
+  a.versoes=crLista(a.versoes);
+  return a;
+}
+const agObj=o=>(o&&typeof o==='object'&&!Array.isArray(o))?o:{};
+function agNorm(pl){
+  pl.editalIds=crLista(pl.editalIds).filter(x=>typeof x==='string');
+  pl.pct=agObj(pl.pct);pl.pesos=agObj(pl.pesos);pl.minPorAssunto=agObj(pl.minPorAssunto);pl.excluidos=agObj(pl.excluidos);
+  pl.prioridade=agObj(pl.prioridade);pl.reforco=agObj(pl.reforco);pl.config=agObj(pl.config);
+  pl.config.diasSemana=crLista(pl.config.diasSemana).map(Number).filter(n=>n>=0&&n<=6);
+  if(!pl.config.diasSemana.length)pl.config.diasSemana=[1,2,3,4,5,6];
+  return pl;
+}
+function agAtivo(){
+  const a=db.agendaPlanos;
+  if(!a||!a.ativoId||!a.planos||typeof a.planos!=='object')return null;
+  const pl=a.planos[a.ativoId];
+  return pl&&typeof pl==='object'?agNorm(pl):null;
+}
+function agDiaUtil(pl,ds){return(!pl||pl.config.diasSemana.includes(crDow(ds)))&&!crLista(db.cronograma&&db.cronograma.indisp).includes(ds);}
+const agHM=s=>{const m=/^([01]?\d|2[0-3]):([0-5]\d)$/.exec(String(s||''));return m?(+m[1])*60+(+m[2]):null;};
+function agDataValida(s){
+  if(!/^\d{4}-\d\d-\d\d$/.test(String(s||'')))return false;
+  const d=new Date(s+'T12:00:00');return!isNaN(d)&&d.toISOString().slice(0,10)===s;
+}
+// Compromissos (bloqueios) e dias indisponíveis ficam em db.cronograma: valem na trilha Ebserh e nos planos por edital.
+const agBloqs=()=>crLista(db.cronograma&&db.cronograma.bloqueios).filter(b=>b&&b.data&&agHM(b.inicio)!==null);
+function agHorasEfetivas(ds,h){
+  if(!agDiaUtil(agAtivo(),ds)&&crDow(ds)!==0)return 0;
+  const bl=agBloqs().filter(b=>b.data===ds);if(!bl.length)return h;
+  const ini=crHoraInicioMin(),fim=ini+h*60+Math.floor(h*60/CRON_PAUSA_APOS)*CRON_PAUSA;
+  let ov=0;
+  bl.forEach(b=>{const bi=agHM(b.inicio);if(bi===null)return;ov+=Math.max(0,Math.min(fim,bi+(+b.min||0))-Math.max(ini,bi));});
+  return Math.max(0,h-ov/60);
+}
+function agBloqueiosRel(ds){
+  const ini=crHoraInicioMin();
+  return agBloqs().filter(b=>b.data===ds).map(b=>({ini:agHM(b.inicio)-ini,fim:agHM(b.inicio)-ini+(+b.min||0),titulo:b.titulo}))
+    .sort((a,b)=>a.ini-b.ini);
+}
+// Os blocos (matérias) que a grade, o diagnóstico e as questões enxergam: trilha da Ebserh ou disciplinas do edital.
+function agBlocosAplicar(discs){
+  const pares=[[CRON_BLOCOS,CRON_BLOCOS_0],[CRON_PESOS,CRON_PESOS_0],[CRON_COR,CRON_COR_0],[CRON_CAT,CRON_CAT_0]];
+  pares.forEach(([o,o0])=>{Object.keys(o).forEach(k=>delete o[k]);Object.assign(o,o0);});
+  if(!discs)return;
+  [CRON_BLOCOS,CRON_PESOS,CRON_CAT].forEach(o=>Object.keys(o).forEach(k=>delete o[k]));
+  const tot=discs.reduce((n,d)=>n+d.w,0)||1,extra={revisao:CRON_CAT_0.revisao,questoes:CRON_CAT_0.questoes,erros:CRON_CAT_0.erros};
+  discs.forEach((d,i)=>{CRON_BLOCOS[d.chave]=d.nome;CRON_PESOS[d.chave]=d.w/tot;CRON_CAT[d.chave]=d.nome;CRON_COR[d.chave]=AG_CORES[i%AG_CORES.length];});
+  Object.assign(CRON_CAT,extra);
+}
+// Monta a fila do plano: disciplinas do(s) edital(is), assuntos ligados ao Mapa, sem repetir (pelo subId).
+function agFonte(pl,inicio,fases){
+  const st=crEstado();
+  const eds=pl.editalIds.map(id=>edFind(id)).filter(Boolean);
+  const subs=new Map(),tops=new Map();
+  (db.kingdoms||[]).forEach(k=>(db.topics[k.id]||[]).forEach(t=>{tops.set(t.id,{t,k});(t.subtopics||[]).forEach(s=>subs.set(s.id,{s,t,k}));}));
+  const peso=e=>Number(pl.pct[e.id])>0?Number(pl.pct[e.id]):1;
+  const pctTot=eds.reduce((n,e)=>n+peso(e),0)||1;
+  const discs=[],porNome=new Map(),rec={};
+  eds.forEach(e=>{rec[e.id]={nome:e.nome,total:0,naFila:0,sem:[],excl:[]};});
+  eds.forEach(e=>e.disciplinas.forEach(d=>{
+    const nome=String(d.nome||'Disciplina'),key=normalizeForDedup(nome)||('d'+discs.length);
+    let g=porNome.get(key);
+    if(!g){g={chave:'d'+discs.length,key,nome,itens:[],qDecl:0,eds:new Set(),semQ:true};porNome.set(key,g);discs.push(g);}
+    if(d.questoes>0){g.qDecl+=d.questoes*peso(e)/pctTot;g.semQ=false;}
+    g.eds.add(e.id);
+    (d.assuntos||[]).forEach(a=>g.itens.push({e,d,a}));
+  }));
+  const vistos=new Set(),subEds=new Map(),sem=[],exclLista=[];
+  discs.forEach(g=>{
+    g.subs=[];g.nSem=0;g.nExcl=0;g.total=g.itens.length;
+    g.itens.forEach(({e,a})=>{
+      rec[e.id].total++;
+      const alvo=(a.subId&&subs.has(a.subId))?[subs.get(a.subId)]
+        :(a.topicId&&tops.has(a.topicId))?(tops.get(a.topicId).t.subtopics||[]).map(s=>({s,t:tops.get(a.topicId).t,k:tops.get(a.topicId).k})):[];
+      const ex=pl.excluidos[a.id]||(a.subId&&pl.excluidos[a.subId]);
+      if(ex){rec[e.id].excl.push({a,disc:g.nome,motivo:String(ex)});g.nExcl++;exclLista.push({e,a,disc:g.nome,motivo:String(ex)});return;}
+      if(!alvo.length){rec[e.id].sem.push({a,disc:g.nome});g.nSem++;sem.push({e,a,disc:g.nome});return;}
+      rec[e.id].naFila++;
+      alvo.forEach(x=>{
+        if(!subEds.has(x.s.id))subEds.set(x.s.id,new Set());subEds.get(x.s.id).add(e.id);
+        if(vistos.has(x.s.id))return;
+        vistos.add(x.s.id);g.subs.push(x);
+      });
+    });
+  });
+  const ativos=discs.filter(g=>g.subs.length);
+  // Peso em minutos por dia: o que você definiu vale; senão, a fatia das questões declaradas na capacidade do dia;
+  // sem número nenhum, fatia igual — e isso fica marcado como "peso não informado" (nunca em silêncio).
+  const horas=(fases&&fases.length)?fases[fases.length-1].horas:CRON_HORAS_PADRAO,capDia=crCapMin(horas);
+  const qTot=ativos.reduce((n,g)=>n+g.qDecl,0);
+  const diag=(pl.usarDiag!==false)?crDiagnostico():null;
+  ativos.forEach(g=>{
+    g.min=Math.max(5,Math.min(180,Number(pl.minPorAssunto[g.key])||Number(pl.minPadrao)||AG_MIN_PADRAO));
+    const u=Number(pl.pesos[g.key]);
+    g.pesoUsuario=u>0;g.semPeso=!(u>0)&&!(g.qDecl>0);
+    let w=u>0?u:(g.qDecl>0&&qTot>0?capDia*g.qDecl/qTot:capDia/ativos.length);
+    const pr=Number(pl.prioridade[g.key])||0;w*=Math.max(0.2,1+0.25*pr);
+    if(pl.reforco[g.key])w*=1.5;
+    const dg=diag&&diag.blocos&&diag.blocos[g.chave];
+    if(dg&&dg.tot>=3&&dg.certas/dg.tot<0.6){w*=1.3;g.fraco=true;}
+    g.w=w;
+  });
+  const meta=new Map();
+  ativos.forEach(g=>{
+    const topic={id:g.chave,name:g.nome,subtopics:g.subs.map(x=>x.s)};
+    g.subs.forEach((x,i)=>meta.set(x.s.id,{capId:g.chave,idx:i+1,cap:{id:g.chave,nome:g.nome,cat:'esp',bloco:g.chave},sub:x.s,topic,k:x.k,
+      min:Number(pl.minPorAssunto['s:'+x.s.id])||g.min,bloco:g.chave,eds:[...(subEds.get(x.s.id)||[])]}));
+  });
+  // rodízio ponderado: sempre entra o assunto da disciplina mais atrás em relação ao tempo que ela merece
+  let fila=[];
+  if(st.rodizio===false)ativos.forEach(g=>g.subs.forEach(x=>fila.push(x.s.id)));
+  else{
+    const idx={},feito={};ativos.forEach(g=>{idx[g.chave]=0;feito[g.chave]=0;});
+    const total=ativos.reduce((n,g)=>n+g.subs.length,0);
+    while(fila.length<total){
+      let best=null,bv=Infinity;
+      ativos.forEach(g=>{if(idx[g.chave]>=g.subs.length)return;const v=feito[g.chave]/g.w;if(v<bv-1e-9){bv=v;best=g;}});
+      const id=best.subs[idx[best.chave]++].s.id;fila.push(id);feito[best.chave]+=meta.get(id).min;
+    }
+  }
+  return{meta,fila,discs:ativos,todas:discs,rec,semVinculo:sem,excluidos:exclLista,eds};
+}
+// Reconciliação: cada assunto do edital está na fila, sem vínculo ou excluído por você — se a conta não fechar, avisa.
+function agReconciliar(f){
+  return Object.keys(f.rec).map(id=>{const r=f.rec[id];return{id,nome:r.nome,total:r.total,naFila:r.naFila,sem:r.sem.length,excl:r.excl.length,
+    fecha:r.total===r.naFila+r.sem.length+r.excl.length};});
+}
+// ===== ASSISTENTE DO PLANO (rascunho + prévia) =====
+// Tudo o que você muda aqui é um RASCUNHO: a prévia recalcula na hora e nada é gravado até "Aplicar".
+let agR=null,agHist=[];
+const agClone=o=>JSON.parse(JSON.stringify(o===undefined?null:o));
+const agAmanha=()=>addDays(todayStr(),1);
+function agRascunhoInicial(){
+  const a=agPlanos(),st=crEstado(),at=agAtivo();
+  const base=at?agClone(at):{id:genId(),nome:'Meu plano',editalIds:[],pct:{},pesos:{},minPorAssunto:{},excluidos:{},prioridade:{},reforco:{},
+    config:{inicio:agAmanha(),horasDia:CRON_HORAS_PADRAO,horaInicio:'06:00',diasSemana:[1,2,3,4,5,6],prazo:''}};
+  agNorm(base);
+  const f=crFases(st,st.inicio||agAmanha());
+  base.config.inicio=st.inicio||base.config.inicio||agAmanha();
+  base.config.horasDia=crHorasBase(todayStr()>base.config.inicio?todayStr():base.config.inicio,f);
+  base.config.horaInicio=st.horaInicio||base.config.horaInicio||'06:00';
+  base.pins=agClone(agObj(st.pins));
+  base.bloqueios=agClone(crLista(st.bloqueios));base.indisp=agClone(crLista(st.indisp));
+  return base;
+}
+// Roda fn com o rascunho instalado no lugar do plano real e devolve o resultado; o estado verdadeiro volta sempre.
+function agComPlano(r,fn){
+  const stOrig=db.cronograma,apOrig=db.agendaPlanos,st0=crEstado(),st=agClone(st0),c=r.config,hoje=todayStr();
+  st.ativo=true;st.pins=agClone(agObj(r.pins));st.horaInicio=c.horaInicio||'08:00';
+  st.bloqueios=agClone(crLista(r.bloqueios));st.indisp=agClone(crLista(r.indisp));
+  const horas=Number(c.horasDia)>0?Number(c.horasDia):CRON_HORAS_PADRAO;
+  const comecou=Object.keys(st.feitos||{}).length&&st.inicio&&st.inicio<=hoje;
+  if(!comecou){st.inicio=c.inicio;st.fases=[{desde:c.inicio,horas}];st.zero=null;}
+  else{const f=crFases(st,st.inicio).filter(x=>x.desde<hoje);f.push({desde:hoje,horas});st.fases=f;}
+  const pl=agNorm(agClone(r));pl.id='__rasc__';
+  db.cronograma=st;db.agendaPlanos={ativoId:'__rasc__',planos:{__rasc__:pl},versoes:[]};
+  try{return fn(pl,st);}finally{db.cronograma=stOrig;db.agendaPlanos=apOrig;crPlano();}
+}
+function agPrevia(r){
+  const antes=new Set(crPlano().meta.keys());
+  return agComPlano(r,(pl,st)=>{
+    const p=crPlano(),f=p.agenda;
+    const ini=p.inicio,sem=[0,1,2,3,4,5,6].map(i=>addDays(ini,i));
+    const porMat={};let totMin=0;
+    const dias=sem.map(ds=>{
+      const d=p.calendario.find(x=>x.ds===ds);if(!d)return{ds,txt:'—'};
+      const bl=crBlocosDoDia(d,p);
+      bl.forEach(b=>{if(b.tipo==='conteudo'){porMat[b.titulo]=(porMat[b.titulo]||0)+b.dur;totMin+=b.dur;}});
+      const txt=bl.filter(b=>b.tipo==='conteudo').map(b=>`${b.titulo} (${b.dur} min)`).join(' · ')||(d.indisp?'indisponível':d.t==='rev'?'revisão + simulado':d.t==='fer'?'feriado':'sem assunto novo');
+      return{ds,txt};
+    });
+    const linhas=[];
+    p.calendario.filter(d=>d.t==='est'&&d.ds>=p.hoje).slice(0,14).forEach(d=>(d.ds===p.hoje?p.hojeAtual:d.atual).forEach(id=>{const m=p.meta.get(id);if(m)linhas.push({ds:d.ds,id,nome:m.sub.name,disc:m.cap.nome,min:m.min});}));
+    const novos=[...p.meta.keys()].filter(id=>!antes.has(id)),saem=[...antes].filter(id=>!p.meta.has(id));
+    const nomeDe=id=>{const m=p.meta.get(id);return m?m.sub.name:id;};
+    return{
+      total:p.total,fim:p.fimAtual,prazo:p.prazo,noPrazo:p.noPrazo,horasNec:p.horasNec,horas:p.horas,dias,porMat,
+      discs:f.discs.map(g=>({chave:g.chave,key:g.key,nome:g.nome,n:g.subs.length,sem:g.nSem,excl:g.nExcl,q:Math.round(g.qDecl*10)/10,w:g.w,semPeso:g.semPeso,
+        pesoUsuario:g.pesoUsuario,min:g.min,fraco:!!g.fraco,total:g.total})),
+      rec:agReconciliar(f),sem:f.semVinculo.map(x=>({ed:x.e.nome,edId:x.e.id,disc:x.disc,id:x.a.id,nome:x.a.nome})),
+      excl:f.excluidos.map(x=>({id:x.a.id,nome:x.a.nome,motivo:x.motivo,disc:x.disc})),
+      conflitos:p.conflitos.map(c=>({id:c.id,nome:nomeDe(c.id),ds:c.ds,motivo:c.motivo})),linhas,
+      entram:novos.length,saem:saem.length,exEntram:novos.slice(0,5).map(nomeDe),
+      pendentes:p.pendentes};
+  });
+}
+function agMut(fn){agHist.push(agClone(agR));if(agHist.length>30)agHist.shift();fn();agRender();}
+function agDesfazerRasc(){if(!agHist.length)return;agR=agHist.pop();agRender();}
+function agRender(){
+  const el=document.getElementById('ag-assist');if(!el)return;
+  const sc=[];let n=el;while(n&&n!==document.body){sc.push([n,n.scrollTop]);n=n.parentElement;}
+  el.innerHTML=agAssistInner();
+  sc.forEach(([e,t])=>{e.scrollTop=t;});
+}
+const agNum=(v,min,max,def)=>{const n=parseFloat(String(v).replace(',','.'));return isFinite(n)?Math.min(max,Math.max(min,n)):def;};
+function agSetEd(id,on){agMut(()=>{const l=agR.editalIds.filter(x=>x!==id);if(on)l.push(id);agR.editalIds=l;});}
+function agSetPct(id,v){agMut(()=>{agR.pct[id]=agNum(v,0,100,0);});}
+function agSetCfg(k,v){
+  agMut(()=>{
+    const c=agR.config;
+    if(k==='horasDia')c.horasDia=agNum(v,1,12,4);
+    else if(k==='inicio'){if(agDataValida(v)&&v>=todayStr())c.inicio=v;else toast('⚠️ Escolha uma data válida, a partir de hoje.','var(--orange)');}
+    else if(k==='prazo'){c.prazo=agDataValida(v)?v:'';}
+    else if(k==='horaInicio'){if(agHM(v)!==null)c.horaInicio=v;}
+  });
+}
+function agSetDia(n,on){agMut(()=>{const s=new Set(agR.config.diasSemana);if(on)s.add(n);else s.delete(n);s.delete(0);agR.config.diasSemana=[...s].sort();if(!agR.config.diasSemana.length)agR.config.diasSemana=[1];});}
+function agSetPeso(key,v){agMut(()=>{const n=agNum(v,0,600,0);if(n>0)agR.pesos[key]=Math.round(n);else delete agR.pesos[key];});}
+function agSetMin(key,v){agMut(()=>{const n=agNum(v,5,180,0);if(n>0)agR.minPorAssunto[key]=Math.round(n);else delete agR.minPorAssunto[key];});}
+function agPrio(key,d){agMut(()=>{agR.prioridade[key]=Math.max(-2,Math.min(2,(Number(agR.prioridade[key])||0)+d));});}
+function agReforco(key){agMut(()=>{if(agR.reforco[key])delete agR.reforco[key];else agR.reforco[key]=true;});}
+// Seus tempos por dia: Enfermagem 1h, Português 2h, SUS 1h, Raciocínio lógico 30 min, História de Campina Grande 30 min.
+function agUsarMeusTempos(){
+  const M=[[/enferm/,60],[/portugu/,120],[/\bsus\b|saude publica|politicas? de saude/,60],[/raciocinio/,30],[/campina/,30]];
+  agMut(()=>{
+    (db.editais||[]).filter(e=>agR.editalIds.includes(e.id)).forEach(e=>edMigrar(e).disciplinas.forEach(d=>{
+      const k=normalizeForDedup(d.nome),m=M.find(x=>x[0].test(k));if(m)agR.pesos[k]=m[1];
+    }));
+  });
+}
+function agExcluir(){
+  const sel=document.getElementById('ag-exc-sel'),mo=document.getElementById('ag-exc-mot');
+  if(!sel||!sel.value)return;
+  const motivo=(mo&&mo.value||'').trim();
+  if(!motivo){toast('⚠️ Diga o motivo da exclusão (ex.: "já domino").','var(--orange)');return;}
+  agMut(()=>{agR.excluidos[sel.value]=motivo.slice(0,80);});
+}
+function agIncluir(id){agMut(()=>{delete agR.excluidos[id];});}
+function agMover(id,ds){
+  if(!agDataValida(ds)||ds<todayStr()){toast('⚠️ Escolha uma data válida, a partir de hoje.','var(--orange)');agRender();return;}
+  agMut(()=>{agR.pins[id]=Object.assign({},agR.pins[id],{ds});});
+}
+function agTravar(id,on){agMut(()=>{agR.pins[id]=Object.assign({},agR.pins[id]||{},{travado:!!on});if(!agR.pins[id].ds)delete agR.pins[id];});}
+function agTirarPino(id){agMut(()=>{delete agR.pins[id];});}
+function agMinAssunto(id,v){agMut(()=>{const n=agNum(v,5,180,0);if(n>0)agR.minPorAssunto['s:'+id]=Math.round(n);else delete agR.minPorAssunto['s:'+id];});}
+function agSoltarAjustes(){agMut(()=>{Object.keys(agR.pins).forEach(id=>{if(!agR.pins[id].travado)delete agR.pins[id];});});}
+function agAddIndisp(){
+  const v=(document.getElementById('ag-indisp')||{}).value;
+  if(!agDataValida(v)||v<todayStr()){toast('⚠️ Escolha uma data válida, a partir de hoje.','var(--orange)');return;}
+  agMut(()=>{if(!agR.indisp.includes(v))agR.indisp.push(v);agR.indisp.sort();});
+}
+function agDelIndisp(i){agMut(()=>{agR.indisp.splice(i,1);});}
+function agAddBloq(){
+  const g=id=>(document.getElementById(id)||{}).value;
+  const data=g('ag-bq-d'),ini=g('ag-bq-i'),min=agNum(g('ag-bq-m'),5,720,0),tit=(g('ag-bq-t')||'Compromisso').trim().slice(0,60)||'Compromisso';
+  if(!agDataValida(data)||data<todayStr()||agHM(ini)===null||!min){toast('⚠️ Informe data (de hoje em diante), horário e duração.','var(--orange)');return;}
+  agMut(()=>{agR.bloqueios.push({data,inicio:ini,min:Math.round(min),titulo:tit});});
+}
+function agDelBloq(i){agMut(()=>{agR.bloqueios.splice(i,1);});}
+function agFmtMin(m){return crFmtMin(m);}
+function agAssistInner(){
+  const r=agR,c=r.config,eds=(db.editais||[]).map(edMigrar).filter(e=>e.disciplinas.length);
+  const NOMES=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  if(!eds.length)return`<div class="cron-aviso">Você ainda não tem edital com disciplinas. Cadastre em <b>Editais</b> (dá para importar o PDF) e volte aqui.</div>`;
+  let pv=null,erro='';
+  if(r.editalIds.length){try{pv=agPrevia(r);}catch(e){erro=String(e&&e.message||e);}}
+  const s1=`<div class="ag-sec"><b>1 · Editais do plano</b><div class="cron-sub">Marque um ou mais. Com mais de um, defina o % de tempo de cada.</div>
+    ${eds.map(e=>{const on=r.editalIds.includes(e.id);return`<div class="ag-lin"><label class="banco-check"><input type="checkbox" ${on?'checked':''} onchange="agSetEd('${escapeAttrJs(e.id)}',this.checked)"> <b>${escapeHtml(e.nome)}</b> <span class="cron-sub">${escapeHtml(e.cargo||'')}${e.data?' · prova '+crFmtData(e.data):''} · ${e.disciplinas.length} disciplinas</span></label>
+      ${on&&r.editalIds.length>1?`<span>% do tempo <input class="inp" type="number" min="0" max="100" style="width:70px" value="${Number(r.pct[e.id])||''}" placeholder="igual" onchange="agSetPct('${escapeAttrJs(e.id)}',this.value)"></span>`:''}</div>`;}).join('')}</div>`;
+  if(!pv)return`<div class="ag-topo">${s1}<div class="cron-sub">Escolha ao menos um edital para ver as disciplinas e a prévia.</div></div>`;
+  const s2=`<div class="ag-sec"><b>2 · Disciplinas, questões e tempo</b>
+    <div class="cron-sub">Peso = questões que o edital declara. Sem número, aparece <b>peso não informado</b> — preencha os minutos por dia. <button class="btn btn-xs btn-ghost" onclick="agUsarMeusTempos()" title="Enfermagem 1h, Português 2h, SUS 1h, Raciocínio lógico 30 min, História de Campina Grande 30 min">Usar meus tempos</button></div>
+    <div class="ag-tab">${pv.discs.map(d=>`<div class="ag-disc"><div><b>${escapeHtml(d.nome)}</b> <span class="cron-sub">${d.n}/${d.total} assuntos na fila${d.sem?` · ${d.sem} sem vínculo`:''}${d.excl?` · ${d.excl} excluído${d.excl>1?'s':''}`:''}${d.fraco?' · ponto fraco no diagnóstico':''}</span><br>
+      <span class="cron-sub">${d.q>0?d.q+' questões':''}${d.semPeso?'<span class="ag-alerta">peso não informado</span>':(d.pesoUsuario?'definido por você':'')}</span></div>
+      <div class="ag-ctr"><label>min/dia <input class="inp" type="number" min="0" step="5" style="width:64px" value="${r.pesos[d.key]||''}" placeholder="${Math.round(d.w)}" onchange="agSetPeso('${escapeAttrJs(d.key)}',this.value)"></label>
+      <label>min/assunto <input class="inp" type="number" min="5" max="180" step="5" style="width:64px" value="${d.min}" onchange="agSetMin('${escapeAttrJs(d.key)}',this.value)"></label>
+      <button class="btn btn-xs btn-ghost" title="Subir a prioridade" onclick="agPrio('${escapeAttrJs(d.key)}',1)">▲</button><button class="btn btn-xs btn-ghost" title="Descer a prioridade" onclick="agPrio('${escapeAttrJs(d.key)}',-1)">▼</button>
+      <button class="btn btn-xs ${r.reforco[d.key]?'btn-primary':'btn-ghost'}" title="Reforçar ponto fraco" onclick="agReforco('${escapeAttrJs(d.key)}')">🎯</button></div></div>`).join('')}</div></div>`;
+  const dsem=[1,2,3,4,5,6].map(n=>`<label class="banco-check" style="display:inline-flex;margin-right:8px"><input type="checkbox" ${c.diasSemana.includes(n)?'checked':''} onchange="agSetDia(${n},this.checked)"> ${NOMES[n]}</label>`).join('');
+  const s3=`<div class="ag-sec"><b>3 · Quando e quanto</b><div class="ag-grid">
+    <label>Começa em <input class="inp" type="date" min="${todayStr()}" value="${c.inicio}" onchange="agSetCfg('inicio',this.value)"></label>
+    <label>Horas por dia <input class="inp" type="number" min="1" max="12" step="0.5" style="width:80px" value="${c.horasDia}" onchange="agSetCfg('horasDia',this.value)"></label>
+    <label>Começo às <input class="inp" type="time" step="900" value="${escapeHtml(c.horaInicio)}" onchange="agSetCfg('horaInicio',this.value)"></label>
+    <label>Prova / prazo <input class="inp" type="date" value="${escapeHtml(c.prazo||'')}" onchange="agSetCfg('prazo',this.value)"></label></div>
+    <div style="margin-top:6px">Dias de estudo: ${dsem} <span class="cron-sub">(domingo é sempre revisão + simulado)</span></div>
+    <div class="cron-sub">Sem data de prova, o prazo é de ${CRON_MESES_PRAZO} meses a partir do início.</div></div>`;
+  const s4=`<div class="ag-sec"><b>4 · Conferência dos editais</b>
+    ${pv.rec.map(x=>`<div class="ag-lin"><b>${escapeHtml(x.nome)}</b> · ${x.total} assuntos = ${x.naFila} na fila + ${x.sem} sem vínculo + ${x.excl} excluídos ${x.fecha?'✅':'<span class="ag-alerta">a conta não fecha</span>'}</div>`).join('')}
+    ${pv.sem.length?`<details class="ag-det"><summary><span class="ag-alerta">${pv.sem.length} sem vínculo com o Mapa</span> (não entram na fila até você vincular)</summary>
+      ${pv.sem.slice(0,60).map(x=>`<div class="cron-sub">• ${escapeHtml(x.disc)} — ${escapeHtml(x.nome)} <i>(${escapeHtml(x.ed)})</i></div>`).join('')}
+      <div class="cron-sub">Vincule em <b>Editais</b> (botão de vínculo do assunto) ou crie o assunto no Mapa; depois volte aqui.</div></details>`:''}
+    <details class="ag-det"><summary>Excluir um assunto do plano (${pv.excl.length} excluído${pv.excl.length===1?'':'s'})</summary>
+      <div class="ag-lin"><select id="ag-exc-sel" class="inp"><option value="">Escolha o assunto…</option>${r.editalIds.map(id=>edFind(id)).filter(Boolean).flatMap(e=>e.disciplinas.flatMap(d=>d.assuntos.filter(a=>!r.excluidos[a.id]).map(a=>`<option value="${escapeHtml(a.id)}">${escapeHtml(d.nome)} — ${escapeHtml(a.nome)}</option>`))).join('')}</select>
+      <input id="ag-exc-mot" class="inp" placeholder="motivo" maxlength="80" style="width:160px"><button class="btn btn-xs btn-ghost" onclick="agExcluir()">Excluir</button></div>
+      ${pv.excl.map(x=>`<div class="cron-sub">• ${escapeHtml(x.nome)} — ${escapeHtml(x.motivo)} <button class="btn btn-xs btn-ghost" onclick="agIncluir('${escapeAttrJs(x.id)}')">incluir de volta</button></div>`).join('')}</details></div>`;
+  const s5=`<div class="ag-sec"><b>5 · Compromissos e dias indisponíveis</b>
+    <div class="cron-sub">O estudo se reorganiza em volta. Um compromisso só tira tempo do estudo se cair na janela em que você estuda.</div>
+    <div class="ag-lin"><input id="ag-indisp" class="inp" type="date" min="${todayStr()}"><button class="btn btn-xs btn-ghost" onclick="agAddIndisp()">Marcar dia indisponível</button>
+      ${r.indisp.map((d,i)=>`<span class="cron-pill">${crFmtData(d)} <a href="#" onclick="agDelIndisp(${i});return false" aria-label="Remover">✕</a></span>`).join(' ')}</div>
+    <div class="ag-lin"><input id="ag-bq-d" class="inp" type="date" min="${todayStr()}"><input id="ag-bq-i" class="inp" type="time" step="900" value="07:00"><input id="ag-bq-m" class="inp" type="number" min="5" step="5" value="60" style="width:70px" title="minutos"><input id="ag-bq-t" class="inp" placeholder="ex.: plantão" maxlength="60" style="width:130px"><button class="btn btn-xs btn-ghost" onclick="agAddBloq()">Adicionar compromisso</button></div>
+    ${r.bloqueios.map((b,i)=>`<div class="cron-sub">• ${crFmtData(b.data)} ${escapeHtml(b.inicio)} · ${b.min} min — ${escapeHtml(b.titulo||'')} <a href="#" onclick="agDelBloq(${i});return false">remover</a></div>`).join('')}</div>`;
+  const delta=pv.entram||pv.saem?`<div class="cron-aviso">Mudança em relação ao plano de hoje: <b>+${pv.entram}</b> assunto${pv.entram===1?'':'s'} entram${pv.entram?' ('+pv.exEntram.map(escapeHtml).join('; ')+(pv.entram>5?'…':'')+')':''}, <b>−${pv.saem}</b> saem. Nada concluído se perde.</div>`:'';
+  const pinsN=Object.keys(r.pins).length;
+  const s6=`<div class="ag-sec"><b>6 · Prévia</b>
+    <div class="ag-res"><span class="cron-pill ${pv.noPrazo?'cron-pill-bom':'cron-pill-ruim'}">${pv.noPrazo?'✅ fecha no prazo':'⚠️ passa do prazo'} (${crFmtData(pv.prazo)})</span>
+      <span class="cron-pill">📅 término previsto ${crFmtData(pv.fim)}</span><span class="cron-pill">⏱ ${String(pv.horas).replace('.',',')}h/dia</span>
+      <span class="cron-pill cron-pill-meta">${pv.pendentes} assuntos a estudar</span>
+      ${pv.horasNec?`<span class="cron-pill" title="Para fechar tudo até o prazo">precisa de ~${String(pv.horasNec).replace('.',',')}h/dia</span>`:''}</div>
+    ${pv.conflitos.length?`<div class="cron-aviso">⚠️ ${pv.conflitos.map(x=>`<b>${escapeHtml(x.nome)}</b> estava fixado em ${crFmtData(x.ds)} (${escapeHtml(x.motivo)}) e voltou para a fila`).join('; ')}.</div>`:''}
+    <div class="cron-sub" style="margin-top:6px"><b>Primeira semana</b></div>
+    ${pv.dias.map(d=>`<div class="cron-sub">${CRON_DOW[crDow(d.ds)]} ${crFmtData(d.ds)} — ${escapeHtml(d.txt)}</div>`).join('')}
+    <div class="cron-sub" style="margin-top:6px"><b>Horas por matéria na semana:</b> ${Object.keys(pv.porMat).map(k=>`${escapeHtml(k)} ${crFmtMin(pv.porMat[k])}`).join(' · ')||'—'}</div>
+    ${delta}</div>`;
+  const s7=`<div class="ag-sec"><b>7 · Ajustes finos</b> <span class="cron-sub">(próximos dias)</span>
+    <div class="cron-sub">Mude o dia, a duração ou trave um assunto. O resto desliza em volta; o que está travado fica onde você pôs.${pinsN?` ${pinsN} ajuste${pinsN>1?'s':''} seu${pinsN>1?'s':''}.`:''} ${pinsN?'<button class="btn btn-xs btn-ghost" onclick="agSoltarAjustes()">Soltar os que não estão travados</button>':''}</div>
+    <div class="ag-fino">${pv.linhas.map(l=>{const pn=r.pins[l.id]||{};return`<div class="ag-lin"><span>${CRON_DOW[crDow(l.ds)]} ${crFmtData(l.ds)} · ${escapeHtml(l.disc)} — ${escapeHtml(l.nome)}</span>
+      <input class="inp" type="date" min="${todayStr()}" value="${l.ds}" onchange="agMover('${escapeAttrJs(l.id)}',this.value)" aria-label="Dia">
+      <input class="inp" type="number" min="5" max="180" step="5" style="width:64px" value="${l.min}" onchange="agMinAssunto('${escapeAttrJs(l.id)}',this.value)" aria-label="Minutos">
+      <label class="banco-check"><input type="checkbox" ${pn.travado?'checked':''} ${pn.ds?'':'disabled title="Mude o dia primeiro"'} onchange="agTravar('${escapeAttrJs(l.id)}',this.checked)"> travar</label></div>`;}).join('')||'<div class="cron-sub">Sem assuntos nos próximos dias.</div>'}</div></div>`;
+  const a=agPlanos();
+  const acoes=`<div class="ag-acoes"><button class="btn btn-xs btn-ghost" onclick="agDesfazerRasc()" ${agHist.length?'':'disabled'}>↶ Desfazer</button>
+    ${a.versoes.length?`<button class="btn btn-xs btn-ghost" onclick="agVoltar()" title="Volta ao plano que estava antes da última aplicação">Voltar ao plano anterior (${a.versoes.length})</button>`:''}
+    <button class="btn btn-sm btn-primary" onclick="agAplicar()">Aplicar plano</button></div>`;
+  return`${erro?`<div class="cron-aviso">⚠️ ${escapeHtml(erro)}</div>`:''}<div class="ag-topo">${s1}</div>${s2}${s3}${s4}${s5}${s6}${s7}${acoes}`;
+}
+function agAbrirAssistente(){
+  agR=agRascunhoInicial();agHist=[];
+  if(!agR.editalIds.length){const e=(db.editais||[]).map(edMigrar).filter(x=>x.disciplinas.length);if(e.length===1)agR.editalIds=[e[0].id];}
+  openModal('🧭 Plano por edital',`<div class="cron-modal ag-modal"><div id="ag-assist">${agAssistInner()}</div></div>`);
+}
+function agFoto(){
+  const a=agPlanos(),st=crEstado(),at=agAtivo();
+  return agClone({em:todayStr(),ativoId:a.ativoId||null,plano:at||null,st:{inicio:st.inicio,fases:st.fases,horaInicio:st.horaInicio,pins:st.pins||{},bloqueios:crLista(st.bloqueios),indisp:crLista(st.indisp),zero:st.zero||null}});
+}
+function agGuardarVersao(){const a=agPlanos();a.versoes.push(agFoto());a.versoes=a.versoes.slice(-AG_VERSOES);}
+function agVoltar(){
+  const a=agPlanos(),v=a.versoes.pop();if(!v){toast('Não há versão anterior.','var(--muted)');return;}
+  const st=crEstado(),antes=crPlano().atrasados.length;
+  a.ativoId=v.ativoId;if(v.plano)a.planos[v.plano.id]=v.plano;
+  ['inicio','fases','horaInicio','pins','bloqueios','indisp'].forEach(k=>{if(v.st[k]===undefined)delete st[k];else st[k]=v.st[k];});
+  crRebase(antes);saveDB();crRefrescar();
+  if(document.getElementById('ag-assist')){agR=agRascunhoInicial();agHist=[];agRender();}
+  toast('↩ Plano anterior restaurado.','var(--accent)');
+}
+function agVoltarEbserh(){
+  const a=agPlanos(),st=crEstado();if(!a.ativoId)return;
+  if(!confirm('Voltar para a trilha da Ebserh?\n\nO plano por edital fica guardado e o que você concluiu continua concluído.'))return;
+  const antes=crPlano().atrasados.length;agGuardarVersao();a.ativoId=null;crRebase(antes);saveDB();crRefrescar();closeModal();
+  toast('Trilha da Ebserh de volta.','var(--accent)');
+}
+function agAplicar(){
+  const r=agR;if(!r||!r.editalIds.length){toast('⚠️ Escolha ao menos um edital.','var(--orange)');return;}
+  const c=r.config,hoje=todayStr();
+  if(!agDataValida(c.inicio)||c.inicio<hoje){toast('⚠️ A data de início precisa ser de hoje em diante.','var(--orange)');return;}
+  const st=crEstado(),a=agPlanos(),antes=crPlano().atrasados.length,comecou=Object.keys(st.feitos||{}).length&&st.inicio&&st.inicio<=hoje;
+  agGuardarVersao();
+  const pl=agClone(r);delete pl.pins;delete pl.bloqueios;delete pl.indisp;pl.atualizadoEm=hoje;
+  a.planos[pl.id]=pl;a.ativoId=pl.id;
+  const horas=Number(c.horasDia)>0?Number(c.horasDia):CRON_HORAS_PADRAO;
+  st.ativo=true;st.ativadoEm=st.ativadoEm||hoje;
+  if(!comecou){st.inicio=c.inicio;st.fases=[{desde:c.inicio,horas}];}
+  else{const f=crFases(st,st.inicio).filter(x=>x.desde<hoje);f.push({desde:hoje,horas});st.fases=f;}
+  st.horaInicio=c.horaInicio;st.pins=agClone(r.pins);st.bloqueios=agClone(r.bloqueios);st.indisp=agClone(r.indisp);
+  crRebase(antes);saveDB();crRefrescar();closeModal();
+  const p=crPlano();
+  toast(`🧭 Plano aplicado: ${p.total} assuntos, término previsto ${crFmtData(p.fimAtual)}.`,'var(--accent)');
+}
+
+// ===== IMPORTAR E EXPORTAR =====
+const AG_TIPOS=['estudo','revisao','questoes','erros','simulado','bloqueio'];
+const AG_MAX_BYTES=2*1024*1024,AG_MAX_ITENS=5000;
+function agTipoDe(b){return b.tipo==='conteudo'?'estudo':b.tipo==='questoes'?'questoes':b.tipo==='erros'?'erros':b.tipo==='simulado'?'simulado':'revisao';}
+// A agenda inteira de hoje em diante, no formato de troca (um item por assunto estudado).
+function agItens(){
+  const p=crPlano(),st=p.st,itens=[];
+  p.calendario.filter(d=>d.ds>=p.hoje).forEach(d=>{
+    const ini=crHoraInicioMin(),seq=crSequencia(crBlocosDoDia(d,p));let fimAnt=0;
+    seq.blocos.forEach(b=>{
+      if(b.tipo==='pausa')return;
+      let t=Math.max(ini+b.ini,fimAnt);   // blocos arredondados em 5 min não podem se sobrepor na troca
+      if(b.tipo==='conteudo'&&b.ids){
+        b.ids.forEach(id=>{const m=p.meta.get(id);if(!m)return;
+          itens.push({data:d.ds,inicio:crHM(t),min:m.min,tipo:'estudo',subId:id,disciplina:m.cap.nome,assunto:m.sub.name,editalId:(m.eds&&m.eds[0])||null,travado:!!(st.pins&&st.pins[id]&&st.pins[id].travado)});t+=m.min;});
+        fimAnt=t;return;
+      }
+      itens.push({data:d.ds,inicio:crHM(t),min:b.dur,tipo:agTipoDe(b),subId:null,disciplina:'',assunto:b.titulo||'',editalId:null,travado:false});fimAnt=t+b.dur;
+    });
+  });
+  agBloqs().filter(b=>b.data>=p.hoje).forEach(b=>itens.push({data:b.data,inicio:b.inicio,min:+b.min||0,tipo:'bloqueio',subId:null,disciplina:'',assunto:b.titulo||'Compromisso',editalId:null,travado:false}));
+  itens.sort((a,b)=>(a.data+a.inicio).localeCompare(b.data+b.inicio));
+  return itens;
+}
+function agExportarObj(){
+  const st=crEstado(),p=crPlano(),pl=agAtivo(),f=crFases(st,p.inicio);
+  return{formato:'vale-agenda-v1',editalIds:pl?pl.editalIds.slice():[],
+    config:{inicio:p.inicio,horasDia:p.horas,horaInicio:st.horaInicio||'08:00',diasSemana:pl?pl.config.diasSemana.slice():[1,2,3,4,5,6]},itens:agItens()};
+}
+const agCsvCel=v=>'"'+String(v===null||v===undefined?'':v).replace(/"/g,'""')+'"';
+function agExportarCSV(){
+  const p=crPlano(),nomeEd=id=>{const e=id&&edFind(id);return e?e.nome:'';};
+  return['data,inicio,min,tipo,edital,disciplina,assunto'].concat(agItens().map(i=>[i.data,i.inicio,i.min,i.tipo,nomeEd(i.editalId),i.disciplina,i.assunto].map(agCsvCel).join(','))).join('\r\n')+'\r\n';
+}
+const agIcsEsc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
+function agIcsDt(ds,min){const d=ds.replace(/-/g,''),h=String(Math.floor(min/60)%24).padStart(2,'0'),m=String(min%60).padStart(2,'0');return`${d}T${h}${m}00`;}
+function agExportarICS(){
+  const itens=agItens(),carimbo=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+Z$/,'Z');
+  const ev=itens.map((i,n)=>{
+    const ini=agHM(i.inicio),fim=ini+i.min;
+    const tit=i.tipo==='estudo'?`Estudo: ${i.assunto}`:i.tipo==='bloqueio'?i.assunto:i.assunto||i.tipo;
+    return['BEGIN:VEVENT',`UID:vdn-${i.data}-${n}@valedosnomeados`,`DTSTAMP:${carimbo}`,`DTSTART:${agIcsDt(i.data,ini)}`,`DTEND:${agIcsDt(fim>=1440?i.data:i.data,Math.min(fim,1439))}`,
+      `SUMMARY:${agIcsEsc(tit)}`,`DESCRIPTION:${agIcsEsc([i.disciplina,i.tipo].filter(Boolean).join(' · '))}`,'END:VEVENT'].join('\r\n');
+  });
+  return['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Vale dos Nomeados//Agenda//PT-BR','CALSCALE:GREGORIAN'].concat(ev,['END:VCALENDAR']).join('\r\n')+'\r\n';
+}
+function agBaixar(nome,tipo,texto){
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([texto],{type:tipo+';charset=utf-8'}));a.download=nome;
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+}
+function agExportar(fmt){
+  const hoje=todayStr();
+  if(fmt==='json')agBaixar(`agenda-${hoje}.json`,'application/json',JSON.stringify(agExportarObj(),null,2));
+  else if(fmt==='csv')agBaixar(`agenda-${hoje}.csv`,'text/csv',agExportarCSV());
+  else agBaixar(`agenda-${hoje}.ics`,'text/calendar',agExportarICS());
+  toast('📤 Agenda exportada.','var(--accent)');
+}
+// --- leitura dos três formatos ---
+function agCsvLinhas(txt){
+  const tab=(txt.split('\n')[0]||'').includes('\t'),sep=tab?'\t':((txt.split('\n')[0]||'').split(';').length>(txt.split('\n')[0]||'').split(',').length?';':',');
+  const linhas=[];let cel='',lin=[],asp=false;
+  for(let i=0;i<txt.length;i++){
+    const ch=txt[i];
+    if(asp){if(ch==='"'){if(txt[i+1]==='"'){cel+='"';i++;}else asp=false;}else cel+=ch;}
+    else if(ch==='"')asp=true;
+    else if(ch===sep){lin.push(cel);cel='';}
+    else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&txt[i+1]==='\n')i++;lin.push(cel);cel='';if(lin.some(x=>x.trim()))linhas.push(lin);lin=[];}
+    else cel+=ch;
+  }
+  lin.push(cel);if(lin.some(x=>x.trim()))linhas.push(lin);
+  return linhas;
+}
+function agLerCSV(txt){
+  const L=agCsvLinhas(txt),erros=[],itens=[];
+  if(!L.length)return{itens,erros:[{linha:0,motivo:'arquivo vazio'}]};
+  const cab=L[0].map(x=>normalizeForDedup(x)),ix=n=>cab.indexOf(n);
+  const col={data:ix('data'),inicio:ix('inicio'),min:ix('min'),tipo:ix('tipo'),edital:ix('edital'),disciplina:ix('disciplina'),assunto:ix('assunto')};
+  if(col.data<0||col.inicio<0||col.min<0||col.tipo<0)return{itens,erros:[{linha:1,motivo:'cabeçalho esperado: data, inicio, min, tipo, edital, disciplina, assunto'}]};
+  L.slice(1).forEach((c,n)=>{const g=k=>col[k]>=0?String(c[col[k]]||'').trim():'';
+    itens.push({linha:n+2,data:g('data'),inicio:g('inicio'),min:g('min'),tipo:normalizeForDedup(g('tipo')),subId:null,disciplina:g('disciplina'),assunto:g('assunto'),editalNome:g('edital'),travado:false});});
+  return{itens,erros};
+}
+function agLerJSON(txt){
+  let o;try{o=JSON.parse(txt);}catch(e){return{itens:[],erros:[{linha:0,motivo:'JSON inválido'}]};}
+  if(!o||o.formato!=='vale-agenda-v1')return{itens:[],erros:[{linha:0,motivo:'formato desconhecido (esperado "vale-agenda-v1")'}]};
+  const l=crLista(o.itens);
+  if(l.length>AG_MAX_ITENS)return{itens:[],erros:[{linha:0,motivo:`itens demais (máximo ${AG_MAX_ITENS})`}]};
+  const cut=v=>typeof v==='string'?v.slice(0,200):(v===null||v===undefined?'':String(v).slice(0,200));
+  const itens=l.map((i,n)=>i&&typeof i==='object'?{linha:n+1,data:cut(i.data),inicio:cut(i.inicio),min:i.min,tipo:cut(i.tipo),subId:i.subId?cut(i.subId):null,
+    disciplina:cut(i.disciplina),assunto:cut(i.assunto),editalId:i.editalId?cut(i.editalId):null,travado:i.travado===true}:{linha:n+1,data:'',inicio:'',min:0,tipo:'',subId:null,disciplina:'',assunto:'',travado:false,invalido:true});
+  return{itens,erros:[],editalIds:crLista(o.editalIds).filter(x=>typeof x==='string').slice(0,20),config:agObj(o.config)};
+}
+function agIcsDtParse(v){
+  const m=/^(\d{4})(\d\d)(\d\d)(?:T(\d\d)(\d\d)(\d\d)?(Z)?)?$/.exec(String(v||'').trim());if(!m)return null;
+  if(m[4]===undefined)return{ds:`${m[1]}-${m[2]}-${m[3]}`,min:0,dia:true};
+  let y=+m[1],mo=+m[2],d=+m[3],h=+m[4],mi=+m[5];
+  if(m[7]){const dt=new Date(Date.UTC(y,mo-1,d,h,mi));y=dt.getFullYear();mo=dt.getMonth()+1;d=dt.getDate();h=dt.getHours();mi=dt.getMinutes();}
+  return{ds:`${String(y).padStart(4,'0')}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`,min:h*60+mi,dia:false};
+}
+function agLerICS(txt){
+  const L=txt.replace(/\r?\n[ \t]/g,'').split(/\r?\n/),itens=[],erros=[];let ev=null,n=0;
+  L.forEach(l=>{
+    if(l==='BEGIN:VEVENT'){ev={};return;}
+    if(l==='END:VEVENT'&&ev){n++;
+      const a=agIcsDtParse(ev.DTSTART),b=ev.DTEND?agIcsDtParse(ev.DTEND):null;
+      const tit=String(ev.SUMMARY||'Compromisso').replace(/\\([,;nN\\])/g,(x,c)=>c==='n'||c==='N'?' ':c).slice(0,60)||'Compromisso';
+      if(!a){erros.push({linha:n,motivo:'data do evento ilegível'});ev=null;return;}
+      if(ev.RRULE){erros.push({linha:n,motivo:`evento recorrente ("${tit}"): só a primeira ocorrência foi lida`});}
+      let min=0;
+      if(a.dia)min=1440;
+      else if(b&&b.ds===a.ds&&b.min>a.min)min=b.min-a.min;
+      else if(b&&b.ds!==a.ds)min=Math.max(5,1440-a.min);
+      else{const d=/^PT(?:(\d+)H)?(?:(\d+)M)?$/.exec(ev.DURATION||'');min=d?(+d[1]||0)*60+(+d[2]||0):60;}
+      itens.push({linha:n,data:a.ds,inicio:a.dia?'00:00':crHM(a.min),min,tipo:'bloqueio',subId:null,disciplina:'',assunto:tit,diaInteiro:a.dia,travado:false});
+      ev=null;return;
+    }
+    if(ev){const i=l.indexOf(':');if(i<0)return;const k=l.slice(0,i).split(';')[0].toUpperCase();if(!(k in ev))ev[k]=l.slice(i+1);}
+  });
+  return{itens,erros};
+}
+function agLer(txt,nome){
+  const t=String(txt||'').replace(/^\uFEFF/,'').trim();
+  if(!t)return{itens:[],erros:[{linha:0,motivo:'nada para importar'}],formato:'?'};
+  if(t[0]==='{'||t[0]==='['){const r=agLerJSON(t);r.formato='json';return r;}
+  if(/BEGIN:VCALENDAR/i.test(t)){const r=agLerICS(t);r.formato='ics';return r;}
+  const r=agLerCSV(t);r.formato='csv';return r;
+}
+// Decide o destino de cada linha: aplicar, ignorar (com motivo) ou perguntar (nome ambíguo). Nada é gravado aqui.
+function agAnalisar(lida,sobrepor){
+  const hoje=todayStr(),amanha=agAmanha(),p=crPlano(),st=p.st;
+  const porChave=new Map();
+  p.meta.forEach((m,id)=>{const k=edChaveNome(m.sub.name);if(!porChave.has(k))porChave.set(k,[]);porChave.get(k).push(id);});
+  // o nome que está no edital também vale (é o que a IA externa recebe no prompt)
+  if(p.agenda)p.agenda.todas.forEach(g=>g.itens.forEach(({a})=>{
+    if(a.subId&&p.meta.has(a.subId)){const k=edChaveNome(a.nome),l=porChave.get(k)||[];if(!l.includes(a.subId))l.push(a.subId);porChave.set(k,l);}}));
+  const res=[];
+  lida.itens.forEach(it=>{
+    const r={it,status:'ignorar',motivo:'',subId:null,cand:[]};res.push(r);
+    if(it.invalido){r.motivo='linha inválida';return;}
+    if(!agDataValida(it.data)){r.motivo='data inválida';return;}
+    const ini=agHM(it.inicio);if(ini===null){r.motivo='horário inválido';return;}
+    const min=Number(it.min);if(!isFinite(min)||min<5||min>1440||Math.round(min)!==min){r.motivo='duração inválida';return;}
+    it.minN=min;it.iniN=ini;
+    if(!AG_TIPOS.includes(it.tipo)){r.motivo=`tipo desconhecido ("${String(it.tipo).slice(0,20)}")`;return;}
+    if(it.data<amanha){r.motivo='passado ou hoje (só entra o que vem a partir de amanhã)';return;}
+    if(it.tipo==='bloqueio'){r.status='aplicar';r.bloqueio=true;return;}
+    if(it.tipo!=='estudo'){r.motivo='gerado automaticamente pelo plano (revisões, questões, erros e simulado)';return;}
+    let id=it.subId&&p.meta.has(it.subId)?it.subId:null;
+    if(!id){
+      const c=porChave.get(edChaveNome(it.assunto))||[];
+      let l=c;
+      if(l.length>1&&it.disciplina){const dk=normalizeForDedup(it.disciplina);const f=l.filter(x=>normalizeForDedup(p.meta.get(x).cap.nome)===dk);if(f.length)l=f;}
+      if(l.length===1)id=l[0];
+      else if(l.length>1){r.status='ambiguo';r.cand=l;r.motivo='nome com mais de um candidato';return;}
+      else{r.motivo='assunto não reconhecido no plano';return;}
+    }
+    if(st.feitos[id]){r.motivo='assunto já concluído';return;}
+    r.subId=id;r.status='aplicar';
+  });
+  // dia sem estudo e sobreposição (só entre o que vai entrar)
+  const ocupado=[];
+  agBloqs().forEach(b=>ocupado.push({ds:b.data,i:agHM(b.inicio),f:agHM(b.inicio)+(+b.min||0),de:'compromisso existente'}));
+  res.filter(r=>r.status==='aplicar').forEach(r=>{
+    const it=r.it;
+    if(!r.bloqueio&&!crUtil(it.data)){r.status='ignorar';r.motivo='dia sem estudo (domingo, feriado ou indisponível)';return;}
+    if(r.bloqueio&&it.diaInteiro){r.dia=true;return;}
+    const i=it.iniN,f=i+it.minN,x=ocupado.find(o=>o.ds===it.data&&i<o.f&&f>o.i);
+    if(x&&!sobrepor){r.status='ignorar';r.motivo=`sobrepõe ${x.de} (marque "permitir sobreposição" para aceitar)`;return;}
+    if(x)r.sobreposto=true;
+    ocupado.push({ds:it.data,i,f,de:'outro item da importação'});
+  });
+  return res;
+}
+let agImp={txt:'',modo:'somar',sobrepor:false,lida:null,res:null,esc:{}};
+function agImportarAbrir(){
+  agImp={txt:'',modo:'somar',sobrepor:false,lida:null,res:null,esc:{}};
+  openModal('📥 Importar agenda',`<div class="cron-modal ag-modal"><div id="ag-imp">${agImportarHTML()}</div></div>`);
+}
+function agImportarHTML(){
+  const m=agImp;
+  const modos=[['somar','Somar','acrescenta ao que você já tem'],['substituir','Substituir só o futuro','troca os ajustes e compromissos a partir de amanhã; passado e progresso ficam'],['novo','Criar como novo plano','copia o plano atual e aplica a importação nele; o atual fica guardado']];
+  let prev='';
+  if(m.res){
+    const ap=m.res.filter(r=>r.status==='aplicar'),am=m.res.filter(r=>r.status==='ambiguo'),ig=m.res.filter(r=>r.status==='ignorar');
+    const resolvidos=am.filter(r=>m.esc[r.it.linha]),nApl=ap.length+resolvidos.length,nIgn=ig.length+(am.length-resolvidos.length);
+    const motivos={};ig.concat(am.filter(r=>!m.esc[r.it.linha])).forEach(r=>{motivos[r.motivo]=(motivos[r.motivo]||0)+1;});
+    prev=`<div class="ag-sec"><b>Prévia</b> <span class="cron-sub">(${escapeHtml(m.lida.formato)})</span>
+      <div class="ag-res"><span class="cron-pill">${m.res.length} linhas lidas</span><span class="cron-pill cron-pill-bom">${nApl} aplicadas</span><span class="cron-pill ${nIgn?'cron-pill-ruim':''}">${nIgn} ignoradas</span></div>
+      <div class="cron-sub">Conta: ${m.res.length} lidas = ${nApl} aplicadas + ${nIgn} ignoradas ${m.res.length===nApl+nIgn?'✅':'<span class="ag-alerta">não fecha</span>'}</div>
+      ${m.lida.erros.length?`<div class="cron-aviso">${m.lida.erros.slice(0,6).map(e=>`${e.linha?'Linha '+e.linha+': ':''}${escapeHtml(e.motivo)}`).join('<br>')}</div>`:''}
+      ${Object.keys(motivos).map(k=>`<div class="cron-sub">• ${motivos[k]}× ${escapeHtml(k)}</div>`).join('')}
+      ${am.map(r=>`<div class="ag-lin"><span>"${escapeHtml(r.it.assunto)}" — qual destes?</span><select class="inp" onchange="agImpEscolher(${r.it.linha},this.value)"><option value="">pular</option>${r.cand.map(id=>{const mm=crPlano().meta.get(id);return`<option value="${escapeHtml(id)}"${m.esc[r.it.linha]===id?' selected':''}>${escapeHtml(mm.cap.nome)} — ${escapeHtml(mm.sub.name)}</option>`;}).join('')}</select></div>`).join('')}
+      <details class="ag-det"><summary>Ver as linhas</summary>${m.res.slice(0,200).map(r=>`<div class="cron-sub">${r.it.linha}. ${escapeHtml(String(r.it.data))} ${escapeHtml(String(r.it.inicio))} · ${escapeHtml(String(r.it.tipo))} · ${escapeHtml(String(r.it.assunto||'').slice(0,50))} → ${r.status==='aplicar'?'✅ entra'+(r.sobreposto?' (sobrepõe)':''):r.status==='ambiguo'?'❓ perguntar':'⏭ '+escapeHtml(r.motivo)}</div>`).join('')}</details>
+      <button class="btn btn-sm btn-primary" onclick="agImportarAplicar()" ${nApl?'':'disabled'}>Aplicar importação</button></div>`;
+  }
+  return`<div class="cron-sub">Aceita o JSON da Agenda ("vale-agenda-v1"), CSV/planilha colada (data, inicio, min, tipo, edital, disciplina, assunto) e arquivo .ics. Só entra o que vem <b>a partir de amanhã</b>; passado e progresso nunca mudam.</div>
+    <div class="ag-lin"><input type="file" id="ag-imp-file" accept=".json,.csv,.tsv,.txt,.ics,application/json,text/csv,text/calendar" onchange="agImpArquivo(this)"></div>
+    <textarea id="ag-imp-txt" class="inp" rows="6" style="width:100%" placeholder="…ou cole aqui o JSON, o CSV ou a planilha" oninput="agImp.txt=this.value">${escapeHtml(m.txt)}</textarea>
+    <div class="ag-sec"><b>Como entrar</b>${modos.map(x=>`<label class="banco-check" style="display:flex"><input type="radio" name="ag-modo" ${m.modo===x[0]?'checked':''} onchange="agImp.modo='${x[0]}'"> <span><b>${x[1]}</b> — ${x[2]}</span></label>`).join('')}
+      <label class="banco-check" style="margin-top:6px"><input type="checkbox" ${m.sobrepor?'checked':''} onchange="agImp.sobrepor=this.checked;agImpAnalisar()"> Permitir sobreposição de horários</label></div>
+    <button class="btn btn-sm btn-ghost" onclick="agImpAnalisar(true)">Ver prévia</button>${prev}`;
+}
+function agImpRender(){const el=document.getElementById('ag-imp');if(el){const t=document.getElementById('ag-imp-txt');if(t)agImp.txt=t.value;el.innerHTML=agImportarHTML();}}
+function agImpArquivo(inp){
+  const f=inp.files&&inp.files[0];if(!f)return;
+  if(f.size>AG_MAX_BYTES){toast('⚠️ Arquivo grande demais (máximo 2 MB).','var(--orange)');inp.value='';return;}
+  if(!/\.(json|csv|tsv|txt|ics)$/i.test(f.name)&&!/json|csv|calendar|text\/plain/.test(f.type||'')){toast('⚠️ Tipo de arquivo não aceito. Use .json, .csv, .tsv, .txt ou .ics.','var(--orange)');inp.value='';return;}
+  const rd=new FileReader();rd.onload=()=>{agImp.txt=String(rd.result||'');agImpAnalisar(true);};rd.readAsText(f);
+}
+function agImpAnalisar(forcar){
+  const t=document.getElementById('ag-imp-txt');if(t)agImp.txt=t.value;
+  if(!agImp.txt.trim()&&!forcar){return;}
+  agImp.lida=agLer(agImp.txt);agImp.esc={};agImp.res=agAnalisar(agImp.lida,agImp.sobrepor);agImpRender();
+}
+function agImpEscolher(linha,id){agImp.esc[linha]=id||'';agImpRender();}
+// Grava: pinos (assunto em outro dia), compromissos e dias indisponíveis. Passado e progresso nunca são tocados.
+function agImportarAplicar(){
+  const m=agImp;if(!m.res)return;
+  const amanha=agAmanha(),st=crEstado(),a=agPlanos(),antes=crPlano().atrasados.length;
+  m.res.filter(r=>r.status==='ambiguo'&&m.esc[r.it.linha]).forEach(r=>{r.subId=m.esc[r.it.linha];r.status='aplicar';});
+  const lista=m.res.filter(r=>r.status==='aplicar');
+  if(!lista.length){toast('Nada para aplicar.','var(--muted)');return;}
+  agGuardarVersao();
+  if(m.modo==='novo'){
+    const at=agAtivo(),ids=(m.lida.editalIds&&m.lida.editalIds.length?m.lida.editalIds:(at?at.editalIds:[])).filter(id=>edFind(id));
+    if(!ids.length){a.versoes.pop();toast('⚠️ Para criar um plano novo, escolha antes um edital no assistente do plano.','var(--orange)');return;}
+    const novo=at?agClone(at):agClone(agRascunhoInicial());delete novo.pins;delete novo.bloqueios;delete novo.indisp;
+    novo.id=genId();novo.nome='Importado '+todayStr();novo.editalIds=ids;a.planos[novo.id]=novo;a.ativoId=novo.id;
+    st.ativo=true;
+  }
+  if(m.modo==='substituir'||m.modo==='novo'){
+    Object.keys(agObj(st.pins)).forEach(id=>{if(st.pins[id].ds>=amanha)delete st.pins[id];});
+    st.bloqueios=crLista(st.bloqueios).filter(b=>b.data<amanha);st.indisp=crLista(st.indisp).filter(d=>d<amanha);
+  }
+  st.pins=agObj(st.pins);st.bloqueios=crLista(st.bloqueios);st.indisp=crLista(st.indisp);
+  // o dia "natural" de cada assunto, sem ajuste nenhum no futuro: só vira pino o que difere dele (ou está travado)
+  const salvo=st.pins;st.pins={};Object.keys(salvo).forEach(id=>{if(salvo[id].ds<amanha)st.pins[id]=salvo[id];});
+  const base=crPlano(),dia={};base.calendario.forEach(d=>d.atual.forEach(id=>{dia[id]=d.ds;}));
+  Object.keys(salvo).forEach(id=>{if(salvo[id].ds>=amanha&&m.modo==='somar')st.pins[id]=salvo[id];});
+  let nPino=0,nBloq=0,nDia=0;
+  lista.forEach(r=>{
+    const it=r.it;
+    if(r.bloqueio){
+      if(r.dia){if(!st.indisp.includes(it.data)){st.indisp.push(it.data);nDia++;}return;}
+      if(!st.bloqueios.some(b=>b.data===it.data&&b.inicio===it.inicio&&+b.min===it.minN&&b.titulo===it.assunto)){st.bloqueios.push({data:it.data,inicio:it.inicio,min:it.minN,titulo:it.assunto||'Compromisso'});nBloq++;}
+      return;
+    }
+    if(dia[r.subId]!==it.data||it.travado){st.pins[r.subId]={ds:it.data,travado:!!it.travado};nPino++;}
+  });
+  st.indisp.sort();crRebase(antes);saveDB();crRefrescar();closeModal();
+  const ign=m.res.length-lista.length;
+  toast(`📥 Importação: ${m.res.length} lidas = ${lista.length} aplicadas + ${ign} ignoradas (${nPino} assuntos movidos, ${nBloq} compromissos, ${nDia} dias indisponíveis).`,'var(--accent)');
+}
+// --- prompt para a IA externa ---
+function agPromptIA(){
+  const st=crEstado(),at=agAtivo(),eds=(db.editais||[]).map(edMigrar).filter(e=>e.disciplinas.length&&(!at||at.editalIds.includes(e.id)));
+  const subs=new Set();(db.kingdoms||[]).forEach(k=>(db.topics[k.id]||[]).forEach(t=>(t.subtopics||[]).forEach(s=>subs.add(s.id))));
+  const hoje=todayStr(),inicio=st.inicio&&st.inicio>agAmanha()?st.inicio:agAmanha(),f=crFases(st,inicio);
+  const ed=eds.map(e=>({editalId:e.id,nome:e.nome,cargo:e.cargo,banca:e.banca,dataProva:e.data||null,
+    disciplinas:e.disciplinas.map(d=>({nome:d.nome,questoes:d.questoes>0?d.questoes:'não informado',
+      assuntos:d.assuntos.map(a=>({subId:a.subId&&subs.has(a.subId)?a.subId:null,nome:a.nome}))}))}));
+  const dias=(at?at.config.diasSemana:[1,2,3,4,5,6]);
+  return`Você vai montar uma agenda de estudos por hora para concurso. Responda SOMENTE com um JSON válido no formato "vale-agenda-v1" descrito abaixo (sem texto antes ou depois), para eu importar no app.
+
+## Meus editais (disciplinas, questões e assuntos)
+Cada assunto tem "subId" (use exatamente esse valor) ou null (assunto ainda sem vínculo: NÃO use esses assuntos).
+${JSON.stringify(ed,null,1)}
+
+## Minha disponibilidade
+- Começo em: ${inicio} (nada antes de ${agAmanha()})
+- Horas de estudo por dia: ${crHorasBase(inicio,f)} (a partir das ${st.horaInicio||'08:00'})
+- Dias da semana disponíveis (0=dom … 6=sáb): ${JSON.stringify(dias)} — domingo fica para revisão e simulado, não coloque estudo novo
+- Dias indisponíveis: ${JSON.stringify(crLista(st.indisp))}
+- Compromissos fixos (não coloque estudo por cima): ${JSON.stringify(agBloqs().map(b=>({data:b.data,inicio:b.inicio,min:+b.min,titulo:b.titulo})))}
+${at&&at.config.prazo?`- Prova/prazo: ${at.config.prazo}\n`:''}
+## Formato da resposta
+{
+  "formato": "vale-agenda-v1",
+  "editalIds": ["..."],
+  "config": { "inicio": "AAAA-MM-DD", "horasDia": 4, "horaInicio": "06:00", "diasSemana": [1,2,3,4,5,6] },
+  "itens": [
+    { "data": "AAAA-MM-DD", "inicio": "06:00", "min": 60,
+      "tipo": "estudo|revisao|questoes|erros|simulado|bloqueio",
+      "subId": null, "disciplina": "", "assunto": "", "editalId": null, "travado": false }
+  ]
+}
+
+## Regras
+1. Datas reais no formato AAAA-MM-DD, horários HH:MM, "min" inteiro múltiplo de 5.
+2. Itens do mesmo dia não podem se sobrepor.
+3. Para "estudo", preencha "subId" com o valor do edital acima, mais "disciplina", "assunto" e "editalId". Cada assunto aparece uma vez.
+4. Respeite o peso das disciplinas (mais questões = mais tempo) e alterne as disciplinas ao longo da semana.
+5. Revisões (D+1, D+7, D+30), questões e erros podem aparecer como itens "revisao", "questoes" e "erros"; o app já gera esses por conta própria, então são opcionais.
+6. Termine antes da data da prova, se houver.`;
+}
+function agCopiarPrompt(){
+  const t=agPromptIA();
+  const ok=()=>toast('🤖 Prompt copiado. Cole na sua IA, depois importe o JSON que ela devolver.','var(--accent)');
+  const fallback=()=>{
+    openModal('🤖 Prompt para a IA externa',`<div class="cron-modal"><div class="cron-sub">Seu navegador bloqueou a cópia automática. Selecione tudo e copie:</div><textarea id="ag-prompt-txt" class="inp" rows="14" style="width:100%" readonly>${escapeHtml(t)}</textarea></div>`);
+    const ta=document.getElementById('ag-prompt-txt');if(ta){ta.focus();ta.select();}
+  };
+  try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(ok,fallback);return t;}}catch(e){}
+  fallback();return t;
+}
+
+// ===== AJUSTE DO DIA (aba Hoje) =====
+// "Hoje só X horas", "não vou estudar hoje", "trocar de matéria" e "adiantar" mexem só nas horas e na ordem do futuro:
+// o calendário-base usa as mesmas horas, então o que sai de hoje desliza para os próximos dias SEM virar atraso.
+function agFimSimples(){return crPlano().fimAtual;}
+function agHojeHoras(h){
+  const st=crEstado(),p=crPlano(),hoje=todayStr();
+  if(!p.hojeDia||p.hojeDia.t!=='est'||hoje<p.inicio){toast('Hoje não é um dia de estudo novo.','var(--muted)');return;}
+  h=Math.max(0,Math.min(12,Math.round(h*2)/2));
+  const fim0=p.fimAtual;
+  st.ajusteHoje=st.ajusteHoje&&st.ajusteHoje.ds===hoje?st.ajusteHoje:{ds:hoje,fases:agClone(st.fases||null),pins:[]};
+  const f=crFases(st,p.inicio),normal=crHorasBase(hoje,f);
+  st.fases=f.filter(x=>x.desde<hoje).concat([{desde:hoje,horas:h},{desde:addDays(hoje,1),horas:normal}],f.filter(x=>x.desde>addDays(hoje,1)));
+  saveDB();crRefrescar();crFecharAjuste();
+  const fim1=agFimSimples();
+  toast(h===0?`🌿 Hoje sem estudo. O que era de hoje desliza para os próximos dias — término ${fim1===fim0?'continua em '+crFmtData(fim1):'passa de '+crFmtData(fim0)+' para '+crFmtData(fim1)}.`
+    :`⏱ Hoje só ${String(h).replace('.',',')}h. O resto desliza — término ${fim1===fim0?'continua em '+crFmtData(fim1):'passa de '+crFmtData(fim0)+' para '+crFmtData(fim1)}.`,'var(--accent)');
+}
+function agTrocarHoje(bloco){
+  const st=crEstado(),p=crPlano(),hoje=todayStr();
+  if(!p.hojeDia||p.hojeDia.t!=='est'){toast('Hoje não é um dia de estudo novo.','var(--muted)');return;}
+  const fila=[...p.meta.keys()].filter(id=>!st.feitos[id]&&p.meta.get(id).bloco===bloco&&!p.hojeAtual.includes(id));
+  const ordem=p.calendario.filter(d=>d.t==='est'&&d.ds>hoje).flatMap(d=>d.atual).filter(id=>fila.includes(id));
+  const id=ordem[0]||fila[0];
+  if(!id){toast('Essa disciplina não tem assunto pendente.','var(--muted)');return;}
+  const fim0=p.fimAtual;
+  st.ajusteHoje=st.ajusteHoje&&st.ajusteHoje.ds===hoje?st.ajusteHoje:{ds:hoje,fases:agClone(st.fases||null),pins:[]};
+  st.pins=agObj(st.pins);st.pins[id]={ds:hoje};st.ajusteHoje.pins.push(id);
+  saveDB();crRefrescar();crFecharAjuste();
+  const fim1=agFimSimples(),m=crPlano().meta.get(id);
+  toast(`🔀 "${m?m.sub.name:'assunto'}" entra hoje; o que estava no dia desliza. Término ${fim1===fim0?'em '+crFmtData(fim1):crFmtData(fim0)+' → '+crFmtData(fim1)}.`,'var(--accent)');
+}
+function agAdiantar(){
+  const st=crEstado(),p=crPlano(),hoje=todayStr();
+  if(!p.hojeDia||p.hojeDia.t!=='est'){toast('Hoje não é um dia de estudo novo.','var(--muted)');return;}
+  const prox=p.calendario.filter(d=>d.t==='est'&&d.ds>hoje).flatMap(d=>d.atual).filter(id=>!st.feitos[id]&&!p.hojeAtual.includes(id))[0];
+  if(!prox){toast('Não há nada pela frente para adiantar.','var(--muted)');return;}
+  const fim0=p.fimAtual;
+  st.ajusteHoje=st.ajusteHoje&&st.ajusteHoje.ds===hoje?st.ajusteHoje:{ds:hoje,fases:agClone(st.fases||null),pins:[]};
+  st.pins=agObj(st.pins);st.pins[prox]={ds:hoje};st.ajusteHoje.pins.push(prox);
+  saveDB();crRefrescar();crFecharAjuste();
+  const fim1=agFimSimples(),m=crPlano().meta.get(prox);
+  toast(`⏩ Adiantado para hoje: "${m?m.sub.name:'assunto'}". Término ${fim1===fim0?'em '+crFmtData(fim1):crFmtData(fim0)+' → '+crFmtData(fim1)}.`,'var(--accent)');
+}
+function agDesfazerAjusteHoje(){
+  const st=crEstado(),aj=st.ajusteHoje;
+  if(!aj||aj.ds!==todayStr()){toast('Nenhum ajuste de hoje para desfazer.','var(--muted)');return;}
+  if(aj.fases)st.fases=aj.fases;else delete st.fases;
+  agObj(st.pins);(aj.pins||[]).forEach(id=>{if(st.pins)delete st.pins[id];});
+  delete st.ajusteHoje;saveDB();crRefrescar();crFecharAjuste();
+  toast('↩ Ajustes de hoje desfeitos.','var(--accent)');
+}
+function crFecharAjuste(){if(document.getElementById('ag-ajuste'))closeModal();}
+function agAbrirAjusteDia(){
+  const p=crPlano(),st=crEstado(),hoje=todayStr();
+  if(!p.hojeDia||p.hojeDia.t!=='est'){
+    openModal('⏱ Ajustar o dia',`<div class="cron-modal" id="ag-ajuste"><div class="cron-sub">Hoje é dia de revisão, feriado ou semana final. A revisão semanal e o simulado de domingo não podem se perder; se não puder hoje, faça amanhã.</div></div>`);
+    return;
+  }
+  const blocos=Object.keys(CRON_BLOCOS).filter(b=>[...p.meta.keys()].some(id=>p.meta.get(id).bloco===b&&!st.feitos[id]&&!p.hojeAtual.includes(id)));
+  const desf=st.ajusteHoje&&st.ajusteHoje.ds===hoje;
+  openModal('⏱ Ajustar o dia',`<div class="cron-modal" id="ag-ajuste">
+    <div class="cron-sub">Hoje: ${p.hojeAtual.length} assunto${p.hojeAtual.length===1?'':'s'} · ${String(p.horasEm(hoje)).replace('.',',')}h. O que sair de hoje desliza para os próximos dias de estudo <b>sem virar atraso</b>. As revisões (D+1, D+7, D+30) e o simulado de domingo continuam.</div>
+    <div class="ag-lin"><label>Hoje tenho só <input id="ag-hh" class="inp" type="number" min="0.5" max="12" step="0.5" value="2" style="width:70px"> h</label><button class="btn btn-xs btn-primary" onclick="agHojeHoras(parseFloat(document.getElementById('ag-hh').value.replace(',','.'))||0)">Aplicar</button></div>
+    <div class="ag-lin"><button class="btn btn-sm btn-ghost" onclick="agHojeHoras(0)">🌿 Não vou estudar hoje</button></div>
+    <div class="ag-lin"><label>Trocar por outra disciplina <select id="ag-troca" class="inp">${blocos.map(b=>`<option value="${escapeHtml(b)}">${escapeHtml(CRON_BLOCOS[b])}</option>`).join('')}</select></label><button class="btn btn-xs btn-primary" onclick="agTrocarHoje(document.getElementById('ag-troca').value)" ${blocos.length?'':'disabled'}>Trocar</button></div>
+    <div class="ag-lin"><button class="btn btn-sm btn-ghost" onclick="agAdiantar()">⏩ Adiantar o próximo assunto</button></div>
+    ${desf?`<div class="ag-lin"><button class="btn btn-xs btn-ghost" onclick="agDesfazerAjusteHoje()">↩ Desfazer os ajustes de hoje</button></div>`:''}</div>`);
+}
 let crGradeOff=0;
 const crR5=n=>Math.max(5,Math.round(n/5)*5);
 function crHoraInicioMin(){const h=String(crEstado().horaInicio||'08:00').split(':');return(+h[0]||0)*60+(+h[1]||0);}
@@ -26223,6 +27009,7 @@ function crRevVencidas(hoje){
 function crBlocosDoDia(d,p){
   const ds=d.ds,total=Math.round(p.horasEm(ds)*60);
   const mk=(tipo,dur,titulo,sub,extra)=>({tipo,dur:crR5(dur),titulo,sub:sub||'',ds,...extra});
+  if(d.indisp)return[];
   if(d.t==='fer')return[mk('leve',60,'Revisão leve','Flashcards e dicas (feriado)')];
   if(d.t==='rev'){
     if(d.descanso)return[mk('erros',total*0.5,'Erros do simulado'),mk('revisao',total*0.3,'Itens "conferir valores"')];
@@ -26243,15 +27030,18 @@ function crBlocosDoDia(d,p){
   const C=grupos.reduce((n,x)=>n+x.dur,0),R=Math.max(0,total-C);
   const out=[mk('revisao',R*0.4,'Revisões e flashcards',revSub)];
   grupos.forEach(x=>out.push({tipo:'conteudo',bloco:crBloco(x.g.cap),dur:crR5(x.dur),titulo:crNomeCap(x.g.cap),sub:'assuntos '+x.g.faixa,
-    ds,n:x.g.n,feitos:x.g.feitos}));
+    ds,n:x.g.n,feitos:x.g.feitos,ids:x.g.ids}));
   out.push(mk('questoes',R*0.45,'Questões do dia'),mk('erros',R*0.15,'Erros'));
   return out;
 }
 // Põe os blocos em fila a partir do começo do dia, com uma pausa depois de ~80 min seguidos.
 function crSequencia(blocos){
   const out=[];let t=0,seg=0;
+  const bq=blocos.length?agBloqueiosRel(blocos[0].ds):[];   // compromissos: o estudo se reorganiza em volta
+  const desvia=dur=>{for(let g=0;g<20;g++){const o=bq.find(x=>t<x.fim&&t+dur>x.ini);if(!o)break;t=o.fim;seg=0;}};
   blocos.forEach(b=>{
-    if(seg>=CRON_PAUSA_APOS){out.push({tipo:'pausa',ini:t,dur:CRON_PAUSA,titulo:'Pausa',sub:'',ds:b.ds});t+=CRON_PAUSA;seg=0;}
+    if(seg>=CRON_PAUSA_APOS){desvia(CRON_PAUSA);out.push({tipo:'pausa',ini:t,dur:CRON_PAUSA,titulo:'Pausa',sub:'',ds:b.ds});t+=CRON_PAUSA;seg=0;}
+    desvia(b.dur);
     out.push({...b,ini:t});t+=b.dur;seg+=b.dur;
   });
   return{blocos:out,fim:t};
@@ -26300,12 +27090,12 @@ function crGradeHTML(){
   // Quanto tempo cada matéria ganha na semana: é onde se vê se todas têm vez com as horas que você tem.
   const soma={};let totalMin=0;
   cols.forEach(c=>{if(c.seq)c.seq.blocos.forEach(b=>{const k=crCatDe(b);if(k){soma[k]=(soma[k]||0)+b.dur;totalMin+=b.dur;}});});
-  const cats=['esp','pol','por','leg','revisao','questoes','erros'].concat(soma.comp?['comp']:[]);
+  const cats=Object.keys(CRON_PESOS).concat(['revisao','questoes','erros']).concat(soma.comp?['comp']:[]);
   const barras=cats.map(k=>{
     const m=soma[k]||0,pc=totalMin?Math.round(100*m/totalMin):0;
-    return`<div class="cg-orc${!m&&['esp','pol','por','leg'].includes(k)?' cg-orc-zero':''}"><span class="cg-orc-n"><i style="background:${CRON_COR[k]}"></i>${CRON_CAT[k]}</span><span class="cg-orc-b"><i style="width:${pc}%;background:${CRON_COR[k]}"></i></span><b>${m?crFmtMin(m):'—'}</b></div>`;
+    return`<div class="cg-orc${!m&&k in CRON_PESOS?' cg-orc-zero':''}"><span class="cg-orc-n"><i style="background:${CRON_COR[k]}"></i>${CRON_CAT[k]}</span><span class="cg-orc-b"><i style="width:${pc}%;background:${CRON_COR[k]}"></i></span><b>${m?crFmtMin(m):'—'}</b></div>`;
   }).join('');
-  const semMat=['esp','pol','por','leg'].filter(k=>p.blocos[k]&&p.blocos[k].tot&&!(soma[k]));
+  const semMat=Object.keys(CRON_PESOS).filter(k=>p.blocos[k]&&p.blocos[k].tot&&!(soma[k]));
   const aviso=semMat.length?`<div class="cron-aviso">ℹ️ Sem assunto novo nesta semana: <b>${semMat.map(k=>CRON_CAT[k]).join(', ')}</b>. ${p.st.rodizio?'É uma matéria pequena: as revisões dela (D+1, D+7, D+30) seguem na fila.':'Ligue o <b>rodízio</b> em ⚙️ pra todas as matérias avançarem toda semana.'}</div>`:'';
   const fim=addDays(seg,6);
   return`<div class="cron-grade-wrap">
