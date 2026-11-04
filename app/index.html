@@ -25593,10 +25593,28 @@ function crCusto(id,st,meta){
   const f=st.feitos[id],m=meta.get(id);
   return f&&f.via==='ja-sei'?CRON_MIN_JASEI:(m?m.min:22);
 }
+// A prova do cronograma é a da Ebserh / HU Brasil, não "a próxima prova cadastrada": outro edital seu (de
+// outra banca, com outra data) aparecia aqui e o plano parecia travado numa data que não é dele. Vale o
+// edital escolhido em ⚙️ (db.cronograma.provaId; 'nenhum' esconde) ou, no automático, o que tem Ebserh ou
+// HU Brasil no nome; sem ele, é "prova sem data".
+const CRON_ED_RX=/ebserh|hu\s*brasil/i;
+function crEditalDaProva(hoje){
+  const st=crEstado(),eds=db.editais||[];
+  if(st.provaId==='nenhum')return null;
+  if(st.provaId)return eds.find(e=>e.id===st.provaId)||null;
+  const ok=e=>e.data&&e.data>=hoje&&e.status!=='realizado'&&CRON_ED_RX.test([e.nome,e.orgao,e.cargo].filter(Boolean).join(' '));
+  const foco=db.editalFoco?edFind(db.editalFoco):null;
+  if(foco&&ok(foco))return foco;
+  return eds.filter(ok).sort((a,b)=>a.data.localeCompare(b.data))[0]||null;
+}
 function crDataProva(hoje){
-  const ed=db.editalFoco?edFind(db.editalFoco):null;
-  const c=ed||(db.editais||[]).filter(e=>e.data&&e.data>=hoje&&e.status!=='realizado').sort((a,b)=>a.data.localeCompare(b.data))[0];
+  const c=crEditalDaProva(hoje);
   return c&&c.data?{nome:c.nome,data:c.data}:null;
+}
+function crSetProva(v){
+  const st=crEstado();
+  if(v)st.provaId=v;else delete st.provaId;
+  saveDB();crRefrescar();crAbrirConfig();
 }
 
 // Rodízio: reordena a fila pra que os blocos da prova (Específicos, Políticas Públicas, Português,
@@ -25852,7 +25870,10 @@ function crAvisoFechar(){
 function crAvisoAbrir(subId,via){
   const a=crAcharSub(subId);if(!a)return;
   const tr=crTrechosConferir(a.s);
-  crDiaRetorno=crModalDia;crModalDia=null;   // o aviso ocupa o modal; depois volta pro dia
+  // O aviso ocupa o modal; depois volta pro dia — mas só se o modal do dia estiver MESMO aberto. Fechar o
+  // modal não zera crModalDia, então um dia visto antes reaparecia sozinho depois de cada confirmação.
+  const m=document.getElementById('modal');
+  crDiaRetorno=(m&&m.classList.contains('open')&&crModalDia)?crModalDia:null;crModalDia=null;
   openModal('⚠️ Conferir valores',`<div style="font-size:13px;line-height:1.6">
     <div style="font-weight:900;margin-bottom:6px">${escapeHtml(a.s.name)}</div>
     <div style="color:var(--text2);margin-bottom:10px">Este assunto tem valores que não devem ser decorados sem checar a fonte oficial. Leia os trechos marcados e confira antes de dar como concluído.</div>
@@ -26137,6 +26158,13 @@ function crAbrirConfig(){
     <div class="cron-conf-linha" style="margin-top:12px"><label for="cron-inicio"><b>Começa em</b></label>
       <input id="cron-inicio" class="inp" type="date" value="${p.inicio}" min="${todayStr()}" ${p.antes||!Object.keys(st.feitos||{}).length?'':'disabled title="Já começou e você já concluiu assuntos"'} onchange="crSetInicio(this.value)"></div>
     <div class="cron-sub">Prazo de ${CRON_MESES_PRAZO} meses: até <b>${crFmtData(p.prazo)}</b>, com a semana final antes dele. Hoje o plano termina em <b>${crFmtData(p.fimAtual)}</b>${p.noPrazo?' — dentro do prazo.':` — ${daysDiff(p.prazo,p.fimAtual)} dias além${p.horasNec?`; com ~${fh(p.horasNec)} por dia fecha no prazo`:''}.`}</div>
+    <div class="cron-conf-linha" style="margin-top:12px"><label for="cron-prova"><b>Prova do cronograma</b></label>
+      <select id="cron-prova" class="inp" onchange="crSetProva(this.value)">
+        <option value=""${!st.provaId?' selected':''}>Automática (edital da Ebserh / HU Brasil)</option>
+        ${(db.editais||[]).filter(e=>e.data).map(e=>`<option value="${escapeHtml(e.id)}"${st.provaId===e.id?' selected':''}>${escapeHtml(e.nome)} · ${crFmtData(e.data)}</option>`).join('')}
+        <option value="nenhum"${st.provaId==='nenhum'?' selected':''}>Nenhuma</option>
+      </select></div>
+    <div class="cron-sub">Só a data mostrada na faixa. Os seus outros editais seguem normais em Editais.</div>
     <label class="banco-check" style="margin-top:12px"><input type="checkbox" ${st.complementar?'checked':''} onchange="crAlternarComplementar()"> Incluir a trilha complementar (Dir. Administrativo, História de Campina Grande, Informática) — <b>não estava no último edital (03/2024)</b></label>
     <div class="cron-sub" style="margin:6px 0 14px">Fica de fora por padrão porque o último edital não cobrava. Quando o novo sair, confira se algum desses assuntos entrou. Se sobrar tempo, ligue; se faltar, o Português é o próximo a reduzir.</div>
     <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">

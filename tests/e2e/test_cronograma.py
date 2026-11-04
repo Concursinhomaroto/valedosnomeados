@@ -343,6 +343,40 @@ async def main():
         assert r['desabilitado'] and r['aposTentar']=='2026-11-03' and r['livre'] and r['mudou']=='2026-11-06'
         print('   OK\n')
 
+        print('=== V) a prova do cronograma e a da Ebserh: outro edital seu nao toma o lugar ===')
+        r=await page.evaluate("""()=>{window.__hoje='2026-11-04';closeModal();
+          db.cronograma={ativo:true,inicio:'2026-11-03',complementar:false,rodizio:false,v:2,feitos:{},lidos:{}};
+          const outro={id:'ed1',nome:'Prefeitura X',cargo:'Enfermeiro',banca:'FGV',data:'2026-12-06',status:'inscrito',icon:'🏛️',color:'#0ea5e9',disciplinas:[]};
+          db.editais=[outro];db.editalFoco='ed1';
+          const txt=()=>{renderWeeklyPlan();return [...document.querySelectorAll('#cron-head .cron-pill')].map(x=>x.textContent.trim()).find(x=>/Prova/.test(x));};
+          const so_outro=txt();
+          const eb={id:'ed2',nome:'Ebserh HU Brasil',cargo:'Enfermeiro',banca:'FGV',data:'2027-03-01',status:'previsto',icon:'🏥',color:'#6c47ff',disciplinas:[]};
+          db.editais=[outro,eb];const com_ebserh=txt();
+          crSetProva('ed1');const manual=txt();            // a pessoa escolhe a outra em ⚙️
+          crSetProva('nenhum');const nenhum=txt();
+          crSetProva('');const auto=txt();closeModal();
+          return {so_outro,com_ebserh,manual,nenhum,auto,outroIntacto:db.editais.length===2&&db.editalFoco==='ed1'};}""")
+        print('   %s'%r)
+        assert 'Prova sem data' in r['so_outro']                       # so ha edital de outra banca/orgao: nao serve
+        assert 'Prova 01/03' in r['com_ebserh'] and 'Prova 06/12' in r['manual'] and 'Prova sem data' in r['nenhum'] and 'Prova 01/03' in r['auto']
+        assert r['outroIntacto']                                        # os editais do usuario nao foram mexidos
+        print('   OK\n')
+
+        print('=== W) aviso de [CONFERIR] nao reabre um dia visto antes ===')
+        r=await page.evaluate("""()=>{window.__hoje='2026-11-04';closeModal();
+          const st=crEstado();st.feitos={};st.lidos={};st.zero=null;st.rodizio=false;renderWeeklyPlan();
+          const p=crPlano();const id=p.hojeAtual[0];crAcharSub(id).s.resumo={texto:'Dose 4 g [CONFERIR] na fonte.'};crAcharSub(id).s.studied=false;
+          crAbrirDia(p.hoje);closeModal();                    // viu um dia e fechou (crModalDia fica velho)
+          crConcluir(id,'estudado');                           // pela aba Hoje, sem modal de dia aberto
+          const aviso=document.getElementById('modal-title').innerText;
+          crConcluir(id,'estudado',true);
+          const m=document.getElementById('modal');
+          return {aviso,feito:!!st.feitos[id],modalAberto:m.classList.contains('open'),titulo:document.getElementById('modal-title').innerText};}""")
+        print('   %s'%r)
+        assert 'Conferir valores' in r['aviso'] and r['feito']
+        assert not r['modalAberto'], r                        # antes: reabria o dia antigo depois de confirmar
+        print('   OK\n')
+
         print('=== M) celular: sem rolagem lateral com o cronograma na tela ===')
         await page.set_viewport_size({'width':375,'height':800})
         r=await page.evaluate("()=>{closeModal();showScreen('dashboard');renderWeeklyPlan();return {w:document.documentElement.scrollWidth,iw:innerWidth};}")
