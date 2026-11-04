@@ -77,3 +77,8 @@ Legislação Ebserh (7 assuntos) termina antes e sobra tempo para revisá-la. A 
 
 **Atraso** passa a ter um "marco zero": ao mudar a estrutura do plano (rodízio, trilha complementar) o app guarda o atraso
 daquele instante e só conta a diferença a partir dali (`db.cronograma.zero`). Sem isso, trocar a ordem inventaria ou apagaria atraso.
+
+## Agenda: grade 06h–23h e lista dos 7 dias
+- A grade por hora mostra o dia inteiro (06:00–23:00; estende só se o estudo passar das 23h) e já abre rolada para a hora de início.
+- A lista "Próximos 7 dias" fica oculta com o cronograma ativo; volta em ⚙️ → "Mostrar também a lista dos 7 dias" (`cronograma.listaDias`).
+- O "＋" no cabeçalho de cada dia adiciona compromissos; itens novos levam `criadoEm` e aparecem no cabeçalho do dia. Itens antigos (sem `criadoEm`) seguem escondidos/contáveis/apagáveis como antes.

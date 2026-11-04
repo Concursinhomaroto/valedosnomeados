@@ -42,15 +42,18 @@ async def main():
                     primeiro:est[0].tipo,ultimos:est.slice(-2).map(b=>b.tipo),fim:c.seq.fim};}
           crEstado().fases=[{desde:'2026-11-03',horas:4}];
           renderCronCabecalho();const h1=document.querySelector('.cg-hora').textContent;
+          const labs=[...document.querySelectorAll('.cg-hora')].map(x=>x.textContent);
+          const b1=document.querySelector('.cg-bloco');const r1=+b1.style.gridRowStart;
           crSetHoraInicio('06:30');const h2=document.querySelector('.cg-hora').textContent;
           crSetHoraInicio('xx');const ficou=crEstado().horaInicio;
           crSetHoraInicio('08:00');
-          return {out,h1,h2,ficou};}""")
+          return {out,h1,h2,ficou,labs,r1,rolar:document.getElementById('cron-grade').dataset.rolar};}""")
         print('   %s'%r)
         for h,o in r['out'].items():
             assert abs(o['soma']-int(h)*60)<=15, (h,o)           # arredondamento em 5 min por bloco
             assert not o['sobrepoe'] and o['pausas']>=1 and o['primeiro']=='revisao' and o['ultimos']==['questoes','erros']
-        assert r['h1']=='08:00' and r['h2']=='06:30' and r['ficou']=='06:30'
+        assert r['h1']=='06:00' and r['h2']=='06:00' and r['ficou']=='06:30'
+        assert r['labs'][0]=='06:00' and r['labs'][-1]>='22:00' and len(r['labs'])>=17 and int(r['rolar'])>0
         print('   OK\n')
 
         print('=== C) domingo, feriado e semana final tem blocos proprios ===')

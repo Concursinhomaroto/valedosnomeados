@@ -20,6 +20,14 @@ async def main():
                          '2026-11-06':[{name:'Sabado de Especifico',livre:true}]};
           crAba='hoje';crMostrarManuais=false;showScreen('dashboard');renderWeeklyPlan();}""")
 
+        print('=== A0) padrao: so Hoje e Grade (a lista dos 7 dias saiu, volta no engrenagem) ===')
+        r=await page.evaluate("""()=>({abas:[...document.querySelectorAll('#cron-head .cron-aba')].map(b=>b.textContent.trim()),
+            tools:getComputedStyle(document.querySelector('.dash-agenda .dash-head-tools')).display})""")
+        print('   %s'%r)
+        assert r['abas']==['📌 Hoje','🕐 Grade por hora'] and r['tools']=='none'
+        await page.evaluate("()=>{crAlternarListaDias();}")
+        print('   OK\n')
+
         print('=== A) uma visao por vez: Hoje, Grade e 7 dias ===')
         r=await page.evaluate("""()=>{const vis=()=>({hoje:!!document.querySelector('#cron-head .cron-hoje'),grade:!!document.querySelector('#cron-head .cron-grade'),
             dias:getComputedStyle(document.getElementById('weekly-plan')).display!=='none',aba:crAba});
@@ -67,7 +75,7 @@ async def main():
         print('   OK\n')
 
         print('=== E) sem cronograma, a agenda segue como era: lista visivel e itens do usuario aparecendo ===')
-        r=await page.evaluate("""()=>{db.cronograma.ativo=false;db.weeklyPlan={'2026-11-05':[{name:'Academia 18h',livre:true}]};crAba='grade';renderWeeklyPlan();
+        r=await page.evaluate("""()=>{db.cronograma.ativo=false;crEstado().listaDias=false;db.weeklyPlan={'2026-11-05':[{name:'Academia 18h',livre:true}]};crAba='grade';renderWeeklyPlan();
           return {lista:getComputedStyle(document.getElementById('weekly-plan')).display!=='none',itens:document.querySelectorAll('#weekly-plan .plan-item').length,
                   abas:document.querySelectorAll('#cron-head .cron-aba').length};}""")
         print('   %s'%r)
