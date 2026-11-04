@@ -19,9 +19,9 @@ async def main():
         ctx,page,errs=await abrir(browser,seed_cron(),viewport={'width':1200,'height':900})
         await page.evaluate(HOJE)
         # Estes cenarios reproduzem o ritmo do prompt (5h por dia, comecando em 09/11, com a trilha
-        # complementar) pra os dias 1-3 serem os da tabela dele. O padrao real (4h, amanha, sem a
+        # complementar, na ordem dele — sem o rodizio) pra os dias 1-3 serem os da tabela dele. O padrao real (4h, amanha, sem a
         # complementar) e conferido nos cenarios O a R.
-        await page.evaluate("()=>{const st=crEstado();st.inicio='2026-11-09';st.fases=[{desde:'2026-11-09',horas:5}];st.complementar=true;}")
+        await page.evaluate("()=>{const st=crEstado();st.inicio='2026-11-09';st.fases=[{desde:'2026-11-09',horas:5}];st.complementar=true;st.rodizio=false;}")
         async def dia(ds):
             await page.evaluate("(d)=>{window.__hoje=d;}",ds)
 
@@ -251,17 +251,18 @@ async def main():
           db.cronograma={ativo:true,complementar:true,feitos:{},lidos:{}};   // como ficou salvo na versao anterior
           const st=crEstado();const p=crPlano();renderWeeklyPlan();
           const est=p.dias.filter(d=>d.t==='est');
-          return {inicio:p.inicio,horas:p.horas,comp:st.complementar,v:st.v,total:p.total,antes:p.antes,dia1:est[0].orig.length,dia2:est[1].orig.length,
+          return {inicio:p.inicio,horas:p.horas,comp:st.complementar,rod:st.rodizio,v:st.v,total:p.total,antes:p.antes,dia1:est[0].orig.length,dia2:est[1].orig.length,
                   min1:est[0].orig.reduce((n,id)=>n+p.meta.get(id).min,0),
                   h:document.getElementById('cron-head').innerText.replace(/\\s+/g,' ')};}""")
         print('   %s'%{k:v for k,v in r.items() if k!='h'})
         assert r['inicio']=='2026-11-03' and r['horas']==4 and r['comp'] is False and r['v']==2 and r['antes']
-        assert r['total']==534 and r['dia1']==7 and r['dia2']==7 and r['min1']<=158+11
+        assert r['rod'] is True                      # estado antigo ganha o rodizio
+        assert r['total']==534 and 6<=r['dia1']<=9 and 6<=r['dia2']<=9 and r['min1']<=158+11
         assert 'Começa em 1 dia' in r['h'] and '4h/dia' in r['h']
         print('   OK\n')
 
         print('=== P) prazo de 3 meses: 4h nao fecha tudo, e o app diz quanto fecha; 4h30 fecha ===')
-        r=await page.evaluate("""()=>{const a=crPlano();const ha=document.getElementById('cron-head').innerText.replace(/\\s+/g,' ');
+        r=await page.evaluate("""()=>{crEstado().rodizio=false;const a=crPlano();const ha=document.getElementById('cron-head').innerText.replace(/\\s+/g,' ');
           crSetHoras(4.5);const b=crPlano();const hb=document.getElementById('cron-head').innerText.replace(/\\s+/g,' ');
           crSetHoras(4);
           return {prazo:a.prazo,noA:a.noPrazo,nec:a.horasNec,fimA:a.fimAtual,ha,noB:b.noPrazo,fimB:b.fimAtual,hb,dia1B:b.dias.filter(d=>d.t==='est')[0].orig.length};}""")

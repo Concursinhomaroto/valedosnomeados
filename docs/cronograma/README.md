@@ -52,3 +52,28 @@ Simulação (começando em 03/11, 534 assuntos do edital, 598 com a complementar
 | 5h | 14/01 | 20/01 |
 
 O dia a dia deixa de coincidir com a tabela do prompt (a ordem dos assuntos e dos blocos é a mesma).
+
+## Grade por hora e rodízio (v3, 04/11/2026)
+
+**Grade por hora** (botão "🕐 Grade por hora" na Agenda): a semana como uma grade de horários, dias nas colunas e
+horas nas linhas. Cada dia de estudo vira blocos em sequência a partir da hora em que você começa (⚙️, padrão 08:00),
+com uma pausa de 15 min a cada ~80 min seguidos, e os blocos somam as horas do dia:
+
+| Dia | Blocos |
+|---|---|
+| Estudo | Revisões e flashcards (40% do que sobra) → assunto novo de cada matéria (o mais pesado primeiro) → questões do dia (45%) → erros (15%) |
+| Domingo | Revisão da semana 25% · refazer os erros 20% · simulado de 30 45% · flashcards 10% |
+| Feriado | 1h de revisão leve |
+| Semana final | O tema do dia (seção 7 do prompt); o sábado é o simulado completo de 60 |
+
+Clicar num bloco abre o dia; o do simulado abre o simulado. O que você digitou na Agenda sem horário aparece no topo do dia.
+Embaixo, **"Tempo por matéria"** soma a semana por matéria (Específicos, Políticas Públicas, Português, Legislação Ebserh),
+revisões, questões e erros, e avisa quando uma matéria não tem assunto novo naquela semana.
+
+**Rodízio** (ligado por padrão; ⚙️ desliga): na ordem do prompt o Português só aparece de meados de dezembro a meados de
+janeiro e a Legislação Ebserh some depois da 2ª semana. Com o rodízio, sempre entra o assunto do bloco que está mais atrás
+*em proporção ao próprio tamanho*, então Específicos, Políticas Públicas e Português avançam juntos e terminam juntos; a
+Legislação Ebserh (7 assuntos) termina antes e sobra tempo para revisá-la. A ordem *dentro* de cada bloco não muda.
+
+**Atraso** passa a ter um "marco zero": ao mudar a estrutura do plano (rodízio, trilha complementar) o app guarda o atraso
+daquele instante e só conta a diferença a partir dali (`db.cronograma.zero`). Sem isso, trocar a ordem inventaria ou apagaria atraso.

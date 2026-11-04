@@ -2300,6 +2300,36 @@ nav{
 .fora-tag{font-size:11px;font-weight:800;color:var(--orange-t);white-space:nowrap}
 .fora-off .fora-nome{color:var(--muted);text-decoration:line-through}
 .fora-vazio{font-size:12.5px;color:var(--muted);padding:8px 0}
+/* grade por hora */
+.cron-grade-wrap{border:1.5px solid var(--border);border-radius:12px;padding:10px;margin-bottom:10px;background:var(--panel2)}
+.cg-topo{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:13px}
+.cg-nav{display:flex;gap:4px}
+.cron-grade{overflow-x:auto;border:1.5px solid var(--border);border-radius:10px;background:var(--panel)}
+.cg{display:grid;grid-template-columns:48px repeat(7,minmax(112px,1fr));min-width:860px;position:relative}
+.cg-cab{padding:6px 6px 4px;text-align:center;font-size:12px;border-bottom:1.5px solid var(--border);display:flex;flex-direction:column;gap:1px;min-width:0}
+.cg-cab span{font-size:11px;color:var(--muted);font-weight:700}
+.cg-cab em{font-style:normal;font-size:10.5px;color:var(--text2);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cg-hoje{background:rgba(108,71,255,.07)}
+.cg-fundo{background-image:repeating-linear-gradient(to bottom,transparent 0 79px,var(--border) 79px 80px);border-left:1px solid var(--border)}
+.cg-hora{grid-column:1;font-size:11px;font-weight:700;color:var(--muted);text-align:right;padding:0 6px;border-top:1px solid var(--border);line-height:1}
+.cg-bloco{margin:1px 2px;padding:2px 6px;border-radius:7px;border-left:3px solid var(--cor);background:color-mix(in srgb,var(--cor) 14%,var(--panel));
+  font-size:11px;line-height:1.25;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;min-width:0;z-index:1}
+.cg-bloco:hover{background:color-mix(in srgb,var(--cor) 24%,var(--panel))}
+.cg-bloco b{font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cg-bloco span{color:var(--text2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cg-bloco i{font-style:normal;color:var(--muted);font-weight:700;font-size:10.5px}
+.cg-feito{opacity:.5}.cg-feito b{text-decoration:line-through}
+.cg-pausa{margin:1px 2px;text-align:center;font-size:11px;color:var(--muted);background:repeating-linear-gradient(45deg,transparent 0 4px,var(--border) 4px 5px);border-radius:6px;z-index:1}
+.cg-vazio{margin:6px;font-size:11px;color:var(--muted);font-weight:700;text-align:center;z-index:1}
+.cg-resumo{margin-top:10px;display:flex;flex-direction:column;gap:4px}
+.cg-resumo-tit{font-size:12px;font-weight:900;color:var(--text);margin-bottom:2px}
+.cg-orc{display:grid;grid-template-columns:minmax(120px,170px) 1fr 64px;gap:8px;align-items:center;font-size:12px}
+.cg-orc-n{display:flex;align-items:center;gap:6px;font-weight:700;color:var(--text2)}
+.cg-orc-n i{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+.cg-orc-b{height:7px;border-radius:999px;background:var(--border);overflow:hidden}
+.cg-orc-b i{display:block;height:100%}
+.cg-orc b{text-align:right;color:var(--text)}
+.cg-orc-zero b{color:var(--red-t)}
 .cron-card{border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:var(--panel2);display:flex;flex-direction:column;gap:8px}
 .cron-off{flex-direction:row;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .cron-sub{font-size:12px;color:var(--muted);font-weight:600;line-height:1.5;margin-top:2px}
@@ -25456,6 +25486,9 @@ function crEstado(){
   // (Dir. Administrativo, Informática, História de Campina Grande) sai por padrão: não cai no edital.
   if(!c.v){c.v=2;c.complementar=false;}
   if(c.complementar===undefined)c.complementar=false;
+  // Rodízio: todas as matérias avançam juntas (na proporção do tamanho de cada uma). Na ordem do prompt o
+  // Português só aparece em dezembro e a Legislação Ebserh some depois da 2ª semana.
+  if(c.rodizio===undefined)c.rodizio=true;
   if(c.ativo&&!c.inicio)c.inicio=addDays(todayStr(),1);   // "começar amanhã"
   return c;
 }
@@ -25554,6 +25587,21 @@ function crDataProva(hoje){
   return c&&c.data?{nome:c.nome,data:c.data}:null;
 }
 
+// Rodízio: reordena a fila pra que os blocos da prova (Específicos, Políticas Públicas, Português,
+// Legislação Ebserh) avancem juntos — sempre entra o assunto do bloco que está mais atrás em
+// proporção ao próprio tamanho. A ordem DENTRO de cada bloco não muda.
+function crRodizio(fila,meta){
+  const ordem=['esp','pol','por','leg','comp'],por={},tot={},feito={},idx={};
+  fila.forEach(id=>{const b=meta.get(id).bloco;(por[b]=por[b]||[]).push(id);});
+  ordem.forEach(b=>{if(por[b]){tot[b]=por[b].reduce((n,id)=>n+meta.get(id).min,0);feito[b]=0;idx[b]=0;}});
+  const nova=[];
+  while(nova.length<fila.length){
+    let melhor=null,mf=Infinity;
+    ordem.forEach(b=>{if(!por[b]||idx[b]>=por[b].length)return;const f=feito[b]/tot[b];if(f<mf-1e-9){mf=f;melhor=b;}});
+    const id=por[melhor][idx[melhor]++];nova.push(id);feito[melhor]+=meta.get(id).min;
+  }
+  fila.splice(0,fila.length,...nova);
+}
 function crPlano(hoje){
   hoje=hoje||todayStr();
   const st=crEstado();
@@ -25577,20 +25625,25 @@ function crPlano(hoje){
       }
     });
   });
+  if(st.rodizio)crRodizio(fila,meta);
   const dias=crCalendarioBase(fila,meta,inicio,fases);
   const estDias=dias.filter(d=>d.t==='est');
   const fimBase=dias[dias.length-1].ds;
   const ultimoEst=estDias.length?estDias[estDias.length-1].ds:addDays(inicio,-1);
   const capUlt=crCapMin(fases[fases.length-1].horas);
 
-  // Atraso: o que estava planejado pra antes de hoje e não foi concluído.
-  const atrasados=[];
-  estDias.forEach(d=>{if(d.ds<hoje)d.orig.forEach(id=>{if(!st.feitos[id])atrasados.push(id);});});
-
   // Preenche hoje e os dias seguintes com o que falta, na ordem. Hoje desconta o que já foi
   // gasto: concluir "de verdade" gasta o tempo do assunto; "já sei" gasta quase nada e por
   // isso puxa o próximo da fila pro mesmo dia.
   const fica=fila.filter(id=>!st.feitos[id]);
+  // Atraso = quantos assuntos o plano já tinha pra antes de hoje menos quantos você concluiu. Conta,
+  // não lista de ids: assim mudar a ordem (rodízio) ou as horas no meio do caminho não inventa atraso.
+  const previstos=estDias.reduce((n,d)=>n+(d.ds<hoje?d.orig.length:0),0);
+  // Marco zero: ao mudar a estrutura do plano (rodízio, trilha complementar) guardo o atraso que você tinha
+  // ali e só conto o que muda DEPOIS — senão trocar a ordem inventaria ou apagaria atraso.
+  const z=st.zero,feitosN=fila.length-fica.length;
+  const atrasoN=z?Math.max(0,z.atraso+(previstos-z.previstos)-(feitosN-z.feitos)):Math.max(0,previstos-feitosN);
+  const atrasados=fica.slice(0,atrasoN);
   const feitosHoje=Object.keys(st.feitos).filter(id=>st.feitos[id].em===hoje&&meta.has(id));
   const gastoHoje=feitosHoje.reduce((n,id)=>n+crCusto(id,st,meta),0);
   const q=fica.slice();
@@ -25649,8 +25702,8 @@ function crPlano(hoje){
   meta.forEach((m,id)=>{blocos[m.bloco].tot++;if(st.feitos[id])blocos[m.bloco].feito++;});
   const hojeDia=calendario.find(d=>d.ds===hoje);
   const hojeAtual=hojeDia&&hojeDia.t==='est'?feitosHoje.concat(hojeDia.atual.filter(id=>!feitosHoje.includes(id))):[];
-  return{st,meta,dias,calendario,falt,hoje,inicio,fimBase,prazo,horasNec,noPrazo:fimAtual<=prazo,
-    horas:crHorasEm(hoje>inicio?hoje:inicio,fases),
+  return{st,meta,dias,calendario,falt,hoje,inicio,fimBase,prazo,horasNec,previstos,noPrazo:fimAtual<=prazo,
+    horas:crHorasEm(hoje>inicio?hoje:inicio,fases),fases,horasEm:ds=>crHorasEm(ds,fases),
     antes:hoje<inicio,depois:hoje>fimAtual,diaN,totalDias:diasEstudo.length,
     atrasados,pendentes:fica.length,total:fila.length,feitosN:fila.length-fica.length,
     fimEstudo,folgaDias,encurtarPara,encurtado:!!(st.encurtar&&possivel),fimAtual,blocos,
@@ -25696,8 +25749,14 @@ function crDesativar(){
   crEstado().ativo=false;saveDB();closeModal();crRefrescar();
   toast('Cronograma desativado.','var(--muted)');
 }
+// Chamar DEPOIS de mudar a estrutura do plano; `antes` é o atraso de antes da mudança.
+function crRebase(antes){
+  const st=crEstado();st.zero=null;
+  const p=crPlano();
+  st.zero={ds:todayStr(),previstos:p.previstos,feitos:p.feitosN,atraso:antes};
+}
 function crAlternarComplementar(){
-  const st=crEstado();st.complementar=!st.complementar;saveDB();crRefrescar();crReabrirModal();
+  const st=crEstado();const antes=crPlano().atrasados.length;st.complementar=!st.complementar;crRebase(antes);saveDB();crRefrescar();crReabrirModal();
   toast(st.complementar?'Trilha complementar incluída.':'Trilha complementar fora do cronograma — o resto adianta.','var(--accent)');
 }
 function crAlternarEncurtar(){
@@ -26019,6 +26078,7 @@ function crCabecalhoHTML(){
     <div class="cron-progresso">${bl}</div>
     <div class="cron-ferr">
       <span class="cron-total">${p.feitosN}/${p.total} assuntos</span>${encurta}
+      <button class="btn btn-xs ${crGradeAberta?'btn-primary':'btn-ghost'}" onclick="crGradeAlternar()" title="A semana em horas, como uma grade de horários">🕐 Grade por hora</button>
       <button class="btn btn-xs btn-ghost" onclick="crAbrirPlano()">🗓️ Cronograma completo</button>
       <button class="btn btn-xs btn-ghost" onclick="crAbrirConfig()" title="Opções">⚙️</button>
     </div>${edital}${prep}${falt}${hoje}</div>`;
@@ -26054,6 +26114,11 @@ function crAbrirConfig(){
     <div class="cron-conf-linha"><label for="cron-horas"><b>Horas de estudo por dia</b></label>
       <input id="cron-horas" class="inp" type="number" min="1" max="12" step="0.5" value="${p.horas}" style="width:90px" onchange="crSetHoras(this.value)"></div>
     <div class="cron-sub">Vale a partir de hoje; o que já passou não vira atraso. Cerca de ${Math.round(crCapMin(p.horas)/22*10)/10} assuntos novos por dia — o resto do tempo é revisão (D+1, D+7, D+30), erros e flashcards.</div>
+    <div class="cron-conf-linha" style="margin-top:12px"><label for="cron-hora"><b>Começo a estudar às</b></label>
+      <input id="cron-hora" class="inp" type="time" step="900" value="${escapeHtml(st.horaInicio||'08:00')}" onchange="crSetHoraInicio(this.value)"></div>
+    <div class="cron-sub">Define os horários da grade por hora.</div>
+    <label class="banco-check" style="margin-top:12px"><input type="checkbox" ${st.rodizio?'checked':''} onchange="crAlternarRodizio()"> <b>Rodízio:</b> todas as matérias avançam juntas, toda semana</label>
+    <div class="cron-sub">Na ordem do prompt o Português só entra em dezembro e a Legislação Ebserh some depois da 2ª semana. O que você já concluiu continua concluído.</div>
     <div class="cron-conf-linha" style="margin-top:12px"><label for="cron-inicio"><b>Começa em</b></label>
       <input id="cron-inicio" class="inp" type="date" value="${p.inicio}" min="${todayStr()}" ${p.antes?'':'disabled title="Já começou"'} onchange="crSetInicio(this.value)"></div>
     <div class="cron-sub">Prazo de ${CRON_MESES_PRAZO} meses: até <b>${crFmtData(p.prazo)}</b>, com a semana final antes dele. Hoje o plano termina em <b>${crFmtData(p.fimAtual)}</b>${p.noPrazo?' — dentro do prazo.':` — ${daysDiff(p.prazo,p.fimAtual)} dias além${p.horasNec?`; com ~${fh(p.horasNec)} por dia fecha no prazo`:''}.`}</div>
@@ -26063,9 +26128,127 @@ function crAbrirConfig(){
       <button class="btn btn-xs btn-ghost" style="color:var(--red-t)" onclick="crDesativar()">Desativar cronograma</button>
       <button class="btn btn-sm btn-primary" onclick="closeModal()">Fechar</button></div></div>`);
 }
+// ===== GRADE POR HORA =====
+// A semana em horas, como uma grade de horários: cada dia de estudo vira blocos em sequência a partir
+// da hora em que você começa — revisões e flashcards, o assunto novo de cada matéria, questões e erros —
+// com uma pausa a cada ~80 min. Os blocos somam as horas do dia (⚙️). Clicar num bloco abre o dia.
+const CRON_PAUSA_APOS=80,CRON_PAUSA=15;
+const CRON_COR={esp:'#7c3aed',pol:'#2563eb',por:'#db2777',leg:'#059669',comp:'#ea580c',revisao:'#0891b2',questoes:'#d97706',erros:'#dc2626',simulado:'#4338ca',leve:'#64748b',final:'#7c3aed',folga:'#16a34a',pausa:'#94a3b8'};
+const CRON_CAT={esp:'Específicos',pol:'Políticas Públicas',por:'Português',leg:'Legislação Ebserh',comp:'Complementar',revisao:'Revisões e flashcards',questoes:'Questões',erros:'Erros e simulado'};
+let crGradeAberta=false,crGradeOff=0;
+const crR5=n=>Math.max(5,Math.round(n/5)*5);
+function crHoraInicioMin(){const h=String(crEstado().horaInicio||'08:00').split(':');return(+h[0]||0)*60+(+h[1]||0);}
+function crHM(m){m=((m%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
+function crRevVencidas(hoje){
+  try{return getAllRevItems().filter(i=>!i.completed&&!i.locked&&i.studied&&i.date<=hoje).length;}catch(e){return 0;}
+}
+function crBlocosDoDia(d,p){
+  const ds=d.ds,total=Math.round(p.horasEm(ds)*60);
+  const mk=(tipo,dur,titulo,sub,extra)=>({tipo,dur:crR5(dur),titulo,sub:sub||'',ds,...extra});
+  if(d.t==='fer')return[mk('leve',60,'Revisão leve','Flashcards e dicas (feriado)')];
+  if(d.t==='rev'){
+    if(d.descanso)return[mk('erros',total*0.5,'Erros do simulado'),mk('revisao',total*0.3,'Itens "conferir valores"')];
+    return[mk('revisao',total*0.25,'Revisão da semana','D+1 e D+7'),mk('erros',total*0.2,'Refazer os erros','',{acao:`crErrosSemana('${ds}')`}),
+      mk('simulado',total*0.45,'Simulado de 30','assuntos da semana',{acao:`crSimuladoSemana('${ds}')`}),mk('leve',total*0.1,'Flashcards')];
+  }
+  if(d.t==='fin'){
+    const i=Math.min(p.calendario.filter(x=>x.t==='fin'&&x.ds<ds).length,CRON_FINAL.length-1);
+    return i===CRON_FINAL.length-1?[mk('simulado',total,'Simulado completo','60 questões',{acao:'crSimuladoCompleto()'})]
+      :[mk('final',total,CRON_FINAL[i][1],CRON_FINAL[i][2])];
+  }
+  const ids=ds===p.hoje?p.hojeAtual:(ds<p.hoje?d.orig:d.atual);
+  const venc=ds===p.hoje?crRevVencidas(p.hoje):0;
+  const revSub=venc?`${venc} vencida${venc>1?'s':''}`:'D+1, D+7 e D+30';
+  if(!ids.length)return[mk('revisao',total*0.25,'Revisões e flashcards',revSub),mk('questoes',total*0.5,'Questões','folga: sem assunto novo'),mk('erros',total*0.25,'Erros')];
+  const grupos=crFaixas(ids,p).map(g=>({g,dur:g.ids.reduce((n,id)=>n+p.meta.get(id).min,0)}));
+  grupos.sort((a,b)=>(crBloco(a.g.cap)==='esp'?0:1)-(crBloco(b.g.cap)==='esp'?0:1));   // o mais pesado primeiro
+  const C=grupos.reduce((n,x)=>n+x.dur,0),R=Math.max(0,total-C);
+  const out=[mk('revisao',R*0.4,'Revisões e flashcards',revSub)];
+  grupos.forEach(x=>out.push({tipo:'conteudo',bloco:crBloco(x.g.cap),dur:crR5(x.dur),titulo:crNomeCap(x.g.cap),sub:'assuntos '+x.g.faixa,
+    ds,n:x.g.n,feitos:x.g.feitos}));
+  out.push(mk('questoes',R*0.45,'Questões do dia'),mk('erros',R*0.15,'Erros'));
+  return out;
+}
+// Põe os blocos em fila a partir do começo do dia, com uma pausa depois de ~80 min seguidos.
+function crSequencia(blocos){
+  const out=[];let t=0,seg=0;
+  blocos.forEach(b=>{
+    if(seg>=CRON_PAUSA_APOS){out.push({tipo:'pausa',ini:t,dur:CRON_PAUSA,titulo:'Pausa',sub:'',ds:b.ds});t+=CRON_PAUSA;seg=0;}
+    out.push({...b,ini:t});t+=b.dur;seg+=b.dur;
+  });
+  return{blocos:out,fim:t};
+}
+function crCatDe(b){return b.tipo==='conteudo'?b.bloco:b.tipo==='revisao'||b.tipo==='leve'?'revisao':b.tipo==='questoes'?'questoes':(b.tipo==='erros'||b.tipo==='simulado')?'erros':null;}
+function crSemanaDados(off){
+  const p=crPlano(),seg=addDays(p.hoje,-((crDow(p.hoje)+6)%7)+7*off);
+  const cols=[0,1,2,3,4,5,6].map(i=>{
+    const ds=addDays(seg,i),d=p.calendario.find(x=>x.ds===ds);
+    return{ds,d,seq:d?crSequencia(crBlocosDoDia(d,p)):null};
+  });
+  return{p,seg,cols};
+}
+function crGradeHTML(){
+  const{p,seg,cols}=crSemanaDados(crGradeOff);
+  const ini=crHoraInicioMin(),NOMES=['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+  const fimMax=Math.max(60,...cols.map(c=>c.seq?c.seq.fim:0));
+  const rows=Math.ceil(fimMax/15);
+  const horas=[];for(let m=0;m<rows*15;m+=60)horas.push(m);
+  const cab=cols.map((c,i)=>{
+    const man=(db.weeklyPlan&&db.weeklyPlan[c.ds]||[]).map(x=>escapeHtml(x.name)).slice(0,2);
+    return`<div class="cg-cab${c.ds===p.hoje?' cg-hoje':''}" style="grid-column:${i+2};grid-row:1"><b>${NOMES[i]}</b><span>${crFmtData(c.ds)}</span>${man.length?`<em title="Marcado na agenda, sem horário">＋ ${man.join(' · ')}</em>`:''}</div>`;
+  }).join('');
+  const fundo=cols.map((c,i)=>`<div class="cg-fundo${c.ds===p.hoje?' cg-hoje':''}" style="grid-column:${i+2};grid-row:2/${rows+2}"></div>`).join('');
+  const lab=horas.map(m=>`<div class="cg-hora" style="grid-row:${2+m/15}/span 4">${crHM(ini+m)}</div>`).join('');
+  const blocos=cols.map((c,i)=>{
+    if(!c.seq){
+      const antes=c.ds<p.inicio;
+      return`<div class="cg-vazio" style="grid-column:${i+2};grid-row:2/span 6">${antes?'antes do início':'fora do cronograma'}</div>`;
+    }
+    return c.seq.blocos.map(b=>{
+      const tipoCls=b.tipo==='conteudo'?b.bloco:b.tipo,cor=CRON_COR[tipoCls]||CRON_COR.leve;
+      const feito=b.tipo==='conteudo'&&b.n&&b.feitos===b.n;
+      const rs=2+Math.round(b.ini/15),span=Math.max(1,Math.round(b.dur/15));
+      const acao=b.acao?b.acao:`crAbrirDia('${c.ds}')`;
+      const tit=`${crHM(ini+b.ini)}–${crHM(ini+b.ini+b.dur)} · ${b.titulo}${b.sub?' — '+b.sub:''}`;
+      if(b.tipo==='pausa')return`<div class="cg-pausa" style="grid-column:${i+2};grid-row:${rs}/span ${span}" title="${escapeHtml(tit)}">☕</div>`;
+      return`<div class="cg-bloco${feito?' cg-feito':''}" style="grid-column:${i+2};grid-row:${rs}/span ${span};--cor:${cor}" onclick="${acao}" title="${escapeHtml(tit)}">
+        <b>${escapeHtml(b.titulo)}</b>${span>=2&&b.sub?`<span>${escapeHtml(b.sub)}</span>`:''}${span>=3?`<i>${b.dur} min</i>`:''}</div>`;
+    }).join('');
+  }).join('');
+  // Quanto tempo cada matéria ganha na semana: é onde se vê se todas têm vez com as horas que você tem.
+  const soma={};let totalMin=0;
+  cols.forEach(c=>{if(c.seq)c.seq.blocos.forEach(b=>{const k=crCatDe(b);if(k){soma[k]=(soma[k]||0)+b.dur;totalMin+=b.dur;}});});
+  const cats=['esp','pol','por','leg','revisao','questoes','erros'].concat(soma.comp?['comp']:[]);
+  const barras=cats.map(k=>{
+    const m=soma[k]||0,pc=totalMin?Math.round(100*m/totalMin):0;
+    return`<div class="cg-orc${!m&&['esp','pol','por','leg'].includes(k)?' cg-orc-zero':''}"><span class="cg-orc-n"><i style="background:${CRON_COR[k]}"></i>${CRON_CAT[k]}</span><span class="cg-orc-b"><i style="width:${pc}%;background:${CRON_COR[k]}"></i></span><b>${m?crFmtMin(m):'—'}</b></div>`;
+  }).join('');
+  const semMat=['esp','pol','por','leg'].filter(k=>p.blocos[k]&&p.blocos[k].tot&&!(soma[k]));
+  const aviso=semMat.length?`<div class="cron-aviso">ℹ️ Sem assunto novo nesta semana: <b>${semMat.map(k=>CRON_CAT[k]).join(', ')}</b>. ${p.st.rodizio?'É uma matéria pequena: as revisões dela (D+1, D+7, D+30) seguem na fila.':'Ligue o <b>rodízio</b> em ⚙️ pra todas as matérias avançarem toda semana.'}</div>`:'';
+  const fim=addDays(seg,6);
+  return`<div class="cron-grade-wrap">
+    <div class="cg-topo"><b>🕐 Grade da semana · ${crFmtData(seg)} a ${crFmtData(fim)}</b>
+      <span class="cg-nav"><button class="btn btn-xs btn-ghost" onclick="crGradeSemana(-1)" aria-label="Semana anterior">‹</button>
+      <button class="btn btn-xs btn-ghost" onclick="crGradeSemana(0)"${crGradeOff?'':' disabled'}>Esta semana</button>
+      <button class="btn btn-xs btn-ghost" onclick="crGradeSemana(1)" aria-label="Próxima semana">›</button></span></div>
+    <div class="cron-grade"><div class="cg" style="grid-template-rows:auto repeat(${rows},20px)">${cab}${fundo}${lab}${blocos}</div></div>
+    <div class="cg-resumo"><div class="cg-resumo-tit">Tempo por matéria · ${crFmtMin(totalMin)} de estudo na semana (${String(p.horas).replace('.',',')}h por dia)</div>${barras}${aviso}</div>
+  </div>`;
+}
+function crGradeAlternar(){crGradeAberta=!crGradeAberta;renderCronCabecalho();}
+function crGradeSemana(d){crGradeOff=d===0?0:crGradeOff+d;renderCronCabecalho();}
+function crSetHoraInicio(v){
+  if(!/^\d\d:\d\d$/.test(v)){toast('⚠️ Use um horário como 08:00.','var(--orange)');return;}
+  crEstado().horaInicio=v;saveDB();crRefrescar();crAbrirConfig();
+  toast(`🕐 Os blocos começam às ${v}.`,'var(--accent)');
+}
+function crAlternarRodizio(){
+  const st=crEstado();const antes=crPlano().atrasados.length;st.rodizio=!st.rodizio;crRebase(antes);saveDB();crRefrescar();crAbrirConfig();
+  toast(st.rodizio?'🔀 Rodízio ligado: todas as matérias avançam juntas. O que você já concluiu continua concluído.':'Rodízio desligado: volta à ordem do prompt.','var(--accent)');
+}
 function renderCronCabecalho(){
   const el=document.getElementById('cron-head');
-  if(el)el.innerHTML=crCabecalhoHTML();
+  if(el)el.innerHTML=crCabecalhoHTML()+(crAtivo()&&crGradeAberta?crGradeHTML():'');
 }
 
 function renderWeeklyPlan(){
