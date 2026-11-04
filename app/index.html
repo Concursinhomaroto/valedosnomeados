@@ -5432,7 +5432,7 @@ function applyDefaults(){
   if(!db.xp)db.xp=0;
   if(!db.editais)db.editais=[];
   if(!db.freeSessions)db.freeSessions=[];
-  if(!db.weeklyPlan)db.weeklyPlan={};
+  if(!db.weeklyPlan)db.weeklyPlan={};weeklyPlanNormalizar();
   if(!db.cronograma||typeof db.cronograma!=='object'||Array.isArray(db.cronograma))db.cronograma={ativo:false};
   if(!db.flashcards)db.flashcards={};
   if(!db.redacoes)db.redacoes={topics:{},textos:{}};
@@ -25497,6 +25497,14 @@ function crEstado(){
   if(c.ativo&&!c.inicio)c.inicio=addDays(todayStr(),1);   // "começar amanhã"
   return c;
 }
+// O Firebase devolve como OBJETO ({"0":…,"2":…}) uma lista que ficou com buraco ou que não começa em 0.
+// A agenda tratava db.weeklyPlan[dia] como array e quebrava (e a Agenda inteira parava de responder).
+function crLista(v){return Array.isArray(v)?v:(v&&typeof v==='object'?Object.values(v):[]);}
+function weeklyPlanNormalizar(){
+  const w=db.weeklyPlan;
+  if(!w||typeof w!=='object')return;
+  Object.keys(w).forEach(ds=>{if(!Array.isArray(w[ds]))w[ds]=crLista(w[ds]);});
+}
 function crAtivo(){return!!(db.cronograma&&db.cronograma.ativo);}
 function crBloco(cap){return cap.cat==='comp'?'comp':cap.cat==='esp'?'esp':CRON_LEG.has(cap.id)?'leg':CRON_POR.has(cap.id)?'por':'pol';}
 function crMinCap(cap){return CRON_CURTOS.has(cap.id)?15:CRON_VALORES.has(cap.id)?28:22;}
@@ -25964,7 +25972,7 @@ function crRegistrarDiagnostico(sess){
 function crDiagnostico(){
   const st=crEstado();
   if(st.diagnostico&&st.diagnostico.respondidas)return st.diagnostico;
-  const h=(db.treinoHistorico||[]).find(x=>x.titulo===CRON_TITULO_DIAG&&x.respondidas>0);
+  const h=crLista(db.treinoHistorico).find(x=>x&&x.titulo===CRON_TITULO_DIAG&&x.respondidas>0);
   return h?{em:String(h.data).slice(0,10),respondidas:h.respondidas,certas:h.certas,blocos:null}:null;
 }
 function crDiagnosticoHTML(d,p){
@@ -26237,7 +26245,7 @@ function crGradeHTML(){
   const rows=Math.ceil(fimMax/15);
   const horas=[];for(let m=0;m<rows*15;m+=60)horas.push(m);
   const cab=cols.map((c,i)=>{
-    const man=(crMostrarManuais&&db.weeklyPlan&&db.weeklyPlan[c.ds]||[]).map(x=>escapeHtml(x.name)).slice(0,2);
+    const man=(crMostrarManuais&&db.weeklyPlan?crLista(db.weeklyPlan[c.ds]):[]).map(x=>escapeHtml(x&&x.name)).slice(0,2);
     return`<div class="cg-cab${c.ds===p.hoje?' cg-hoje':''}" style="grid-column:${i+2};grid-row:1"><b>${NOMES[i]}</b><span>${crFmtData(c.ds)}</span>${man.length?`<em title="Marcado na agenda, sem horário">＋ ${man.join(' · ')}</em>`:''}</div>`;
   }).join('');
   const fundo=cols.map((c,i)=>`<div class="cg-fundo${c.ds===p.hoje?' cg-hoje':''}" style="grid-column:${i+2};grid-row:2/${rows+2}"></div>`).join('');
@@ -26302,7 +26310,8 @@ function crAbaHTML(){
 let crMostrarManuais=false;
 function crManuaisFuturos(){
   const hoje=todayStr(),out=[];
-  Object.keys(db.weeklyPlan||{}).forEach(ds=>{if(ds>=hoje)(db.weeklyPlan[ds]||[]).forEach(x=>out.push({ds,nome:x.name}));});
+  weeklyPlanNormalizar();
+  Object.keys(db.weeklyPlan||{}).forEach(ds=>{if(ds>=hoje)crLista(db.weeklyPlan[ds]).forEach(x=>out.push({ds,nome:x&&x.name}));});
   return out;
 }
 function crManuaisNota(){
@@ -26335,7 +26344,7 @@ function renderWeeklyPlan(){
   if(!el)return;
   renderCronCabecalho();
   const cronP=crAtivo()?crPlano():null;   // cronograma ativo: cada dia ganha o cartão dele
-  if(!db.weeklyPlan)db.weeklyPlan={};
+  if(!db.weeklyPlan)db.weeklyPlan={};weeklyPlanNormalizar();
   // As datas saem de todayStr()/addDays, nao de new Date() do aparelho. O resto do app
   // (revisoes, fila, grafico) conta o dia em Brasilia; construir esta grade com a data
   // local do celular fazia a agenda discordar de tudo quando o fuso do aparelho nao era
@@ -26419,7 +26428,7 @@ const RETA_SEMANA=[
 // Idempotente: tira os blocos que ele mesmo escreveu (reta:true) antes de reescrever,
 // e nunca encosta no que voce marcou. Dar o botao duas vezes nao duplica nada.
 function planoRetaFinal(){
-  if(!db.weeklyPlan)db.weeklyPlan={};
+  if(!db.weeklyPlan)db.weeklyPlan={};weeklyPlanNormalizar();
   const hoje=todayStr();
   let postos=0,seus=0;
   for(let i=0;i<7;i++){
@@ -26478,7 +26487,7 @@ function confirmAddPlanItem(ds){
   const sel=document.getElementById('plan-sub-sel');
   const livreEl=document.getElementById('plan-livre');
   const livre=((livreEl&&livreEl.value)||'').trim().slice(0,80);
-  if(!db.weeklyPlan)db.weeklyPlan={};
+  if(!db.weeklyPlan)db.weeklyPlan={};weeklyPlanNormalizar();
   if(!db.weeklyPlan[ds])db.weeklyPlan[ds]=[];
   const lista=db.weeklyPlan[ds];
   if(sel&&sel.value){
@@ -26500,6 +26509,7 @@ function confirmAddPlanItem(ds){
 }
 
 function removePlanItem(ds,idx){
+  weeklyPlanNormalizar();
   if(!db.weeklyPlan||!db.weeklyPlan[ds])return;
   db.weeklyPlan[ds].splice(idx,1);
   saveDB();renderWeeklyPlan();
