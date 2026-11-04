@@ -2342,6 +2342,7 @@ nav{
 .ag-acoes{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card,var(--bg));padding:10px 0;border-top:1px solid var(--border);margin-top:10px}
 .ag-det{margin:6px 0}.ag-fino{max-height:260px;overflow:auto}.ag-cfg{border-top:1px solid var(--border);margin-top:14px;padding-top:10px}
 .cron-ajuste{margin-top:8px}
+.cg-manual{--cor:#64748b;border-style:dashed;background:rgba(100,116,139,.18);cursor:pointer}
 .cg-cab{position:sticky;top:0;z-index:4;background:var(--panel)}
 .cg-cab.cg-hoje{background:color-mix(in srgb,var(--accent) 8%,var(--panel))}
 .cg-add{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:6px;border:1px solid var(--border);background:var(--panel2);color:var(--muted);font-size:13px;line-height:1;cursor:pointer;padding:0}
@@ -26142,9 +26143,11 @@ function crHojeHTML(){
 function crCabecalhoHTML(){
   const p=crPlano();
   if(!crAtivo()){
-    return`<div class="cron-card cron-off"><div><b>📅 Cronograma Ebserh · HU Brasil</b><div class="cron-sub">${p.inicio>p.hoje?'começa em '+crFmtData(p.inicio):p.inicio===p.hoje?'começa hoje':'retoma de '+crFmtData(p.inicio)} · ${p.total} assuntos em ${p.totalDias} dias de estudo a ${String(p.horas).replace('.',',')}h por dia, com revisão e simulado todo domingo.</div>
-      ${p.falt.length?`<div class="cron-aviso">${p.falt.length} capítulo${p.falt.length>1?'s':''} do prompt não ${p.falt.length>1?'estão':'está'} no seu Mapa: ${escapeHtml(p.falt.slice(0,4).join('; '))}${p.falt.length>4?'…':''}</div>`:''}</div>
-      <button class="btn btn-sm btn-primary" onclick="crAtivar()">Ativar cronograma</button></div>`;
+    return`<div class="cron-card cron-off"><div><b>📅 Agenda manual</b><div class="cron-sub">Monte a sua semana por hora: toque em ＋ no dia (ou em "＋ Bloco") e marque estudo, plantão, aula… com horário, duração e repetição. Nada vem pronto.</div>
+      <div class="cron-sub" style="margin-top:6px">Quer um plano pronto? <b>🧭 Plano por edital</b> monta a partir dos seus editais. Existe também o cronograma da Ebserh (${p.inicio>p.hoje?'começa em '+crFmtData(p.inicio):p.inicio===p.hoje?'começa hoje':'retoma de '+crFmtData(p.inicio)} · ${p.total} assuntos em ${p.totalDias} dias de estudo a ${String(p.horas).replace('.',',')}h por dia, com revisão e simulado todo domingo) — só entra se você ativar.</div></div>
+      <div class="ag-lin"><button class="btn btn-sm btn-primary" onclick="agAbrirBloco(todayStr())">＋ Bloco na agenda</button>
+      <button class="btn btn-sm btn-ghost" onclick="agAbrirAssistente()">🧭 Plano por edital</button>
+      <button class="btn btn-xs btn-ghost" onclick="crAtivar()">Ativar cronograma Ebserh</button></div></div>`;
   }
   const dia=p.antes?`Começa em ${daysDiff(p.hoje,p.inicio)} dia${daysDiff(p.hoje,p.inicio)>1?'s':''}`
     :p.depois?'Cronograma concluído':`Dia ${p.diaN} de ${p.totalDias}`;
@@ -26241,7 +26244,8 @@ function crAbrirConfig(){
       <button class="btn btn-xs btn-ghost" onclick="agExportar('json')">📤 JSON</button><button class="btn btn-xs btn-ghost" onclick="agExportar('csv')">CSV</button><button class="btn btn-xs btn-ghost" onclick="agExportar('ics')">.ics</button>
       <button class="btn btn-xs btn-ghost" onclick="agCopiarPrompt()">🤖 Copiar prompt para IA externa</button>
       ${agPlanos().versoes.length?`<button class="btn btn-xs btn-ghost" onclick="agVoltar()">↩ Voltar ao plano anterior</button>`:''}
-      ${agAtivo()?`<button class="btn btn-xs btn-ghost" onclick="agVoltarEbserh()">Voltar à trilha da Ebserh</button>`:''}</div></div>
+      ${agAtivo()?`<button class="btn btn-xs btn-ghost" onclick="agVoltarEbserh()">Voltar à trilha da Ebserh</button>`:''}
+      <button class="btn btn-xs btn-ghost" style="color:var(--red-t)" onclick="agApagarGeradas()" title="Apaga o cronograma da Ebserh e os planos por edital; fica só a agenda manual">🗑 Apagar agendas geradas</button></div></div>
     <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:12px">
       <button class="btn btn-xs btn-ghost" style="color:var(--red-t)" onclick="crDesativar()">Desativar cronograma</button>
       <button class="btn btn-sm btn-primary" onclick="closeModal()">Fechar</button></div></div>`);
@@ -26393,6 +26397,65 @@ function agFonte(pl,inicio,fases){
 function agReconciliar(f){
   return Object.keys(f.rec).map(id=>{const r=f.rec[id];return{id,nome:r.nome,total:r.total,naFila:r.naFila,sem:r.sem.length,excl:r.excl.length,
     fecha:r.total===r.naFila+r.sem.length+r.excl.length};});
+}
+
+// ===== BLOCOS MANUAIS E LIMPEZA =====
+// Um bloco manual é um compromisso/estudo seu com dia, hora e duração. Fica em db.cronograma.bloqueios: aparece na
+// grade com ou sem cronograma e, com plano ativo, o estudo se reorganiza em volta dele.
+function agGarantirIds(){const st=db.cronograma;if(st&&Array.isArray(st.bloqueios))st.bloqueios.forEach(b=>{if(b&&!b.id)b.id=genId();});}
+function agBlocosManuais(ds){agGarantirIds();return agBloqs().filter(b=>b.data===ds);}
+function agAbrirBloco(ds,id){
+  agGarantirIds();
+  const st=crEstado(),b=id?crLista(st.bloqueios).find(x=>x&&x.id===id):null;
+  const v=b||{data:ds||todayStr(),inicio:'19:00',min:60,titulo:''};
+  openModal(b?'✏️ Bloco':'＋ Bloco na agenda',`<div class="cron-modal" id="ag-bloco">
+    <div class="ag-lin"><input id="agb-t" class="inp" maxlength="60" placeholder="O que é? (ex.: Plantão, Aula, Estudar Português)" style="flex:1;min-width:200px" value="${escapeHtml(v.titulo||'')}"></div>
+    <div class="ag-grid"><label>Dia <input id="agb-d" class="inp" type="date" value="${escapeHtml(v.data)}"></label>
+      <label>Começa às <input id="agb-i" class="inp" type="time" step="300" value="${escapeHtml(v.inicio)}"></label>
+      <label>Duração (min) <input id="agb-m" class="inp" type="number" min="5" max="720" step="5" value="${+v.min||60}"></label></div>
+    ${b?'':`<div class="ag-lin"><label>Repetir <select id="agb-r" class="inp"><option value="">não repete</option><option value="semana">toda semana</option></select></label>
+      <label>até <input id="agb-ate" class="inp" type="date" value="${addDays(v.data,56)}"></label></div>`}
+    <div class="cron-sub">Com um plano ativo, o estudo se reorganiza em volta do bloco.</div>
+    <div class="ag-lin" style="justify-content:space-between"><span>${b?`<button class="btn btn-xs btn-ghost" style="color:var(--red-t)" onclick="agExcluirBloco('${escapeAttrJs(b.id)}')">Excluir</button>${b.serie?`<button class="btn btn-xs btn-ghost" style="color:var(--red-t)" onclick="agExcluirBloco('${escapeAttrJs(b.id)}',true)">Excluir a série</button>`:''}`:''}</span>
+      <button class="btn btn-sm btn-primary" onclick="agSalvarBloco('${b?escapeAttrJs(b.id):''}')">Salvar</button></div></div>`);
+}
+function agSalvarBloco(id){
+  const g=k=>(document.getElementById(k)||{}).value;
+  const data=g('agb-d'),ini=g('agb-i'),min=Math.round(parseFloat(g('agb-m'))),tit=(g('agb-t')||'').trim().slice(0,60)||'Compromisso';
+  if(!agDataValida(data)||agHM(ini)===null||!(min>=5&&min<=720)){toast('⚠️ Informe um dia, um horário e uma duração (5 a 720 min).','var(--orange)');return;}
+  const st=crEstado();st.bloqueios=crLista(st.bloqueios);
+  const choca=(d,i,m,ign)=>st.bloqueios.some(x=>x&&x.id!==ign&&x.data===d&&agHM(x.inicio)!==null&&agHM(i)<agHM(x.inicio)+(+x.min||0)&&agHM(i)+m>agHM(x.inicio));
+  if(id){
+    const b=st.bloqueios.find(x=>x&&x.id===id);if(!b)return;
+    if(choca(data,ini,min,id)&&!confirm('Esse bloco sobrepõe outro. Salvar mesmo assim?'))return;
+    Object.assign(b,{data,inicio:ini,min,titulo:tit});
+  }else{
+    const datas=[data];
+    if(g('agb-r')==='semana'){const ate=g('agb-ate');if(agDataValida(ate))for(let d=addDays(data,7);d<=ate&&datas.length<52;d=addDays(d,7))datas.push(d);}
+    if(datas.some(d=>choca(d,ini,min))&&!confirm('Algum desses blocos sobrepõe outro. Salvar mesmo assim?'))return;
+    const serie=datas.length>1?genId():undefined;
+    datas.forEach(d=>st.bloqueios.push({id:genId(),data:d,inicio:ini,min,titulo:tit,...(serie?{serie}:{})}));
+  }
+  saveDB();closeModal();renderWeeklyPlan();
+  toast('✅ Bloco salvo na agenda.','var(--accent)');
+}
+function agExcluirBloco(id,serie){
+  const st=crEstado(),b=crLista(st.bloqueios).find(x=>x&&x.id===id);if(!b)return;
+  const sr=serie&&b.serie;
+  st.bloqueios=crLista(st.bloqueios).filter(x=>x&&(sr?x.serie!==b.serie:x.id!==id));
+  saveDB();closeModal();renderWeeklyPlan();
+  toast(sr?'🗑 Série excluída.':'🗑 Bloco excluído.','var(--muted)');
+}
+// Apaga o que foi GERADO (cronograma da Ebserh e planos por edital). Fica: o que você concluiu, revisões, blocos manuais e
+// o que você digitou na agenda.
+function agApagarGeradas(){
+  if(!confirm('Apagar as agendas geradas?\n\nSai: o cronograma da Ebserh e os planos por edital (versões, assuntos movidos, ajustes do dia).\nFica: o que você já concluiu, suas revisões, seus blocos manuais e o que você digitou na agenda.\n\nDá para montar de novo quando quiser.'))return;
+  const st=crEstado();
+  st.ativo=false;['pins','ajusteHoje','zero','fases','inicio','ativadoEm','provaId'].forEach(k=>{delete st[k];});
+  db.agendaPlanos={ativoId:null,planos:{},versoes:[]};
+  crAba='grade';
+  saveDB();closeModal();crRefrescar();renderWeeklyPlan();
+  toast('🗑 Agendas geradas apagadas. Sua agenda agora é manual.','var(--accent)');
 }
 // ===== ASSISTENTE DO PLANO (rascunho + prévia) =====
 // Tudo o que você muda aqui é um RASCUNHO: a prévia recalcula na hora e nada é gravado até "Aplicar".
@@ -27057,22 +27120,27 @@ function crSemanaDados(off){
 }
 function crGradeHTML(){
   const{p,seg,cols}=crSemanaDados(crGradeOff);
+  const manual=!crAtivo();                      // sem cronograma: só os seus blocos
+  if(manual)cols.forEach(c=>{c.seq=null;});
   const ini=crHoraInicioMin(),NOMES=['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
   // O dia inteiro à vista, como numa grade de horários: das 06:00 às 23:00 (ou mais, se os blocos pedirem).
   const fimMax=Math.max(0,...cols.map(c=>c.seq?c.seq.fim:0));
-  const eixoIni=Math.min(CRON_EIXO_INI,Math.floor(ini/60)*60);
-  const eixoFim=Math.max(CRON_EIXO_FIM,Math.ceil((ini+fimMax)/60)*60);
+  const bq=cols.flatMap(c=>agBlocosManuais(c.ds));
+  const bqIni=Math.min(1440,...bq.map(b=>agHM(b.inicio))),bqFim=Math.max(0,...bq.map(b=>agHM(b.inicio)+(+b.min||0)));
+  const eixoIni=Math.min(CRON_EIXO_INI,Math.floor(ini/60)*60,Math.floor(bqIni/60)*60);
+  const eixoFim=Math.max(CRON_EIXO_FIM,Math.ceil((ini+fimMax)/60)*60,Math.min(1440,Math.ceil(bqFim/60)*60));
   const rows=Math.ceil((eixoFim-eixoIni)/15);
   const off0=ini-eixoIni;                                    // onde o estudo começa dentro do eixo
   const horas=[];for(let m=0;m<rows*15;m+=60)horas.push(m);
   const cab=cols.map((c,i)=>{
     const man=(db.weeklyPlan?crLista(db.weeklyPlan[c.ds]):[]).filter(x=>x&&(crMostrarManuais||x.criadoEm)).map(x=>escapeHtml(x.name)).slice(0,3);
-    return`<div class="cg-cab${c.ds===p.hoje?' cg-hoje':''}" style="grid-column:${i+2};grid-row:1"><button class="cg-add" onclick="openAddPlanItem('${c.ds}')" title="Acrescentar um compromisso neste dia" aria-label="Acrescentar um compromisso em ${NOMES[i]}">＋</button><b>${NOMES[i]}</b><span>${crFmtData(c.ds)}</span>${man.length?`<em title="Marcado na agenda, sem horário">＋ ${man.join(' · ')}</em>`:''}</div>`;
+    return`<div class="cg-cab${c.ds===p.hoje?' cg-hoje':''}" style="grid-column:${i+2};grid-row:1"><button class="cg-add" onclick="agAbrirBloco('${c.ds}')" title="Acrescentar um bloco neste dia" aria-label="Acrescentar um bloco em ${NOMES[i]}">＋</button><b>${NOMES[i]}</b><span>${crFmtData(c.ds)}</span>${man.length?`<em title="Marcado na agenda, sem horário">＋ ${man.join(' · ')}</em>`:''}</div>`;
   }).join('');
   const fundo=cols.map((c,i)=>`<div class="cg-fundo${c.ds===p.hoje?' cg-hoje':''}" style="grid-column:${i+2};grid-row:2/${rows+2}"></div>`).join('');
   const lab=horas.map(m=>`<div class="cg-hora" style="grid-row:${2+m/15}/span 4">${crHM(eixoIni+m)}</div>`).join('');
   const blocos=cols.map((c,i)=>{
     if(!c.seq){
+      if(manual)return'';
       const antes=c.ds<p.inicio;
       return`<div class="cg-vazio" style="grid-column:${i+2};grid-row:2/span 6">${antes?'antes do início':'fora do cronograma'}</div>`;
     }
@@ -27087,6 +27155,10 @@ function crGradeHTML(){
         <b>${escapeHtml(b.titulo)}</b>${span>=2&&b.sub?`<span>${escapeHtml(b.sub)}</span>`:''}${span>=3?`<i>${b.dur} min</i>`:''}</div>`;
     }).join('');
   }).join('');
+  const manuais=cols.map((c,i)=>agBlocosManuais(c.ds).map(b=>{
+    const bi=agHM(b.inicio),rs=2+Math.max(0,Math.round((bi-eixoIni)/15)),span=Math.max(1,Math.round((+b.min||15)/15));
+    const tit=`${b.inicio}–${crHM(bi+(+b.min||0))} · ${b.titulo||'Compromisso'}`;
+    return`<div class="cg-bloco cg-manual" style="grid-column:${i+2};grid-row:${rs}/span ${span}" onclick="agAbrirBloco('${c.ds}','${escapeAttrJs(b.id)}')" title="${escapeHtml(tit)}"><b>${escapeHtml(b.titulo||'Compromisso')}</b>${span>=2?`<span>${escapeHtml(b.inicio)} · ${b.min} min</span>`:''}</div>`;}).join('')).join('');
   // Quanto tempo cada matéria ganha na semana: é onde se vê se todas têm vez com as horas que você tem.
   const soma={};let totalMin=0;
   cols.forEach(c=>{if(c.seq)c.seq.blocos.forEach(b=>{const k=crCatDe(b);if(k){soma[k]=(soma[k]||0)+b.dur;totalMin+=b.dur;}});});
@@ -27100,11 +27172,12 @@ function crGradeHTML(){
   const fim=addDays(seg,6);
   return`<div class="cron-grade-wrap">
     <div class="cg-topo"><b>🕐 Grade da semana · ${crFmtData(seg)} a ${crFmtData(fim)}</b>
-      <span class="cg-nav"><button class="btn btn-xs btn-ghost" onclick="crGradeSemana(-1)" aria-label="Semana anterior">‹</button>
+      <span class="cg-nav"><button class="btn btn-xs btn-primary" onclick="agAbrirBloco('${p.hoje}')" title="Marcar um bloco: estudo, plantão, aula…">＋ Bloco</button>
+      <button class="btn btn-xs btn-ghost" onclick="crGradeSemana(-1)" aria-label="Semana anterior">‹</button>
       <button class="btn btn-xs btn-ghost" onclick="crGradeSemana(0)"${crGradeOff?'':' disabled'}>Esta semana</button>
       <button class="btn btn-xs btn-ghost" onclick="crGradeSemana(1)" aria-label="Próxima semana">›</button></span></div>
-    <div class="cron-grade" id="cron-grade" data-rolar="${Math.max(0,Math.round(off0/15)*20-24)}"><div class="cg" style="grid-template-rows:auto repeat(${rows},20px)">${cab}${fundo}${lab}${blocos}</div></div>
-    <div class="cg-resumo"><div class="cg-resumo-tit">Tempo por matéria · ${crFmtMin(totalMin)} de estudo na semana (${String(p.horas).replace('.',',')}h por dia)</div>${barras}${aviso}</div>
+    <div class="cron-grade" id="cron-grade" data-rolar="${Math.max(0,Math.round(off0/15)*20-24)}"><div class="cg" style="grid-template-rows:auto repeat(${rows},20px)">${cab}${fundo}${lab}${blocos}${manuais}</div></div>
+    ${manual?'':''}<div class="cg-resumo"${manual?' style="display:none"':''}><div class="cg-resumo-tit">Tempo por matéria · ${crFmtMin(totalMin)} de estudo na semana (${String(p.horas).replace('.',',')}h por dia)</div>${barras}${aviso}</div>
   </div>`;
 }
 function crGradeAlternar(){crIrAba(crAba==='grade'?'hoje':'grade');}
@@ -27156,15 +27229,16 @@ function renderCronCabecalho(){
   const el=document.getElementById('cron-head'),lista=document.getElementById('weekly-plan');
   const ativo=crAtivo();
   if(ativo&&crAba==='dias'&&!crEstado().listaDias)crAba='hoje';   // a lista antiga ficou de fora
+  agGarantirIds();
   if(el)el.innerHTML=crCabecalhoHTML()+(ativo
-    ?crAbaHTML()+(crAba!=='hoje'?crManuaisNota():'')+(crAba==='grade'?crGradeHTML():crAba==='hoje'?crHojeHTML():''):'');
-  if(lista)lista.style.display=ativo&&crAba!=='dias'?'none':'';
+    ?crAbaHTML()+(crAba!=='hoje'?crManuaisNota():'')+(crAba==='grade'?crGradeHTML():crAba==='hoje'?crHojeHTML():''):crGradeHTML());
+  if(lista)lista.style.display=ativo?(crAba!=='dias'?'none':''):(crEstado().listaDias?'':'none');
   // Aberta a grade, já mostra a hora em que o estudo começa (o dia inteiro fica logo acima e abaixo).
   const g=document.getElementById('cron-grade');
   if(g&&g.dataset.rolar)g.scrollTop=+g.dataset.rolar;
   // Com o cronograma ligado a grade é a agenda: os botões da lista antiga saem de cena.
   const ferr=document.querySelector('.dash-agenda .dash-head-tools');
-  if(ferr)ferr.style.display=ativo&&!crEstado().listaDias?'none':'';
+  if(ferr)ferr.style.display=!crEstado().listaDias?'none':'';
 }
 
 function renderWeeklyPlan(){
