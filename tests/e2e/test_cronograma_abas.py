@@ -82,6 +82,35 @@ async def main():
         assert all(r.values())
         print('   OK\n')
 
+        print('=== G) lista do dia que o Firebase devolve como OBJETO (com buraco) nao derruba a Agenda ===')
+        r=await page.evaluate("""()=>{window.todayStr=()=>'2026-11-04';
+          db.cronograma={ativo:true,inicio:'2026-11-03',complementar:false,rodizio:false,v:2,feitos:{},lidos:{}};
+          // como o Firebase devolve uma lista com buraco: {"0":...,"2":...} e nao [...]
+          db.weeklyPlan={'2026-11-04':{'0':{name:'FASE 1',livre:true},'2':{name:'45min Principios',livre:true}},
+                         '2026-11-05':{'1':{name:'Sabado de Especifico',livre:true}},
+                         '2026-11-02':{'0':{name:'item de ontem',livre:true}}};
+          db.treinoHistorico={'0':{titulo:'Simulado diagnóstico',respondidas:30,certas:24,data:'2026-11-02T10:00:00Z'}};
+          const erros=[];const ant=window.onerror;window.onerror=(m)=>{erros.push(String(m));};
+          const out={};
+          try{
+            crAba='hoje';renderWeeklyPlan();out.hoje=true;
+            for(const a of ['grade','dias','hoje'])crIrAba(a);out.abas=true;
+            out.nota=crManuaisFuturos().length;
+            crIrAba('dias');crManuaisAlternar();out.itens=document.querySelectorAll('#weekly-plan .plan-item').length;crManuaisAlternar();
+            crSetProva('nenhum');crSetProva('');out.prova=true;
+            out.diag=!!crDiagnostico();
+            out.normalizou=Array.isArray(db.weeklyPlan['2026-11-04'])&&db.weeklyPlan['2026-11-04'].length===2;
+            removePlanItem('2026-11-04',0);out.removeu=db.weeklyPlan['2026-11-04'].length;
+            crApagarManuais();out.apagou=Object.keys(db.weeklyPlan).filter(k=>k>='2026-11-04').length;out.passado=db.weeklyPlan['2026-11-02'].length;
+          }catch(e){out.erro=String(e);}
+          window.onerror=ant;out.erros=erros;return out;}""")
+        print('   %s'%r)
+        assert 'erro' not in r and r['erros']==[], r
+        assert r['hoje'] and r['abas'] and r['prova'] and r['diag']
+        assert r['nota']==3 and r['itens']==3 and r['normalizou'] and r['removeu']==1
+        assert r['apagou']==0 and r['passado']==1                # apagar: so de hoje em diante; o passado fica
+        print('   OK\n')
+
         assert not graves(errs),graves(errs)
         print('erros de JS: nenhum\nOK')
         await browser.close()
