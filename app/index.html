@@ -1043,6 +1043,37 @@ nav{
 .treino-montar-titulo{font-size:12px;font-weight:800;margin-right:4px;}
 .treino-montar-bar select{width:auto;padding:6px 8px;font-size:12px;}
 .treino-montar-count{font-size:11px;color:var(--muted);font-weight:700;margin-left:auto;}
+.tf-painel{display:flex;flex-direction:column;gap:10px;min-width:0}
+.tf-topo{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tf-abre-gaveta{display:none}
+.tf-linha{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tf-sel{position:relative}
+.tf-btn{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:130px;cursor:pointer;text-align:left}
+.tf-btn:disabled{opacity:.5;cursor:not-allowed}
+.tf-qtd{background:var(--accent);color:#fff;border-radius:10px;padding:0 6px;font-size:11px;margin-left:4px}
+.tf-pop{position:absolute;z-index:30;top:calc(100% + 4px);left:0;width:300px;max-width:86vw;background:var(--panel,var(--bg));border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:8px}
+.tf-lista{max-height:240px;overflow:auto;margin:6px 0}
+.tf-op{display:flex;gap:8px;align-items:center;padding:5px 6px;border-radius:8px;cursor:pointer;font-size:13px}
+.tf-op:hover{background:var(--panel2)}.tf-op-zero{opacity:.5}.tf-op-nome{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}.tf-op-n{color:var(--muted);font-size:12px}
+.tf-pop-rodape{display:flex;justify-content:space-between}
+.tf-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tf-chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--border);border-radius:999px;padding:3px 6px 3px 10px;font-size:12px;font-weight:700}
+.tf-x{background:none;border:0;cursor:pointer;color:var(--muted);font-size:12px;padding:0 2px}
+.tf-acao{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.tf-contador{font-size:13px;color:var(--muted);font-weight:700}.tf-contador b{color:var(--accent);font-size:18px}
+.tf-campo{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--muted);font-weight:700}
+.tf-gaveta-cab,.tf-gaveta-rodape{display:none}
+/* o cartão tem animação com transform: sem isto o fixed da gaveta prende nele e some embaixo da página */
+body.tf-gaveta-on .treino-topo-montar,body.tf-gaveta-on .treino-topo-montar *{transform:none!important;animation:none!important}
+@media(max-width:700px){
+  .tf-abre-gaveta{display:inline-flex}
+  .tf-corpo{display:none}
+  .tf-gaveta-aberta .tf-corpo{display:flex;flex-direction:column;gap:12px;position:fixed;left:0;right:0;bottom:0;max-height:82vh;overflow:auto;z-index:300;background:var(--panel,var(--bg));border-radius:18px 18px 0 0;padding:14px 14px 18px;box-shadow:0 -12px 40px rgba(0,0,0,.35)}
+  .tf-gaveta-aberta .tf-gaveta-cab{display:flex;justify-content:space-between;align-items:center}
+  .tf-gaveta-aberta .tf-gaveta-rodape{display:block;position:sticky;bottom:0;background:var(--panel,var(--bg));padding-top:8px}
+  .tf-gaveta-aberta .tf-gaveta-rodape .btn{width:100%;justify-content:center}
+  .tf-sel{flex:1 1 45%}.tf-btn{width:100%}.tf-pop{position:static;width:auto;max-width:none;margin-top:4px}
+}
 .treino-rodape-linha{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);font-weight:600;padding:2px 2px;}
 .treino-sessao-wrap{display:flex;gap:16px;justify-content:center;align-items:flex-start;}
 .treino-sessao{max-width:900px;margin:0;flex:1 1 auto;}
@@ -6864,7 +6895,7 @@ function bootApp(){
   loadDB(()=>{
     // Depois do registro principal, e em paralelo com o resto da tela: o banco de
     // questoes so e preciso quando a pessoa abre Provas, nao no primeiro frame.
-    acervoCarregar().catch(e=>console.warn('Falha ao carregar o banco de questões:',e));
+    acervoCarregar().then(()=>tfAposAcervo()).catch(e=>console.warn('Falha ao carregar o banco de questões:',e));
     // As dicas também têm nó próprio e não seguram a primeira tela.
     dicasCarregar().catch(e=>{dicasCarregou=true;console.warn('Falha ao carregar as dicas:',e);});
     renderHeader();
@@ -14841,6 +14872,230 @@ function treinoFiltroTreinar(){
   renderSimGeralScreen();
   window.scrollTo(0,0);
 }
+// ===== FILTROS DO TREINO (Banca · Mundo · Chefe · Miniboss + extras) =====
+// Painel novo da tela Treinar: seleção múltipla com busca, cascata Mundo → Chefe → Miniboss (o de baixo só abre com o de cima),
+// contagem por opção que já considera os outros filtros, chips com X, quantidade/ordem ao iniciar, filtros guardados na URL
+// (f_*) e no aparelho, e gaveta no celular. O filtro roda em memória sobre o acervo já carregado (não há servidor próprio).
+// "Banca": campo `banca` da questão; quem ainda não tem vale "Cebraspe (estilo)" — o acervo foi feito nesse estilo.
+const TF_BANCA_PADRAO='Cebraspe (estilo)';
+const TF_VAZIO=()=>({bancas:[],mundos:[],chefes:[],minis:[],estado:'',busca:'',formato:'',nivel:'',fav:false,avancado:false});
+let tf=TF_VAZIO(),tfAberto=null,tfBuscaOp={},tfGaveta=false,tfIniciado=false,tfEntradas=null;
+const TF_ESTADOS=[['','Todas'],['resolvidas','Resolvidas'],['naoresolvidas','Não resolvidas'],['acertei','Acertei'],['errei','Errei']];
+const tfBancaDe=q=>{const b=String((q&&q.banca)||'').trim().slice(0,60);return b||TF_BANCA_PADRAO;};
+function tfIndiceArvore(){
+  const sub={},ordemM=[],ordemC=[];
+  (db.kingdoms||[]).forEach(k=>{ordemM.push(k.name||'');(db.topics[k.id]||[]).forEach(t=>{ordemC.push(t.id);(t.subtopics||[]).forEach(s=>{
+    sub[s.id]={mini:s.name||'',chefeId:t.id,chefe:t.name||'',mundo:k.name||''};});});});
+  return{sub,ordemM,ordemC};
+}
+// Uma entrada por questão do treino, com o que os filtros precisam (montada uma vez por desenho).
+function tfMontarEntradas(){
+  const ar=tfIndiceArvore();
+  const E=treinoPoolCompleto().map(q=>{
+    const s=q.subId&&ar.sub[q.subId];
+    const chefeId=s?s.chefeId:(q.topicName?'nome:'+q.topicName:''),chefe=s?s.chefe:(q.topicName||''),mundo=s?s.mundo:(q.kingdomName||'');
+    return{q,banca:tfBancaDe(q),mundo,chefeId,chefe,miniId:q.subId||'',mini:s?s.mini:(q.subName||''),
+      vez:q.vezesRespondida||0,ult:q.ultimoResultado||''};
+  });
+  return{E,ar};
+}
+function tfLimparOrfaos(ent){
+  if(!ent.E.length)return;   // acervo ainda carregando: não apaga filtro nenhum
+  const mundos=new Set(ent.E.map(e=>e.mundo)),bancas=new Set(ent.E.map(e=>e.banca));
+  tf.bancas=tf.bancas.filter(b=>bancas.has(b));tf.mundos=tf.mundos.filter(m=>mundos.has(m));
+  const chOk=new Set(ent.E.filter(e=>!tf.mundos.length||tf.mundos.includes(e.mundo)).map(e=>e.chefeId));
+  tf.chefes=tf.mundos.length?tf.chefes.filter(c=>chOk.has(c)):[];
+  const miOk=new Set(ent.E.filter(e=>tf.chefes.includes(e.chefeId)).map(e=>e.miniId));
+  tf.minis=tf.chefes.length?tf.minis.filter(m=>miOk.has(m)):[];
+}
+// ignorar: dimensões que não entram na conta (a própria e as de baixo na hierarquia)
+function tfOk(e,ig){
+  const f=tf;
+  if(!ig.has('banca')&&f.bancas.length&&!f.bancas.includes(e.banca))return false;
+  if(!ig.has('mundo')&&f.mundos.length&&!f.mundos.includes(e.mundo))return false;
+  if(!ig.has('chefe')&&f.chefes.length&&!f.chefes.includes(e.chefeId))return false;
+  if(!ig.has('mini')&&f.minis.length&&!f.minis.includes(e.miniId))return false;
+  if(f.estado==='resolvidas'&&!e.vez)return false;
+  if(f.estado==='naoresolvidas'&&e.vez)return false;
+  if(f.estado==='acertei'&&e.ult!=='C')return false;
+  if(f.estado==='errei'&&e.ult!=='X')return false;
+  if(f.formato&&(e.q.formato||'multipla')!==f.formato)return false;
+  if(f.nivel&&e.q.dificuldadeAferida!==f.nivel)return false;
+  if(f.fav&&!e.q.favorita)return false;
+  if(f.busca&&!(e._n||(e._n=normalizeForDedup(e.q.questao||''))).includes(normalizeForDedup(f.busca)))return false;
+  return true;
+}
+function tfFiltradas(ent){ent=ent||tfMontarEntradas();tfLimparOrfaos(ent);return ent.E.filter(e=>tfOk(e,new Set())).map(e=>e.q);}
+const TF_IGN={banca:['banca'],mundo:['mundo','chefe','mini'],chefe:['chefe','mini'],mini:['mini']};
+// opções de uma dimensão, com a contagem que já respeita os outros filtros
+function tfOpcoes(ent,dim){
+  const ig=new Set(TF_IGN[dim]),cont=new Map();
+  ent.E.forEach(e=>{
+    if(!tfOk(e,ig))return;
+    // cascata: o de baixo só mostra o que pertence ao de cima escolhido
+    if(dim==='chefe'&&tf.mundos.length&&!tf.mundos.includes(e.mundo))return;
+    if(dim==='mini'&&tf.chefes.length&&!tf.chefes.includes(e.chefeId))return;
+    const k=dim==='banca'?e.banca:dim==='mundo'?e.mundo:dim==='chefe'?e.chefeId:e.miniId;
+    if(!k)return;
+    const r=cont.get(k)||{k,n:0,nome:dim==='banca'?e.banca:dim==='mundo'?e.mundo:dim==='chefe'?e.chefe:e.mini};
+    r.n++;cont.set(k,r);
+  });
+  const sel=dim==='banca'?tf.bancas:dim==='mundo'?tf.mundos:dim==='chefe'?tf.chefes:tf.minis;
+  const ar=ent.ar,pos=dim==='mundo'?(k=>ar.ordemM.indexOf(k)):dim==='chefe'?(k=>ar.ordemC.indexOf(k)):null;
+  const l=[...cont.values()];
+  l.sort(pos?((a,b)=>(pos(a.k)<0?1e9:pos(a.k))-(pos(b.k)<0?1e9:pos(b.k))):((a,b)=>a.nome.localeCompare(b.nome)));
+  sel.forEach(k=>{if(!cont.has(k))l.push({k,n:0,nome:k});});
+  return l;
+}
+const TF_ROTULO={banca:'Banca',mundo:'Mundo',chefe:'Chefe',mini:'Miniboss'};
+const tfSelDe=d=>d==='banca'?tf.bancas:d==='mundo'?tf.mundos:d==='chefe'?tf.chefes:tf.minis;
+function tfBloqueado(dim){return(dim==='chefe'&&!tf.mundos.length)||(dim==='mini'&&!tf.chefes.length);}
+function tfSeletorHTML(ent,dim){
+  const sel=tfSelDe(dim),bloq=tfBloqueado(dim),aberto=tfAberto===dim&&!bloq;
+  const dica=dim==='chefe'?'Escolha um Mundo primeiro':dim==='mini'?'Escolha um Chefe primeiro':'';
+  let pop='';
+  if(aberto){
+    const termo=normalizeForDedup(tfBuscaOp[dim]||'');
+    const ops=tfOpcoes(ent,dim).filter(o=>!termo||normalizeForDedup(o.nome).includes(termo));
+    pop=`<div class="tf-pop" role="listbox" aria-multiselectable="true" aria-label="${TF_ROTULO[dim]}">
+      <input id="tf-busca-${dim}" class="inp tf-busca" type="search" placeholder="Buscar ${TF_ROTULO[dim].toLowerCase()}…" value="${escapeHtml(tfBuscaOp[dim]||'')}" oninput="tfBuscarOpcao('${dim}',this.value)" aria-label="Buscar ${TF_ROTULO[dim].toLowerCase()}">
+      <div class="tf-lista">${ops.length?ops.map(o=>`<label class="tf-op${o.n?'':' tf-op-zero'}" role="option" aria-selected="${sel.includes(o.k)}"><input type="checkbox" ${sel.includes(o.k)?'checked':''} onchange="tfAlternar('${dim}','${escapeAttrJs(o.k)}',this.checked)"> <span class="tf-op-nome">${escapeHtml(o.nome)}</span> <span class="tf-op-n">(${o.n})</span></label>`).join(''):'<div class="cron-sub" style="padding:8px">Nada encontrado.</div>'}</div>
+      <div class="tf-pop-rodape"><button class="btn btn-xs btn-ghost" onclick="tfLimparDim('${dim}')">Limpar</button><button class="btn btn-xs btn-primary" onclick="tfFechar()">Pronto</button></div></div>`;
+  }
+  return`<div class="tf-sel${bloq?' tf-bloq':''}"><button class="tf-btn inp" ${bloq?`disabled title="${dica}"`:''} aria-haspopup="listbox" aria-expanded="${aberto}" onclick="tfAbrir('${dim}')">
+      <span>${TF_ROTULO[dim]}${sel.length?` <b class="tf-qtd">${sel.length}</b>`:''}</span><i class="fa fa-chevron-down"></i></button>${pop}</div>`;
+}
+function tfChipsHTML(ent){
+  const chips=[];
+  const nome=(dim,k)=>{const o=tfOpcoes(ent,dim).find(x=>x.k===k);return o?o.nome:k;};
+  ['banca','mundo','chefe','mini'].forEach(d=>tfSelDe(d).forEach(k=>chips.push([d,k,`${TF_ROTULO[d]}: ${nome(d,k)}`])));
+  if(tf.estado)chips.push(['estado',tf.estado,'Status: '+(TF_ESTADOS.find(x=>x[0]===tf.estado)||[])[1]]);
+  if(tf.busca)chips.push(['busca','','Palavra: '+tf.busca]);
+  if(tf.formato)chips.push(['formato','','Formato: '+(tf.formato==='certoerrado'?'Certo/Errado':'Múltipla')]);
+  if(tf.nivel)chips.push(['nivel','','Dificuldade: '+({facil:'Fácil',media:'Média',dificil:'Difícil'}[tf.nivel]||tf.nivel)]);
+  if(tf.fav)chips.push(['fav','','Favoritas']);
+  if(!chips.length)return'';
+  return`<div class="tf-chips">${chips.map(c=>`<span class="tf-chip">${escapeHtml(c[2])} <button class="tf-x" aria-label="Remover filtro ${escapeHtml(c[2])}" onclick="tfRemover('${c[0]}','${escapeAttrJs(c[1])}')">✕</button></span>`).join('')}
+    <button class="btn btn-xs btn-ghost" onclick="tfLimparTudo()">Limpar filtros</button></div>`;
+}
+function tfNFiltros(){return tf.bancas.length+tf.mundos.length+tf.chefes.length+tf.minis.length+(tf.estado?1:0)+(tf.busca?1:0)+(tf.formato?1:0)+(tf.nivel?1:0)+(tf.fav?1:0);}
+function tfPainelHTML(){
+  const ent=tfMontarEntradas();tfLimparOrfaos(ent);
+  const n=ent.E.filter(e=>tfOk(e,new Set())).length,nf=tfNFiltros();
+  const extras=tf.avancado?`<div class="tf-linha tf-extras">
+      <label class="tf-campo">Palavra-chave <input id="tf-busca-txt" class="inp" type="search" maxlength="60" placeholder="no enunciado" value="${escapeHtml(tf.busca)}" onchange="tfSet('busca',this.value.trim())" onkeydown="if(event.key==='Enter')tfSet('busca',this.value.trim())"></label>
+      <label class="tf-campo">Formato <select class="inp" onchange="tfSet('formato',this.value)"><option value="">Todos</option><option value="certoerrado"${tf.formato==='certoerrado'?' selected':''}>Certo/Errado</option><option value="multipla"${tf.formato==='multipla'?' selected':''}>Múltipla</option></select></label>
+      <label class="tf-campo">Dificuldade <select class="inp" onchange="tfSet('nivel',this.value)"><option value="">Todas</option><option value="facil"${tf.nivel==='facil'?' selected':''}>Fácil</option><option value="media"${tf.nivel==='media'?' selected':''}>Média</option><option value="dificil"${tf.nivel==='dificil'?' selected':''}>Difícil</option></select></label>
+      <label class="banco-check"><input type="checkbox" ${tf.fav?'checked':''} onchange="tfSet('fav',this.checked)"> ⭐ Só favoritas</label></div>`:'';
+  return`<div class="tf-painel${tfGaveta?' tf-gaveta-aberta':''}">
+    <div class="tf-topo"><span class="treino-montar-titulo"><i class="fa fa-sliders"></i> Montar meu treino</span>
+      <button class="btn btn-sm btn-ghost tf-abre-gaveta" onclick="tfGavetaAlternar()" aria-expanded="${tfGaveta}">🎚 Filtros${nf?` (${nf})`:''}</button></div>
+    <div class="tf-corpo">
+      <div class="tf-gaveta-cab"><b>Filtros</b><button class="btn btn-xs btn-ghost" onclick="tfGavetaAlternar()" aria-label="Fechar filtros">✕</button></div>
+      <div class="tf-linha">${['banca','mundo','chefe','mini'].map(d=>tfSeletorHTML(ent,d)).join('')}</div>
+      <div class="tf-linha tf-estados" role="group" aria-label="Status pessoal">${TF_ESTADOS.map(([k,l])=>`<button class="chip${tf.estado===k?' active':''}" aria-pressed="${tf.estado===k}" onclick="tfSet('estado','${k}')">${l}</button>`).join('')}</div>
+      ${extras}
+      <button class="btn btn-xs btn-ghost tf-modo" onclick="tfSet('avancado',${!tf.avancado})">${tf.avancado?'Mostrar filtro simples':'Mostrar filtro avançado'}</button>
+      <div class="tf-gaveta-rodape"><button class="btn btn-sm btn-primary" onclick="tfGavetaAlternar()">Ver ${n} questõe${n===1?'':'s'}</button></div>
+    </div>
+    ${tfChipsHTML(ent)}
+    <div class="tf-acao"><span class="tf-contador" aria-live="polite"><b>${n}</b> questõe${n===1?'':'s'} encontrada${n===1?'':'s'}</span>
+      <button class="btn btn-primary" onclick="tfIniciarDialogo()" ${n?'':'disabled'}>▶ Treinar com estas</button></div>
+  </div>`;
+}
+function tfRender(){
+  const el=document.getElementById('tf-painel');if(!el)return;
+  const ant=document.activeElement&&document.activeElement.id;
+  el.innerHTML=tfPainelHTML();tfSalvar();document.body.classList.toggle('tf-gaveta-on',!!tfGaveta);
+  if(tfAberto){const b=document.getElementById('tf-busca-'+tfAberto);if(b&&ant===b.id){b.focus();const v=b.value;b.setSelectionRange(v.length,v.length);}}
+}
+// --- ações ---
+function tfAbrir(dim){tfAberto=tfAberto===dim?null:dim;tfRender();if(tfAberto){const b=document.getElementById('tf-busca-'+dim);if(b)b.focus();}}
+function tfFechar(){tfAberto=null;tfRender();}
+function tfBuscarOpcao(dim,v){tfBuscaOp[dim]=v;tfRender();}
+function tfAlternar(dim,k,on){
+  const l=tfSelDe(dim).filter(x=>x!==k);if(on)l.push(k);
+  if(dim==='banca')tf.bancas=l;else if(dim==='mundo')tf.mundos=l;else if(dim==='chefe')tf.chefes=l;else tf.minis=l;
+  tfRender();
+}
+function tfLimparDim(dim){if(dim==='banca')tf.bancas=[];else if(dim==='mundo')tf.mundos=[];else if(dim==='chefe')tf.chefes=[];else tf.minis=[];tfRender();}
+function tfSet(campo,v){tf[campo]=v;if(campo==='estado'&&tf.estado===v&&false)tf.estado='';tfRender();}
+function tfRemover(dim,k){
+  if(dim==='estado')tf.estado='';else if(dim==='busca')tf.busca='';else if(dim==='formato')tf.formato='';else if(dim==='nivel')tf.nivel='';else if(dim==='fav')tf.fav=false;
+  else tfAlternar(dim,k,false);
+  if(['estado','busca','formato','nivel','fav'].includes(dim))tfRender();
+}
+function tfLimparTudo(){const av=tf.avancado;tf=TF_VAZIO();tf.avancado=av;tfAberto=null;tfRender();}
+function tfGavetaAlternar(){tfGaveta=!tfGaveta;tfRender();}
+document.addEventListener('click',e=>{
+  if(!tfAberto)return;
+  if(e.target.closest&&e.target.closest('.tf-sel'))return;
+  tfAberto=null;tfRender();
+});
+// --- URL e memória do aparelho ---
+const TF_CH={bancas:'f_banca',mundos:'f_mundo',chefes:'f_chefe',minis:'f_mini'};
+function tfParaParams(f){
+  const p={};
+  Object.keys(TF_CH).forEach(k=>{if(f[k].length)p[TF_CH[k]]=f[k].join('|');});
+  if(f.estado)p.f_estado=f.estado;if(f.busca)p.f_q=f.busca;if(f.formato)p.f_formato=f.formato;if(f.nivel)p.f_nivel=f.nivel;if(f.fav)p.f_fav='1';if(f.avancado)p.f_av='1';
+  return p;
+}
+function tfDeParams(sp){
+  const f=TF_VAZIO(),lim=v=>String(v||'').slice(0,200);
+  Object.keys(TF_CH).forEach(k=>{const v=sp.get(TF_CH[k]);if(v)f[k]=v.split('|').map(lim).filter(Boolean).slice(0,40);});
+  const es=sp.get('f_estado');if(TF_ESTADOS.some(x=>x[0]===es))f.estado=es||'';
+  f.busca=lim(sp.get('f_q')).slice(0,60);
+  const fo=sp.get('f_formato');if(fo==='certoerrado'||fo==='multipla')f.formato=fo;
+  const ni=sp.get('f_nivel');if(['facil','media','dificil'].includes(ni))f.nivel=ni;
+  f.fav=sp.get('f_fav')==='1';f.avancado=sp.get('f_av')==='1';
+  return f;
+}
+function tfTemParams(sp){return[...sp.keys()].some(k=>k.startsWith('f_'));}
+function tfSalvar(){
+  try{
+    const sp=new URLSearchParams(location.search);[...sp.keys()].filter(k=>k.startsWith('f_')).forEach(k=>sp.delete(k));
+    const p=tfParaParams(tf);Object.keys(p).forEach(k=>sp.set(k,p[k]));
+    const q=sp.toString();history.replaceState(null,'',location.pathname+(q?'?'+q:'')+location.hash);
+  }catch(e){}
+  try{localStorage.setItem('vdn_tf_'+((typeof currentUser!=='undefined'&&currentUser&&currentUser.uid)||''),JSON.stringify(tfParaParams(tf)));}catch(e){}
+}
+// Primeira vez na sessão: o link manda; sem link, valem os últimos filtros usados neste aparelho.
+function tfIniciar(){
+  if(tfIniciado)return;tfIniciado=true;
+  try{
+    const sp=new URLSearchParams(location.search);
+    if(tfTemParams(sp))tf=tfDeParams(sp);
+    else{const raw=localStorage.getItem('vdn_tf_'+((typeof currentUser!=='undefined'&&currentUser&&currentUser.uid)||''));if(raw){const o=JSON.parse(raw);tf=tfDeParams(new URLSearchParams(o));}}
+  }catch(e){tf=TF_VAZIO();}
+}
+// --- iniciar o treino ---
+let tfQtd=20,tfOrdem='aleatoria';
+function tfIniciarDialogo(){
+  const n=tfFiltradas().length;if(!n){toast('Nenhuma questão com esses filtros.','var(--muted)');return;}
+  openModal('▶ Iniciar treino',`<div class="cron-modal" id="tf-dlg"><div class="cron-sub">${n} questõe${n===1?'':'s'} encontrada${n===1?'':'s'} com os seus filtros.</div>
+    <div class="ag-lin" role="group" aria-label="Quantidade">${[10,20,30].map(x=>`<button class="chip${tfQtd===x?' active':''}" onclick="tfQtd=${x};tfDlgRender()">${x}</button>`).join('')}<button class="chip${tfQtd===n?' active':''}" onclick="tfQtd=${n};tfDlgRender()">Todas (${n})</button>
+      <label>Outra <input id="tf-qtd-pers" class="inp" type="number" min="1" max="${n}" style="width:80px" value="${[10,20,30,n].includes(tfQtd)?'':tfQtd}" onchange="tfQtd=Math.max(1,Math.min(${n},parseInt(this.value)||20));tfDlgRender()"></label></div>
+    <div class="ag-lin" role="group" aria-label="Ordem"><label class="banco-check"><input type="radio" name="tf-ord" ${tfOrdem==='aleatoria'?'checked':''} onchange="tfOrdem='aleatoria'"> Aleatória</label>
+      <label class="banco-check"><input type="radio" name="tf-ord" ${tfOrdem==='sequencial'?'checked':''} onchange="tfOrdem='sequencial'"> Sequencial (Mundo → Chefe → Miniboss)</label></div>
+    <div class="ag-lin" style="justify-content:flex-end"><button class="btn btn-primary" onclick="tfComecar()">Começar</button></div></div>`);
+}
+function tfDlgRender(){const n=tfFiltradas().length;closeModal();tfIniciarDialogo();}
+function tfComecar(){
+  const ent=tfMontarEntradas();tfLimparOrfaos(ent);
+  let lista=ent.E.filter(e=>tfOk(e,new Set()));
+  if(tfOrdem==='sequencial'){
+    const ar=ent.ar,pm=m=>{const i=ar.ordemM.indexOf(m);return i<0?1e9:i;},pc=c=>{const i=ar.ordemC.indexOf(c);return i<0?1e9:i;};
+    lista=lista.map((e,i)=>({e,i})).sort((a,b)=>pm(a.e.mundo)-pm(b.e.mundo)||pc(a.e.chefeId)-pc(b.e.chefeId)||a.e.mini.localeCompare(b.e.mini)||a.i-b.i).map(x=>x.e);
+  }else{for(let i=lista.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[lista[i],lista[j]]=[lista[j],lista[i]];}}
+  const q=Math.max(1,Math.min(lista.length,tfQtd||20));
+  const pool=lista.slice(0,q).map(e=>e.q);
+  const chefe=tf.chefes.length===1&&(ent.E.find(e=>e.chefeId===tf.chefes[0])||{}).chefe;
+  closeModal();
+  if(!treinoIniciar(pool,{titulo:chefe?`Chefão · ${chefe}`:'Treino montado',ordenado:tfOrdem==='sequencial'}))return;
+  renderSimGeralScreen();window.scrollTo(0,0);
+}
+// Link com filtros (?f_...): depois que o acervo carrega, abre direto o Treinar com a seleção.
+function tfAposAcervo(){try{if(tfTemParams(new URLSearchParams(location.search))){tfIniciar();showScreen('simgeral');}}catch(e){}}
 function treinoMontarBarHTML(){
   const materias=treinoFiltroOpcoesMaterias();
   const chefoes=treinoFiltroOpcoesChefoes();
@@ -14939,7 +15194,7 @@ function treinarEntradaHTML(){
       <div class="section-card">${treinoPorDiaHTML()}</div>
     </div>
     <div class="section-card treino-topo-montar">
-      ${treinoMontarBarHTML()}
+      <div id="tf-painel">${(tfIniciar(),tfPainelHTML())}</div>
       <button class="btn btn-sm btn-ghost treino-topo-simulado" onclick="treinarAbrirAvancado()"><i class="fa fa-stopwatch"></i> Fazer simulado</button>
     </div>
     ${foraPainelHTML()}
@@ -18171,13 +18426,14 @@ function bancoLerForm(prefixo){
   const questao=((el('questao')||{}).value||'').trim();
   const explicacao=((el('explicacao')||{}).value||'').trim();
   const fonte=simFonteLimpa((el('fonte')||{}).value||'');
+  const banca=((el('banca')||{}).value||'').trim().slice(0,60);
   const tags=((el('tags')||{}).value||'').split(',').map(t=>t.trim()).filter(Boolean);
   const favorita=!!(el('favorita')||{}).checked;
   const status=(el('status')||{}).value||'ativa';
   if(formato==='certoerrado'){
     const gab=(el('gabarito')||{}).value;
     const norm=simNormalizaQuestao({afirmacao:questao,gabarito:gab,explicacao,fonte},'certoerrado');
-    return norm&&{...norm,tags,favorita,status};
+    return norm&&{...norm,tags,favorita,status,banca};
   }
   const letras=['A','B','C','D','E'];
   const alternativas=letras.map(letra=>{
@@ -18186,7 +18442,7 @@ function bancoLerForm(prefixo){
   }).filter(Boolean);
   const correta=(el('gabarito')||{}).value;
   const norm=simNormalizaQuestao({questao,alternativas,correta,explicacao,fonte},'multipla');
-  return norm&&{...norm,tags,favorita,status};
+  return norm&&{...norm,tags,favorita,status,banca};
 }
 // Aplica os campos editaveis SEM tocar em identidade, historico ou o que e do usuario
 // por natureza (_chaveForte, criadaEm, contadores). Devolve o que mudou de endereco, se
@@ -18198,6 +18454,7 @@ function bancoAplicarEdicao(item,dados){
   item.alternativas=dados.alternativas; item.correta=dados.correta;
   item.explicacao=dados.explicacao; item.fonte=dados.fonte;
   item.tags=dados.tags; item.favorita=dados.favorita; item.status=dados.status;
+  if(dados.banca)item.banca=dados.banca;else delete item.banca;
   if(mudouTexto){
     const chaveForteAntes=item._chaveForte;
     item._chaveForte=acervoChave2(item);
@@ -18309,6 +18566,7 @@ function bancoEditorHTML(q,modo){
     <textarea id="${prefixo}explicacao" class="inp" placeholder="Explicação (opcional)..."
       style="width:100%;min-height:44px;font-size:12px;margin-top:6px">${escapeHtml((q&&q.explicacao)||'')}</textarea>
     <input id="${prefixo}fonte" class="inp" placeholder="Fonte (opcional)..." value="${escapeHtml((q&&q.fonte)||'')}" style="margin-top:6px">
+    <input id="${prefixo}banca" class="inp" maxlength="60" placeholder="Banca (ex.: Cebraspe, FGV, AOCP — vazio = Cebraspe (estilo))" value="${escapeHtml((q&&q.banca)||'')}" style="margin-top:6px">
     <div class="banco-edit-linha" style="margin-top:6px">
       <input id="${prefixo}tags" class="inp" style="flex:1" placeholder="tags, separadas, por vírgula" value="${escapeHtml(((q&&q.tags)||[]).join(', '))}" oninput="bancoTagsSugeridasAtualizar('${prefixo}')">
       <label class="banco-check"><input type="checkbox" id="${prefixo}favorita"${q&&q.favorita?' checked':''}> ⭐ favorita</label>

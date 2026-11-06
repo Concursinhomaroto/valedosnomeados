@@ -30,7 +30,7 @@ async def main():
     async with async_playwright() as p:
         b,page,errs=await setup_page(p,seed())
         await page.evaluate(ACERVO)
-        await page.evaluate("()=>{treinoFiltro={materia:'',chefao:'',assunto:'',formato:'',estado:'',nivel:''};showScreen('simgeral');renderSimGeralScreen();return true;}")
+        await page.evaluate("()=>{treinoFiltro={materia:'',chefao:'',assunto:'',formato:'',estado:'',nivel:''};showScreen('simgeral');renderSimGeralScreen();document.getElementById('tf-painel').outerHTML=treinoMontarBarHTML();return true;}")   # barra antiga: a API continua valendo (o painel novo é o de tf*)
 
         print('=== A) três seletores: Reino, Chefão, Miniboss ===')
         r=await page.evaluate(LER)
