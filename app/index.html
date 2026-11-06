@@ -1048,7 +1048,16 @@ nav{
 .tq-minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px;max-height:200px;overflow:auto}
 .tq-pend{border:1px dashed var(--border);border-radius:10px;padding:8px}
 .treino-origem{font-size:12px;color:var(--muted);font-weight:700;margin-top:6px}
-.tf-painel{display:flex;flex-direction:column;gap:10px;min-width:0}
+.tf-painel{display:flex;flex-direction:column;gap:12px;min-width:0;width:100%}
+.tf-topo-acoes{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tf-corpo{display:flex;flex-direction:column;gap:12px}
+.tf-principais{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.tf-principais .tf-sel{min-width:0}.tf-principais .tf-btn{width:100%;min-width:0}
+.tf-estados-linha{justify-content:space-between}.tf-estados{display:flex;flex-wrap:wrap;gap:6px}
+.tf-extras{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;align-items:end}
+.tf-extras .tf-campo .inp{width:100%}
+.tf-cobertura{font-size:12px;color:var(--muted);font-weight:600}.tf-cobertura a{color:var(--accent);font-weight:800}
+.tf-acao{border-top:1px solid var(--border);padding-top:12px}
 .tf-topo{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .tf-abre-gaveta{display:none}
 .tf-linha{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -1077,7 +1086,7 @@ body.tf-gaveta-on .treino-topo-montar,body.tf-gaveta-on .treino-topo-montar *{tr
   .tf-gaveta-aberta .tf-gaveta-cab{display:flex;justify-content:space-between;align-items:center}
   .tf-gaveta-aberta .tf-gaveta-rodape{display:block;position:sticky;bottom:0;background:var(--panel,var(--bg));padding-top:8px}
   .tf-gaveta-aberta .tf-gaveta-rodape .btn{width:100%;justify-content:center}
-  .tf-sel{flex:1 1 45%}.tf-btn{width:100%}.tf-pop{position:static;width:auto;max-width:none;margin-top:4px}
+  .tf-principais{grid-template-columns:repeat(2,minmax(0,1fr))}.tf-estados-linha{flex-direction:column;align-items:stretch}.tf-pop{position:static;width:auto;max-width:none;margin-top:4px}
 }
 .treino-rodape-linha{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);font-weight:600;padding:2px 2px;}
 .treino-sessao-wrap{display:flex;gap:16px;justify-content:center;align-items:flex-start;}
@@ -2980,11 +2989,11 @@ body.missao-ligada #dash-overdue-revs{display:none;}
 /* ===== TREINAR (rodada 2) =====
    "Montar meu treino" é o cartão do topo; o aviso de simulado pausado cabe numa linha;
    Assuntos e Decks com a mesma altura. */
-.treino-topo-montar{margin:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;}
+.treino-topo-montar{margin:0;display:block;padding:14px 18px;}
 .treino-topo-montar .treino-montar-bar{flex:1 1 560px;min-width:0;background:none;border:0;padding:0;}
 .treino-topo-montar .treino-montar-titulo{font-size:15px;font-weight:900;color:var(--accent);}
 .treino-topo-montar .treino-montar-count{font-size:12px;}
-.treino-topo-simulado{flex:0 0 auto;margin-left:auto;}
+.treino-topo-simulado{flex:0 0 auto;}
 .sim-pausado{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;padding:8px 12px;margin-bottom:12px;box-shadow:none;}
 .sim-pausado-cab{margin:0;font-size:13px;}
 .sim-pausado-num{margin:0;font-size:12px;line-height:1.3;}
@@ -15011,24 +15020,25 @@ function tfNFiltros(){return tf.bancas.length+tf.anos.length+tf.mundos.length+tf
 function tfPainelHTML(){
   const ent=tfMontarEntradas();tfLimparOrfaos(ent);
   const n=ent.E.filter(e=>tfOk(e,new Set())).length,nf=tfNFiltros();
-  const extras=tf.avancado?`<div class="tf-linha tf-extras">
+  const extras=tf.avancado?`<div class="tf-extras">
       <label class="tf-campo">Palavra-chave <input id="tf-busca-txt" class="inp" type="search" maxlength="60" placeholder="no enunciado" value="${escapeHtml(tf.busca)}" onchange="tfSet('busca',this.value.trim())" onkeydown="if(event.key==='Enter')tfSet('busca',this.value.trim())"></label>
       <label class="tf-campo">Formato <select class="inp" onchange="tfSet('formato',this.value)"><option value="">Todos</option><option value="certoerrado"${tf.formato==='certoerrado'?' selected':''}>Certo/Errado</option><option value="multipla"${tf.formato==='multipla'?' selected':''}>Múltipla</option></select></label>
       <label class="tf-campo">Dificuldade <select class="inp" onchange="tfSet('nivel',this.value)"><option value="">Todas</option><option value="facil"${tf.nivel==='facil'?' selected':''}>Fácil</option><option value="media"${tf.nivel==='media'?' selected':''}>Média</option><option value="dificil"${tf.nivel==='dificil'?' selected':''}>Difícil</option></select></label>
       <label class="banco-check"><input type="checkbox" ${tf.fav?'checked':''} onchange="tfSet('fav',this.checked)"> ⭐ Só favoritas</label></div>`:'';
   return`<div class="tf-painel${tfGaveta?' tf-gaveta-aberta':''}">
     <div class="tf-topo"><span class="treino-montar-titulo"><i class="fa fa-sliders"></i> Montar meu treino</span>
-      <button class="btn btn-sm btn-ghost tf-abre-gaveta" onclick="tfGavetaAlternar()" aria-expanded="${tfGaveta}">🎚 Filtros${nf?` (${nf})`:''}</button></div>
+      <span class="tf-topo-acoes"><button class="btn btn-sm btn-ghost tf-abre-gaveta" onclick="tfGavetaAlternar()" aria-expanded="${tfGaveta}">🎚 Filtros${nf?` (${nf})`:''}</button>
+      <button class="btn btn-sm btn-ghost treino-topo-simulado" onclick="treinarAbrirAvancado()"><i class="fa fa-stopwatch"></i> Fazer simulado</button></span></div>
     <div class="tf-corpo">
       <div class="tf-gaveta-cab"><b>Filtros</b><button class="btn btn-xs btn-ghost" onclick="tfGavetaAlternar()" aria-label="Fechar filtros">✕</button></div>
-      <div class="tf-linha">${['banca','ano','mundo','chefe','mini'].map(d=>tfSeletorHTML(ent,d)).join('')}</div>
-      ${tfCoberturaHTML(ent)}
-      <div class="tf-linha tf-estados" role="group" aria-label="Status pessoal">${TF_ESTADOS.map(([k,l])=>`<button class="chip${tf.estado===k?' active':''}" aria-pressed="${tf.estado===k}" onclick="tfSet('estado','${k}')">${l}</button>`).join('')}</div>
+      <div class="tf-principais">${['banca','ano','mundo','chefe','mini'].map(d=>tfSeletorHTML(ent,d)).join('')}</div>
+      <div class="tf-linha tf-estados-linha"><span class="tf-estados" role="group" aria-label="Status pessoal">${TF_ESTADOS.map(([k,l])=>`<button class="chip${tf.estado===k?' active':''}" aria-pressed="${tf.estado===k}" onclick="tfSet('estado','${k}')">${l}</button>`).join('')}</span>
+        <button class="btn btn-xs btn-ghost tf-modo" onclick="tfSet('avancado',${!tf.avancado})">${tf.avancado?'▴ Filtro simples':'▾ Filtro avançado'}</button></div>
       ${extras}
-      <button class="btn btn-xs btn-ghost tf-modo" onclick="tfSet('avancado',${!tf.avancado})">${tf.avancado?'Mostrar filtro simples':'Mostrar filtro avançado'}</button>
       <div class="tf-gaveta-rodape"><button class="btn btn-sm btn-primary" onclick="tfGavetaAlternar()">Ver ${n} questõe${n===1?'':'s'}</button></div>
     </div>
     ${tfChipsHTML(ent)}
+    ${tf.avancado?tfCoberturaHTML(ent):''}
     <div class="tf-acao"><span class="tf-contador" aria-live="polite"><b>${n}</b> questõe${n===1?'':'s'} encontrada${n===1?'':'s'}</span>
       <button class="btn btn-primary" onclick="tfIniciarDialogo()" ${n?'':'disabled'}>▶ Treinar com estas</button></div>
   </div>`;
@@ -15036,8 +15046,8 @@ function tfPainelHTML(){
 // Quantas questões já dizem a banca e o ano (e o botão que preenche pelo texto da fonte, sem chute).
 function tfCoberturaHTML(ent){
   const n=ent.E.length,b=ent.E.filter(e=>e.banca!==TF_SEM).length,a=ent.E.filter(e=>e.ano!==TF_SEM).length;
-  return`<div class="tf-cobertura cron-sub">Banca preenchida em <b>${b}</b> de ${n} · ano em <b>${a}</b> de ${n}.
-    <button class="btn btn-xs btn-ghost" onclick="acervoMigrarOrigem(true)" title="Lê o texto da fonte de cada questão e preenche banca (e ano, quando vier junto). Não sobrescreve o que você já preencheu.">Preencher pelo texto da fonte</button></div>`;
+  return`<div class="tf-cobertura">Banca preenchida em <b>${b}</b> de ${n} · ano em <b>${a}</b> de ${n} ·
+    <a href="#" onclick="acervoMigrarOrigem(true);return false" title="Lê o texto da fonte de cada questão e preenche banca (e ano, quando vier junto). Não sobrescreve o que você já preencheu.">preencher pelo texto da fonte</a></div>`;
 }
 function tfRender(){
   const el=document.getElementById('tf-painel');if(!el)return;
@@ -15534,7 +15544,6 @@ function treinarEntradaHTML(){
     </div>
     <div class="section-card treino-topo-montar">
       <div id="tf-painel">${(tfIniciar(),tfPainelHTML())}</div>
-      <button class="btn btn-sm btn-ghost treino-topo-simulado" onclick="treinarAbrirAvancado()"><i class="fa fa-stopwatch"></i> Fazer simulado</button>
     </div>
     ${tqCardHTML()}
     ${foraPainelHTML()}
