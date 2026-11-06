@@ -1043,6 +1043,10 @@ nav{
 .treino-montar-titulo{font-size:12px;font-weight:800;margin-right:4px;}
 .treino-montar-bar select{width:auto;padding:6px 8px;font-size:12px;}
 .treino-montar-count{font-size:11px;color:var(--muted);font-weight:700;margin-left:auto;}
+.tq-card{margin-top:0}.tq-sum{cursor:pointer;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.tq-corpo{display:flex;flex-direction:column;gap:14px;margin-top:12px}.tq-passo{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--border);padding-top:10px}
+.tq-minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px;max-height:200px;overflow:auto}
+.tq-pend{border:1px dashed var(--border);border-radius:10px;padding:8px}
 .treino-origem{font-size:12px;color:var(--muted);font-weight:700;margin-top:6px}
 .tf-painel{display:flex;flex-direction:column;gap:10px;min-width:0}
 .tf-topo{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -15161,6 +15165,259 @@ function acervoMigrarOrigemUmaVez(){if(!db.migracaoOrigemV1&&(db.acervo||[]).len
 // Link com filtros (?f_...): depois que o acervo carrega, abre direto o Treinar com a seleção.
 function tfAposAcervo(){try{acervoMigrarOrigemUmaVez();}catch(e){console.warn('migração de banca/ano:',e);}
   try{if(tfTemParams(new URLSearchParams(location.search))){tfIniciar();showScreen('simgeral');}}catch(e){}}
+// ===== QUESTÕES INÉDITAS (dentro de Treinar): prompt pronto + importar =====
+// 1) escolhe Mundo › Chefe › Miniboss(es), formato, quantidade e o estilo/banca; 2) copia o prompt e cola numa IA externa;
+// 3) cola aqui o JSON que ela devolver: as questões entram no Acervo (com banca/ano/prova), ligadas ao miniboss certo.
+// Nada é apagado; item repetido só preenche o que faltava; gabarito que não bate com as alternativas é descartado.
+const TQ_BANCAS=['Cebraspe','FGV','IDECAN','AOCP','IBFC','Vunesp','FCC','Quadrix','Consulplan','Instituto Access','IADES'];
+let tq={aberto:false,mundo:'',chefe:'',minis:[],fmt:'certoerrado',qtd:20,banca:'Cebraspe',outra:'',real:false,ano:'',prova:'',lista:[],pend:[],resultado:null};
+function tqBancaRotulo(){
+  const b=tq.banca==='__outra__'?(tq.outra||'').trim().slice(0,60):tq.banca;
+  if(!b)return'';
+  return tq.real?b:b+' (estilo)';
+}
+function tqChefes(){const k=(db.kingdoms||[]).find(x=>x.name===tq.mundo);return k?(db.topics[k.id]||[]):[];}
+function tqMinis(){const t=tqChefes().find(x=>x.id===tq.chefe);return t?(t.subtopics||[]):[];}
+function tqAlvos(){
+  const subs=tqMinis();
+  return tq.minis.length?subs.filter(s=>tq.minis.includes(s.id)):subs;
+}
+function tqCardHTML(){
+  const t=tq,mundos=db.kingdoms||[],chefes=tqChefes(),minis=tqMinis(),alvos=tqAlvos();
+  const bancaSel=TQ_BANCAS.concat(['__outra__']);
+  return`<details class="section-card tq-card" id="tq-card"${t.aberto?' open':''} ontoggle="tq.aberto=this.open">
+    <summary class="tq-sum"><b>🧪 Questões inéditas</b> <span class="cron-sub">gere o prompt, cole numa IA e importe aqui</span></summary>
+    <div class="tq-corpo">
+      <div class="tq-passo"><b>1 · O que gerar</b>
+        <div class="tf-linha">
+          <label class="tf-campo">Mundo <select class="inp" onchange="tqSet('mundo',this.value)"><option value="">Escolha…</option>${mundos.map(k=>`<option value="${escapeHtml(k.name)}"${t.mundo===k.name?' selected':''}>${escapeHtml(k.name)}</option>`).join('')}</select></label>
+          <label class="tf-campo">Chefe <select class="inp" ${t.mundo?'':'disabled'} onchange="tqSet('chefe',this.value)"><option value="">Escolha…</option>${chefes.map(c=>`<option value="${escapeHtml(c.id)}"${t.chefe===c.id?' selected':''}>${escapeHtml(c.name)}</option>`).join('')}</select></label>
+          <label class="tf-campo">Formato <select class="inp" onchange="tqSet('fmt',this.value)"><option value="certoerrado"${t.fmt==='certoerrado'?' selected':''}>Certo/Errado</option><option value="multipla"${t.fmt==='multipla'?' selected':''}>Múltipla (A–E)</option></select></label>
+          <label class="tf-campo">Quantidade <input class="inp" type="number" min="1" max="60" style="width:80px" value="${t.qtd}" onchange="tqSet('qtd',this.value)"></label></div>
+        ${t.chefe?`<div class="tq-minis" role="group" aria-label="Minibosses">
+          <label class="banco-check"><input type="checkbox" ${t.minis.length?'':'checked'} onchange="tqTodosMinis()"> <b>Todos os minibosses do chefe (${minis.length})</b></label>
+          ${minis.map(s=>`<label class="banco-check"><input type="checkbox" ${t.minis.includes(s.id)?'checked':''} onchange="tqAlternarMini('${escapeAttrJs(s.id)}',this.checked)"> ${escapeHtml(s.name)}</label>`).join('')}</div>`:''}
+      </div>
+      <div class="tq-passo"><b>2 · Estilo e procedência</b>
+        <div class="tf-linha">
+          <label class="tf-campo">Banca / estilo <select class="inp" onchange="tqSet('banca',this.value)">${bancaSel.map(b=>`<option value="${escapeHtml(b)}"${t.banca===b?' selected':''}>${b==='__outra__'?'Outra…':escapeHtml(b)}</option>`).join('')}</select></label>
+          ${t.banca==='__outra__'?`<label class="tf-campo">Qual? <input class="inp" maxlength="60" value="${escapeHtml(t.outra)}" onchange="tqSet('outra',this.value)"></label>`:''}
+          <label class="tf-campo">Ano <input class="inp" type="number" min="1950" max="2100" style="width:90px" placeholder="vazio" value="${escapeHtml(String(t.ano))}" onchange="tqSet('ano',this.value)"></label>
+          <label class="tf-campo" style="flex:1;min-width:200px">Prova <input class="inp" maxlength="160" placeholder="só se for questão de prova real" value="${escapeHtml(t.prova)}" onchange="tqSet('prova',this.value)"></label></div>
+        <label class="banco-check"><input type="checkbox" ${t.real?'checked':''} onchange="tqSet('real',this.checked)"> São questões de <b>prova real</b> dessa banca (senão entram como "${escapeHtml(tqBancaRotulo()||'estilo')}")</label>
+        <div class="cron-sub">Questão inédita feita por IA no estilo da banca grava <b>banca = ${escapeHtml(tqBancaRotulo()||'—')}</b>. Ano e prova só devem ser preenchidos se vierem de uma prova que existiu.</div>
+      </div>
+      <div class="tq-passo"><b>3 · Prompt</b>
+        <div class="ag-lin"><button class="btn btn-primary" onclick="tqCopiarPrompt()" ${alvos.length?'':'disabled'}>📋 Copiar prompt (${alvos.length} miniboss${alvos.length===1?'':'es'} · ${t.qtd} ${t.fmt==='certoerrado'?'itens':'questões'})</button>
+          <button class="btn btn-sm btn-ghost" onclick="tqVerPrompt()" ${alvos.length?'':'disabled'}>Ver o prompt</button></div>
+        ${alvos.length?'':'<div class="cron-sub">Escolha o Mundo e o Chefe para liberar o prompt.</div>'}
+      </div>
+      <div class="tq-passo"><b>4 · Importar a resposta da IA</b>
+        <textarea id="tq-txt" class="inp" rows="6" style="width:100%" placeholder="Cole aqui o JSON que a IA devolveu (do [ até o ])" maxlength="2000000"></textarea>
+        <div class="ag-lin"><button class="btn btn-primary" onclick="tqImportar()">📥 Importar questões</button>
+          <span class="cron-sub">Ligam ao miniboss pelo nome. Se a resposta veio cortada, o app aproveita o que está inteiro.</span></div>
+        ${tqPendentesHTML()}${tqResultadoHTML()}
+      </div>
+    </div></details>`;
+}
+function tqRender(){const el=document.getElementById('tq-card');if(!el)return;const txt=(document.getElementById('tq-txt')||{}).value||'';el.outerHTML=tqCardHTML();const n=document.getElementById('tq-txt');if(n&&txt)n.value=txt;}
+function tqSet(k,v){
+  if(k==='qtd')tq.qtd=Math.max(1,Math.min(60,parseInt(v,10)||20));
+  else if(k==='ano'){const a=parseInt(v,10);tq.ano=(a>=1950&&a<=2100)?a:'';}
+  else if(k==='prova')tq.prova=String(v||'').trim().slice(0,160);
+  else if(k==='outra')tq.outra=String(v||'').trim().slice(0,60);
+  else tq[k]=v;
+  if(k==='mundo'){tq.chefe='';tq.minis=[];}
+  if(k==='chefe')tq.minis=[];
+  tqRender();
+}
+function tqTodosMinis(){tq.minis=[];tqRender();}
+function tqAlternarMini(id,on){const l=tq.minis.filter(x=>x!==id);if(on)l.push(id);tq.minis=l;tqRender();}
+// --- o prompt ---
+function tqExistentes(sub){
+  const l=(db.acervo||[]).filter(q=>q.subId===sub.id);
+  return{n:l.length,amostra:l.slice(0,6).map(q=>String(q.questao||'').replace(/\s+/g,' ').slice(0,110))};
+}
+function tqPromptTexto(){
+  const ce=tq.fmt==='certoerrado',qtd=tq.qtd,alvos=tqAlvos(),rot=tqBancaRotulo()||'Cebraspe (estilo)';
+  const bancaNome=(tq.banca==='__outra__'?(tq.outra||'banca de concurso'):tq.banca);
+  const cebra=/cebra|cespe/i.test(bancaNome);
+  const topic=tqChefes().find(c=>c.id===tq.chefe);
+  tq.lista=alvos.map(s=>s.id);
+  const lista=alvos.map((s,i)=>`${i+1}. ${s.name}`).join('\n');
+  const jaTem=alvos.map((s,i)=>{const e=tqExistentes(s);return e.n?`${i+1}. ${s.name} — já tenho ${e.n}${e.amostra.length?': '+e.amostra.map(x=>'"'+x.replace(/"/g,"'")+'"').join(' | '):''}`:'';}).filter(Boolean).join('\n');
+  const nome0=String(alvos[0].name).replace(/"/g,"'");
+  const meta=`"banca":"${rot}","ano":${tq.ano?tq.ano:'""'},"prova":"${tq.real&&tq.prova?tq.prova.replace(/"/g,"'"):''}"`;
+  const exemplo=ce
+    ?`[{"assunto":1,"assuntoNome":"${nome0}",${meta},"textoApoio":"","afirmacao":"...","gabarito":"C","explicacao":"...","fonte":"Lei 8.080/1990, art. 7º (2024)"}]`
+    :`[{"assunto":1,"assuntoNome":"${nome0}",${meta},"textoApoio":"","questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"...","fonte":"Lei 8.080/1990, art. 7º (2024)"}]`;
+  return`Você é um elaborador de questões de concurso público brasileiro, no estilo ${bancaNome}. Sua especialidade é prova para o cargo de Enfermeiro (${tq.mundo}${topic?' › '+topic.name:''}).
+
+TAREFA
+Gere EXATAMENTE ${qtd} ${ce?'itens de julgamento CERTO/ERRADO':'questões de múltipla escolha, de A a E, com uma só correta'} INÉDITOS, de nível difícil — o nível de quem disputa vaga direta, não o de quem está começando. Inédito quer dizer: escrito por você agora, sem copiar enunciado de prova anterior.
+
+ANTES DE ESCREVER: PESQUISE NA INTERNET
+Hoje é ${new Date().toLocaleDateString('pt-BR')}. Use a versão VIGENTE de cada lei, resolução, diretriz e protocolo — não a que você lembra do treinamento. Confira o que mudou nos últimos 3 anos. Se não conseguir pesquisar, diga isso no início e não cobre nenhum número, prazo ou dose.
+
+${cebra?promptRecorteCebraspe(ce)+'\n\n':''}${promptFormatoCebraspe(ce,true)}
+
+${promptFonteCebraspe()}
+
+ASSUNTOS — LISTA FECHADA
+Cobre SÓ o que está nesta lista (${tq.mundo}${topic?' › '+topic.name:''}):
+
+${lista}
+
+- Cada item cobra UM assunto da lista e traz dois campos: "assunto" com o NÚMERO do assunto na lista e "assuntoNome" com o nome copiado exatamente como está escrito acima.
+- NÃO invente assunto fora da lista e NÃO crie um nome mais específico: se o ponto é um detalhe de um assunto listado, use o número do assunto que o contém.
+- Distribua os ${qtd} ${ce?'itens':'questões'} de forma parecida entre os ${alvos.length} assunto${alvos.length===1?'':'s'}. Pode repetir assunto; varie o ângulo (conceito, número, exceção, prazo, sequência de conduta, cálculo, competência).
+${jaTem?`
+JÁ TENHO ESTAS — NÃO REPITA NEM FAÇA VARIAÇÃO PRÓXIMA
+${jaTem}
+`:''}
+REGRAS DE CONTEÚDO
+- Todo número em ALGARISMO, nunca por extenso: "36 graus", "2 mL/kg", "7 dias", "artigo 5º".
+- NÃO afirme quem pode ou não pode executar um procedimento (competência privativa, ato delegável, "sob supervisão de") sem ter confirmado na fonte.
+- Nunca cite número de lei, artigo ou resolução que você não confirmou na pesquisa.
+- Nada de pegadinha de português em item de conteúdo técnico: o que está sendo medido é o conteúdo.
+- Nenhum item pode repetir outro desta resposta, nem ser variação próxima de outro.
+${ce?`
+REGRAS DO CERTO/ERRADO
+- Cada item é UMA afirmação a ser julgada, direta, sem "Julgue o item" na frente e sem alternativas.
+- O item ERRADO erra por UM detalhe (número trocado, conduta fora de ordem, exceção ignorada, "sempre/nunca" indevido, via trocada). Nunca por ser absurdo.
+- Equilibre o gabarito: de 45% a 55% de CERTO, sem blocos longos da mesma resposta.
+- A explicação diz por que está certo; se estiver errado, aponta qual parte está incorreta e qual seria a redação correta.`:`
+REGRAS DA MÚLTIPLA ESCOLHA
+- Exatamente 5 alternativas (A a E), uma só correta; as 4 erradas precisam ser plausíveis (erro clássico da prática, número próximo, conduta da etapa vizinha).
+- A letra correta varia entre A, B, C, D e E, em proporção parecida.
+- A explicação tem de 1 a 3 frases e diz por que a correta está certa.`}
+
+TEXTO DE APOIO
+- Todo bloco situado tem um texto base (situação clínica, caso funcional, trecho de norma). Escreva UMA vez e copie INTEIRO no campo "textoApoio" de cada item do bloco. Itens que não dependem de texto base levam "textoApoio": "".
+
+PROCEDÊNCIA (campos "banca", "ano" e "prova")
+- "banca": copie exatamente "${rot}" em todos os itens.
+- "ano" e "prova": deixe vazios ("") — estas questões são inéditas, não saíram de uma prova real. NÃO invente ano nem nome de prova.${tq.real?`
+- Atenção: eu marquei que são questões de prova real. Só preencha "ano" e "prova" quando você TIVER CERTEZA de onde saiu; na dúvida, deixe "".`:''}
+
+ENTREGA
+- Responda com os ${qtd} itens de uma vez, se couber. Se não couber, PARE num item completo, feche o array com ] e escreva na linha seguinte: CONTINUA — faltam N itens. Nunca corte no meio de um item.
+
+FORMATO DA RESPOSTA — leia com atenção, é o que mais dá errado
+- Responda APENAS com um array JSON. Sem markdown, sem cerca de código, sem texto antes ou depois.
+- Dentro dos textos, use aspas simples se precisar citar algo. Aspas duplas sem escape quebram o JSON inteiro.
+- Sem vírgula sobrando antes de ] ou }. Sem comentários. Sem quebra de linha dentro de um valor.
+- Formato exato de cada item:
+${exemplo}`;
+}
+function tqCopiarPrompt(){
+  if(!tqAlvos().length){toast('Escolha o Mundo e o Chefe primeiro.','var(--orange)');return;}
+  const t=tqPromptTexto();
+  const ok=()=>toast('📋 Prompt copiado. Cole na sua IA e, depois, traga o JSON aqui.','var(--accent)');
+  try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(ok,()=>tqVerPrompt());return t;}}catch(e){}
+  tqVerPrompt();return t;
+}
+function tqVerPrompt(){
+  if(!tqAlvos().length)return;
+  openModal('🧪 Prompt para a IA',`<div class="cron-modal"><div class="cron-sub">Selecione tudo e copie. Depois cole o JSON de volta em Treinar → Questões inéditas.</div><textarea id="tq-prompt-txt" class="inp" rows="16" style="width:100%" readonly>${escapeHtml(tqPromptTexto())}</textarea></div>`);
+  const ta=document.getElementById('tq-prompt-txt');if(ta){ta.focus();ta.select();}
+}
+// --- importar ---
+function tqAplicarOrigem(norm){
+  const rot=tqBancaRotulo();
+  if(!norm.banca&&rot)norm.banca=rot;
+  if(!norm.ano&&tq.ano)norm.ano=tq.ano;
+  if(!norm.prova&&tq.real&&tq.prova)norm.prova=tq.prova;
+  return norm;
+}
+function tqGravarEm(norm,alvo){
+  Object.assign(norm,{subId:alvo.sub.id,subName:alvo.sub.name,topicName:alvo.topic.name,kingdomId:alvo.kingdom.id,kingdomName:alvo.kingdom.name,kingdomIcon:alvo.kingdom.icon});
+  const antes=db.acervo.length;
+  const r=bancoAdicionarOuFundir(norm,'ia');
+  return{r,item:r.novo?db.acervo[0]:null,cresceu:db.acervo.length>antes};
+}
+function tqImportar(){
+  const ta=document.getElementById('tq-txt');if(!ta)return;
+  const bruto=(ta.value||'').trim();
+  if(!bruto){toast('⚠️ Cole o JSON primeiro.','var(--red)');return;}
+  if(bruto.length>2000000){toast('⚠️ Texto grande demais (máximo 2 MB).','var(--red)');return;}
+  let arr=null;
+  try{arr=extractAIJson(bruto);}catch(e){arr=null;}
+  if(!Array.isArray(arr))arr=simColarResgatar(bruto);   // resposta cortada: aproveita o que está inteiro
+  if(!Array.isArray(arr)){toast('❌ Não achei uma lista de questões. Cole o array JSON, do [ até o ].','var(--red)');return;}
+  if(arr.length>500){toast('⚠️ Itens demais de uma vez (máximo 500). Divida a resposta.','var(--red)');return;}
+  const ix=simIndiceAssuntos(),cache={},lista=tq.lista||[];
+  const pend={},novos=[];
+  const rel={lidas:arr.length,novas:0,fundidas:0,repetidas:0,descartadas:{},pendentes:0};
+  const desc=m=>{rel.descartadas[m]=(rel.descartadas[m]||0)+1;};
+  arr.forEach(item=>{
+    if(!item||typeof item!=='object'){desc('não é um item');return;}
+    const fmt=(Array.isArray(item.alternativas)&&item.alternativas.length>2)?'multipla':'certoerrado';
+    const bruto2=simNormalizaQuestao(item,fmt);
+    if(!bruto2){desc('enunciado ou gabarito inválido');return;}
+    const{assunto,...norm}=bruto2;
+    tqAplicarOrigem(norm);
+    // alvo: pelo nome; senão pelo número do prompt (lista copiada); senão, o único miniboss escolhido
+    const nome=String(item.assuntoNome||'').trim();
+    let alvo=null;
+    if(nome){alvo=nome in cache?cache[nome]:(cache[nome]=simCasarAssunto(nome,ix));}
+    if(!alvo&&!nome){const n=parseInt(item.assunto,10);if(n>=1&&lista[n-1]){alvo=ix.find(c=>c.sub.id===lista[n-1])||null;}}
+    if(!alvo&&!nome&&lista.length===1)alvo=ix.find(c=>c.sub.id===lista[0])||null;
+    if(!alvo){const k=nome||'(sem assunto)';(pend[k]=pend[k]||[]).push(norm);return;}
+    const g=tqGravarEm(norm,alvo);
+    if(g.r.novo){rel.novas++;if(g.item)novos.push(g.item);}else if(g.r.mudou)rel.fundidas++;else rel.repetidas++;
+  });
+  tq.pend=Object.keys(pend).map(nome=>({nome,itens:pend[nome]}));
+  rel.pendentes=tq.pend.reduce((n,p)=>n+p.itens.length,0);
+  const totalDesc=Object.values(rel.descartadas).reduce((a,b)=>a+b,0);
+  if(!rel.novas&&!rel.fundidas&&!rel.repetidas&&!tq.pend.length){toast('❌ Nenhuma questão aproveitável nessa resposta.','var(--red)');tq.resultado=rel;tqRender();return;}
+  acervoAparar();acervoSalvar(true);
+  tq.resultado={...rel,novosIds:novos.map(q=>acervoChave2De(q))};
+  if(!tq.pend.length)ta.value='';
+  tqRender();
+  if(document.getElementById('tf-painel'))tfRender();
+  toast(`📥 ${rel.novas} nova(s)${rel.fundidas?` · ${rel.fundidas} já existiam e ganharam o que faltava`:''}${totalDesc?` · ${totalDesc} descartada(s)`:''}${rel.pendentes?` · ${rel.pendentes} aguardando assunto`:''}.`,'var(--green)');
+}
+function tqResultadoHTML(){
+  const r=tq.resultado;if(!r)return'';
+  const desc=Object.keys(r.descartadas||{});
+  const total=Object.values(r.descartadas||{}).reduce((a,b)=>a+b,0);
+  return`<div class="tq-resultado cron-sub" role="status"><b>Última importação:</b> ${r.lidas} lidas = ${r.novas} novas + ${(r.fundidas||0)+(r.repetidas||0)} já existentes + ${r.pendentes} aguardando assunto + ${total} descartadas.
+    ${desc.map(k=>`<div>• ${r.descartadas[k]}× ${escapeHtml(k)}</div>`).join('')}
+    ${(r.novosIds||[]).length?`<div class="ag-lin"><button class="btn btn-sm btn-primary" onclick="tqTreinarNovas()">▶ Treinar com as ${r.novosIds.length} novas</button></div>`:''}</div>`;
+}
+function tqTreinarNovas(){
+  const ids=new Set((tq.resultado&&tq.resultado.novosIds)||[]);
+  const pool=(db.acervo||[]).filter(q=>ids.has(acervoChave2De(q)));
+  if(!pool.length){toast('Nenhuma questão nova para treinar.','var(--muted)');return;}
+  if(!treinoIniciar(pool,{titulo:'Questões inéditas'}))return;
+  renderSimGeralScreen();window.scrollTo(0,0);
+}
+function tqPendentesHTML(){
+  if(!tq.pend.length)return'';
+  return`<div class="tq-pend"><b>⚠️ ${tq.pend.length} assunto(s) sem correspondência</b> <span class="cron-sub">escolha o assunto certo; fica lembrado.</span>
+    ${tq.pend.map((p,i)=>`<div class="ag-lin"><span style="flex:1;min-width:140px"><b>${escapeHtml(p.nome)}</b> <span class="cron-sub">${p.itens.length} questão${p.itens.length>1?'ões':''}</span></span>
+      <select id="tq-pend-${i}" class="inp" style="width:auto;max-width:220px">${bancoAssuntoOpcoesHTML('','')}</select>
+      <button class="btn btn-xs btn-primary" onclick="tqPendenteUsar(${i})">Usar</button><button class="btn btn-xs btn-ghost" onclick="tqPendenteDescartar(${i})">Descartar</button></div>`).join('')}</div>`;
+}
+function tqPendenteUsar(i){
+  const p=tq.pend[i];const subId=(document.getElementById('tq-pend-'+i)||{}).value;if(!p||!subId)return;
+  const alvo=simIndiceAssuntos().find(c=>c.sub.id===subId);if(!alvo)return;
+  let novas=0,fund=0,rep=0;const novos=[];
+  p.itens.forEach(n=>{const g=tqGravarEm(n,alvo);if(g.r.novo){novas++;if(g.item)novos.push(g.item);}else if(g.r.mudou)fund++;else rep++;});
+  try{simColarGravarApelido(p.nome,subId);}catch(e){}
+  tq.pend.splice(i,1);
+  if(tq.resultado){tq.resultado.novas+=novas;tq.resultado.fundidas+=fund;tq.resultado.repetidas=(tq.resultado.repetidas||0)+rep;tq.resultado.pendentes=tq.pend.reduce((n,x)=>n+x.itens.length,0);tq.resultado.novosIds=(tq.resultado.novosIds||[]).concat(novos.map(q=>acervoChave2De(q)));}
+  acervoAparar();acervoSalvar(true);
+  if(!tq.pend.length){const ta=document.getElementById('tq-txt');if(ta)ta.value='';}
+  tqRender();if(document.getElementById('tf-painel'))tfRender();
+  toast(`📥 "${p.nome}" → ${alvo.sub.name}: ${novas} nova(s)${fund?` · ${fund} já existiam`:''}.`,'var(--green)');
+}
+function tqPendenteDescartar(i){
+  const p=tq.pend[i];if(!p)return;tq.pend.splice(i,1);
+  if(tq.resultado){tq.resultado.descartadas['assunto sem correspondência (descartado por você)']=(tq.resultado.descartadas['assunto sem correspondência (descartado por você)']||0)+p.itens.length;tq.resultado.pendentes=tq.pend.reduce((n,x)=>n+x.itens.length,0);}
+  tqRender();
+}
 function treinoMontarBarHTML(){
   const materias=treinoFiltroOpcoesMaterias();
   const chefoes=treinoFiltroOpcoesChefoes();
@@ -15245,7 +15502,8 @@ function treinarEntradaHTML(){
         <p>Você ainda tem poucas questões pra organizar por estado.<br>Gere um Simulado Geral ou importe um Caderno da Banca — assim que você responder, elas entram pro seu acervo e os decks aparecem aqui.</p>
       </div>
       <div id="treinar-avancado" style="display:none;margin-top:14px">${simGeralConfigHTML()}</div>
-    </div>`;
+    </div>
+    ${tqCardHTML()}`;
   }
   const decks=treinarDecks();
   // Rodada 2: "Montar meu treino" (a ferramenta mais usada) sobe pro topo e vira o
@@ -15262,6 +15520,7 @@ function treinarEntradaHTML(){
       <div id="tf-painel">${(tfIniciar(),tfPainelHTML())}</div>
       <button class="btn btn-sm btn-ghost treino-topo-simulado" onclick="treinarAbrirAvancado()"><i class="fa fa-stopwatch"></i> Fazer simulado</button>
     </div>
+    ${tqCardHTML()}
     ${foraPainelHTML()}
     ${treinoRodapeHTML()}
     <div id="treinar-avancado" style="display:none">${simGeralConfigHTML()}</div>
