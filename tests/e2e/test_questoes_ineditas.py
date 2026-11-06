@@ -12,9 +12,9 @@ async def main():
         await page.evaluate("()=>{tf=TF_VAZIO();tfIniciado=true;tq.aberto=true;window.confirm=()=>true;showScreen('simgeral');renderSimGeralScreen();return true;}")
 
         print('=== A) o cartao existe em Treinar; Mundo > Chefe > Miniboss; prompt so libera com o alvo ===')
-        r=await page.evaluate("""()=>{const c=document.getElementById('tq-card');const antes=c.querySelector('.tq-passo:nth-of-type(3) button').disabled;
+        r=await page.evaluate("""()=>{const c=document.getElementById('tq-card');const antes=[...c.querySelectorAll('button')].find(b=>b.textContent.includes('Copiar prompt')).disabled;
           tqSet('mundo','Enfermagem');const ch=tqChefes().map(x=>x.name);tqSet('chefe','t1');const mi=tqMinis().map(x=>x.name);
-          const dep=document.getElementById('tq-card').querySelector('.tq-passo:nth-of-type(3) button').disabled;
+          const dep=[...document.getElementById('tq-card').querySelectorAll('button')].find(b=>b.textContent.includes('Copiar prompt')).disabled;
           return {existe:!!c,antes,ch,mi,dep,alvos:tqAlvos().length};}""")
         print('   ',r)
         assert r['existe'] and r['antes'] is True and r['ch']==['Saúde da Mulher','Saúde da Criança'] and r['mi']==['Pré-natal','Puerpério'] and r['dep'] is False and r['alvos']==2
@@ -81,9 +81,32 @@ async def main():
         assert r['cortado']==1 and r['lixo']==0 and r['grande']==0 and r['xss']
         print('   OK\n')
 
+        print('=== G) assunto digitado: o prompt usa exatamente o nome escrito; importa pelo nome digitado; desconhecido fica pendente ===')
+        r=await page.evaluate("""()=>{tqSet('mundo','');tqSet('texto','puerperio\\n  Tema Inexistente   XYZ  ');tqSet('banca','Cebraspe');tqSet('fmt','certoerrado');tqSet('qtd','8');
+          const al=tqAlvos().map(a=>[a.nome,a.sub?a.sub.id:null]);const p=tqPromptTexto();
+          const aviso=document.getElementById('tq-card').innerText;
+          const habil=![...document.querySelectorAll('#tq-card button')].find(b=>b.textContent.includes('Copiar prompt')).disabled;
+          return {al,lista:p.includes('1. puerperio\\n2. Tema Inexistente XYZ'),valem:p.includes('valem exatamente como estão'),semMini:!p.includes('Pré-natal'),jaTem:p.includes('1. puerperio — já tenho'),aviso:aviso.includes('"Tema Inexistente XYZ" não existe como miniboss')&&aviso.includes('→ miniboss'),habil,lista2:JSON.parse(JSON.stringify(tq.lista))};}""")
+        print('   ',r)
+        assert r['al']==[['puerperio','s2'],['Tema Inexistente XYZ',None]] and r['lista'] and r['valem'] and r['semMini'] and r['jaTem'] and r['aviso'] and r['habil']
+        r=await page.evaluate("""()=>{const j=[
+          {assunto:1,assuntoNome:'puerperio',afirmacao:'Item digitado um sobre puerperio digitado.',gabarito:'C',explicacao:'.'},
+          {assunto:2,assuntoNome:'Tema Inexistente XYZ',afirmacao:'Item digitado dois de tema que nao existe.',gabarito:'E',explicacao:'.'},
+          {assunto:2,afirmacao:'Item digitado tres so com o numero 2.',gabarito:'C',explicacao:'.'},
+          {assunto:1,afirmacao:'Item digitado quatro so com o numero 1.',gabarito:'C',explicacao:'.'}];
+          document.getElementById('tq-txt').value=JSON.stringify(j);tqImportar();
+          const por=t=>{const q=db.acervo.find(x=>x.questao.includes(t));return q?q.subId:null;};
+          return {a:por('digitado um'),b:por('digitado dois'),c:por('digitado tres'),d:por('digitado quatro'),pend:tq.pend.map(x=>[x.nome,x.itens.length]),rel:[tq.resultado.novas,tq.resultado.pendentes]};}""")
+        print('   ',r)
+        assert r['a']=='s2' and r['b'] is None and r['c'] is None and r['d']=='s2' and r['pend']==[['Tema Inexistente XYZ',2]] and r['rel']==[2,2]
+        await page.evaluate("()=>{tq.pend=[];tqSet('texto','');return true;}")
+        r=await page.evaluate("()=>({alvos:tqAlvos().length,digitado:tqAlvos().some(a=>a.digitado)})")
+        assert r['digitado'] is False
+        print('   OK\n')
+
         print('=== F) celular: nada rola de lado; copiar prompt devolve o texto ===')
         await page.set_viewport_size({'width':375,'height':800})
-        r=await page.evaluate("""()=>{tqRender();const w=document.documentElement.scrollWidth;const t=tqCopiarPrompt();return {w,iw:innerWidth,ok:typeof t==='string'&&t.length>2000};}""")
+        r=await page.evaluate("""()=>{tqSet('mundo','Enfermagem');tqSet('chefe','t1');tqRender();const w=document.documentElement.scrollWidth;const t=tqCopiarPrompt();return {w,iw:innerWidth,ok:typeof t==='string'&&t.length>2000};}""")
         print('   ',r); assert r['w']<=r['iw']+1 and r['ok']
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))

@@ -15170,7 +15170,7 @@ function tfAposAcervo(){try{acervoMigrarOrigemUmaVez();}catch(e){console.warn('m
 // 3) cola aqui o JSON que ela devolver: as questões entram no Acervo (com banca/ano/prova), ligadas ao miniboss certo.
 // Nada é apagado; item repetido só preenche o que faltava; gabarito que não bate com as alternativas é descartado.
 const TQ_BANCAS=['Cebraspe','FGV','IDECAN','AOCP','IBFC','Vunesp','FCC','Quadrix','Consulplan','Instituto Access','IADES'];
-let tq={aberto:false,mundo:'',chefe:'',minis:[],fmt:'certoerrado',qtd:20,banca:'Cebraspe',outra:'',real:false,ano:'',prova:'',lista:[],pend:[],resultado:null};
+let tq={aberto:false,mundo:'',chefe:'',minis:[],texto:'',fmt:'certoerrado',qtd:20,banca:'Cebraspe',outra:'',real:false,ano:'',prova:'',lista:[],pend:[],resultado:null};
 function tqBancaRotulo(){
   const b=tq.banca==='__outra__'?(tq.outra||'').trim().slice(0,60):tq.banca;
   if(!b)return'';
@@ -15178,9 +15178,16 @@ function tqBancaRotulo(){
 }
 function tqChefes(){const k=(db.kingdoms||[]).find(x=>x.name===tq.mundo);return k?(db.topics[k.id]||[]):[];}
 function tqMinis(){const t=tqChefes().find(x=>x.id===tq.chefe);return t?(t.subtopics||[]):[];}
+// Assuntos digitados (um por linha) mandam: o nome vale EXATAMENTE como foi escrito. Sem texto, valem os minibosses escolhidos.
+function tqLinhasTexto(){return String(tq.texto||'').split(/\r?\n/).map(x=>x.replace(/\s+/g,' ').trim().slice(0,140)).filter(Boolean).slice(0,12);}
 function tqAlvos(){
-  const subs=tqMinis();
-  return tq.minis.length?subs.filter(s=>tq.minis.includes(s.id)):subs;
+  const digitados=tqLinhasTexto();
+  if(digitados.length){
+    const ix=simIndiceAssuntos();
+    return digitados.map(nome=>{const c=simCasarAssunto(nome,ix);return{nome,sub:c?c.sub:null,topic:c?c.topic:null,kingdom:c?c.kingdom:null,digitado:true};});
+  }
+  const subs=tqMinis(),t=tqChefes().find(x=>x.id===tq.chefe),k=(db.kingdoms||[]).find(x=>x.name===tq.mundo);
+  return(tq.minis.length?subs.filter(s=>tq.minis.includes(s.id)):subs).map(s=>({nome:s.name,sub:s,topic:t||null,kingdom:k||null,digitado:false}));
 }
 function tqCardHTML(){
   const t=tq,mundos=db.kingdoms||[],chefes=tqChefes(),minis=tqMinis(),alvos=tqAlvos();
@@ -15198,6 +15205,10 @@ function tqCardHTML(){
           <label class="banco-check"><input type="checkbox" ${t.minis.length?'':'checked'} onchange="tqTodosMinis()"> <b>Todos os minibosses do chefe (${minis.length})</b></label>
           ${minis.map(s=>`<label class="banco-check"><input type="checkbox" ${t.minis.includes(s.id)?'checked':''} onchange="tqAlternarMini('${escapeAttrJs(s.id)}',this.checked)"> ${escapeHtml(s.name)}</label>`).join('')}</div>`:''}
       </div>
+      <div class="tq-passo"><b>Ou digite o assunto</b> <span class="cron-sub">(opcional — vale o que você escrever, um por linha)</span>
+        <textarea class="inp" rows="3" maxlength="800" style="width:100%" placeholder="Ex.: Sondagem vesical de demora&#10;Cálculo de gotejamento" onchange="tqSet('texto',this.value)">${escapeHtml(t.texto)}</textarea>
+        ${t.texto.trim()?`<div class="cron-sub">${alvos.map(a=>a.sub?`✅ "${escapeHtml(a.nome)}" → miniboss <b>${escapeHtml(a.sub.name)}</b>`:`⚠️ "${escapeHtml(a.nome)}" não existe como miniboss: as questões ficam pendentes para você escolher o assunto`).join('<br>')}</div>`:''}
+      </div>
       <div class="tq-passo"><b>2 · Estilo e procedência</b>
         <div class="tf-linha">
           <label class="tf-campo">Banca / estilo <select class="inp" onchange="tqSet('banca',this.value)">${bancaSel.map(b=>`<option value="${escapeHtml(b)}"${t.banca===b?' selected':''}>${b==='__outra__'?'Outra…':escapeHtml(b)}</option>`).join('')}</select></label>
@@ -15208,9 +15219,9 @@ function tqCardHTML(){
         <div class="cron-sub">Questão inédita feita por IA no estilo da banca grava <b>banca = ${escapeHtml(tqBancaRotulo()||'—')}</b>. Ano e prova só devem ser preenchidos se vierem de uma prova que existiu.</div>
       </div>
       <div class="tq-passo"><b>3 · Prompt</b>
-        <div class="ag-lin"><button class="btn btn-primary" onclick="tqCopiarPrompt()" ${alvos.length?'':'disabled'}>📋 Copiar prompt (${alvos.length} miniboss${alvos.length===1?'':'es'} · ${t.qtd} ${t.fmt==='certoerrado'?'itens':'questões'})</button>
+        <div class="ag-lin"><button class="btn btn-primary" onclick="tqCopiarPrompt()" ${alvos.length?'':'disabled'}>📋 Copiar prompt (${alvos.length} assunto${alvos.length===1?'':'s'} · ${t.qtd} ${t.fmt==='certoerrado'?'itens':'questões'})</button>
           <button class="btn btn-sm btn-ghost" onclick="tqVerPrompt()" ${alvos.length?'':'disabled'}>Ver o prompt</button></div>
-        ${alvos.length?'':'<div class="cron-sub">Escolha o Mundo e o Chefe para liberar o prompt.</div>'}
+        ${alvos.length?'':'<div class="cron-sub">Escolha o Mundo e o Chefe, ou digite o assunto, para liberar o prompt.</div>'}
       </div>
       <div class="tq-passo"><b>4 · Importar a resposta da IA</b>
         <textarea id="tq-txt" class="inp" rows="6" style="width:100%" placeholder="Cole aqui o JSON que a IA devolveu (do [ até o ])" maxlength="2000000"></textarea>
@@ -15235,6 +15246,7 @@ function tqTodosMinis(){tq.minis=[];tqRender();}
 function tqAlternarMini(id,on){const l=tq.minis.filter(x=>x!==id);if(on)l.push(id);tq.minis=l;tqRender();}
 // --- o prompt ---
 function tqExistentes(sub){
+  if(!sub)return{n:0,amostra:[]};
   const l=(db.acervo||[]).filter(q=>q.subId===sub.id);
   return{n:l.length,amostra:l.slice(0,6).map(q=>String(q.questao||'').replace(/\s+/g,' ').slice(0,110))};
 }
@@ -15243,15 +15255,16 @@ function tqPromptTexto(){
   const bancaNome=(tq.banca==='__outra__'?(tq.outra||'banca de concurso'):tq.banca);
   const cebra=/cebra|cespe/i.test(bancaNome);
   const topic=tqChefes().find(c=>c.id===tq.chefe);
-  tq.lista=alvos.map(s=>s.id);
-  const lista=alvos.map((s,i)=>`${i+1}. ${s.name}`).join('\n');
-  const jaTem=alvos.map((s,i)=>{const e=tqExistentes(s);return e.n?`${i+1}. ${s.name} — já tenho ${e.n}${e.amostra.length?': '+e.amostra.map(x=>'"'+x.replace(/"/g,"'")+'"').join(' | '):''}`:'';}).filter(Boolean).join('\n');
-  const nome0=String(alvos[0].name).replace(/"/g,"'");
+  const contexto=[tq.mundo,topic&&topic.name].filter(Boolean).join(' › ');
+  tq.lista=alvos.map(a=>({nome:a.nome,subId:a.sub?a.sub.id:null}));
+  const lista=alvos.map((a,i)=>`${i+1}. ${a.nome}`).join('\n');
+  const jaTem=alvos.map((a,i)=>{const e=tqExistentes(a.sub);return e.n?`${i+1}. ${a.nome} — já tenho ${e.n}${e.amostra.length?': '+e.amostra.map(x=>'"'+x.replace(/"/g,"'")+'"').join(' | '):''}`:'';}).filter(Boolean).join('\n');
+  const nome0=String(alvos[0].nome).replace(/"/g,"'");
   const meta=`"banca":"${rot}","ano":${tq.ano?tq.ano:'""'},"prova":"${tq.real&&tq.prova?tq.prova.replace(/"/g,"'"):''}"`;
   const exemplo=ce
     ?`[{"assunto":1,"assuntoNome":"${nome0}",${meta},"textoApoio":"","afirmacao":"...","gabarito":"C","explicacao":"...","fonte":"Lei 8.080/1990, art. 7º (2024)"}]`
     :`[{"assunto":1,"assuntoNome":"${nome0}",${meta},"textoApoio":"","questao":"...","alternativas":[{"letra":"A","texto":"..."},{"letra":"B","texto":"..."},{"letra":"C","texto":"..."},{"letra":"D","texto":"..."},{"letra":"E","texto":"..."}],"correta":"B","explicacao":"...","fonte":"Lei 8.080/1990, art. 7º (2024)"}]`;
-  return`Você é um elaborador de questões de concurso público brasileiro, no estilo ${bancaNome}. Sua especialidade é prova para o cargo de Enfermeiro (${tq.mundo}${topic?' › '+topic.name:''}).
+  return`Você é um elaborador de questões de concurso público brasileiro, no estilo ${bancaNome}. Sua especialidade é prova para o cargo de Enfermeiro${contexto?' ('+contexto+')':''}.
 
 TAREFA
 Gere EXATAMENTE ${qtd} ${ce?'itens de julgamento CERTO/ERRADO':'questões de múltipla escolha, de A a E, com uma só correta'} INÉDITOS, de nível difícil — o nível de quem disputa vaga direta, não o de quem está começando. Inédito quer dizer: escrito por você agora, sem copiar enunciado de prova anterior.
@@ -15264,13 +15277,13 @@ ${cebra?promptRecorteCebraspe(ce)+'\n\n':''}${promptFormatoCebraspe(ce,true)}
 ${promptFonteCebraspe()}
 
 ASSUNTOS — LISTA FECHADA
-Cobre SÓ o que está nesta lista (${tq.mundo}${topic?' › '+topic.name:''}):
+Cobre SÓ o que está nesta lista${contexto?' ('+contexto+')':''}. Os nomes foram escritos por mim e valem exatamente como estão: não renomeie, não amplie e não troque por outro assunto parecido.
 
 ${lista}
 
 - Cada item cobra UM assunto da lista e traz dois campos: "assunto" com o NÚMERO do assunto na lista e "assuntoNome" com o nome copiado exatamente como está escrito acima.
-- NÃO invente assunto fora da lista e NÃO crie um nome mais específico: se o ponto é um detalhe de um assunto listado, use o número do assunto que o contém.
-- Distribua os ${qtd} ${ce?'itens':'questões'} de forma parecida entre os ${alvos.length} assunto${alvos.length===1?'':'s'}. Pode repetir assunto; varie o ângulo (conceito, número, exceção, prazo, sequência de conduta, cálculo, competência).
+- NÃO invente assunto fora da lista, NÃO crie um nome mais específico e NÃO escolha por conta própria o que cobrar fora dela: se o ponto é um detalhe de um assunto listado, use o número do assunto que o contém.
+- Distribua os ${qtd} ${ce?'itens':'questões'} de forma parecida entre os ${alvos.length} assunto${alvos.length===1?'':'s'} da lista. Pode repetir assunto; varie o ângulo (conceito, número, exceção, prazo, sequência de conduta, cálculo, competência).
 ${jaTem?`
 JÁ TENHO ESTAS — NÃO REPITA NEM FAÇA VARIAÇÃO PRÓXIMA
 ${jaTem}
@@ -15361,8 +15374,11 @@ function tqImportar(){
     const nome=String(item.assuntoNome||'').trim();
     let alvo=null;
     if(nome){alvo=nome in cache?cache[nome]:(cache[nome]=simCasarAssunto(nome,ix));}
-    if(!alvo&&!nome){const n=parseInt(item.assunto,10);if(n>=1&&lista[n-1]){alvo=ix.find(c=>c.sub.id===lista[n-1])||null;}}
-    if(!alvo&&!nome&&lista.length===1)alvo=ix.find(c=>c.sub.id===lista[0])||null;
+    // o nome que VOCÊ digitou no prompt já está resolvido (ou deliberadamente pendente): vale o mapa do prompt
+    if(nome){const d=lista.find(x=>revNorm(x.nome)===revNorm(nome));if(d&&d.subId)alvo=ix.find(c=>c.sub.id===d.subId)||alvo;}
+    if(!alvo&&!nome){const n=parseInt(item.assunto,10);const d=n>=1&&lista[n-1];if(d&&d.subId)alvo=ix.find(c=>c.sub.id===d.subId)||null;}
+    if(!alvo&&!nome&&lista.length===1&&lista[0].subId)alvo=ix.find(c=>c.sub.id===lista[0].subId)||null;
+    if(!alvo&&!nome&&(parseInt(item.assunto,10)>=1)){const d=lista[parseInt(item.assunto,10)-1];if(d&&!d.subId){const k=d.nome;(pend[k]=pend[k]||[]).push(norm);return;}}
     if(!alvo){const k=nome||'(sem assunto)';(pend[k]=pend[k]||[]).push(norm);return;}
     const g=tqGravarEm(norm,alvo);
     if(g.r.novo){rel.novas++;if(g.item)novos.push(g.item);}else if(g.r.mudou)rel.fundidas++;else rel.repetidas++;
