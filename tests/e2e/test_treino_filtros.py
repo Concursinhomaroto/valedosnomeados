@@ -37,19 +37,19 @@ async def main():
         await page.evaluate(ACERVO)
         await page.evaluate(ABRIR)
 
-        print('=== A) padrao: banca "Cebraspe (estilo)" para quem nao tem; Chefe e Miniboss bloqueados ===')
+        print('=== A) padrao: quem nao tem banca aparece como "Sem banca"; Chefe e Miniboss bloqueados ===')
         r=await page.evaluate(ESTADO); print('   ',r['banca'],r['bloq'],r['contador'])
-        assert r['banca']==[['Cebraspe (estilo)',14],['FGV',2]] and r['n']==16 and r['contador']=='16'
-        assert r['bloq']==[False,False,True,True]
+        assert r['banca']==[['FGV',2],['Sem banca',14]] and r['n']==16 and r['contador']=='16'
+        assert r['bloq']==[False,False,False,True,True]
         print('   OK\n')
 
         print('=== B) cascata Mundo -> Chefe -> Miniboss, e limpeza ao trocar o de cima ===')
         await page.evaluate("()=>tfAlternar('mundo','Enfermagem',true)")
         r=await page.evaluate(ESTADO); print('   ',r['chefe'],r['bloq'])
-        assert r['chefe']==[['Saúde da Mulher',8],['Saúde da Criança',4]] and r['bloq']==[False,False,False,True] and r['n']==12
+        assert r['chefe']==[['Saúde da Mulher',8],['Saúde da Criança',4]] and r['bloq']==[False,False,False,False,True] and r['n']==12
         await page.evaluate("()=>tfAlternar('chefe','t1',true)")
         r=await page.evaluate(ESTADO); print('   ',r['mini'],r['bloq'])
-        assert [x[0] for x in r['mini']]==['Pré-natal','Puerpério'] and r['bloq']==[False,False,False,False] and r['n']==8
+        assert [x[0] for x in r['mini']]==['Pré-natal','Puerpério'] and r['bloq']==[False,False,False,False,False] and r['n']==8
         await page.evaluate("()=>tfAlternar('mini','s2',true)")
         r=await page.evaluate(ESTADO); assert r['n']==4 and r['tf']['minis']==['s2']
         await page.evaluate("()=>{tfAlternar('mundo','Português',true);tfAlternar('mundo','Enfermagem',false);}")
@@ -134,7 +134,7 @@ async def main():
           bancoAplicarEdicao(it,{questao:it.questao,formato:it.formato,alternativas:it.alternativas,correta:it.correta,explicacao:'.',fonte:'',tags:[],favorita:false,status:'ativa',banca:'Cebraspe'});
           return tfOpcoes(tfMontarEntradas(),'banca').map(x=>[x.nome,x.n]);}""")
         print('   ',r)
-        assert ['Cebraspe',1] in r and ['Cebraspe (estilo)',13] in r
+        assert ['Cebraspe',1] in r and ['Sem banca',13] in r
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))
         assert not graves, graves

@@ -1043,6 +1043,7 @@ nav{
 .treino-montar-titulo{font-size:12px;font-weight:800;margin-right:4px;}
 .treino-montar-bar select{width:auto;padding:6px 8px;font-size:12px;}
 .treino-montar-count{font-size:11px;color:var(--muted);font-weight:700;margin-left:auto;}
+.treino-origem{font-size:12px;color:var(--muted);font-weight:700;margin-top:6px}
 .tf-painel{display:flex;flex-direction:column;gap:10px;min-width:0}
 .tf-topo{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .tf-abre-gaveta{display:none}
@@ -12087,6 +12088,17 @@ function simFonteLimpa(f){
   const t=String(f||'').trim().replace(/\s+/g,' ').slice(0,SIM_FONTE_MAX);
   return t&&!/^(n\/?a|-+|nenhuma?)$/i.test(t)?t:'';
 }
+// banca, ano, prova (e órgão/cargo): opcionais; só entram se vierem válidos. Nada é inventado.
+function simOrigemLimpa(q){
+  const o={};if(!q)return o;
+  const t=(v,n)=>{const x=String(v==null?'':v).replace(/\s+/g,' ').trim().slice(0,n);return x;};
+  const banca=t(q.banca,60);if(banca)o.banca=banca;
+  const ano=parseInt(String(q.ano==null?'':q.ano).trim(),10);if(ano>=1950&&ano<=2100&&/^\s*\d{4}\s*$/.test(String(q.ano)))o.ano=ano;
+  const prova=t(q.prova,160);if(prova)o.prova=prova;
+  const orgao=t(q.orgao,80);if(orgao)o.orgao=orgao;
+  const cargo=t(q.cargo,80);if(cargo)o.cargo=cargo;
+  return o;
+}
 function simNormalizaQuestao(q,formato){
   if(!q)return null;
   if(formato==='certoerrado'){
@@ -12100,7 +12112,8 @@ function simNormalizaQuestao(q,formato){
            explicacao:String(q.explicacao||'').trim(),formato:'certoerrado',
            ...(simFonteLimpa(q.fonte)?{fonte:simFonteLimpa(q.fonte)}:{}),
            ...(q.assunto!==undefined?{assunto:q.assunto}:{}),
-           ...(q.textoApoio?{textoApoio:String(q.textoApoio).trim()}:{})};
+           ...(q.textoApoio?{textoApoio:String(q.textoApoio).trim()}:{}),
+           ...simOrigemLimpa(q)};
   }
   if(!q.questao||!Array.isArray(q.alternativas)||!q.correta)return null;
   // Ter enunciado, alternativas e um campo "correta" preenchido nao basta: se a
@@ -12126,7 +12139,8 @@ function simNormalizaQuestao(q,formato){
     else return null;
   }
   const fonte=simFonteLimpa(q.fonte);
-  return{...q,alternativas:alts,correta,formato:'multipla',fonte:fonte||undefined};
+  const{banca:_b,ano:_a,prova:_p,orgao:_o,cargo:_c,...resto}=q;
+  return{...resto,alternativas:alts,correta,formato:'multipla',fonte:fonte||undefined,...simOrigemLimpa(q)};
 }
 
 // ===== BANCO ANTES DA IA (passo 5) =====
@@ -13917,6 +13931,11 @@ function treinoHistoricoHTML(item){
   const ultima=item.ultimaVezEm?`, da última vez você ${item.ultimoResultado==='C'?'acertou':'errou'} (${new Date(item.ultimaVezEm).toLocaleDateString('pt-BR')})`:'';
   return`<div class="sim-q-historico"><i class="fa fa-clock-rotate-left"></i> Respondida ${item.vezesRespondida}× · acertou ${pct}%${ultima}</div>`;
 }
+// Linha pequena de procedência: "IDECAN · 2025 · Prefeitura de Campina Grande, Enfermeiro, 2026". Campo vazio não aparece.
+function origemLinhaHTML(q){
+  const partes=[q&&q.banca,q&&q.ano,q&&q.prova].filter(x=>x!==undefined&&x!==null&&String(x).trim()!=='');
+  return partes.length?`<div class="treino-origem" title="De onde veio esta questão">${partes.map(x=>escapeHtml(String(x))).join(' · ')}</div>`:'';
+}
 function treinoQuestaoHTML(){
   const s=treinoSessao;
   const i=s.idx;
@@ -13948,6 +13967,7 @@ function treinoQuestaoHTML(){
       </span>
     </div>
     ${treinoHistoricoHTML(item)}
+    ${origemLinhaHTML(item)}
     ${textoApoioHTML(item)}
     <div class="sim-q-text" style="font-size:16px;margin-top:8px">${escapeHtml(item.questao)}</div>
     <div class="sim-alts${item.formato==='certoerrado'?' sim-alts-ce':''}">${alts}</div>
@@ -14876,12 +14896,13 @@ function treinoFiltroTreinar(){
 // Painel novo da tela Treinar: seleção múltipla com busca, cascata Mundo → Chefe → Miniboss (o de baixo só abre com o de cima),
 // contagem por opção que já considera os outros filtros, chips com X, quantidade/ordem ao iniciar, filtros guardados na URL
 // (f_*) e no aparelho, e gaveta no celular. O filtro roda em memória sobre o acervo já carregado (não há servidor próprio).
-// "Banca": campo `banca` da questão; quem ainda não tem vale "Cebraspe (estilo)" — o acervo foi feito nesse estilo.
-const TF_BANCA_PADRAO='Cebraspe (estilo)';
-const TF_VAZIO=()=>({bancas:[],mundos:[],chefes:[],minis:[],estado:'',busca:'',formato:'',nivel:'',fav:false,avancado:false});
+// "Banca" e "Ano": campos `banca` e `ano` da questão; quem não tem aparece como "Sem banca" / "Sem ano" (nada é chutado).
+const TF_SEM='__sem__';
+const TF_VAZIO=()=>({bancas:[],anos:[],mundos:[],chefes:[],minis:[],estado:'',busca:'',formato:'',nivel:'',fav:false,avancado:false});
 let tf=TF_VAZIO(),tfAberto=null,tfBuscaOp={},tfGaveta=false,tfIniciado=false,tfEntradas=null;
 const TF_ESTADOS=[['','Todas'],['resolvidas','Resolvidas'],['naoresolvidas','Não resolvidas'],['acertei','Acertei'],['errei','Errei']];
-const tfBancaDe=q=>{const b=String((q&&q.banca)||'').trim().slice(0,60);return b||TF_BANCA_PADRAO;};
+const tfBancaDe=q=>{const b=String((q&&q.banca)||'').trim().slice(0,60);return b||TF_SEM;};
+const tfAnoDe=q=>{const a=parseInt(q&&q.ano,10);return a>=1950&&a<=2100?String(a):TF_SEM;};
 function tfIndiceArvore(){
   const sub={},ordemM=[],ordemC=[];
   (db.kingdoms||[]).forEach(k=>{ordemM.push(k.name||'');(db.topics[k.id]||[]).forEach(t=>{ordemC.push(t.id);(t.subtopics||[]).forEach(s=>{
@@ -14894,15 +14915,15 @@ function tfMontarEntradas(){
   const E=treinoPoolCompleto().map(q=>{
     const s=q.subId&&ar.sub[q.subId];
     const chefeId=s?s.chefeId:(q.topicName?'nome:'+q.topicName:''),chefe=s?s.chefe:(q.topicName||''),mundo=s?s.mundo:(q.kingdomName||'');
-    return{q,banca:tfBancaDe(q),mundo,chefeId,chefe,miniId:q.subId||'',mini:s?s.mini:(q.subName||''),
+    return{q,banca:tfBancaDe(q),ano:tfAnoDe(q),mundo,chefeId,chefe,miniId:q.subId||'',mini:s?s.mini:(q.subName||''),
       vez:q.vezesRespondida||0,ult:q.ultimoResultado||''};
   });
   return{E,ar};
 }
 function tfLimparOrfaos(ent){
   if(!ent.E.length)return;   // acervo ainda carregando: não apaga filtro nenhum
-  const mundos=new Set(ent.E.map(e=>e.mundo)),bancas=new Set(ent.E.map(e=>e.banca));
-  tf.bancas=tf.bancas.filter(b=>bancas.has(b));tf.mundos=tf.mundos.filter(m=>mundos.has(m));
+  const mundos=new Set(ent.E.map(e=>e.mundo)),bancas=new Set(ent.E.map(e=>e.banca)),anos=new Set(ent.E.map(e=>e.ano));
+  tf.bancas=tf.bancas.filter(b=>bancas.has(b));tf.anos=tf.anos.filter(a=>anos.has(a));tf.mundos=tf.mundos.filter(m=>mundos.has(m));
   const chOk=new Set(ent.E.filter(e=>!tf.mundos.length||tf.mundos.includes(e.mundo)).map(e=>e.chefeId));
   tf.chefes=tf.mundos.length?tf.chefes.filter(c=>chOk.has(c)):[];
   const miOk=new Set(ent.E.filter(e=>tf.chefes.includes(e.chefeId)).map(e=>e.miniId));
@@ -14912,6 +14933,7 @@ function tfLimparOrfaos(ent){
 function tfOk(e,ig){
   const f=tf;
   if(!ig.has('banca')&&f.bancas.length&&!f.bancas.includes(e.banca))return false;
+  if(!ig.has('ano')&&f.anos.length&&!f.anos.includes(e.ano))return false;
   if(!ig.has('mundo')&&f.mundos.length&&!f.mundos.includes(e.mundo))return false;
   if(!ig.has('chefe')&&f.chefes.length&&!f.chefes.includes(e.chefeId))return false;
   if(!ig.has('mini')&&f.minis.length&&!f.minis.includes(e.miniId))return false;
@@ -14926,7 +14948,7 @@ function tfOk(e,ig){
   return true;
 }
 function tfFiltradas(ent){ent=ent||tfMontarEntradas();tfLimparOrfaos(ent);return ent.E.filter(e=>tfOk(e,new Set())).map(e=>e.q);}
-const TF_IGN={banca:['banca'],mundo:['mundo','chefe','mini'],chefe:['chefe','mini'],mini:['mini']};
+const TF_IGN={banca:['banca'],ano:['ano'],mundo:['mundo','chefe','mini'],chefe:['chefe','mini'],mini:['mini']};
 // opções de uma dimensão, com a contagem que já respeita os outros filtros
 function tfOpcoes(ent,dim){
   const ig=new Set(TF_IGN[dim]),cont=new Map();
@@ -14935,20 +14957,23 @@ function tfOpcoes(ent,dim){
     // cascata: o de baixo só mostra o que pertence ao de cima escolhido
     if(dim==='chefe'&&tf.mundos.length&&!tf.mundos.includes(e.mundo))return;
     if(dim==='mini'&&tf.chefes.length&&!tf.chefes.includes(e.chefeId))return;
-    const k=dim==='banca'?e.banca:dim==='mundo'?e.mundo:dim==='chefe'?e.chefeId:e.miniId;
+    const k=dim==='banca'?e.banca:dim==='ano'?e.ano:dim==='mundo'?e.mundo:dim==='chefe'?e.chefeId:e.miniId;
     if(!k)return;
-    const r=cont.get(k)||{k,n:0,nome:dim==='banca'?e.banca:dim==='mundo'?e.mundo:dim==='chefe'?e.chefe:e.mini};
+    const r=cont.get(k)||{k,n:0,nome:dim==='banca'?(e.banca===TF_SEM?'Sem banca':e.banca):dim==='ano'?(e.ano===TF_SEM?'Sem ano':e.ano):dim==='mundo'?e.mundo:dim==='chefe'?e.chefe:e.mini};
     r.n++;cont.set(k,r);
   });
-  const sel=dim==='banca'?tf.bancas:dim==='mundo'?tf.mundos:dim==='chefe'?tf.chefes:tf.minis;
+  const sel=tfSelDe(dim);
   const ar=ent.ar,pos=dim==='mundo'?(k=>ar.ordemM.indexOf(k)):dim==='chefe'?(k=>ar.ordemC.indexOf(k)):null;
   const l=[...cont.values()];
-  l.sort(pos?((a,b)=>(pos(a.k)<0?1e9:pos(a.k))-(pos(b.k)<0?1e9:pos(b.k))):((a,b)=>a.nome.localeCompare(b.nome)));
-  sel.forEach(k=>{if(!cont.has(k))l.push({k,n:0,nome:k});});
+  const fim=o=>o.k===TF_SEM?1:0;
+  if(pos)l.sort((a,b)=>(pos(a.k)<0?1e9:pos(a.k))-(pos(b.k)<0?1e9:pos(b.k)));
+  else if(dim==='ano')l.sort((a,b)=>fim(a)-fim(b)||(+b.k||0)-(+a.k||0));
+  else l.sort((a,b)=>fim(a)-fim(b)||a.nome.localeCompare(b.nome));
+  sel.forEach(k=>{if(!cont.has(k))l.push({k,n:0,nome:k===TF_SEM?(dim==='ano'?'Sem ano':'Sem banca'):k});});
   return l;
 }
-const TF_ROTULO={banca:'Banca',mundo:'Mundo',chefe:'Chefe',mini:'Miniboss'};
-const tfSelDe=d=>d==='banca'?tf.bancas:d==='mundo'?tf.mundos:d==='chefe'?tf.chefes:tf.minis;
+const TF_ROTULO={banca:'Banca',ano:'Ano',mundo:'Mundo',chefe:'Chefe',mini:'Miniboss'};
+const tfSelDe=d=>d==='banca'?tf.bancas:d==='ano'?tf.anos:d==='mundo'?tf.mundos:d==='chefe'?tf.chefes:tf.minis;
 function tfBloqueado(dim){return(dim==='chefe'&&!tf.mundos.length)||(dim==='mini'&&!tf.chefes.length);}
 function tfSeletorHTML(ent,dim){
   const sel=tfSelDe(dim),bloq=tfBloqueado(dim),aberto=tfAberto===dim&&!bloq;
@@ -14968,7 +14993,7 @@ function tfSeletorHTML(ent,dim){
 function tfChipsHTML(ent){
   const chips=[];
   const nome=(dim,k)=>{const o=tfOpcoes(ent,dim).find(x=>x.k===k);return o?o.nome:k;};
-  ['banca','mundo','chefe','mini'].forEach(d=>tfSelDe(d).forEach(k=>chips.push([d,k,`${TF_ROTULO[d]}: ${nome(d,k)}`])));
+  ['banca','ano','mundo','chefe','mini'].forEach(d=>tfSelDe(d).forEach(k=>chips.push([d,k,`${TF_ROTULO[d]}: ${nome(d,k)}`])));
   if(tf.estado)chips.push(['estado',tf.estado,'Status: '+(TF_ESTADOS.find(x=>x[0]===tf.estado)||[])[1]]);
   if(tf.busca)chips.push(['busca','','Palavra: '+tf.busca]);
   if(tf.formato)chips.push(['formato','','Formato: '+(tf.formato==='certoerrado'?'Certo/Errado':'Múltipla')]);
@@ -14978,7 +15003,7 @@ function tfChipsHTML(ent){
   return`<div class="tf-chips">${chips.map(c=>`<span class="tf-chip">${escapeHtml(c[2])} <button class="tf-x" aria-label="Remover filtro ${escapeHtml(c[2])}" onclick="tfRemover('${c[0]}','${escapeAttrJs(c[1])}')">✕</button></span>`).join('')}
     <button class="btn btn-xs btn-ghost" onclick="tfLimparTudo()">Limpar filtros</button></div>`;
 }
-function tfNFiltros(){return tf.bancas.length+tf.mundos.length+tf.chefes.length+tf.minis.length+(tf.estado?1:0)+(tf.busca?1:0)+(tf.formato?1:0)+(tf.nivel?1:0)+(tf.fav?1:0);}
+function tfNFiltros(){return tf.bancas.length+tf.anos.length+tf.mundos.length+tf.chefes.length+tf.minis.length+(tf.estado?1:0)+(tf.busca?1:0)+(tf.formato?1:0)+(tf.nivel?1:0)+(tf.fav?1:0);}
 function tfPainelHTML(){
   const ent=tfMontarEntradas();tfLimparOrfaos(ent);
   const n=ent.E.filter(e=>tfOk(e,new Set())).length,nf=tfNFiltros();
@@ -14992,7 +15017,8 @@ function tfPainelHTML(){
       <button class="btn btn-sm btn-ghost tf-abre-gaveta" onclick="tfGavetaAlternar()" aria-expanded="${tfGaveta}">🎚 Filtros${nf?` (${nf})`:''}</button></div>
     <div class="tf-corpo">
       <div class="tf-gaveta-cab"><b>Filtros</b><button class="btn btn-xs btn-ghost" onclick="tfGavetaAlternar()" aria-label="Fechar filtros">✕</button></div>
-      <div class="tf-linha">${['banca','mundo','chefe','mini'].map(d=>tfSeletorHTML(ent,d)).join('')}</div>
+      <div class="tf-linha">${['banca','ano','mundo','chefe','mini'].map(d=>tfSeletorHTML(ent,d)).join('')}</div>
+      ${tfCoberturaHTML(ent)}
       <div class="tf-linha tf-estados" role="group" aria-label="Status pessoal">${TF_ESTADOS.map(([k,l])=>`<button class="chip${tf.estado===k?' active':''}" aria-pressed="${tf.estado===k}" onclick="tfSet('estado','${k}')">${l}</button>`).join('')}</div>
       ${extras}
       <button class="btn btn-xs btn-ghost tf-modo" onclick="tfSet('avancado',${!tf.avancado})">${tf.avancado?'Mostrar filtro simples':'Mostrar filtro avançado'}</button>
@@ -15002,6 +15028,12 @@ function tfPainelHTML(){
     <div class="tf-acao"><span class="tf-contador" aria-live="polite"><b>${n}</b> questõe${n===1?'':'s'} encontrada${n===1?'':'s'}</span>
       <button class="btn btn-primary" onclick="tfIniciarDialogo()" ${n?'':'disabled'}>▶ Treinar com estas</button></div>
   </div>`;
+}
+// Quantas questões já dizem a banca e o ano (e o botão que preenche pelo texto da fonte, sem chute).
+function tfCoberturaHTML(ent){
+  const n=ent.E.length,b=ent.E.filter(e=>e.banca!==TF_SEM).length,a=ent.E.filter(e=>e.ano!==TF_SEM).length;
+  return`<div class="tf-cobertura cron-sub">Banca preenchida em <b>${b}</b> de ${n} · ano em <b>${a}</b> de ${n}.
+    <button class="btn btn-xs btn-ghost" onclick="acervoMigrarOrigem(true)" title="Lê o texto da fonte de cada questão e preenche banca (e ano, quando vier junto). Não sobrescreve o que você já preencheu.">Preencher pelo texto da fonte</button></div>`;
 }
 function tfRender(){
   const el=document.getElementById('tf-painel');if(!el)return;
@@ -15015,10 +15047,10 @@ function tfFechar(){tfAberto=null;tfRender();}
 function tfBuscarOpcao(dim,v){tfBuscaOp[dim]=v;tfRender();}
 function tfAlternar(dim,k,on){
   const l=tfSelDe(dim).filter(x=>x!==k);if(on)l.push(k);
-  if(dim==='banca')tf.bancas=l;else if(dim==='mundo')tf.mundos=l;else if(dim==='chefe')tf.chefes=l;else tf.minis=l;
+  if(dim==='banca')tf.bancas=l;else if(dim==='ano')tf.anos=l;else if(dim==='mundo')tf.mundos=l;else if(dim==='chefe')tf.chefes=l;else tf.minis=l;
   tfRender();
 }
-function tfLimparDim(dim){if(dim==='banca')tf.bancas=[];else if(dim==='mundo')tf.mundos=[];else if(dim==='chefe')tf.chefes=[];else tf.minis=[];tfRender();}
+function tfLimparDim(dim){if(dim==='banca')tf.bancas=[];else if(dim==='ano')tf.anos=[];else if(dim==='mundo')tf.mundos=[];else if(dim==='chefe')tf.chefes=[];else tf.minis=[];tfRender();}
 function tfSet(campo,v){tf[campo]=v;if(campo==='estado'&&tf.estado===v&&false)tf.estado='';tfRender();}
 function tfRemover(dim,k){
   if(dim==='estado')tf.estado='';else if(dim==='busca')tf.busca='';else if(dim==='formato')tf.formato='';else if(dim==='nivel')tf.nivel='';else if(dim==='fav')tf.fav=false;
@@ -15033,7 +15065,7 @@ document.addEventListener('click',e=>{
   tfAberto=null;tfRender();
 });
 // --- URL e memória do aparelho ---
-const TF_CH={bancas:'f_banca',mundos:'f_mundo',chefes:'f_chefe',minis:'f_mini'};
+const TF_CH={bancas:'f_banca',anos:'f_ano',mundos:'f_mundo',chefes:'f_chefe',minis:'f_mini'};
 function tfParaParams(f){
   const p={};
   Object.keys(TF_CH).forEach(k=>{if(f[k].length)p[TF_CH[k]]=f[k].join('|');});
@@ -15094,8 +15126,41 @@ function tfComecar(){
   if(!treinoIniciar(pool,{titulo:chefe?`Chefão · ${chefe}`:'Treino montado',ordenado:tfOrdem==='sequencial'}))return;
   renderSimGeralScreen();window.scrollTo(0,0);
 }
+// ===== MIGRAÇÃO: banca e ano a partir da fonte =====
+// Só preenche quando a fonte DIZ: "Cebraspe", "FGV", "IDECAN"… "estilo Cebraspe" (questão feita no estilo, não da prova)
+// vira "Cebraspe (estilo)". O ano só entra se aparecer junto da banca. Não sobrescreve nada que já esteja preenchido.
+const ORIGEM_BANCAS=[['Cebraspe',/\b(cebraspe|cespe(?:\/unb)?)\b/i],['FGV',/\bfgv\b/i],['IDECAN',/\bidecan\b/i],['AOCP',/\baocp\b/i],['IBFC',/\bibfc\b/i],
+  ['Vunesp',/\bvunesp\b/i],['FCC',/\bfcc\b/i],['Quadrix',/\bquadrix\b/i],['Consulplan',/\bconsulplan\b/i],['Instituto Access',/\binstituto access\b/i],['IADES',/\biades\b/i]];
+function origemDaFonte(fonte){
+  const f=String(fonte||'');if(!f)return null;
+  const est=/estilo\s+(cebra\w*|cespe|fgv|idecan|aocp|ibfc|vunesp|fcc|quadrix|consulplan|iades)/i.exec(f);
+  if(est){const k=ORIGEM_BANCAS.find(b=>b[1].test(est[1]));return{banca:(k?k[0]:est[1])+' (estilo)'};}
+  const hit=ORIGEM_BANCAS.find(b=>b[1].test(f));if(!hit)return null;
+  const o={banca:hit[0]};
+  const y=/\b(19[5-9]\d|20[0-3]\d)\b/.exec(f);if(y)o.ano=+y[1];
+  return o;
+}
+function acervoMigrarOrigem(manual){
+  let b=0,a=0;
+  (db.acervo||[]).forEach(q=>{
+    const o=origemDaFonte(q.fonte);if(!o)return;
+    if(o.banca&&!String(q.banca||'').trim()){q.banca=o.banca;b++;}
+    if(o.ano&&!q.ano){q.ano=o.ano;a++;}
+  });
+  const tot=(db.acervo||[]).length,comB=(db.acervo||[]).filter(q=>String(q.banca||'').trim()).length,comA=(db.acervo||[]).filter(q=>q.ano).length;
+  db.migracaoOrigemV1={em:todayStr(),total:tot,banca:comB,ano:comA};
+  if(b||a){acervoSalvar(true);}
+  saveDB();
+  if(manual||b||a){
+    toast(`🏷️ Banca em ${comB} de ${tot} questões · ano em ${comA}${b||a?` (preenchidas agora: ${b} banca, ${a} ano)`:''}.`,'var(--accent)');
+    if(document.getElementById('tf-painel'))tfRender();
+  }
+  return{preenchidasBanca:b,preenchidasAno:a,total:tot,comBanca:comB,comAno:comA};
+}
+function acervoMigrarOrigemUmaVez(){if(!db.migracaoOrigemV1&&(db.acervo||[]).length)acervoMigrarOrigem(false);}
 // Link com filtros (?f_...): depois que o acervo carrega, abre direto o Treinar com a seleção.
-function tfAposAcervo(){try{if(tfTemParams(new URLSearchParams(location.search))){tfIniciar();showScreen('simgeral');}}catch(e){}}
+function tfAposAcervo(){try{acervoMigrarOrigemUmaVez();}catch(e){console.warn('migração de banca/ano:',e);}
+  try{if(tfTemParams(new URLSearchParams(location.search))){tfIniciar();showScreen('simgeral');}}catch(e){}}
 function treinoMontarBarHTML(){
   const materias=treinoFiltroOpcoesMaterias();
   const chefoes=treinoFiltroOpcoesChefoes();
@@ -15993,7 +16058,7 @@ function acervoLimparQuestao(q){
   return limpa;
 }
 // Campos que a versao que chega pode ter e a guardada nao.
-const ACERVO_ENRIQUECE=['explicacao','fonte','apoioWeb','minhaNota','textoApoio'];
+const ACERVO_ENRIQUECE=['explicacao','fonte','apoioWeb','minhaNota','textoApoio','banca','ano','prova','orgao','cargo'];
 function acervoTem(v){return Array.isArray(v)?v.length>0:!!(v&&String(v).trim());}
 // montarChaveQ (120 chars, sem formato) e um ENDERECO: fica gravado dentro do arquivo de
 // provas (chaves[]) e nao pode mudar de definicao, senao provas ja arquivadas param de
@@ -18426,14 +18491,15 @@ function bancoLerForm(prefixo){
   const questao=((el('questao')||{}).value||'').trim();
   const explicacao=((el('explicacao')||{}).value||'').trim();
   const fonte=simFonteLimpa((el('fonte')||{}).value||'');
-  const banca=((el('banca')||{}).value||'').trim().slice(0,60);
+  const origem=simOrigemLimpa({banca:(el('banca')||{}).value,ano:(el('ano')||{}).value,prova:(el('prova')||{}).value,orgao:(el('orgao')||{}).value,cargo:(el('cargo')||{}).value});
+  const banca=origem.banca||'';
   const tags=((el('tags')||{}).value||'').split(',').map(t=>t.trim()).filter(Boolean);
   const favorita=!!(el('favorita')||{}).checked;
   const status=(el('status')||{}).value||'ativa';
   if(formato==='certoerrado'){
     const gab=(el('gabarito')||{}).value;
     const norm=simNormalizaQuestao({afirmacao:questao,gabarito:gab,explicacao,fonte},'certoerrado');
-    return norm&&{...norm,tags,favorita,status,banca};
+    return norm&&{...norm,tags,favorita,status,...origem};
   }
   const letras=['A','B','C','D','E'];
   const alternativas=letras.map(letra=>{
@@ -18442,7 +18508,7 @@ function bancoLerForm(prefixo){
   }).filter(Boolean);
   const correta=(el('gabarito')||{}).value;
   const norm=simNormalizaQuestao({questao,alternativas,correta,explicacao,fonte},'multipla');
-  return norm&&{...norm,tags,favorita,status,banca};
+  return norm&&{...norm,tags,favorita,status,...origem};
 }
 // Aplica os campos editaveis SEM tocar em identidade, historico ou o que e do usuario
 // por natureza (_chaveForte, criadaEm, contadores). Devolve o que mudou de endereco, se
@@ -18454,7 +18520,7 @@ function bancoAplicarEdicao(item,dados){
   item.alternativas=dados.alternativas; item.correta=dados.correta;
   item.explicacao=dados.explicacao; item.fonte=dados.fonte;
   item.tags=dados.tags; item.favorita=dados.favorita; item.status=dados.status;
-  if(dados.banca)item.banca=dados.banca;else delete item.banca;
+  ['banca','ano','prova','orgao','cargo'].forEach(k=>{if(dados[k]!==undefined&&dados[k]!=='')item[k]=dados[k];else delete item[k];});
   if(mudouTexto){
     const chaveForteAntes=item._chaveForte;
     item._chaveForte=acervoChave2(item);
@@ -18566,7 +18632,13 @@ function bancoEditorHTML(q,modo){
     <textarea id="${prefixo}explicacao" class="inp" placeholder="Explicação (opcional)..."
       style="width:100%;min-height:44px;font-size:12px;margin-top:6px">${escapeHtml((q&&q.explicacao)||'')}</textarea>
     <input id="${prefixo}fonte" class="inp" placeholder="Fonte (opcional)..." value="${escapeHtml((q&&q.fonte)||'')}" style="margin-top:6px">
-    <input id="${prefixo}banca" class="inp" maxlength="60" placeholder="Banca (ex.: Cebraspe, FGV, AOCP — vazio = Cebraspe (estilo))" value="${escapeHtml((q&&q.banca)||'')}" style="margin-top:6px">
+    <div class="banco-edit-linha" style="margin-top:6px;flex-wrap:wrap">
+      <input id="${prefixo}banca" class="inp" style="flex:1;min-width:120px" maxlength="60" placeholder="Banca (ex.: IDECAN, Cebraspe, FGV)" value="${escapeHtml((q&&q.banca)||'')}">
+      <input id="${prefixo}ano" class="inp" style="width:90px" type="number" min="1950" max="2100" placeholder="Ano" value="${(q&&q.ano)||''}">
+      <input id="${prefixo}prova" class="inp" style="flex:2;min-width:180px" maxlength="160" placeholder="Prova (ex.: Prefeitura de Campina Grande, Enfermeiro, 2026)" value="${escapeHtml((q&&q.prova)||'')}">
+      <input id="${prefixo}orgao" class="inp" style="flex:1;min-width:120px" maxlength="80" placeholder="Órgão (opcional)" value="${escapeHtml((q&&q.orgao)||'')}">
+      <input id="${prefixo}cargo" class="inp" style="flex:1;min-width:120px" maxlength="80" placeholder="Cargo (opcional)" value="${escapeHtml((q&&q.cargo)||'')}">
+    </div>
     <div class="banco-edit-linha" style="margin-top:6px">
       <input id="${prefixo}tags" class="inp" style="flex:1" placeholder="tags, separadas, por vírgula" value="${escapeHtml(((q&&q.tags)||[]).join(', '))}" oninput="bancoTagsSugeridasAtualizar('${prefixo}')">
       <label class="banco-check"><input type="checkbox" id="${prefixo}favorita"${q&&q.favorita?' checked':''}> ⭐ favorita</label>
