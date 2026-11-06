@@ -103,7 +103,7 @@ async def main():
           tfAlternar('ano','2025',true);out.a2025=tfFiltradas().length;tfAlternar('banca','Cebraspe',true);out.cebra2025=tfFiltradas().length;
           out.url=location.search;out.chips=[...document.querySelectorAll('.tf-chip')].map(x=>x.textContent.replace(/\\s+/g,' ').trim());
           tf=TF_VAZIO();tfIniciado=false;tfIniciar();out.volta=[tf.bancas,tf.anos];
-          out.cobertura=document.querySelector('.tf-cobertura')?document.querySelector('.tf-cobertura').textContent.replace(/\\s+/g,' '):'';
+          tfSet('avancado',true);out.cobertura=document.querySelector('.tf-cobertura')?document.querySelector('.tf-cobertura').textContent.replace(/\\s+/g,' '):'';
           return out;}""")
         print('   ',r)
         assert r['banca']==[['Cebraspe',1],['IDECAN',2],['Sem banca',14]] and r['ano'][0]==['2025',2] and ['Sem ano',14] in r['ano']
