@@ -49,7 +49,7 @@ async def main():
           await new Promise(r=>setTimeout(r,1200));
           const caminhos=window.__updateCalls.map(c=>c.path);
           return {saves:caminhos.length,
-                  noAcervo:caminhos.filter(c=>/vdn_acervo$/.test(c)).length,
+                  noAcervo:caminhos.filter(c=>/vdn_acervo(z)?$/.test(c)).length,
                   noRegistro:caminhos.filter(c=>/vdn_v1/.test(c)).length};}""")
         print('   5 saveDB → %s gravações no registro, %s no nó do banco'
               %(r['noRegistro'],r['noAcervo']))
@@ -64,15 +64,16 @@ async def main():
             subName:'Choque septico',kingdomId:'k1',kingdomName:'Enfermagem'}],tentativas:[]};
           const novas=acervoGuardarProva(prova);
           await new Promise(r=>setTimeout(r,ACERVO_SALVA_MS+400));
-          const c=window.__updateCalls.filter(x=>/vdn_acervo$/.test(x.path));
-          const noServidor=window.__root.users.TEST_UID_LEO.vdn_acervo||[];
+          await acervoAguardar();
+          const c=window.__updateCalls.filter(x=>/vdn_acervoz$/.test(x.path));
+          const noServidor=(await acervoDesempacotar(window.__root.users.TEST_UID_LEO.vdn_acervoz))||[];
           return {novas,gravacoes:c.length,caminho:c[0]&&c[0].path,
                   noServidor:noServidor.length,
                   temANova:noServidor.some(q=>q.questao==='nova do banco')};}""")
         print('   1 questão nova → %s gravação em "%s"'%(r['gravacoes'],r['caminho']))
         print('   no servidor: %s questões, com a nova: %s'%(r['noServidor'],r['temANova']))
         assert r['novas']==1 and r['gravacoes']==1 and r['temANova']
-        assert r['caminho']=='users/TEST_UID_LEO/vdn_acervo'
+        assert r['caminho']=='users/TEST_UID_LEO/vdn_acervoz'   # agora vai comprimido, no no vdn_acervoz
         print('   OK\n')
 
         print('=== D) uniao das tres origens, sem duplicar ===')
@@ -127,10 +128,10 @@ async def main():
         antigo=seed({'acervo':qs('VELHA',25)})
         b,page,errs=await setup_page(p,antigo)
         r=await page.evaluate("""async()=>{
-          await new Promise(r=>setTimeout(r,600));
+          await acervoCarregarJa();await acervoAguardar();
           const raiz=window.__root.users.TEST_UID_LEO;
           return {emMemoria:(db.acervo||[]).length,
-                  noNoProprio:(raiz.vdn_acervo||[]).length,
+                  noNoProprio:((await acervoDesempacotar(raiz.vdn_acervoz))||[]).length,   // agora o no proprio e o pacote comprimido
                   aindaNoRegistro:raiz.vdn_v1.acervo===undefined?'não':(raiz.vdn_v1.acervo||[]).length,
                   aVelhaSobreviveu:(db.acervo||[]).some(q=>q.questao.startsWith('VELHA'))};}""")
         print('   em memória: %s · no nó próprio: %s · ainda dentro do registro: %s'
@@ -147,7 +148,8 @@ async def main():
         b,page,errs=await setup_page(p,seed())
         await page.evaluate("""(lista)=>{
           window.__root.users.TEST_UID_LEO.vdn_acervo=lista;   // o que ficou de ontem
-          return true;}""", qs('ONTEM',120))
+          delete window.__root.users.TEST_UID_LEO.vdn_acervoz;  // ainda nao migrou para o pacote comprimido
+          return idbGravar(acervoChaveCache()+'z',null).then(()=>true);}""", qs('ONTEM',120))
         r=await page.evaluate("""async()=>{
           const n=await acervoCarregar();
           return {carregou:n, emMemoria:db.acervo.length,

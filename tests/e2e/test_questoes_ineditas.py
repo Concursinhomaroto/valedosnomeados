@@ -59,9 +59,9 @@ async def main():
         print('   OK\n')
 
         print('=== D) pendente: escolher o assunto; resultado fecha a conta; treinar com as novas ===')
-        r=await page.evaluate("""()=>{const sel=document.getElementById('tq-pend-0');sel.value='s3';tqPendenteUsar(0);
+        r=await page.evaluate("""async()=>{const sel=document.getElementById('tq-pend-0');sel.value='s3';tqPendenteUsar(0);
           const q=db.acervo.find(x=>x.questao.includes('assunto desconhecido'));const rel=tq.resultado;
-          const salvo=(window.__root.users.TEST_UID_LEO.vdn_acervo||[]).filter(x=>x.banca==='Cebraspe (estilo)').length;
+          await acervoAguardar();const salvo=((await acervoDesempacotar(window.__root.users.TEST_UID_LEO.vdn_acervoz))||[]).filter(x=>x.banca==='Cebraspe (estilo)').length;
           tqTreinarNovas();const s=treinoSessao;const res={sub:q&&q.subId,pend:tq.pend.length,rel:[rel.novas,rel.pendentes],itens:s&&s.itens.length,titulo:s&&s.titulo,salvo};
           treinoSessao=null;treinoResumo=null;renderSimGeralScreen();return res;}""")
         print('   ',r)

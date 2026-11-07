@@ -143,7 +143,7 @@ async def main():
             origem:'ia',treino:false,limiteSec:0,chaves:qs.map(q=>montarChaveQ(q)),
             chaves2:qs.map(q=>q._chaveForte),marcacoes:{},
             tentativas:[{data:'2024-05-01T00:00:00.000Z',respostas:qs.map(q=>q.correta),acertos:3,tempoGastoSec:100}]}];
-          acervoSalvar(true);
+          acervoSalvar(true);await acervoAguardar();   // a gravacao agora comprime: espera terminar, como um boot de verdade
           provarqSalvar(true);
           db.acervo=[];db.provas=[];db.provasArquivo=[];
           await acervoCarregar();

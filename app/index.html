@@ -16743,11 +16743,11 @@ async function acervoCarregarZ(){
   const tsNuvem=await noLerComTimeout(userRef('vdn_acervoz/ts'));
   if(tsNuvem===undefined){const l=local&&await acervoDesempacotar(local);return l?{lista:l,via:'local-offline'}:null;}   // sem rede: usa a cópia local
   if(tsNuvem===null)return null;                                                                                          // ainda não existe pacote: caminho antigo (e migra)
-  if(local&&local.ts===tsNuvem){const l=await acervoDesempacotar(local);if(l)return{lista:l,via:'local'};}
+  if(local&&local.ts===tsNuvem){const l=await acervoDesempacotar(local);if(l&&l.length)return{lista:l,via:'local'};}
   const pk=await new Promise(res=>{const t=setTimeout(()=>res(null),12000);
     ACERVO_REF_Z.once('value').then(sn=>{clearTimeout(t);res(sn.val());},()=>{clearTimeout(t);res(null);});});
   const l=pk&&await acervoDesempacotar(pk);
-  if(!l)return null;
+  if(!l||!l.length)return null;   // pacote vazio ou ilegível: o nó antigo (intacto) decide
   try{if(cacheIdbOk)idbGravar(acervoChaveCache()+'z',pk);}catch(e){}
   return{lista:l,via:'nuvem'};
 }
@@ -16798,7 +16798,7 @@ async function acervoCarregarInterno(){
   let migrou=0;
   db.acervo.forEach(q=>{if(!q._chaveForte){q._chaveForte=acervoChave2(q);migrou++;}});
   ACERVO_PRONTO=true;   // a partir daqui gravar é seguro: a lista em memória já é a união de tudo
-  if(noRegistro||migrou||acervoPendente||db.acervo.length!==((Array.isArray(nuvem)?nuvem:[]).length)||(!viaZ&&acervoZSuportado())){
+  if(noRegistro||migrou||acervoPendente||db.acervo.length!==((Array.isArray(nuvem)?nuvem:[]).length)||(!viaZ&&acervoZSuportado()&&(nuvem!==null||Array.isArray(local)))){   // só migra para o pacote se leu o banco de algum lugar: falha de rede não grava pacote vazio
     acervoPendente=false;
     acervoSalvar(true);   // inclui a migração para o pacote comprimido (o nó antigo fica intacto)
     if(noRegistro)saveDB();   // o registro principal encolhe na mesma hora
