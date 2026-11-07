@@ -1044,6 +1044,7 @@ nav{
 .treino-montar-bar select{width:auto;padding:6px 8px;font-size:12px;}
 .treino-montar-count{font-size:11px;color:var(--muted);font-weight:700;margin-left:auto;}
 .rec-off-sala #nav-sala,.rec-off-redacoes #nav-redacoes{display:none!important}
+.acv-tab{width:100%;border-collapse:collapse}.acv-tab td{padding:6px 4px;border-bottom:1px solid var(--border);font-size:13px}.acv-tab td:last-child{text-align:right}
 .tq-card{margin-top:0}.tq-sum{cursor:pointer;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .tq-corpo{display:flex;flex-direction:column;gap:14px;margin-top:12px}.tq-passo{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--border);padding-top:10px}
 .tq-minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px;max-height:200px;overflow:auto}
@@ -1057,7 +1058,7 @@ nav{
 .tf-estados-linha{justify-content:space-between}.tf-estados{display:flex;flex-wrap:wrap;gap:6px}
 .tf-extras{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;align-items:end}
 .tf-extras .tf-campo .inp{width:100%}
-.tf-cobertura{font-size:12px;color:var(--muted);font-weight:600}.tf-cobertura a{color:var(--accent);font-weight:800}
+.tf-cobertura{font-size:12px;color:var(--muted);font-weight:600}.tf-cobertura a,.tf-verificar{color:var(--accent);font-weight:800}.tf-verificar{font-size:12px;margin-left:8px}
 .tf-acao{border-top:1px solid var(--border);padding-top:12px}
 .tf-topo{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .tf-abre-gaveta{display:none}
@@ -15057,7 +15058,7 @@ function tfPainelHTML(){
     </div>
     ${tfChipsHTML(ent)}
     ${tf.avancado?tfCoberturaHTML(ent):''}
-    <div class="tf-acao"><span class="tf-contador" aria-live="polite"><b>${n}</b> questõe${n===1?'':'s'} encontrada${n===1?'':'s'}</span>
+    <div class="tf-acao"><span class="tf-contador" aria-live="polite"><b>${n}</b> questõe${n===1?'':'s'} encontrada${n===1?'':'s'} <a href="#" class="tf-verificar" onclick="acervoVerificar();return false" title="Conta as questões na memória, na nuvem e neste aparelho">🔎 verificar meu banco</a></span>
       <button class="btn btn-primary" onclick="tfIniciarDialogo()" ${n?'':'disabled'}>▶ Treinar com estas</button></div>
   </div>`;
 }
@@ -15065,7 +15066,36 @@ function tfPainelHTML(){
 function tfCoberturaHTML(ent){
   const n=ent.E.length,b=ent.E.filter(e=>e.banca!==TF_SEM).length,a=ent.E.filter(e=>e.ano!==TF_SEM).length;
   return`<div class="tf-cobertura">Banca preenchida em <b>${b}</b> de ${n} · ano em <b>${a}</b> de ${n} ·
-    <a href="#" onclick="acervoMigrarOrigem(true);return false" title="Lê o texto da fonte de cada questão e preenche banca (e ano, quando vier junto). Não sobrescreve o que você já preencheu.">preencher pelo texto da fonte</a></div>`;
+    <a href="#" onclick="acervoMigrarOrigem(true);return false" title="Lê o texto da fonte de cada questão e preenche banca (e ano, quando vier junto). Não sobrescreve o que você já preencheu.">preencher pelo texto da fonte</a> ·
+    <a href="#" onclick="acervoVerificar();return false" title="Conta as questões na memória, na nuvem e neste aparelho">🔎 verificar meu banco</a></div>`;
+}
+// "Verificar meu banco": conta as questões na memória, no pacote novo (nuvem), no banco antigo (nuvem) e nas cópias do aparelho.
+async function acervoVerificar(){
+  openModal('🔎 Verificar meu banco','<div class="cron-modal" id="acv-corpo"><div class="cron-sub">Contando… (pode levar alguns segundos)</div></div>');
+  const rel={};
+  const tenta=async(k,fn)=>{try{rel[k]=await fn();}catch(e){rel[k]={erro:String((e&&(e.code||e.message))||e)};}};
+  const ler=(ref)=>new Promise((res,rej)=>{if(!ref){res(undefined);return;}const t=setTimeout(()=>rej(new Error('demorou demais')),25000);ref.once('value').then(sn=>{clearTimeout(t);res(sn.val());},e=>{clearTimeout(t);rej(e);});});
+  rel.memoria=db.acervo.length;
+  await tenta('treino',async()=>treinoPoolCompleto().length);
+  await tenta('nuvemNovo',async()=>{const v=await ler(userRef('vdn_acervoz'));if(v===undefined)return{n:null,motivo:'sem conexão'};if(v===null)return{n:0,motivo:'ainda não existe'};const l=await acervoDesempacotar(v);return{n:l?l.length:null,declarado:v.n,motivo:l?'':'pacote ilegível'};});
+  await tenta('nuvemAntigo',async()=>{const v=await ler(userRef('vdn_acervo'));if(v===undefined)return{n:null,motivo:'sem conexão'};return{n:crLista(v).length};});
+  await tenta('localNovo',async()=>{const v=await idbLer(acervoChaveCache()+'z');if(!v)return{n:0,motivo:'sem cópia'};const l=await acervoDesempacotar(v);return{n:l?l.length:null};});
+  await tenta('localAntigo',async()=>{const v=await idbLer(acervoChaveCache());return{n:Array.isArray(v)?v.length:0};});
+  const n=x=>(x&&typeof x.n==='number')?x.n:null;
+  const linhas=[['Na memória do app agora',rel.memoria],['Disponíveis para treinar',typeof rel.treino==='number'?rel.treino:(rel.treino&&rel.treino.erro)],
+    ['Na nuvem — banco novo (comprimido)',rel.nuvemNovo],['Na nuvem — banco antigo (cópia de segurança)',rel.nuvemAntigo],['Neste aparelho — banco novo',rel.localNovo],['Neste aparelho — banco antigo',rel.localAntigo]];
+  const fmt=v=>typeof v==='number'?String(v):(v&&v.erro?`<span class="ag-alerta">erro: ${escapeHtml(v.erro)}</span>`:(v&&v.n!==null&&v.n!==undefined?String(v.n)+(v.motivo?` <span class="cron-sub">(${escapeHtml(v.motivo)})</span>`:''):`<span class="cron-sub">${escapeHtml((v&&v.motivo)||'—')}</span>`));
+  const mem=rel.memoria,novo=n(rel.nuvemNovo),antigo=n(rel.nuvemAntigo);
+  let veredito='';
+  if(novo!==null&&novo===mem)veredito=`✅ O banco novo na nuvem tem as mesmas ${mem} questões que o app mostra agora.`;
+  else if(novo!==null&&novo<mem)veredito=`⚠️ A nuvem tem ${novo} e o app tem ${mem}: a diferença ainda vai ser gravada na próxima resposta. Nada foi perdido na memória.`;
+  else if(novo!==null&&novo>mem)veredito=`⚠️ A nuvem tem MAIS (${novo}) do que o app mostra (${mem}). Feche e abra o app para juntar tudo — não responda questões antes disso.`;
+  else veredito='ℹ️ Não consegui ler o banco novo da nuvem agora (sem conexão ou ainda não criado). O banco antigo continua intacto.';
+  if(antigo!==null&&novo!==null&&antigo>novo)veredito+=` O banco antigo tem ${antigo}: guardo ele como cópia de segurança.`;
+  const el=document.getElementById('acv-corpo');
+  if(el)el.innerHTML=`<table class="acv-tab">${linhas.map(l=>`<tr><td>${l[0]}</td><td><b>${fmt(l[1])}</b></td></tr>`).join('')}</table><div class="cron-sub" style="margin-top:10px">${veredito}</div>
+    <div class="cron-sub">Se o app estiver com poucas questões e a nuvem com muitas, não responda nada e me avise.</div>`;
+  return rel;
 }
 function tfRender(){
   const el=document.getElementById('tf-painel');if(!el)return;
