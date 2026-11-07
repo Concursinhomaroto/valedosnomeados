@@ -7,6 +7,7 @@ BASE = 'http://127.0.0.1:8934/app/index.html'
 LOCAL_PHASER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures', 'phaser.min.js')
 
 INIT_JS = r"""
+window.__VDN_LIGAR=["sala","redacoes"];   // Sala e Redação estão desligadas no app; os testes delas ligam de volta
 window.__root = { users: { TEST_UID_LEO: { vdn_v1: __SEED__ } } };
 window.__updateCalls = [];
 window.__onDisconnectRemoves = [];

@@ -1043,6 +1043,7 @@ nav{
 .treino-montar-titulo{font-size:12px;font-weight:800;margin-right:4px;}
 .treino-montar-bar select{width:auto;padding:6px 8px;font-size:12px;}
 .treino-montar-count{font-size:11px;color:var(--muted);font-weight:700;margin-left:auto;}
+.rec-off-sala #nav-sala,.rec-off-redacoes #nav-redacoes{display:none!important}
 .tq-card{margin-top:0}.tq-sum{cursor:pointer;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .tq-corpo{display:flex;flex-direction:column;gap:14px;margin-top:12px}.tq-passo{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--border);padding-top:10px}
 .tq-minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px;max-height:200px;overflow:auto}
@@ -7647,7 +7648,23 @@ document.body.classList.toggle('missao-ligada',missaoLigada());
   try{if(localStorage.getItem('vdn_dash_mais')==='1')d.open=true;}catch(e){}
   d.addEventListener('toggle',()=>{try{localStorage.setItem('vdn_dash_mais',d.open?'1':'0');}catch(e){}});
 })();
+// ===== RECURSOS DESLIGADOS =====
+// Sala de Estudo e Redação (com o Banco de Repertório) estão DESLIGADAS: somem do menu e as telas não abrem. Nada foi apagado —
+// o código, as redações e os dados continuam guardados. Para religar: tire o nome da lista abaixo, ou abra o app com
+// ?ligar=sala,redacoes (vale só naquela visita, bom para testar).
+const RECURSOS_DESLIGADOS=['sala','redacoes'];
+function recursosLigadosAgora(){
+  const l=new Set((window.__VDN_LIGAR||[]).map(String));
+  try{String(new URLSearchParams(location.search).get('ligar')||'').split(',').forEach(x=>{x=x.trim().toLowerCase();if(x)l.add(x);});}catch(e){}
+  return l;
+}
+function recursoDesligado(nome){return RECURSOS_DESLIGADOS.includes(nome)&&!recursosLigadosAgora().has(nome);}
+const RECURSO_DA_TELA={sala:'sala',redacoes:'redacoes',repertorio:'redacoes'};
+function recursosAplicar(){
+  ['sala','redacoes'].forEach(r=>document.body.classList.toggle('rec-off-'+r,recursoDesligado(r)));
+}
 function showScreen(name){
+  if(RECURSO_DA_TELA[name]&&recursoDesligado(RECURSO_DA_TELA[name]))name='dashboard';   // tela desligada: volta pro Painel
   // "Agenda" é uma vista do Painel: mesma tela, mostrando só o card da agenda (grade por hora).
   const vistaAgenda=name==='agenda';
   if(vistaAgenda)name='dashboard';
@@ -36472,6 +36489,7 @@ function renderHistorico(){
 
 // ===== BIND STATIC HTML EVENTS (module scripts are isolated from onclick) =====
 function bindStaticEvents(){
+  recursosAplicar();
   document.getElementById('nav-map')?.addEventListener('click',()=>showScreen('map'));
   document.getElementById('nav-revisions')?.addEventListener('click',()=>showScreen('revisions'));
   document.getElementById('nav-simgeral')?.addEventListener('click',()=>showScreen('simgeral'));
