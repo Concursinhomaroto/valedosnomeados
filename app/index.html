@@ -6910,7 +6910,7 @@ function bootApp(){
   loadDB(()=>{
     // Depois do registro principal, e em paralelo com o resto da tela: o banco de
     // questoes so e preciso quando a pessoa abre Provas, nao no primeiro frame.
-    acervoCarregar().then(()=>tfAposAcervo()).catch(e=>console.warn('Falha ao carregar o banco de questões:',e));
+    acervoAgendarCarga();   // o banco carrega logo depois da primeira tela (ou na hora, se você abrir uma tela que precisa dele)
     // As dicas também têm nó próprio e não seguram a primeira tela.
     dicasCarregar().catch(e=>{dicasCarregou=true;console.warn('Falha ao carregar as dicas:',e);});
     renderHeader();
@@ -7665,6 +7665,7 @@ function recursosAplicar(){
 }
 function showScreen(name){
   if(RECURSO_DA_TELA[name]&&recursoDesligado(RECURSO_DA_TELA[name]))name='dashboard';   // tela desligada: volta pro Painel
+  if(!ACERVO_PRONTO&&ACERVO_TELAS.has(name)){toast('Carregando seu banco de questões…','var(--muted)');const alvo=name;acervoCarregarJa().then(()=>showScreen(alvo));return;}
   // "Agenda" é uma vista do Painel: mesma tela, mostrando só o card da agenda (grade por hora).
   const vistaAgenda=name==='agenda';
   if(vistaAgenda)name='dashboard';
@@ -16624,29 +16625,76 @@ function acervoAparar(){
   return sobra;
 }
 // ===== O BANCO NO SEU PROPRIO NO =====
-let ACERVO_REF=null;
+let ACERVO_REF=null,ACERVO_REF_Z=null;
 let acervoSalvarTimer=null;
 const ACERVO_SALVA_MS=1500;
 function acervoChaveCache(){return lsKey()+'_acervo';}
+// ---- Banco comprimido (nó vdn_acervoz) ----
+// O banco inteiro (milhares de questões) subia e descia em texto puro a cada gravação. Agora ele vai comprimido (gzip em base64,
+// em pedaços), de 5 a 10 vezes menor, e tanto a nuvem quanto a cópia local guardam esse pacote. O nó antigo (vdn_acervo) NÃO é
+// tocado: continua lá como cópia de segurança e para versões antigas do app. Sem suporte a compressão no navegador, tudo segue
+// como antes. Se o pacote não abrir ou a contagem não bater, o app volta para o nó antigo.
+const ACERVO_Z_PARTE=600000;
+function acervoZSuportado(){return typeof CompressionStream==='function'&&typeof DecompressionStream==='function'&&typeof Response==='function'&&typeof TextEncoder==='function';}
+async function zComprimirTexto(txt){
+  const cs=new CompressionStream('gzip'),w=cs.writable.getWriter();
+  w.write(new TextEncoder().encode(txt));w.close();
+  return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+}
+async function zDescomprimirBytes(u8){
+  const ds=new DecompressionStream('gzip'),w=ds.writable.getWriter();
+  w.write(u8);w.close();
+  return await new Response(ds.readable).text();
+}
+function zParaB64(u8){let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s);}
+function zDeB64(b){const bin=atob(b),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}
+async function acervoEmpacotar(lista){
+  const txt=JSON.stringify(lista),b=zParaB64(await zComprimirTexto(txt)),partes=[];
+  for(let i=0;i<b.length;i+=ACERVO_Z_PARTE)partes.push(b.slice(i,i+ACERVO_Z_PARTE));
+  return{v:1,ts:Date.now(),n:lista.length,chars:txt.length,z:'gzip64',parts:partes};
+}
+async function acervoDesempacotar(pk){
+  if(!pk||pk.z!=='gzip64'||!pk.parts)return null;
+  const partes=crLista(pk.parts);if(!partes.length)return null;
+  const arr=JSON.parse(await zDescomprimirBytes(zDeB64(partes.join(''))));
+  return(Array.isArray(arr)&&arr.length===pk.n)?arr:null;     // contagem não bate: pacote não vale
+}
+// Gravações em fila: uma de cada vez, sempre com o estado MAIS NOVO da memória (a comprimir leva tempo e duas gravações
+// não podem terminar fora de ordem).
+let ACERVO_PRONTO=false,acervoPendente=false,acervoFila=Promise.resolve();
+function acervoAguardar(){return acervoFila;}
+async function acervoGravarAgora(){
+  const lista=sanitizeForFirebase(db.acervo||[]);
+  if(acervoZSuportado()){
+    try{
+      const pk=await acervoEmpacotar(lista);
+      try{if(cacheIdbOk)await idbGravar(acervoChaveCache()+'z',pk);}catch(e){}   // cópia local primeiro: funciona sem internet
+      if(!ACERVO_REF_Z)return;
+      const r=ACERVO_REF_Z.set(pk);
+      if(r&&r.catch)r.catch(e=>{console.warn('Falha ao salvar o banco de questões:',e);warnSyncIssue('⚠️ Não consegui salvar o banco de questões na nuvem agora. Ele continua guardado neste aparelho.');});
+      if(r&&r.then)await r.catch(()=>{});
+      return;
+    }catch(e){console.warn('Compressão do banco falhou; gravando sem comprimir:',e);}
+  }
+  try{if(cacheIdbOk)idbGravar(acervoChaveCache(),lista);}catch(e){}
+  if(!ACERVO_REF)return;
+  try{
+    const r=noGravarComVersao(ACERVO_REF,'vdn_acervo',acervoChaveCache(),lista);
+    if(r&&r.catch)r.catch(e=>{
+      console.warn('Falha ao salvar o banco de questões:',e);
+      warnSyncIssue('⚠️ Não consegui salvar o banco de questões na nuvem agora. Ele continua guardado neste aparelho.');
+    });
+  }catch(e){console.warn('Falha síncrona ao salvar o banco de questões:',e);}
+}
 function acervoSalvar(agora){
   if(acervoSalvarTimer){clearTimeout(acervoSalvarTimer);acervoSalvarTimer=null;}
-  const grava=()=>{
-    acervoSalvarTimer=null;
-    const lista=sanitizeForFirebase(db.acervo||[]);
-    // Copia local primeiro: e a que funciona sem internet, e a que nunca falha por cota
-    // de rede. O IndexedDB tem espaco de sobra pra isso.
-    try{if(cacheIdbOk)idbGravar(acervoChaveCache(),lista);}catch(e){}
-    if(!ACERVO_REF)return;
-    try{
-      const r=noGravarComVersao(ACERVO_REF,'vdn_acervo',acervoChaveCache(),lista);
-      if(r&&r.catch)r.catch(e=>{
-        console.warn('Falha ao salvar o banco de questões:',e);
-        warnSyncIssue('⚠️ Não consegui salvar o banco de questões na nuvem agora. Ele continua guardado neste aparelho.');
-      });
-    }catch(e){console.warn('Falha síncrona ao salvar o banco de questões:',e);}
-  };
+  // Banco ainda não carregou: gravar agora subiria uma lista parcial por cima da completa. Fica marcado e grava depois do carregamento.
+  if(!ACERVO_PRONTO){acervoPendente=true;return;}
+  const grava=()=>{acervoSalvarTimer=null;acervoFila=acervoFila.then(acervoGravarAgora).catch(e=>console.warn('Fila do banco:',e));};
   if(agora)grava(); else acervoSalvarTimer=setTimeout(grava,ACERVO_SALVA_MS);
 }
+// Fechar ou esconder a aba com gravação marcada: grava já (o que couber antes de sair).
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&acervoSalvarTimer)acervoSalvar(true);});
 // Uniao das tres origens. O banco so CRESCE — questao nao e editada nem apagada por
 // fora —, entao nao existe conflito de verdade: juntar tudo e a resposta certa pra
 // "estudei no celular sem internet e tambem no computador".
@@ -16686,13 +16734,50 @@ function acervoExcluirQuestao(chaveForte){
   acervoSalvar();
   return true;
 }
+// Pacote comprimido: compara só o carimbo (um número) com a cópia local; só baixa se a nuvem mudou.
+async function acervoCarregarZ(){
+  if(!acervoZSuportado())return null;
+  ACERVO_REF_Z=userRef('vdn_acervoz');
+  let local=null;try{local=await idbLer(acervoChaveCache()+'z');}catch(e){}
+  if(!ACERVO_REF_Z){return local?{lista:await acervoDesempacotar(local),via:'local'}:null;}
+  const tsNuvem=await noLerComTimeout(userRef('vdn_acervoz/ts'));
+  if(tsNuvem===undefined){const l=local&&await acervoDesempacotar(local);return l?{lista:l,via:'local-offline'}:null;}   // sem rede: usa a cópia local
+  if(tsNuvem===null)return null;                                                                                          // ainda não existe pacote: caminho antigo (e migra)
+  if(local&&local.ts===tsNuvem){const l=await acervoDesempacotar(local);if(l&&l.length)return{lista:l,via:'local'};}
+  const pk=await new Promise(res=>{const t=setTimeout(()=>res(null),12000);
+    ACERVO_REF_Z.once('value').then(sn=>{clearTimeout(t);res(sn.val());},()=>{clearTimeout(t);res(null);});});
+  const l=pk&&await acervoDesempacotar(pk);
+  if(!l||!l.length)return null;   // pacote vazio ou ilegível: o nó antigo (intacto) decide
+  try{if(cacheIdbOk)idbGravar(acervoChaveCache()+'z',pk);}catch(e){}
+  return{lista:l,via:'nuvem'};
+}
+// O banco não disputa mais o primeiro desenho da tela: carrega quando o navegador está livre (no máximo 2,5 s depois), ou
+// imediatamente se você abrir uma tela que depende dele.
+let acervoCarga=null;
+const ACERVO_TELAS=new Set(['simgeral','provas','caderno','banco','dicas','flashcards','revisions','editais']);
+function acervoCarregarJa(){
+  if(!acervoCarga)acervoCarga=acervoCarregar().then(r=>{try{tfAposAcervo();}catch(e){}return r;}).catch(e=>{console.warn('Falha ao carregar o banco de questões:',e);});
+  return acervoCarga;
+}
+function acervoAgendarCarga(){
+  if('requestIdleCallback' in window)requestIdleCallback(()=>acervoCarregarJa(),{timeout:2500});
+  else setTimeout(acervoCarregarJa,1200);
+}
+// Carrega o banco e, aconteça o que acontecer, libera as gravações no fim (a lista em memória já é o que existe).
 async function acervoCarregar(){
+  try{return await acervoCarregarInterno();}
+  finally{if(!ACERVO_PRONTO){ACERVO_PRONTO=true;if(acervoPendente){acervoPendente=false;acervoSalvar(true);}}}
+}
+async function acervoCarregarInterno(){
   ACERVO_REF=userRef('vdn_acervo');
+  let viaZ=null;
+  try{viaZ=await acervoCarregarZ();}catch(e){console.warn('Pacote do banco ilegível; usando o nó antigo:',e);viaZ=null;}
   let local=null;
-  try{local=await idbLer(acervoChaveCache());}catch(e){}
+  if(!viaZ){try{local=await idbLer(acervoChaveCache());}catch(e){}}
   let nuvem=null;
-  const ver=ACERVO_REF?await noVerLer('vdn_acervo',acervoChaveCache(),Array.isArray(local)?local.length:-1):{igual:false};
-  if(ver.igual&&Array.isArray(local))nuvem=local;   // nada mudou na nuvem: não baixa
+  const ver=viaZ?{igual:true}:(ACERVO_REF?await noVerLer('vdn_acervo',acervoChaveCache(),Array.isArray(local)?local.length:-1):{igual:false});
+  if(viaZ){nuvem=viaZ.lista;local=viaZ.lista;}
+  else if(ver.igual&&Array.isArray(local))nuvem=local;   // nada mudou na nuvem: não baixa
   else if(ACERVO_REF){
     try{
       nuvem=await new Promise(res=>{
@@ -16712,8 +16797,10 @@ async function acervoCarregar(){
   // abrir o app duas vezes nao recalcula e muito menos duplica.
   let migrou=0;
   db.acervo.forEach(q=>{if(!q._chaveForte){q._chaveForte=acervoChave2(q);migrou++;}});
-  if(noRegistro||migrou||db.acervo.length!==((Array.isArray(nuvem)?nuvem:[]).length)){
-    acervoSalvar(true);
+  ACERVO_PRONTO=true;   // a partir daqui gravar é seguro: a lista em memória já é a união de tudo
+  if(noRegistro||migrou||acervoPendente||db.acervo.length!==((Array.isArray(nuvem)?nuvem:[]).length)||(!viaZ&&acervoZSuportado()&&(nuvem!==null||Array.isArray(local)))){   // só migra para o pacote se leu o banco de algum lugar: falha de rede não grava pacote vazio
+    acervoPendente=false;
+    acervoSalvar(true);   // inclui a migração para o pacote comprimido (o nó antigo fica intacto)
     if(noRegistro)saveDB();   // o registro principal encolhe na mesma hora
   }else if(!ver.igual&&ACERVO_REF){
     noCarimbarLocal('vdn_acervo',acervoChaveCache(),sanitizeForFirebase(db.acervo||[]),ver.nuvem);

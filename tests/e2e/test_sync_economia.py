@@ -74,6 +74,7 @@ async def main():
 
         print('=== F) banco de questões: mesma versão na nuvem = não baixa; mudou = baixa ===')
         r=await page.evaluate("""async(uid)=>{
+          window.acervoZSuportado=()=>false;   // estes testes cobrem o protocolo de versao do no antigo (vdn_acervo); o pacote comprimido tem teste proprio em test_acervo_comprimido
           const q={questao:'Q1: julgue.',correta:'C',formato:'certoerrado',alternativas:[{letra:'C',texto:'Certo'},{letra:'E',texto:'Errado'}],
             explicacao:'.',subId:'s0',subName:'Assunto 0',topicName:'Urgência',kingdomId:'k1',kingdomName:'Enfermagem',kingdomIcon:'💉'};
           db.acervo=[{...q,_chaveForte:acervoChave2(q),...acervoCamposNovos('ia')}];

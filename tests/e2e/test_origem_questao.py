@@ -113,7 +113,7 @@ async def main():
         print('   OK\n')
 
         print('=== F) migracao: so preenche quando a fonte diz; "estilo" vira (estilo); nao sobrescreve; ano so junto da banca ===')
-        r=await page.evaluate("""()=>{
+        r=await page.evaluate("""async()=>{
           const F=[['Cebraspe 2023, prova de Enfermeiro'],['Banco de questões Português estilo Cebraspe'],['FGV - Ebserh 2024'],['IDECAN 2025'],['Lei 8.080/90, art. 2'],['Resumo do app (manual), 2022'],['material/sus/lei-8080-1990'],['Manual de Gestação (MS, 2022)'],['Prova do Instituto Access 2021'],[''],['Aocp']];
           db.acervo=[];db.migracaoOrigemV1=null;
           F.forEach(([f],i)=>{const q={questao:'Q'+i+': julgue.',correta:'C',formato:'certoerrado',alternativas:[{letra:'C',texto:'Certo'},{letra:'E',texto:'Errado'}],explicacao:'.',subId:'s1',subName:'Pré-natal',topicName:'Saúde da Mulher',kingdomId:'k1',kingdomName:'Enfermagem',kingdomIcon:'x',fonte:f};
@@ -123,7 +123,7 @@ async def main():
           const rel=acervoMigrarOrigem(false);
           const ev=db.acervo.map(q=>[q.banca||null,q.ano||null]);
           const intacto=JSON.stringify(before)===JSON.stringify(db.acervo.map(q=>q.questao+'|'+q.correta+'|'+q.explicacao));
-          const salvo=(window.__root.users.TEST_UID_LEO.vdn_acervo||[]);const noServidor=salvo.filter(q=>q.banca).length;
+          await acervoAguardar();const salvo=((await acervoDesempacotar(window.__root.users.TEST_UID_LEO.vdn_acervoz))||[]);const noServidor=salvo.filter(q=>q.banca).length;
           const de2=acervoMigrarOrigem(false);   // idempotente
           return {rel,ev,intacto,noServidor,de2,flag:!!db.migracaoOrigemV1};}""")
         print('   ',r['ev']); print('   ',r['rel'],r['noServidor'])
