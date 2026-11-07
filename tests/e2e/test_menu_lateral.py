@@ -18,7 +18,7 @@ async def main():
         r=await page.evaluate("""()=>[...document.querySelectorAll('#nav-principal > *')]
           .filter(e=>getComputedStyle(e).display!=='none').map(e=>e.classList.contains('nav-group')?'#'+e.textContent.trim():e.id)""")
         print('   %s'%r)
-        assert r==['#Hoje','nav-dashboard','nav-revisions','nav-simgeral','#Estudar','nav-map','nav-sala',
+        assert r==['#Hoje','nav-dashboard','nav-agenda','nav-revisions','nav-simgeral','#Estudar','nav-map','nav-sala',
                    'nav-flashcards','#Acompanhar','nav-editais','nav-conquistas','nav-redacoes'], r
         print('   OK\n')
 
