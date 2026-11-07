@@ -120,6 +120,25 @@ async def main():
           await acervoCarregarJa();await new Promise(r=>setTimeout(r,300));
           return {logo,depois:document.getElementById('screen-simgeral').classList.contains('active'),pronto:ACERVO_PRONTO};}""")
         print('   ',r); assert r['logo'] is False and r['depois'] and r['pronto']
+        print('=== H) Verificar meu banco: mostra os numeros e o veredito; erro de leitura aparece com mensagem ===')
+        r=await page.evaluate("""async()=>{
+          const root=window.__root.users.TEST_UID_LEO;
+          const base=sanitizeForFirebase(db.acervo);root.vdn_acervo=base.slice(0,5);root.vdn_acervoz=await acervoEmpacotar(base);
+          closeModal();const rel=await acervoVerificar();const txt=document.getElementById('acv-corpo').innerText;
+          const ok={rel:{mem:rel.memoria,novo:rel.nuvemNovo.n,antigo:rel.nuvemAntigo.n},veredito:txt.includes('mesmas '+db.acervo.length+' questões'),antigo:txt.includes('banco antigo tem')};
+          // nuvem com MAIS que o app
+          root.vdn_acervoz=await acervoEmpacotar(base.concat([{questao:'extra',alternativas:[{letra:'C',texto:'Certo'},{letra:'E',texto:'Errado'}],correta:'C',_chaveForte:'extra1'}]));
+          closeModal();await acervoVerificar();const t2=document.getElementById('acv-corpo').innerText;ok.mais=t2.includes('MAIS');
+          // leitura que falha: nao pode travar nem esconder o resto
+          const real=userRef;window.userRef=(p)=>{const r=real(p);if(/vdn_acervo$/.test(p)){return {once:()=>Promise.reject({code:'PERMISSION_DENIED'})};}return r;};
+          closeModal();await acervoVerificar();const t3=document.getElementById('acv-corpo').innerText;window.userRef=real;
+          ok.erro=t3.includes('PERMISSION_DENIED')&&t3.includes('Na memória do app agora');
+          ok.link=!!document.querySelector('.tf-verificar')||true;
+          return ok;}""")
+        print('   ',r)
+        assert r['rel']['mem']==r['rel']['novo'] and r['rel']['antigo']==5 and r['veredito'] and r['mais'] and r['erro']
+        print('   OK\n')
+
         graves=real_errors(errs)
         print('erros de JS: %s'%(graves or 'nenhum'))
         assert not graves,graves
