@@ -17448,6 +17448,7 @@ function acervoBackfillCompleto(){
 function provaMarcacoesClone(marcacoes){
   const out={};
   Object.entries(marcacoes||{}).forEach(([i,mk])=>{
+    if(!mk)return;
     out[i]={...mk,g:mk.g?mk.g.map(m=>({...m})):undefined};
   });
   return out;
@@ -18063,7 +18064,7 @@ function motivosAgregado(){
       const marcadas=(ult.respostas||[]).filter(Boolean).length;
       erradas+=Math.max(0,marcadas-(ult.acertos||0));
     }
-    Object.values(a.marcacoes||{}).forEach(mk=>conta(mk.m,mk.s,mk.k));
+    Object.values(a.marcacoes||{}).filter(Boolean).forEach(mk=>conta(mk.m,mk.s,mk.k));   // entrada nula (buraco vindo da nuvem) nao derruba o painel
   });
   (db.provas||[]).forEach(p=>{
     const ts=p.tentativas||[];
@@ -18075,7 +18076,7 @@ function motivosAgregado(){
         const marcadas=(ult.respostas||[]).filter(Boolean).length;
         erradas+=Math.max(0,marcadas-(ult.acertos||0));
       }
-      Object.values(p.marcacoes||{}).forEach(mk=>conta(mk.m,mk.s,mk.k));
+      Object.values(p.marcacoes||{}).filter(Boolean).forEach(mk=>conta(mk.m,mk.s,mk.k));
       return;
     }
     const resp=(ult&&ult.respostas)||[];
@@ -22013,7 +22014,7 @@ function provasGuardadasHTML(){
       const ts=p.tentativas||[];
       const nova=!ts.length;
       const foraP=p.chaves
-        ?Object.values(p.marcacoes||{}).filter(mk=>questaoForaDaConta({motivo:mk.m,problematico:!!mk.p})).length
+        ?Object.values(p.marcacoes||{}).filter(mk=>mk&&questaoForaDaConta({motivo:mk.m,problematico:!!mk.p})).length
         :(p.questoes||[]).filter(questaoForaDaConta).length;
       const linhas=ts.map((t,i)=>{
         const pl=provaPlacar(p,t);
