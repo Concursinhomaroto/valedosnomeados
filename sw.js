@@ -2,7 +2,7 @@
 // (HTML/manifest/ícones). NUNCA intercepta o Firebase Realtime Database:
 // os dados em tempo real trafegam por WebSocket, que passa por fora do
 // evento 'fetch' de qualquer forma, então a sincronização não é afetada.
-const CACHE_NAME = 'vdn-shell-v289';
+const CACHE_NAME = 'vdn-shell-v290';
 const PRECACHE_URLS = [
   './',
   './index.html',
