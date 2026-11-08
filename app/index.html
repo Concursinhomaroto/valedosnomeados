@@ -1043,8 +1043,20 @@ nav{
 .treino-montar-titulo{font-size:12px;font-weight:800;margin-right:4px;}
 .treino-montar-bar select{width:auto;padding:6px 8px;font-size:12px;}
 .treino-montar-count{font-size:11px;color:var(--muted);font-weight:700;margin-left:auto;}
-.rec-off-sala #nav-sala,.rec-off-redacoes #nav-redacoes{display:none!important}
+.rec-off-sala #nav-sala,.rec-off-redacoes #nav-redacoes,.rec-off-agenda #nav-agenda,.rec-off-agenda .dash-agenda{display:none!important}
 .acv-tab{width:100%;border-collapse:collapse}.acv-tab td{padding:6px 4px;border-bottom:1px solid var(--border);font-size:13px}.acv-tab td:last-child{text-align:right}
+.pa-topo{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.pa-total{font-size:14px;font-weight:700}.pa-total b{font-size:22px;color:var(--accent)}.pa-pct{color:var(--muted);margin-left:6px}
+.pa-barra{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden}.pa-barra i{display:block;height:100%;background:var(--accent)}
+.pa-mundos{display:flex;flex-wrap:wrap;gap:6px}.pa-ferr{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.pa-ferr .inp{flex:1;min-width:180px;max-width:320px}
+.pa-mundo{margin-bottom:16px}.pa-mundo-tit{font-weight:900;font-size:15px;margin:6px 0}.pa-mundo-tit span{color:var(--muted);font-weight:700;font-size:12px;margin-left:6px}
+.pa-chefe{border:1px solid var(--border);border-radius:12px;margin-bottom:8px;background:var(--panel2)}
+.pa-chefe summary{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;list-style:none}
+.pa-chefe-nome{flex:1;min-width:0;font-weight:800;font-size:14px}.pa-chefe-n{font-size:12px;color:var(--muted);font-weight:800}
+.pa-mini-barra{width:60px;height:6px;background:var(--border);border-radius:99px;overflow:hidden;flex:0 0 auto}.pa-mini-barra b{display:block;height:100%;background:var(--accent)}
+.pa-itens{padding:2px 12px 10px}.pa-item{display:flex;align-items:center;gap:10px;min-height:42px;padding:4px 2px;border-top:1px solid var(--border);cursor:pointer;font-size:14px}
+.pa-item input{width:20px;height:20px;flex:0 0 auto}.pa-nome{flex:1;min-width:0}.pa-feito .pa-nome{color:var(--muted);text-decoration:line-through}.pa-data{font-size:12px;color:var(--muted);font-style:normal;font-weight:700}
+.pa-acoes{display:flex;gap:8px;margin-top:8px}
 .tq-card{margin-top:0}.tq-sum{cursor:pointer;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .tq-corpo{display:flex;flex-direction:column;gap:14px;margin-top:12px}.tq-passo{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--border);padding-top:10px}
 .tq-minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px;max-height:200px;overflow:auto}
@@ -3626,6 +3638,9 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
     <button class="nav-btn active" id="nav-dashboard" title="Painel do Herói">
       <span class="nav-icon">🏆</span><span class="nav-label">Painel</span>
     </button>
+    <button class="nav-btn nav-extra" id="nav-plano" title="Plano de assunto: marque o que já estudou">
+      <span class="nav-icon">✅</span><span class="nav-label">Plano de assunto</span>
+    </button>
     <button class="nav-btn nav-extra" id="nav-agenda" title="Agenda semanal por hora">
       <span class="nav-icon">📅</span><span class="nav-label">Agenda</span>
     </button>
@@ -4173,6 +4188,11 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
 </div>
 
 <!-- ===== CONQUISTAS ===== -->
+<div class="screen" id="screen-plano">
+  <div class="sec-title">✅ Plano de assunto</div>
+  <div class="cron-sub" style="margin-bottom:10px">Clique para marcar que você já estudou o assunto. É só um registro seu: não cria revisão nem muda o Mapa.</div>
+  <div id="plano-conteudo"></div>
+</div>
 <div class="screen" id="screen-conquistas">
   <div class="conq-header">
     <h2>🏅 Conquistas</h2>
@@ -7649,20 +7669,93 @@ document.body.classList.toggle('missao-ligada',missaoLigada());
   try{if(localStorage.getItem('vdn_dash_mais')==='1')d.open=true;}catch(e){}
   d.addEventListener('toggle',()=>{try{localStorage.setItem('vdn_dash_mais',d.open?'1':'0');}catch(e){}});
 })();
+// ===== PLANO DE ASSUNTO =====
+// Uma lista simples, sem mais nada: Mundo › Chefe › assuntos (minibosses), cada um com uma caixinha "já estudei". Clicou, marcou
+// (e fica a data); clicou de novo, desmarcou. É só um registro: não gera revisão, XP nem muda o Mapa. Guardado em db.planoAssunto
+// ({idDoAssunto: 'AAAA-MM-DD'}).
+let paFiltro={mundo:'',busca:'',soPendentes:false},paAbertos=new Set();
+function paDados(){
+  if(!db.planoAssunto||typeof db.planoAssunto!=='object'||Array.isArray(db.planoAssunto))db.planoAssunto={};
+  return db.planoAssunto;
+}
+function paArvore(){
+  const d=paDados(),termo=normalizeForDedup(paFiltro.busca||'');
+  const mundos=[];
+  (db.kingdoms||[]).forEach(k=>{
+    if(paFiltro.mundo&&paFiltro.mundo!==k.id)return;
+    const chefes=[];
+    (db.topics[k.id]||[]).forEach(t=>{
+      const todos=t.subtopics||[],feitos=todos.filter(s=>d[s.id]).length;
+      let itens=todos;
+      if(termo)itens=itens.filter(s=>normalizeForDedup(s.name).includes(termo)||normalizeForDedup(t.name).includes(termo));
+      if(paFiltro.soPendentes)itens=itens.filter(s=>!d[s.id]);
+      if(!itens.length&&(termo||paFiltro.soPendentes))return;
+      chefes.push({t,itens,total:todos.length,feitos});
+    });
+    const tot=chefes.reduce((n,c)=>n+c.total,0),fei=chefes.reduce((n,c)=>n+c.feitos,0);
+    if(chefes.length||(!termo&&!paFiltro.soPendentes))mundos.push({k,chefes,total:tot,feitos:fei});
+  });
+  return mundos;
+}
+function paResumo(){
+  const d=paDados();let tot=0,fei=0;const porMundo=[];
+  (db.kingdoms||[]).forEach(k=>{let t=0,f=0;(db.topics[k.id]||[]).forEach(c=>(c.subtopics||[]).forEach(s=>{t++;if(d[s.id])f++;}));tot+=t;fei+=f;porMundo.push({k,t,f});});
+  return{tot,fei,porMundo};
+}
+const paPct=(f,t)=>t?Math.round(100*f/t):0;
+function paFmt(ds){return/^\d{4}-\d\d-\d\d$/.test(String(ds))?ds.slice(8,10)+'/'+ds.slice(5,7):'';}
+function renderPlanoAssunto(){
+  const el=document.getElementById('plano-conteudo');if(!el)return;
+  const r=paResumo(),mundos=paArvore(),d=paDados();
+  const abrir=!!(paFiltro.busca||paFiltro.soPendentes&&false);
+  el.innerHTML=`<div class="pa-topo">
+      <div class="pa-total"><b>${r.fei}</b> de ${r.tot} assuntos estudados <span class="pa-pct">${paPct(r.fei,r.tot)}%</span></div>
+      <div class="pa-barra" role="progressbar" aria-valuenow="${paPct(r.fei,r.tot)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${paPct(r.fei,r.tot)}%"></i></div>
+      <div class="pa-mundos">${r.porMundo.filter(m=>m.t).map(m=>`<button class="chip${paFiltro.mundo===m.k.id?' active':''}" onclick="paSetMundo('${escapeAttrJs(m.k.id)}')">${escapeHtml(m.k.icon||'')} ${escapeHtml(m.k.name)} · ${m.f}/${m.t}</button>`).join('')}
+        ${paFiltro.mundo?`<button class="chip" onclick="paSetMundo('')">Todos</button>`:''}</div>
+      <div class="pa-ferr"><input id="pa-busca" class="inp" type="search" maxlength="60" placeholder="Buscar assunto…" value="${escapeHtml(paFiltro.busca)}" onchange="paBuscar(this.value)" onkeydown="if(event.key==='Enter')paBuscar(this.value)" aria-label="Buscar assunto">
+        <label class="banco-check"><input type="checkbox" ${paFiltro.soPendentes?'checked':''} onchange="paSoPendentes(this.checked)"> só os que faltam</label></div></div>
+    ${mundos.length?mundos.map(m=>`<div class="pa-mundo"><div class="pa-mundo-tit">${escapeHtml(m.k.icon||'')} ${escapeHtml(m.k.name)} <span>${m.feitos}/${m.total} · ${paPct(m.feitos,m.total)}%</span></div>
+      ${m.chefes.map(c=>`<details class="pa-chefe"${(paAbertos.has(c.t.id)||abrir||paFiltro.soPendentes)?' open':''} ontoggle="paToggle('${escapeAttrJs(c.t.id)}',this.open)">
+        <summary><span class="pa-chefe-nome">${escapeHtml(c.t.name)}</span><span class="pa-chefe-n">${c.feitos}/${c.total}</span><i class="pa-mini-barra"><b style="width:${paPct(c.feitos,c.total)}%"></b></i></summary>
+        <div class="pa-itens">${c.itens.map(s=>`<label class="pa-item${d[s.id]?' pa-feito':''}"><input type="checkbox" ${d[s.id]?'checked':''} onchange="paAlternar('${escapeAttrJs(s.id)}')" aria-label="Já estudei ${escapeHtml(s.name)}"> <span class="pa-nome">${escapeHtml(s.name)}</span>${d[s.id]?`<em class="pa-data">${paFmt(d[s.id])}</em>`:''}</label>`).join('')||'<div class="cron-sub">Nenhum assunto cadastrado neste chefe.</div>'}
+          ${c.itens.length>1?`<div class="pa-acoes"><button class="btn btn-xs btn-ghost" onclick="paMarcarChefe('${escapeAttrJs(c.t.id)}',true)">Marcar todos</button><button class="btn btn-xs btn-ghost" onclick="paMarcarChefe('${escapeAttrJs(c.t.id)}',false)">Limpar</button></div>`:''}</div></details>`).join('')}</div>`).join(''):'<div class="empty"><p>Nenhum assunto encontrado.</p></div>'}`;
+}
+function paToggle(id,aberto){if(aberto)paAbertos.add(id);else paAbertos.delete(id);}
+function paSetMundo(id){paFiltro.mundo=paFiltro.mundo===id?'':id;renderPlanoAssunto();}
+function paBuscar(v){paFiltro.busca=String(v||'').trim().slice(0,60);renderPlanoAssunto();}
+function paSoPendentes(on){paFiltro.soPendentes=!!on;renderPlanoAssunto();}
+function paAlternar(id){
+  const d=paDados();
+  if(d[id])delete d[id];else d[id]=todayStr();
+  saveDB();
+  const y=window.scrollY;renderPlanoAssunto();window.scrollTo(0,y);
+}
+function paMarcarChefe(tid,on){
+  const d=paDados();let t=null;
+  (db.kingdoms||[]).forEach(k=>(db.topics[k.id]||[]).forEach(c=>{if(c.id===tid)t=c;}));
+  if(!t)return;
+  const ids=(t.subtopics||[]).map(s=>s.id);
+  if(on&&!confirm(`Marcar os ${ids.length} assuntos de "${t.name}" como estudados?`))return;
+  if(!on&&!confirm(`Limpar as marcas dos assuntos de "${t.name}"?`))return;
+  ids.forEach(id=>{if(on){if(!d[id])d[id]=todayStr();}else delete d[id];});
+  saveDB();const y=window.scrollY;renderPlanoAssunto();window.scrollTo(0,y);
+}
+
 // ===== RECURSOS DESLIGADOS =====
-// Sala de Estudo e Redação (com o Banco de Repertório) estão DESLIGADAS: somem do menu e as telas não abrem. Nada foi apagado —
+// Sala de Estudo, Redação (com o Banco de Repertório) e Agenda estão DESLIGADAS: somem do menu e as telas não abrem. Nada foi apagado —
 // o código, as redações e os dados continuam guardados. Para religar: tire o nome da lista abaixo, ou abra o app com
 // ?ligar=sala,redacoes (vale só naquela visita, bom para testar).
-const RECURSOS_DESLIGADOS=['sala','redacoes'];
+const RECURSOS_DESLIGADOS=['sala','redacoes','agenda'];
 function recursosLigadosAgora(){
   const l=new Set((window.__VDN_LIGAR||[]).map(String));
   try{String(new URLSearchParams(location.search).get('ligar')||'').split(',').forEach(x=>{x=x.trim().toLowerCase();if(x)l.add(x);});}catch(e){}
   return l;
 }
 function recursoDesligado(nome){return RECURSOS_DESLIGADOS.includes(nome)&&!recursosLigadosAgora().has(nome);}
-const RECURSO_DA_TELA={sala:'sala',redacoes:'redacoes',repertorio:'redacoes'};
+const RECURSO_DA_TELA={sala:'sala',redacoes:'redacoes',repertorio:'redacoes',agenda:'agenda'};
 function recursosAplicar(){
-  ['sala','redacoes'].forEach(r=>document.body.classList.toggle('rec-off-'+r,recursoDesligado(r)));
+  ['sala','redacoes','agenda'].forEach(r=>document.body.classList.toggle('rec-off-'+r,recursoDesligado(r)));
 }
 function showScreen(name){
   if(RECURSO_DA_TELA[name]&&recursoDesligado(RECURSO_DA_TELA[name]))name='dashboard';   // tela desligada: volta pro Painel
@@ -7709,6 +7802,7 @@ function showScreen(name){
   if(name==='redacoes')renderRedacoesScreen();
   if(name==='repertorio')renderRepertorioScreen();
   if(name==='conquistas')renderConquistasScreen();
+  if(name==='plano')renderPlanoAssunto();
   if(name==='sala')renderSalaMapaScreen();
   if(name==='admin'){adminSearchUsers();adminLoadBackups();}
   if(name==='mapaeditor')renderMapEditor();
@@ -27991,6 +28085,7 @@ function renderCronCabecalho(){
 }
 
 function renderWeeklyPlan(){
+  if(recursoDesligado('agenda'))return;   // Agenda desligada: não monta cronograma nem grade (menos peso)
   const el=document.getElementById('weekly-plan');
   if(!el)return;
   renderCronCabecalho();
@@ -36613,6 +36708,7 @@ function bindStaticEvents(){
   document.getElementById('nav-simgeral')?.addEventListener('click',()=>showScreen('simgeral'));
   document.getElementById('nav-dashboard')?.addEventListener('click',()=>showScreen('dashboard'));
   document.getElementById('nav-agenda')?.addEventListener('click',()=>showScreen('agenda'));
+  document.getElementById('nav-plano')?.addEventListener('click',()=>showScreen('plano'));
   document.getElementById('nav-editais')?.addEventListener('click',()=>showScreen('editais'));
   document.getElementById('nav-flashcards')?.addEventListener('click',()=>showScreen('flashcards'));
   document.getElementById('nav-redacoes')?.addEventListener('click',()=>showScreen('redacoes'));
