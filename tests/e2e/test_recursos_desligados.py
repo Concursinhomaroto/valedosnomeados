@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Sala de Estudo e Redacao desligadas: somem do menu, as telas nao abrem (voltam pro Painel), nada e apagado e da pra religar.
+# Sala de Estudo, Redacao e Agenda desligadas: somem do menu, as telas nao abrem (voltam pro Painel), nada e apagado e da pra religar.
 import asyncio, sys
 sys.path.insert(0,'.')
 from test_sala import async_playwright, setup_page, make_seed, real_errors
@@ -15,15 +15,15 @@ async def main():
           return {sala:vis('nav-sala'),red:vis('nav-redacoes'),painel:vis('nav-dashboard'),agenda:vis('nav-agenda'),treinar:vis('nav-simgeral'),flash:vis('nav-flashcards'),mapa:vis('nav-map'),
             off:[recursoDesligado('sala'),recursoDesligado('redacoes')]};}""")
         print('   ',r)
-        assert r['sala'] is False and r['red'] is False and r['painel'] and r['agenda'] and r['treinar'] and r['flash'] and r['mapa'] and r['off']==[True,True]
+        assert r['sala'] is False and r['red'] is False and r['agenda'] is False and r['painel'] and r['treinar'] and r['flash'] and r['mapa'] and r['off']==[True,True]
         print('   OK\n')
 
         print('=== B) as telas nao abrem: voltam para o Painel (inclusive Banco de Repertorio) ===')
         r=await page.evaluate("""()=>{const out={};
-          for(const t of ['sala','redacoes','repertorio']){showScreen(t);out[t]=[...document.querySelectorAll('.screen.active')].map(s=>s.id);}
+          for(const t of ['sala','redacoes','repertorio','agenda']){showScreen(t);out[t]=[...document.querySelectorAll('.screen.active')].map(s=>s.id);}
           showScreen('simgeral');out.simgeral=[...document.querySelectorAll('.screen.active')].map(s=>s.id);return out;}""")
         print('   ',r)
-        assert r['sala']==['screen-dashboard'] and r['redacoes']==['screen-dashboard'] and r['repertorio']==['screen-dashboard'] and r['simgeral']==['screen-simgeral']
+        assert r['sala']==['screen-dashboard'] and r['redacoes']==['screen-dashboard'] and r['repertorio']==['screen-dashboard'] and r['agenda']==['screen-dashboard'] and r['simgeral']==['screen-simgeral']
         print('   OK\n')
 
         print('=== C) nada foi apagado: as redacoes e os dados continuam no banco ===')
