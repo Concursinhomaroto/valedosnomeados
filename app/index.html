@@ -1048,7 +1048,10 @@ nav{
 .pa-topo{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
 .pa-total{font-size:14px;font-weight:700}.pa-total b{font-size:22px;color:var(--accent)}.pa-pct{color:var(--muted);margin-left:6px}
 .pa-barra{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden}.pa-barra i{display:block;height:100%;background:var(--accent)}
-.pa-mundos{display:flex;flex-wrap:wrap;gap:6px}.pa-ferr{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.pa-ferr .inp{flex:1;min-width:180px;max-width:320px}
+.pa-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.pa-card{display:flex;flex-direction:column;gap:4px;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:var(--panel2);cursor:pointer;font:inherit;color:inherit}
+.pa-card:hover{border-color:var(--accent)}.pa-card-aberto{border-color:var(--accent);box-shadow:0 0 0 2px rgba(124,58,237,.18)}
+.pa-card-nome{font-weight:900;font-size:15px}.pa-card-n{color:var(--accent);font-size:13px;font-weight:700}.pa-card-n b{font-size:15px}.pa-card-sub{font-size:12px;color:var(--muted);font-weight:700;display:flex;justify-content:space-between}.pa-seta{font-style:normal}.pa-ferr{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.pa-ferr .inp{flex:1;min-width:180px;max-width:320px}
 .pa-mundo{margin-bottom:16px}.pa-mundo-tit{font-weight:900;font-size:15px;margin:6px 0}.pa-mundo-tit span{color:var(--muted);font-weight:700;font-size:12px;margin-left:6px}
 .pa-chefe{border:1px solid var(--border);border-radius:12px;margin-bottom:8px;background:var(--panel2)}
 .pa-chefe summary{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;list-style:none}
@@ -3639,7 +3642,7 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
       <span class="nav-icon">🏆</span><span class="nav-label">Painel</span>
     </button>
     <button class="nav-btn nav-extra" id="nav-plano" title="Plano de assunto: marque o que já estudou">
-      <span class="nav-icon">✅</span><span class="nav-label">Plano de assunto</span>
+      <span class="nav-icon">✅</span><span class="nav-label">Plano</span>
     </button>
     <button class="nav-btn nav-extra" id="nav-agenda" title="Agenda semanal por hora">
       <span class="nav-icon">📅</span><span class="nav-label">Agenda</span>
@@ -7682,7 +7685,7 @@ function paArvore(){
   const d=paDados(),termo=normalizeForDedup(paFiltro.busca||'');
   const mundos=[];
   (db.kingdoms||[]).forEach(k=>{
-    if(paFiltro.mundo&&paFiltro.mundo!==k.id)return;
+    if(!termo&&paFiltro.mundo!==k.id)return;   // sem busca, só abre a matéria em que você clicou
     const chefes=[];
     (db.topics[k.id]||[]).forEach(t=>{
       const todos=t.subtopics||[],feitos=todos.filter(s=>d[s.id]).length;
@@ -7693,7 +7696,7 @@ function paArvore(){
       chefes.push({t,itens,total:todos.length,feitos});
     });
     const tot=chefes.reduce((n,c)=>n+c.total,0),fei=chefes.reduce((n,c)=>n+c.feitos,0);
-    if(chefes.length||(!termo&&!paFiltro.soPendentes))mundos.push({k,chefes,total:tot,feitos:fei});
+    if(chefes.length||(!termo&&paFiltro.mundo===k.id))mundos.push({k,chefes,total:tot,feitos:fei});
   });
   return mundos;
 }
@@ -7711,15 +7714,17 @@ function renderPlanoAssunto(){
   el.innerHTML=`<div class="pa-topo">
       <div class="pa-total"><b>${r.fei}</b> de ${r.tot} assuntos estudados <span class="pa-pct">${paPct(r.fei,r.tot)}%</span></div>
       <div class="pa-barra" role="progressbar" aria-valuenow="${paPct(r.fei,r.tot)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${paPct(r.fei,r.tot)}%"></i></div>
-      <div class="pa-mundos">${r.porMundo.filter(m=>m.t).map(m=>`<button class="chip${paFiltro.mundo===m.k.id?' active':''}" onclick="paSetMundo('${escapeAttrJs(m.k.id)}')">${escapeHtml(m.k.icon||'')} ${escapeHtml(m.k.name)} · ${m.f}/${m.t}</button>`).join('')}
-        ${paFiltro.mundo?`<button class="chip" onclick="paSetMundo('')">Todos</button>`:''}</div>
+      <div class="pa-cards" role="group" aria-label="Matérias">${r.porMundo.filter(m=>m.t).map(m=>{const aberto=paFiltro.mundo===m.k.id;return`<button class="pa-card${aberto?' pa-card-aberto':''}" aria-expanded="${aberto}" onclick="paSetMundo('${escapeAttrJs(m.k.id)}')">
+        <span class="pa-card-nome">${escapeHtml(m.k.icon||'')} ${escapeHtml(m.k.name)}</span><span class="pa-card-n"><b>${m.f}</b> de ${m.t} assuntos</span>
+        <span class="pa-card-sub">${(db.topics[m.k.id]||[]).length} chefe${(db.topics[m.k.id]||[]).length===1?'':'s'} · ${paPct(m.f,m.t)}% <i class="pa-seta">${aberto?'▴':'▾'}</i></span></button>`;}).join('')}</div>
+      ${paFiltro.mundo||paFiltro.busca?'':'<div class="cron-sub">Clique numa matéria para abrir os assuntos dela.</div>'}
       <div class="pa-ferr"><input id="pa-busca" class="inp" type="search" maxlength="60" placeholder="Buscar assunto…" value="${escapeHtml(paFiltro.busca)}" onchange="paBuscar(this.value)" onkeydown="if(event.key==='Enter')paBuscar(this.value)" aria-label="Buscar assunto">
         <label class="banco-check"><input type="checkbox" ${paFiltro.soPendentes?'checked':''} onchange="paSoPendentes(this.checked)"> só os que faltam</label></div></div>
     ${mundos.length?mundos.map(m=>`<div class="pa-mundo"><div class="pa-mundo-tit">${escapeHtml(m.k.icon||'')} ${escapeHtml(m.k.name)} <span>${m.feitos}/${m.total} · ${paPct(m.feitos,m.total)}%</span></div>
       ${m.chefes.map(c=>`<details class="pa-chefe"${(paAbertos.has(c.t.id)||abrir||paFiltro.soPendentes)?' open':''} ontoggle="paToggle('${escapeAttrJs(c.t.id)}',this.open)">
         <summary><span class="pa-chefe-nome">${escapeHtml(c.t.name)}</span><span class="pa-chefe-n">${c.feitos}/${c.total}</span><i class="pa-mini-barra"><b style="width:${paPct(c.feitos,c.total)}%"></b></i></summary>
         <div class="pa-itens">${c.itens.map(s=>`<label class="pa-item${d[s.id]?' pa-feito':''}"><input type="checkbox" ${d[s.id]?'checked':''} onchange="paAlternar('${escapeAttrJs(s.id)}')" aria-label="Já estudei ${escapeHtml(s.name)}"> <span class="pa-nome">${escapeHtml(s.name)}</span>${d[s.id]?`<em class="pa-data">${paFmt(d[s.id])}</em>`:''}</label>`).join('')||'<div class="cron-sub">Nenhum assunto cadastrado neste chefe.</div>'}
-          ${c.itens.length>1?`<div class="pa-acoes"><button class="btn btn-xs btn-ghost" onclick="paMarcarChefe('${escapeAttrJs(c.t.id)}',true)">Marcar todos</button><button class="btn btn-xs btn-ghost" onclick="paMarcarChefe('${escapeAttrJs(c.t.id)}',false)">Limpar</button></div>`:''}</div></details>`).join('')}</div>`).join(''):'<div class="empty"><p>Nenhum assunto encontrado.</p></div>'}`;
+          ${c.itens.length>1?`<div class="pa-acoes"><button class="btn btn-xs btn-ghost" onclick="paMarcarChefe('${escapeAttrJs(c.t.id)}',true)">Marcar todos</button><button class="btn btn-xs btn-ghost" onclick="paMarcarChefe('${escapeAttrJs(c.t.id)}',false)">Limpar</button></div>`:''}</div></details>`).join('')}</div>`).join(''):(paFiltro.busca?'<div class="empty"><p>Nenhum assunto encontrado.</p></div>':'')}`;
 }
 function paToggle(id,aberto){if(aberto)paAbertos.add(id);else paAbertos.delete(id);}
 function paSetMundo(id){paFiltro.mundo=paFiltro.mundo===id?'':id;renderPlanoAssunto();}
