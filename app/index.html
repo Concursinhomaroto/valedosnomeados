@@ -16756,7 +16756,7 @@ function acervoAparar(){
 // ===== O BANCO NO SEU PROPRIO NO =====
 let ACERVO_REF=null,ACERVO_REF_Z=null;
 let acervoSalvarTimer=null;
-const ACERVO_SALVA_MS=1500;
+const ACERVO_SALVA_MS=4000;   // junta as respostas seguidas numa gravação só (ao esconder a aba grava na hora)
 function acervoChaveCache(){return lsKey()+'_acervo';}
 // ---- Banco comprimido (nó vdn_acervoz) ----
 // O banco inteiro (milhares de questões) subia e descia em texto puro a cada gravação. Agora ele vai comprimido (gzip em base64,
@@ -16777,8 +16777,29 @@ async function zDescomprimirBytes(u8){
 }
 function zParaB64(u8){let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s);}
 function zDeB64(b){const bin=atob(b),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}
+// JSON.stringify do banco inteiro numa tacada trava a tela por uns 200 ms (no celular, mais): aqui vai em fatias, cedendo a vez
+// ao navegador entre elas. O resultado é o mesmo texto.
+// Devolve a lista de pedaços de texto (a soma é o JSON inteiro).
+async function acervoStringifyEmFatias(lista){
+  const fatias=[];
+  for(let i=0;i<lista.length;i+=400){
+    const f=JSON.stringify(lista.slice(i,i+400)).slice(1,-1);
+    if(f)fatias.push(f);
+    if(i+400<lista.length)await new Promise(r=>setTimeout(r,0));
+  }
+  return fatias.map((f,i)=>(i===0?'[':',')+f).concat([']']).filter(Boolean);
+}
+// gzip alimentado aos poucos: de uma vez só, o navegador comprime numa tarefa longa (meio segundo no celular) e a tela trava.
+async function zComprimirPedacos(pedacos){
+  const cs=new CompressionStream('gzip'),w=cs.writable.getWriter(),enc=new TextEncoder();
+  const saida=new Response(cs.readable).arrayBuffer();
+  for(const p of pedacos){await w.write(enc.encode(p));await new Promise(r=>setTimeout(r,0));}
+  await w.close();
+  return new Uint8Array(await saida);
+}
 async function acervoEmpacotar(lista){
-  const txt=JSON.stringify(lista),b=zParaB64(await zComprimirTexto(txt)),partes=[];
+  const pedacos=lista.length?await acervoStringifyEmFatias(lista):['[]'];
+  const txt={length:pedacos.reduce((n,x)=>n+x.length,0)},b=zParaB64(await zComprimirPedacos(pedacos)),partes=[];
   for(let i=0;i<b.length;i+=ACERVO_Z_PARTE)partes.push(b.slice(i,i+ACERVO_Z_PARTE));
   return{v:1,ts:Date.now(),n:lista.length,chars:txt.length,z:'gzip64',parts:partes};
 }
@@ -16793,10 +16814,10 @@ async function acervoDesempacotar(pk){
 let ACERVO_PRONTO=false,acervoPendente=false,acervoFila=Promise.resolve();
 function acervoAguardar(){return acervoFila;}
 async function acervoGravarAgora(){
-  const lista=sanitizeForFirebase(db.acervo||[]);
   if(acervoZSuportado()){
     try{
-      const pk=await acervoEmpacotar(lista);
+      // sem sanitizeForFirebase aqui: o JSON já descarta o que o Firebase recusaria (e custava ~0,3 s por gravação)
+      const pk=await acervoEmpacotar(db.acervo||[]);
       try{if(cacheIdbOk)await idbGravar(acervoChaveCache()+'z',pk);}catch(e){}   // cópia local primeiro: funciona sem internet
       if(!ACERVO_REF_Z)return;
       const r=ACERVO_REF_Z.set(pk);
@@ -16805,6 +16826,7 @@ async function acervoGravarAgora(){
       return;
     }catch(e){console.warn('Compressão do banco falhou; gravando sem comprimir:',e);}
   }
+  const lista=sanitizeForFirebase(db.acervo||[]);
   try{if(cacheIdbOk)idbGravar(acervoChaveCache(),lista);}catch(e){}
   if(!ACERVO_REF)return;
   try{
@@ -16953,7 +16975,8 @@ async function acervoCarregarInterno(){
     if(backfill.tentativasMinibossContadas)partes.push(`${backfill.tentativasMinibossContadas} tentativa(s) de assunto em ${backfill.assuntosMigrados} miniboss(es)`);
     toast(`📚 Acervo recuperado: ${partes.join(' + ')}.`,'var(--accent)');
   }
-  renderSimGeralScreen();
+  // Só redesenha o Treinar se ele estiver na tela: desenhar escondido custava cerca de meio segundo no celular, à toa.
+  if(document.getElementById('screen-simgeral')?.classList.contains('active'))renderSimGeralScreen();
   // A prévia da Missão foi montada antes do acervo chegar (sem o bloco de questões):
   // o botão do Painel recalcula agora, pra contagem bater com a missão de verdade.
   try{missaoCtaRender();}catch(e){}
