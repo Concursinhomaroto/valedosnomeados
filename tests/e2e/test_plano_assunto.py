@@ -72,6 +72,21 @@ async def main():
         assert r['t1'] and r['fechado']==0 and r['busca']==['Vacinação'] and r['busca2']==['Regência'] and r['faltam']==['Vacinação'] and r['limpo']
         print('   OK\n')
 
+        print('=== D2) "Abrir todas as matérias", a última matéria aberta volta, e filtros/ordem mostram tudo sem precisar escolher matéria ===')
+        r=await page.evaluate("""()=>{const n=()=>document.querySelectorAll('#plano-conteudo .pa-item').length;const ch=()=>document.querySelectorAll('#plano-conteudo .pa-chefe').length;
+          paFiltro.mundo='';paFiltro.todos=false;renderPlanoAssunto();const nada={ch:ch(),dica:document.getElementById('plano-conteudo').innerText.includes('Clique numa matéria acima')};
+          paTodos();const todos={ch:ch(),it:n(),txt:document.getElementById('plano-conteudo').innerText.includes('todas as matérias'),btn:document.getElementById('plano-conteudo').innerText.includes('Recolher todas')};
+          paTodos();const recolheu=ch();
+          paSetMundo('k2');const guardado=localStorage.getItem('vdn_pa_mundo');
+          paFiltro.mundo='';paIniciado=false;renderPlanoAssunto();const voltou=paFiltro.mundo;
+          paSetMundo('k2');   // fecha
+          paOrdem(true);const ord=n();paOrdem(false);
+          return {nada,todos,recolheu,guardado,voltou,ord,fechado:paFiltro.mundo};}""")
+        print('   ',r)
+        assert r['nada']=={'ch':0,'dica':True} and r['todos']['ch']==3 and r['todos']['it']==6 and r['todos']['txt'] and r['todos']['btn'] and r['recolheu']==0
+        assert r['guardado']=='k2' and r['voltou']=='k2' and r['ord']==6
+        print('   OK\n')
+
         print('=== E) dado vindo da nuvem como objeto/nulo nao quebra; assunto apagado nao conta ===')
         r=await page.evaluate("""()=>{db.planoAssunto=null;renderPlanoAssunto();const a=document.getElementById('plano-conteudo').innerText.includes('0 de 6');
           db.planoAssunto={s1:'2026-11-07',sFantasma:'2026-11-07'};renderPlanoAssunto();const b=document.getElementById('plano-conteudo').innerText.replace(/\\s+/g,' ');

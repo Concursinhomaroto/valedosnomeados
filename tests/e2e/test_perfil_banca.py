@@ -69,6 +69,18 @@ async def main():
         q=[x for c in r['quentes'] for x in c]; assert 'Vacinação' not in q and 'Pré-natal' in q
         print('   OK\n')
 
+        print('=== D2) sem escolher materia: "so os que mais caem" e "ordenar" mostram os assuntos de todas as materias, ja abertos ===')
+        r=await page.evaluate("""()=>{paFiltro.mundo='';paFiltro.todos=false;const d=db.perfilBanca.dados.Cebraspe;d.s5={a:{},n:3,o:'',via:'manual'};
+          const nomes=()=>[...document.querySelectorAll('#plano-conteudo .pa-nome')].map(x=>x.textContent);const abertos=()=>[...document.querySelectorAll('#plano-conteudo details')].filter(x=>x.open).length;
+          paSoQuentes(true);const q={nomes:nomes(),abertos:abertos()};paSoQuentes(false);
+          paOrdem(true);const o={n:nomes().length,abertos:abertos()};paOrdem(false);
+          delete d.s5;paFiltro.mundo='';paFiltro.todos=false;paSetMundo('k1');
+          return {q,o};}""")
+        print('   ',r)
+        assert 'Regência' in r['q']['nomes'] and 'Pré-natal' in r['q']['nomes'] and 'Vacinação' not in r['q']['nomes'] and r['q']['abertos']>=2
+        assert r['o']['n']==6 and r['o']['abertos']==3
+        print('   OK\n')
+
         print('=== E) bancas independentes; clicar no selo nao marca a caixinha; salvo na nuvem; Firebase devolvendo objeto ===')
         r=await page.evaluate("""async()=>{pbSetBanca('FGV');const vazio=!pbReg('s1');
           const cb=document.querySelector('#plano-conteudo .pa-item input');const antes=cb.checked;
