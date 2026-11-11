@@ -5,8 +5,7 @@ from seed_painel import seed
 
 # injeta um reino com atrasadas E aproveitamento — a combinacao que zerava o nome
 INJETA = """() => {
-  // redesign A3: "Reinos que precisam de atenção" virou uma aba do Diagnóstico — abre ela
-  document.getElementById('dd-reinos').checked=true;
+  // "Reinos que pedem atenção" fica sempre à vista no bloco Desempenho (não é mais aba)
   const linhas=[
     {name:'História de Cabo Verde e do Mundo', icon:'🕌', overdue:5, pct:12},
     {name:'Enfermagem', icon:'💊', overdue:0, pct:59},
