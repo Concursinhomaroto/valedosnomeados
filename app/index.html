@@ -2866,16 +2866,11 @@ button.dash-faixa-atrasadas:hover{border-color:var(--st-atrasado);}
 .dash-hoje .dash-hoje-sub{font-size:11px;font-weight:900;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:16px 0 6px;}
 
 .dash-diag{grid-area:diag;min-width:0;position:sticky;top:16px;}  /* acompanha a coluna Hoje na rolagem */
-.dd-radio{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}
-.dd-abas{display:flex;gap:6px;margin:4px 0 12px;flex-wrap:wrap;}
-.dd-abas label{padding:6px 12px;border-radius:999px;border:1.5px solid var(--border);font-size:12px;font-weight:800;
-  color:var(--text2);cursor:pointer;background:var(--panel2);min-height:32px;display:inline-flex;align-items:center;}
-#dd-sim:checked~.dd-abas label[for=dd-sim],#dd-reinos:checked~.dd-abas label[for=dd-reinos],
-#dd-erros:checked~.dd-abas label[for=dd-erros]{background:var(--st-acao-fill);border-color:var(--st-acao-fill);color:#fff;}
-#dd-sim:focus-visible~.dd-abas label[for=dd-sim],#dd-reinos:focus-visible~.dd-abas label[for=dd-reinos],
-#dd-erros:focus-visible~.dd-abas label[for=dd-erros]{outline:2px solid var(--foco);outline-offset:2px;}
-.dd-painel{display:none;}
-#dd-sim:checked~.dd-p-sim,#dd-reinos:checked~.dd-p-reinos,#dd-erros:checked~.dd-p-erros{display:block;}
+/* Desempenho sempre à vista: as três partes (simulados, reinos, erros) empilhadas, sem
+   aba pra clicar. Antes eram abas, e duas das três ficavam escondidas atrás de um clique. */
+.dd-painel{display:block;}
+.dd-painel+.dd-painel{margin-top:16px;padding-top:14px;border-top:1.5px dashed var(--border);}
+.dd-sub{font-size:11px;font-weight:900;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:0 0 8px;}
 .dash-vazio-linha{font-size:12px;color:var(--muted);padding:10px 12px;border:1.5px dashed var(--border);border-radius:10px;line-height:1.5;}
 .dash-vazio-linha b{color:var(--text2);}
 
@@ -3963,25 +3958,20 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
     </div>
 
     <div class="section-card dash-diag">
-      <div class="sec-title dash-sec">🔬 Diagnóstico</div>
-      <input type="radio" name="dash-diag" id="dd-sim" class="dd-radio" checked>
-      <input type="radio" name="dash-diag" id="dd-reinos" class="dd-radio">
-      <input type="radio" name="dash-diag" id="dd-erros" class="dd-radio">
-      <div class="dd-abas">
-        <label for="dd-sim">🎯 Simulados</label>
-        <label for="dd-reinos">⚠️ Reinos</label>
-        <label for="dd-erros">🔬 Erros</label>
-      </div>
+      <div class="sec-title dash-sec">📈 Desempenho</div>
       <div class="dd-painel dd-p-sim">
+        <div class="dd-sub">🎯 Simulados e questões</div>
         <div id="sim-global-stats" class="sim-global-grid"></div>
         <div id="sim-por-formato"></div>
         <div id="sim-kingdom-breakdown"></div>
       </div>
       <div class="dd-painel dd-p-reinos">
+        <div class="dd-sub">⚠️ Reinos que pedem atenção</div>
         <div class="atencao-legenda">Revisões atrasadas e <b>% de acerto nos flashcards desde sempre</b> — não é quanto do reino você já estudou.</div>
         <div id="avg-time-list"></div>
       </div>
       <div class="dd-painel dd-p-erros">
+        <div class="dd-sub">🔬 Por que você erra</div>
         <div id="controle-erros"></div>
         <div id="controle-erros-foot" class="dash-foot"></div>
       </div>
@@ -4722,8 +4712,12 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
   const ctx=c.getContext('2d');
   let W,H;
   const pts=Array.from({length:50},()=>({x:Math.random(),y:Math.random(),vx:(Math.random()-0.5)*0.0003,vy:(Math.random()-0.5)*0.0003,r:Math.random()*2+1}));
-  function resize(){W=c.width=innerWidth;H=c.height=innerHeight;}
-  resize();addEventListener('resize',resize);
+  // Fundo PARADO: desenha uma vez (e de novo se a janela mudar de tamanho). Antes os pontos
+  // andavam a 60 quadros por segundo, pra sempre, atrás de qualquer tela — a tela cheia era
+  // redesenhada sem parar por um movimento que quase não se via, disputando o processador
+  // com o que você estava fazendo.
+  function resize(){W=c.width=innerWidth;H=c.height=innerHeight;draw();}
+  addEventListener('resize',resize);
   function draw(){
     ctx.clearRect(0,0,W,H);
     pts.forEach(p=>{
@@ -4738,9 +4732,8 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
       const d=Math.sqrt(dx*dx+dy*dy);
       if(d<120){ctx.beginPath();ctx.moveTo(pts[i].x*W,pts[i].y*H);ctx.lineTo(pts[j].x*W,pts[j].y*H);ctx.strokeStyle=`rgba(108,71,255,${0.12*(1-d/120)})`;ctx.lineWidth=1;ctx.stroke();}
     }
-    requestAnimationFrame(draw);
   }
-  draw();
+  resize();
 })();
 
 // ===== DATA =====
@@ -5198,15 +5191,26 @@ function gravarCacheLocal(){
   // Mesmo motivo do payload: o banco tem a sua propria chave de cache, gravada so
   // quando ele muda. Sem isto, cada saveDB copiaria o banco inteiro de novo. Dicas idem.
   const {acervo,provasArquivo,hist,dicas,...semAcervo}=db;
-  const copia=sanitizeForFirebase(semAcervo);   // já é uma cópia profunda; não mexe no db
-  if(currentUser&&currentUser.uid)copia._uid=currentUser.uid;
   const chave=lsKey();
   // Caminho normal: IndexedDB. Guarda o objeto direto (sem serializar), não trava a
   // tela e tem espaço de sobra. A cópia na memória é atualizada na hora pra que um
   // lerCacheLocal() logo em seguida já enxergue o valor novo.
   if(cacheIdbOk){
-    cacheIdbMem=copia;
-    idbGravar(chave,copia).then(ok=>{
+    // O IndexedDB já tira a própria cópia do objeto no instante do put(). A cópia JSON que
+    // era feita antes disso (~0,2 s de tela parada num registro de 13 MB) só duplicava o
+    // trabalho. Se o put recusar o objeto (algo não clonável lá dentro), aí sim cai na
+    // cópia JSON, que descarta o que não serve.
+    const direto={...semAcervo};
+    if(currentUser&&currentUser.uid)direto._uid=currentUser.uid;
+    cacheIdbMem=direto;
+    idbGravar(chave,direto).then(ok=>{
+      if(ok)return true;
+      const {acervo:a2,provasArquivo:p2,hist:h2,dicas:d2,...resto}=db;
+      const copiaJson=sanitizeForFirebase(resto);
+      if(currentUser&&currentUser.uid)copiaJson._uid=currentUser.uid;
+      cacheIdbMem=copiaJson;
+      return idbGravar(chave,copiaJson);
+    }).then(ok=>{
       if(!ok)return;
       // Deu certo no IndexedDB: as cópias no localStorage não servem mais pra nada e
       // estão ocupando o espaço apertado que causou o problema. Vão embora.
@@ -5218,6 +5222,8 @@ function gravarCacheLocal(){
   }
   // Reserva: navegador sem IndexedDB (aba anônima, armazenamento bloqueado).
   if(cacheLocalDesligado)return;
+  const copia=sanitizeForFirebase(semAcervo);   // já é uma cópia profunda; não mexe no db
+  if(currentUser&&currentUser.uid)copia._uid=currentUser.uid;
   const txt=JSON.stringify(copia);
   try{
     localStorage.setItem(chave,txt);
@@ -5298,24 +5304,28 @@ try{
 // atual continua com a questao inteira em memoria (a tela de resultado mostra as
 // alternativas logo depois de corrigir), e o historico que ja esta gravado encolhe
 // sozinho no proximo salvamento, sem precisar de migracao.
-function enxugarHistoricos(copia){
-  (copia.kingdoms||[]).forEach(k=>{
-    (((copia.topics||{})[k.id])||[]).forEach(t=>{
-      (t.subtopics||[]).forEach(s=>{
-        (s.simHistorico||[]).forEach(h=>{
-          if(!Array.isArray(h.questoes))return;
-          h.questoes=h.questoes.map(q=>{
-            // errada (ou nao respondida) volta pra tela no Banco de Erros: fica inteira
-            if(!q||q.userAnswer!==q.correta)return q;
-            const magra={questao:q.questao,correta:q.correta,userAnswer:q.userAnswer};
-            if(q.formato)magra.formato=q.formato;
-            if(q.revisado)magra.revisado=true;
-            if(q.problematico)magra.problematico=true;
-            return magra;
-          });
+function enxugarTopicos(lista){
+  lista.forEach(t=>{
+    (t.subtopics||[]).forEach(s=>{
+      (s.simHistorico||[]).forEach(h=>{
+        if(!Array.isArray(h.questoes))return;
+        h.questoes=h.questoes.map(q=>{
+          // errada (ou nao respondida) volta pra tela no Banco de Erros: fica inteira
+          if(!q||q.userAnswer!==q.correta)return q;
+          const magra={questao:q.questao,correta:q.correta,userAnswer:q.userAnswer};
+          if(q.formato)magra.formato=q.formato;
+          if(q.revisado)magra.revisado=true;
+          if(q.problematico)magra.problematico=true;
+          return magra;
         });
       });
     });
+  });
+  return lista;
+}
+function enxugarHistoricos(copia){
+  (copia.kingdoms||[]).forEach(k=>{
+    enxugarTopicos(((copia.topics||{})[k.id])||[]);
   });
   return copia;
 }
@@ -6171,8 +6181,30 @@ function checkOverdueNotifications(force){
   localStorage.setItem('vdn_last_notif_date',today);
 }
 
+// ===== SALVAR SEM TRAVAR O CLIQUE =====
+// Antes, CADA saveDB copiava o registro inteiro na hora (cópia JSON + cópia do IndexedDB) e,
+// 0,8 s depois, copiava de novo e ainda transformava tudo em texto pra descobrir o que mudou:
+// três passadas por ~13 MB a cada resposta marcada — a tela parava no clique e parava de novo
+// logo depois. Agora o saveDB só MARCA que há o que salvar; o trabalho acontece uma vez só,
+// quando você faz uma pausa de 0,8 s (ou, clicando sem parar, no máximo a cada 4 s), com uma
+// passada em vez de três. Esconder ou fechar a aba grava na hora o que estiver marcado.
+const SAVE_ESPERA_MS=800,SAVE_MAX_MS=4000;
+let savePendente=false,saveDesde=0;
 function saveDB(){
   db.lastModified=Date.now();
+  savePendente=true;
+  if(!useLocalFallback&&DB_REF)isSaving=true;
+  const agora=Date.now();
+  if(!saveDesde)saveDesde=agora;
+  clearTimeout(saveTimeout);
+  saveTimeout=setTimeout(saveFlush,Math.max(0,Math.min(SAVE_ESPERA_MS,saveDesde+SAVE_MAX_MS-agora)));
+  maybeBackupDB();
+  adminIndexAtualizar();
+}
+function saveFlush(){
+  clearTimeout(saveTimeout);saveTimeout=null;saveDesde=0;
+  if(!savePendente)return;
+  savePendente=false;
   try{
     gravarCacheLocal();
   }catch(e){
@@ -6183,27 +6215,24 @@ function saveDB(){
     warnSyncIssue('⚠️ Não consegui gravar a cópia offline deste aparelho. Seus dados continuam sendo salvos na nuvem.');
   }
   if(useLocalFallback||!DB_REF)return;
-  isSaving=true;
-  clearTimeout(saveTimeout);
-  saveTimeout=setTimeout(()=>{
-    try{
-      syncGravar(payloadParaFirebase()).catch(e=>{
-        console.warn('Firebase save error:',e);
-        isSaving=false;
-        syncBase=null;   // na próxima, manda tudo de novo (set), como antes
-        warnSyncIssue('⚠️ Não foi possível salvar na nuvem agora. Seus dados estão seguros neste dispositivo.');
-      });
-    }catch(e){
-      // sanitizeForFirebase (ou o .set em si) pode lançar de forma síncrona — sem esse
-      // try/catch isso derrubava a página inteira com o aviso genérico de "algo deu errado".
-      console.warn('Falha síncrona ao preparar salvamento na nuvem:',e);
+  try{
+    syncGravarDoDb().catch(e=>{
+      console.warn('Firebase save error:',e);
       isSaving=false;
+      syncBase=null;   // na próxima, manda tudo de novo (set), como antes
       warnSyncIssue('⚠️ Não foi possível salvar na nuvem agora. Seus dados estão seguros neste dispositivo.');
-    }
-  },800);
-  maybeBackupDB();
-  adminIndexAtualizar();
+    });
+  }catch(e){
+    // montar o retrato (ou o .set em si) pode lançar de forma síncrona — sem esse
+    // try/catch isso derrubava a página inteira com o aviso genérico de "algo deu errado".
+    console.warn('Falha síncrona ao preparar salvamento na nuvem:',e);
+    isSaving=false;
+    warnSyncIssue('⚠️ Não foi possível salvar na nuvem agora. Seus dados estão seguros neste dispositivo.');
+  }
 }
+// Sair da aba com gravação marcada: grava já, sem esperar a pausa.
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&savePendente)saveFlush();});
+window.addEventListener('pagehide',()=>{if(savePendente)saveFlush();});
 
 // ===== ÍNDICE DO PAINEL ADMIN =====
 // O Painel Admin lia ref('users') inteiro — todas as contas com flashcards, resumos,
@@ -6841,7 +6870,17 @@ updateThemeIcon();
 function genId(){return '_'+Math.random().toString(36).slice(2,9);}
 function getBrasiliaDate(){const n=new Date();return new Date(n.getTime()+(n.getTimezoneOffset()*60000)+(-3*3600000));}
 function localDateStrFromDate(dt){const b=new Date(dt.getTime()+(dt.getTimezoneOffset()*60000)+(-3*3600000));return b.getFullYear()+'-'+String(b.getMonth()+1).padStart(2,'0')+'-'+String(b.getDate()).padStart(2,'0');}
-function todayStr(){const d=getBrasiliaDate();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+var todayStrMemo='',todayStrSeg=-1;
+function todayStr(){
+  // mesma conta de sempre, feita no máximo uma vez por segundo: o Painel chama isto dezenas
+  // de milhares de vezes por desenho, e cada chamada criava duas datas
+  const seg=Math.floor(Date.now()/1000);
+  if(seg===todayStrSeg)return todayStrMemo;
+  const d=getBrasiliaDate();
+  todayStrMemo=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  todayStrSeg=seg;
+  return todayStrMemo;
+}
 function addDays(d,n){const dt=new Date(d+'T00:00:00');dt.setDate(dt.getDate()+n);return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');}
 function fmtDateBR(dateStr){const[y,m,d]=dateStr.split('-');return `${d}/${m}/${y}`;}
 function daysDiff(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000);}
@@ -7124,6 +7163,89 @@ function syncGravar(payload){
   const novo=syncMapa(payload);
   if(!syncBase){syncBase=novo;return DB_REF.set(payload);}
   const up=syncDelta(syncBase,novo,payload);
+  syncBase=novo;
+  if(!Object.keys(up).length){isSaving=false;return Promise.resolve();}   // nada mudou: nada sobe
+  return DB_REF.update(up);
+}
+// ----- Retrato tirado direto do db, numa passada só -----
+// syncMapa(payloadParaFirebase()) dava três voltas no registro: texto, objeto de novo, e texto
+// outra vez por campo. Aqui cada campo vira texto UMA vez, direto da memória, e o resultado é
+// o mesmo retrato — campo por campo, letra por letra (há um teste que compara os dois).
+//  • campos que o JSON descartaria (undefined, função) ficam de fora, como ficavam;
+//  • os históricos de simulado são enxugados reino por reino, e só o reino que mudou desde a
+//    última gravação é refeito (os outros reaproveitam o texto já enxuto);
+//  • os campos de plano saem do que o SERVIDOR tinha, igual ao payloadParaFirebase.
+const SYNC_FORA=new Set(['acervo','provasArquivo','hist','dicas']);
+let syncEnxutoMemo={};   // reino -> {bruto, enxuto}
+function syncTextoOuNada(v){
+  if(v===undefined||typeof v==='function'||typeof v==='symbol')return undefined;
+  return JSON.stringify(v);
+}
+function syncEntradaDe(v){
+  if(v&&typeof v==='object'&&typeof v.toJSON==='function')v=JSON.parse(JSON.stringify(v));
+  if(v&&typeof v==='object'&&!Array.isArray(v)){
+    const ch={};
+    Object.keys(v).forEach(c=>{const t=syncTextoOuNada(v[c]);if(t!==undefined)ch[c]=t;});
+    return {o:1,ch};
+  }
+  const t=syncTextoOuNada(v);
+  return t===undefined?null:{o:0,s:t};
+}
+function syncEnxugarReino(reinoId,bruto){
+  const m=syncEnxutoMemo[reinoId];
+  if(m&&m.bruto===bruto)return m.enxuto;
+  let enxuto=bruto;
+  const lista=JSON.parse(bruto);
+  if(Array.isArray(lista))enxuto=JSON.stringify(enxugarTopicos(lista));
+  syncEnxutoMemo[reinoId]={bruto,enxuto};
+  return enxuto;
+}
+function syncMapaDoDb(){
+  const m={};
+  Object.keys(db).forEach(k=>{
+    if(SYNC_FORA.has(k))return;
+    const e=syncEntradaDe(db[k]);
+    if(e)m[k]=e;
+  });
+  // históricos enxutos — só nos reinos que existem, como o enxugarHistoricos faz
+  const tp=m.topics;
+  if(tp&&tp.o){
+    const vivos={};
+    (Array.isArray(db.kingdoms)?db.kingdoms:[]).forEach(k=>{
+      if(!k||!(k.id in tp.ch))return;
+      tp.ch[k.id]=syncEnxugarReino(k.id,tp.ch[k.id]);vivos[k.id]=1;
+    });
+    Object.keys(syncEnxutoMemo).forEach(id=>{if(!vivos[id])delete syncEnxutoMemo[id];});
+  }
+  CAMPOS_PLANO.forEach(k=>{
+    if(planoDoServidor[k]!==undefined){const e=syncEntradaDe(planoDoServidor[k]);if(e)m[k]=e;else delete m[k];}
+    else if(planoLidoDoServidor)delete m[k];
+  });
+  return m;
+}
+function syncValorDe(e){
+  if(!e.o)return JSON.parse(e.s);
+  const o={};Object.keys(e.ch).forEach(c=>{o[c]=JSON.parse(e.ch[c]);});
+  return o;
+}
+function syncGravarDoDb(){
+  const novo=syncMapaDoDb();
+  if(!syncBase){
+    // sem retrato do servidor (primeira gravação, ou depois de um erro): manda tudo, como antes
+    const payload={};Object.keys(novo).forEach(k=>{payload[k]=syncValorDe(novo[k]);});
+    syncBase=novo;
+    return DB_REF.set(payload);
+  }
+  const base=syncBase,up={};
+  Object.keys(novo).forEach(k=>{
+    const b=base[k],n=novo[k];
+    if(!b){up[k]=syncValorDe(n);return;}
+    if(n.o&&b.o){
+      Object.keys(n.ch).forEach(c=>{if(b.ch[c]!==n.ch[c])up[k+'/'+c]=JSON.parse(n.ch[c]);});
+      Object.keys(b.ch).forEach(c=>{if(!(c in n.ch))up[k+'/'+c]=null;});
+    }else if(n.o!==b.o||n.s!==b.s)up[k]=syncValorDe(n);
+  });
+  Object.keys(base).forEach(k=>{if(!(k in novo))up[k]=null;});
   syncBase=novo;
   if(!Object.keys(up).length){isSaving=false;return Promise.resolve();}   // nada mudou: nada sobe
   return DB_REF.update(up);
@@ -11577,7 +11699,55 @@ ${FLASH_QTD} cards do que devolver repetição.`:'';
   }
 }
 
+// Índice id -> miniboss. A busca antiga varria reino por reino, chefão por chefão, a cada
+// chamada — e o Painel chama isto centenas de milhares de vezes (uma por comparação ao
+// ordenar o banco inteiro): com ~900 minibosses e ~15 mil questões eram 2,5 s de tela
+// congelada só no "Treino inteligente". O resultado é IGUAL ao da varredura (mesma regra de
+// desempate), e o índice nunca devolve coisa velha:
+//  • achou: confere pela POSIÇÃO que o miniboss continua pendurado onde estava (4 leituras);
+//  • não achou: confere a "assinatura" da árvore (quantos reinos/chefões/minibosses) — se
+//    nada entrou nem saiu, o "não existe" vale; se mudou, refaz o índice e procura de novo.
+var subIndice=null,subIndiceAss='';
+function subIndiceAssinatura(){
+  const ks=db.kingdoms||[];let nt=0,ns=0;
+  for(let i=0;i<ks.length;i++){
+    const ts=(db.topics&&db.topics[ks[i].id])||[];nt+=ts.length;
+    for(let j=0;j<ts.length;j++)ns+=(ts[j].subtopics?ts[j].subtopics.length:0);
+  }
+  return ks.length+'|'+nt+'|'+ns;
+}
+function subIndiceMontar(){
+  const idx=new Map();
+  const ks=db.kingdoms||[];
+  for(let ki=0;ki<ks.length;ki++){
+    const kId=ks[ki].id,ts=(db.topics&&db.topics[kId])||[];
+    const doReino=new Map();   // dentro do reino, o chefão mais adiante vence (como na varredura)
+    for(let ti=0;ti<ts.length;ti++){
+      const subs=ts[ti].subtopics;if(!subs)continue;
+      const vistos=new Set();  // dentro do chefão, o primeiro vence (era um .find)
+      for(let si=0;si<subs.length;si++){
+        const s=subs[si];if(!s||vistos.has(s.id))continue;
+        vistos.add(s.id);doReino.set(s.id,{sub:s,ki,kId,ti,si});
+      }
+    }
+    doReino.forEach((e,id)=>{if(!idx.has(id))idx.set(id,e);});   // entre reinos, o primeiro vence
+  }
+  subIndice=idx;subIndiceAss=subIndiceAssinatura();
+}
 function simFindSub(subId){
+  if(!subIndice)subIndiceMontar();
+  let e=subIndice.get(subId);
+  if(e){
+    const k=db.kingdoms[e.ki],t=k&&k.id===e.kId&&db.topics[e.kId]&&db.topics[e.kId][e.ti];
+    if(t&&t.subtopics&&t.subtopics[e.si]===e.sub)return e.sub;
+    subIndiceMontar();e=subIndice.get(subId);
+    return e?e.sub:null;
+  }
+  if(subIndiceAssinatura()!==subIndiceAss){subIndiceMontar();e=subIndice.get(subId);return e?e.sub:null;}
+  return null;
+}
+// A varredura original, guardada só pra conferência (testes comparam as duas).
+function simFindSubVarredura(subId){
   let sub=null;
   for(const k of db.kingdoms){
     (db.topics[k.id]||[]).forEach(t=>{const f=t.subtopics?.find(s=>s.id===subId);if(f)sub=f;});
@@ -13788,7 +13958,8 @@ function treinoQuestaoUtilizavel(q){
   if(!Array.isArray(alts)||alts.length<2)return false;
   return alts.every(a=>a&&a.letra&&a.texto!=null&&String(a.texto).trim());
 }
-function treinoPoolCompleto(){
+function treinoPoolCompleto(){return memoNoEscopo('treinoPool',treinoPoolCompletoCalc).slice();}
+function treinoPoolCompletoCalc(){
   const fora=foraSubsSet();   // matérias de prova que já passou saem daqui — de uma vez pra todo o app
   return montarAcervo().filter(x=>(x.q.status||'ativa')==='ativa'&&treinoQuestaoUtilizavel(x.q)&&!(fora&&fora.has(x.q.subId))).map(x=>x.q);
 }
@@ -14947,8 +15118,11 @@ function tiMontar(n,mix){
   const foco=edFocoIndice();
   const pctSub={};treinoAssuntoStats().forEach(x=>{pctSub[x.subId]=x.pct;});
   const prio=q=>{const sb=simFindSub(q.subId);return (sb&&sb.priority)||50;};
-  const peso=q=>(foco&&foco.idx[q.subId]?1000:0)+prio(q);
-  const dias=q=>q.ultimaVezEm?(Date.now()-new Date(q.ultimaVezEm).getTime())/86400000:9999;
+  // peso e dias: uma conta por questão, não uma por comparação da ordenação (eram centenas
+  // de milhares de datas interpretadas a cada desenho do Painel)
+  const agora=Date.now(),memoPeso=new Map(),memoDias=new Map();
+  const peso=q=>{let v=memoPeso.get(q);if(v===undefined){v=(foco&&foco.idx[q.subId]?1000:0)+prio(q);memoPeso.set(q,v);}return v;};
+  const dias=q=>{let v=memoDias.get(q);if(v===undefined){v=q.ultimaVezEm?(agora-new Date(q.ultimaVezEm).getTime())/86400000:9999;memoDias.set(q,v);}return v;};
   const grupos={
     feridas:ativo.filter(q=>q.ultimoResultado==='X')
       .sort((a,b)=>peso(b)-peso(a)||(b.erros||0)-(a.erros||0)||dias(b)-dias(a)),
@@ -23654,7 +23828,7 @@ let conquistasChecagemAgendada=false;
 function conquistasAgendarChecagem(){
   if(conquistasChecagemAgendada)return;
   conquistasChecagemAgendada=true;
-  setTimeout(()=>{conquistasChecagemAgendada=false;checkAchievementUnlocks();},0);
+  setTimeout(()=>{conquistasChecagemAgendada=false;comIndiceFC(checkAchievementUnlocks);},0);
 }
 function renderBadges(){
   const el=document.getElementById('dash-badges');
@@ -23688,7 +23862,8 @@ function conqSetFilter(tipo,val){
   renderConquistasScreen();
 }
 const CONQ_CAT_LABELS={all:'Todas as categorias',questoes:'📝 Questões & Missões',volume:'📦 Volume',consistencia:'🔥 Consistência',dominio:'🎯 Domínio',amplitude:'🌍 Amplitude',tempo:'⏱️ Tempo',meta:'🎖️ Prestígio',secreta:'❓ Secretas'};
-function renderConquistasScreen(){
+function renderConquistasScreen(){return comIndiceFC(renderConquistasScreenInterno);}
+function renderConquistasScreenInterno(){
   const el=document.getElementById('conquistas-grid');
   if(!el)return;
   let unlockedTotal=0,maxTotal=0,gamerscore=0;
@@ -25485,7 +25660,8 @@ function revEstado(){
 //   cabemHoje  = quantos da vez cabem no tempo do dia (assuntos)
 //   cardsVencidos = flashcards vencidos               (cards)
 //   errosPendentes = erros de simulado sem revisar    (questões)
-function numerosDoDia(){
+function numerosDoDia(){return memoNoEscopo('numerosDoDia',numerosDoDiaCalc);}
+function numerosDoDiaCalc(){
   const fila=revCandidatos();
   const atrasadosIds=new Set(fila.filter(c=>(c.atraso||0)>0).map(c=>c.sub.id));
   const porDia=revPorDia();
@@ -25493,7 +25669,8 @@ function numerosDoDia(){
     cabemHoje:Math.min(porDia,fila.length),cardsVencidos:fcVencidosContagem(),
     errosPendentes:getErrorBank().filter(i=>!i.revisado&&!i.problematico).length};
 }
-function fcVencidosContagem(){
+function fcVencidosContagem(){return memoNoEscopo('fcVencidos',fcVencidosContagemCalc);}
+function fcVencidosContagemCalc(){
   const validos=new Set();
   db.kingdoms.forEach(k=>(db.topics[k.id]||[]).forEach(t=>validos.add(t.id)));
   const pausados=fcTopicosPausados();
@@ -26068,7 +26245,8 @@ function renderRenewalBanner(){
     banner.style.display='flex';
   }
 }
-function renderDashboard(){
+function renderDashboard(){return comIndiceFC(renderDashboardInterno);}
+function renderDashboardInterno(){
   renderBackupBadge(); // o dia pode ter virado com a aba aberta
   renderRenewalBanner();
   dashFaixaHojeRender();
@@ -26513,7 +26691,8 @@ function missaoTick(){
 function missaoTickIniciar(){if(!missaoTickId)missaoTickId=setInterval(missaoTick,2500);}
 function missaoTickParar(){if(missaoTickId){clearInterval(missaoTickId);missaoTickId=null;}}
 // Cartão "Hoje" do Painel: o botão primário inicia/continua a missão.
-function missaoCtaRender(){
+function missaoCtaRender(){return comIndiceFC(missaoCtaRenderInterno);}
+function missaoCtaRenderInterno(){
   const el=document.getElementById('missao-cta');
   if(!el)return;
   if(!missaoLigada()){
@@ -31739,8 +31918,36 @@ function fcStatusColor(st){
   return st==='new'?'var(--accent)':st==='due'?'var(--red)':st==='7'?'var(--orange)':st==='14'?'#d97706':st==='21'?'var(--cyan)':'var(--green)';
 }
 
+// Cada chamada varria TODOS os flashcards atrás dos de um chefão. O Painel pergunta isso
+// chefão por chefão, várias vezes (reinos que pedem atenção, missão, conquistas): com ~6 mil
+// cards e ~100 chefões eram perto de 1,5 s por desenho. Dentro de um "escopo de leitura" os
+// cards são agrupados UMA vez e as perguntas seguintes só consultam o grupo.
+// O escopo só existe enquanto uma tela está sendo desenhada (código que só lê): fora dele a
+// função varre como sempre, então nada que cria, apaga ou move card enxerga agrupamento velho.
+var fcIndiceEscopo=null,escopoMemo=null;
+// Dentro do mesmo escopo, contas que o Painel repete (números do dia, questões treináveis,
+// cards vencidos) são feitas uma vez e reaproveitadas. Fora do escopo, calcula sempre.
+function memoNoEscopo(chave,fn){
+  if(!escopoMemo)return fn();
+  if(escopoMemo.has(chave))return escopoMemo.get(chave);
+  const v=fn();escopoMemo.set(chave,v);return v;
+}
+function comIndiceFC(fn){
+  if(fcIndiceEscopo)return fn();   // já tem um escopo aberto: reaproveita
+  const m=new Map();
+  if(db.flashcards){
+    const todos=Object.values(db.flashcards);
+    for(let i=0;i<todos.length;i++){
+      const c=todos[i];if(!c)continue;
+      const l=m.get(c.mbId);if(l)l.push(c);else m.set(c.mbId,[c]);
+    }
+  }
+  fcIndiceEscopo=m;escopoMemo=new Map();
+  try{return fn();}finally{fcIndiceEscopo=null;escopoMemo=null;}
+}
 function getAllFCForTopic(topicId){
   if(!db.flashcards)return[];
+  if(fcIndiceEscopo){const l=fcIndiceEscopo.get(topicId);return l?l.slice():[];}
   return Object.values(db.flashcards).filter(c=>c.mbId===topicId);
 }
 // Chefões de reinos pausados. Pausar um reino ("não vou revisar História agora, mas
