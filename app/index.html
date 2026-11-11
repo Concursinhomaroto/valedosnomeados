@@ -5735,6 +5735,36 @@ async function loadDB(callback){
     return;
   }
 
+  // ===== ABRIR PELA CÓPIA LOCAL =====
+  // Antes, toda abertura ficava na tela de carregamento até o Firebase entregar o registro
+  // INTEIRO (~13 MB numa conta com bastante material: 4 a 5 s de espera, toda vez), mesmo com
+  // uma cópia idêntica parada no IndexedDB deste aparelho. Agora, havendo cópia local com
+  // dado de verdade, o app abre com ela na hora e pergunta ao servidor UMA coisa pequena: o
+  // lastModified do registro (ver aoVerLM).
+  //  • igual ao da cópia  -> nada a baixar; a cópia é o que o servidor tem.
+  //  • diferente (ou vazio) -> liga o ouvinte completo de sempre, que baixa o registro e
+  //    resolve quem vence exatamente como antes (cópia mais nova sobe; servidor mais novo
+  //    substitui a tela).
+  // Sem cópia local (primeiro acesso, outro navegador), nada muda: carrega do servidor.
+  let localCedo=null,resumoCedo=null;
+  try{localCedo=lerCacheLocal();resumoCedo=localCedo?countDataSummary(localCedo):null;}catch(e){localCedo=null;}
+  if(localCedo&&typeof localCedo.lastModified==='number'&&resumoCedo&&
+     (resumoCedo.reinos+resumoCedo.flashcards+resumoCedo.redacoes+resumoCedo.temas)>0){
+    const limpo=semCarimbo(localCedo);
+    // O retrato do que o servidor tem sai da cópia como ela foi lida, ANTES de o app mexer
+    // em qualquer coisa — é contra ele que a próxima gravação descobre o que mudou.
+    try{baseLocal=syncMapaDe(limpo,false);}catch(e){baseLocal=null;}
+    if(baseLocal){
+      lmLocalNoBoot=localCedo.lastModified;
+      Object.assign(db,limpo);
+      applyDefaults();
+      applyPlanGating();
+      abriuCedo=true;
+      overlay.style.display='none';
+      try{if(callback)callback();}catch(e){console.error('Falha ao desenhar a primeira tela:',e);}
+    }
+  }
+
   // Monitorar conectividade (compat)
   if(connectedRef){
     connectedRef.on('value',(snap)=>{
@@ -5744,8 +5774,27 @@ async function loadDB(callback){
     });
   }
 
+  // O que redesenhar quando o registro muda com o app já aberto.
+  const redesenharComDadosNovos=()=>{
+    renderHeader();renderMap();updateRevBadge();updateEditaisBadge();updateFCBadge();
+    const sc=document.querySelector('.screen.active')?.id;
+    // Se o plano foi liberado (ex: Leo confirmou pagamento no Firebase Console) enquanto
+    // a pessoa via a tela de upsell, já reabre a tela real na hora, sem precisar recarregar.
+    if(sc==='screen-locked'&&hasFullAccess()){
+      stopPixCheckPolling();
+      const lockedNav=document.querySelector('.nav-btn.active');
+      const pending=lockedNav?lockedNav.id.replace('nav-',''):null;
+      if(pending)showScreen(pending);
+    }
+    if(sc==='screen-revisions')renderRevisions();
+    if(sc==='screen-dashboard')renderDashboard();
+    if(sc==='screen-editais')renderEditais();
+    if(sc==='screen-flashcards')renderFlashcardsScreen();
+  };
+
   // Timeout de segurança: 12s — tenta localStorage como fallback
-  const safetyTimer=setTimeout(()=>{
+  // (abrindo pela cópia local não há o que esperar: a tela já está aberta)
+  const safetyTimer=abriuCedo?null:setTimeout(()=>{
     if(firebaseReady)return;
     try{const s=lerCacheLocal();if(s)Object.assign(db,semCarimbo(s));}catch(e){}
     applyDefaults();firebaseReady=true;
@@ -5756,7 +5805,12 @@ async function loadDB(callback){
     if(callback)callback();
   },12000);
 
-  // Listener principal (compat API)
+  // Listener principal (compat API). Baixa o registro inteiro e passa a receber cada mudança.
+  // Sem cópia local ele liga já; abrindo pela cópia local, só liga se for preciso.
+  ligarOuvinteCompleto=()=>{
+  if(ouvinteCompletoLigado)return;
+  ouvinteCompletoLigado=true;
+  vigiasDesligar();
   DB_REF.on('value',(snapshot)=>{
     if(isSaving&&firebaseReady){isSaving=false;return;}
     isSaving=false;
@@ -5778,8 +5832,12 @@ async function loadDB(callback){
       if(!firebaseReady){
         try{
           const local=lerCacheLocal();
-          if(local&&(local.lastModified||0)>(data.lastModified||0)){
-            Object.assign(db,semCarimbo(local));
+          // Abrindo pela cópia local, vale o lastModified que a cópia tinha AO ABRIR: o que
+          // você mexeu enquanto o servidor não respondia não pode fazer uma cópia velha
+          // parecer mais nova que o servidor. E o db já É a cópia (mais o que você mexeu).
+          const lmLocal=abriuCedo?lmLocalNoBoot:((local&&local.lastModified)||0);
+          if(local&&lmLocal>(data.lastModified||0)){
+            if(!abriuCedo)Object.assign(db,semCarimbo(local));
             usedLocalOverride=true;
           }
         }catch(e){}
@@ -5797,7 +5855,7 @@ async function loadDB(callback){
         const local=lerCacheLocal();
         const c=local?countDataSummary(local):null;
         if(c&&(c.reinos+c.flashcards+c.redacoes+c.temas)>0){
-          Object.assign(db,semCarimbo(local));
+          if(!abriuCedo)Object.assign(db,semCarimbo(local));
           usedLocalOverride=true;
           localTemDadoDeVerdade=true;
         }
@@ -5847,31 +5905,32 @@ async function loadDB(callback){
     applyPlanGating();
     try{gravarCacheLocal();}catch(e){}
     if(!firebaseReady){
-      firebaseReady=true;
+      firebaseReady=true;servidorVisto=true;
       overlay.style.display='none';
       if(!data)checkForLegacyMigration();
       maybeBackupDB();
-      if(callback)callback();
+      if(!abriuCedo){if(callback)callback();}
+      else{
+        // A tela já estava aberta pela cópia local. Se o servidor tinha coisa mais nova, ela
+        // acabou de entrar no db: redesenha. Se a cópia venceu, a tela já mostra o certo e o
+        // saveDB() ali em cima cuida de subir (a nuvem deixou de esperar).
+        nuvemPendente=false;
+        backupCheckInicial();
+        if(!usedLocalOverride)redesenharComDadosNovos();
+      }
     }else{
       overlay.style.display='none';
-      renderHeader();renderMap();updateRevBadge();updateEditaisBadge();updateFCBadge();
-      const sc=document.querySelector('.screen.active')?.id;
-      // Se o plano foi liberado (ex: Leo confirmou pagamento no Firebase Console) enquanto
-      // a pessoa via a tela de upsell, já reabre a tela real na hora, sem precisar recarregar.
-      if(sc==='screen-locked'&&hasFullAccess()){
-        stopPixCheckPolling();
-        const lockedNav=document.querySelector('.nav-btn.active');
-        const pending=lockedNav?lockedNav.id.replace('nav-',''):null;
-        if(pending)showScreen(pending);
-      }
-      if(sc==='screen-revisions')renderRevisions();
-      if(sc==='screen-dashboard')renderDashboard();
-      if(sc==='screen-editais')renderEditais();
-      if(sc==='screen-flashcards')renderFlashcardsScreen();
+      redesenharComDadosNovos();
     }
   },(error)=>{
     clearTimeout(safetyTimer);
     console.error('Firebase error:',error);
+    if(abriuCedo&&!firebaseReady){
+      // A tela está aberta com a cópia local; o servidor recusou a leitura. Continua como
+      // está (as gravações seguem só neste aparelho) e avisa.
+      warnSyncIssue('⚠️ Não consegui conferir seus dados com a nuvem. Suas alterações continuam sendo salvas neste dispositivo.');
+      return;
+    }
     try{const s=lerCacheLocal();if(s)Object.assign(db,semCarimbo(s));}catch(e){}
     applyDefaults();
     if(!firebaseReady){
@@ -5885,6 +5944,108 @@ async function loadDB(callback){
       warnSyncIssue('⚠️ Conexão com o banco de dados perdida. Suas alterações continuam sendo salvas neste dispositivo.');
     }
   });
+  };
+
+  if(!abriuCedo){ligarOuvinteCompleto();return;}
+
+  // ----- modo econômico: vigia só o lastModified (e o plano), não o registro inteiro -----
+  const vigiar=(campo,fn)=>{
+    if(ouvinteCompletoLigado)return;   // uma vigia anterior já mandou ouvir tudo
+    const r=userRef('vdn_v1/'+campo);if(!r)return;
+    vigias.push(r);
+    r.on('value',snap=>{try{fn(snap.val());}catch(e){console.warn('vigia '+campo+':',e);}},()=>{});
+    // O on() pode chamar a função na hora (valor já em mãos) e ela decidir ouvir tudo antes
+    // de este registro terminar: desliga aqui o que acabou de ser ligado.
+    if(ouvinteCompletoLigado){try{r.off();}catch(e){}}
+  };
+  vigiar('lastModified',v=>aoVerLM(v,overlay,msg));
+  // Plano liberado ou renovado com o app aberto: passa a ouvir tudo, como sempre foi, pra
+  // tela destravar e o histórico de pagamentos ser registrado na hora.
+  ['plan','lastPaymentAt'].forEach(k=>vigiar(k,v=>{
+    if(!planoLidoDoServidor||ouvinteCompletoLigado)return;
+    if((v===null?undefined:v)!==planoDoServidor[k])irAoVivo();
+  }));
+}
+// Estado do "abrir pela cópia local".
+//  abriuCedo      a tela foi aberta com a cópia deste aparelho, antes de falar com o servidor
+//  servidorVisto  o servidor já respondeu (igual à cópia, ou o registro inteiro chegou)
+//  nuvemPendente  houve gravação enquanto o servidor não respondia: sobe quando ele responder
+var abriuCedo=false,servidorVisto=false,nuvemPendente=false,lmLocalNoBoot=0,baseLocal=null;
+var ouvinteCompletoLigado=false,ligarOuvinteCompleto=null,vigias=[],aoVivoPendente=false;
+// lastModified que ESTE aparelho mandou — pra vigia não tratar o próprio eco como "outro aparelho".
+var lmsEnviados=new Set();
+function lmAnotarEnviado(v){
+  if(typeof v!=='number')return;
+  lmsEnviados.add(v);
+  if(lmsEnviados.size>60)lmsEnviados.delete(lmsEnviados.values().next().value);
+}
+function vigiasDesligar(){
+  vigias.forEach(r=>{try{r.off();}catch(e){}});
+  vigias=[];
+}
+// Outro aparelho gravou (ou o plano mudou): volta ao ouvinte completo, que baixa o registro
+// uma vez e depois recebe só os pedaços que mudam. Com a aba escondida, espera você voltar —
+// uma aba esquecida aberta não fica baixando o registro a cada questão respondida no celular.
+function irAoVivo(){
+  if(ouvinteCompletoLigado||!ligarOuvinteCompleto)return;
+  if(savePendente)saveFlush();   // o que é seu sobe antes de o registro do servidor entrar
+  if(document.hidden){aoVivoPendente=true;return;}
+  aoVivoPendente=false;
+  isSaving=false;                // o primeiro registro que chegar é pra ser lido, não descartado como eco
+  ligarOuvinteCompleto();
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&aoVivoPendente)irAoVivo();});
+function aoVerLM(v,overlay,msg){
+  if(ouvinteCompletoLigado)return;
+  if(!servidorVisto){
+    if(typeof v==='number'&&v===lmLocalNoBoot){
+      // O servidor tem exatamente o que esta cópia tem: nada a baixar.
+      servidorVisto=true;firebaseReady=true;
+      syncBase=baseLocal;baseLocal=null;
+      lmAnotarEnviado(v);
+      maybeBackupDB();
+      backupCheckInicial();
+      planoConferirNoServidor();
+      if(nuvemPendente||savePendente){nuvemPendente=false;savePendente=true;saveFlush();}
+      return;
+    }
+    // Diferente: o ouvinte completo baixa o registro e decide quem vence. Se o servidor é o
+    // mais novo, a tela vai ser trocada — segura os cliques até lá, pra nada do que você
+    // fizer nesses segundos ser jogado fora em silêncio.
+    if(typeof v==='number'&&v>lmLocalNoBoot&&overlay){
+      if(msg){msg.style.display='block';msg.textContent='Atualizando com o que você estudou em outro aparelho...';}
+      overlay.style.display='flex';
+    }
+    ligarOuvinteCompleto();
+    return;
+  }
+  if(v===db.lastModified||lmsEnviados.has(v)){isSaving=false;return;}   // eco da minha própria gravação
+  irAoVivo();
+}
+// No modo econômico o registro não é baixado, então os campos de plano (que só o servidor
+// decide) são lidos à parte: quatro leituras minúsculas.
+function planoConferirNoServidor(){
+  const ler=k=>{const r=userRef('vdn_v1/'+k);return r?noLerComTimeout(r,6000):Promise.resolve(undefined);};
+  return Promise.all(CAMPOS_PLANO.map(ler)).then(vals=>{
+    if(ouvinteCompletoLigado)return;                 // o registro inteiro já chegou por outro caminho
+    if(vals.some(v=>v===undefined))return;           // sem resposta: fica com o plano da cópia local
+    const antes=JSON.stringify(planoAtual());
+    const d={};CAMPOS_PLANO.forEach((k,i)=>{if(vals[i]!==null){d[k]=vals[i];db[k]=vals[i];}});
+    guardarPlanoDoServidor(d);
+    // O retrato do servidor saiu da cópia local; nos campos de plano vale o que o servidor
+    // acabou de dizer (a cópia pode ter um padrão que o servidor nunca recebeu). Sem isto a
+    // primeira gravação mandaria esses campos à toa.
+    if(syncBase)CAMPOS_PLANO.forEach((k,i)=>{
+      const e=vals[i]===null?null:syncEntradaDe(vals[i]);
+      if(e)syncBase[k]=e;else delete syncBase[k];
+    });
+    applyPlanGating();
+    if(JSON.stringify(planoAtual())!==antes){
+      renderHeader();
+      if(document.getElementById('screen-dashboard')?.classList.contains('active'))renderDashboard();
+    }
+    if(!hasFullAccess())irAoVivo();                  // quem espera liberação de plano ouve tudo, como antes
+  }).catch(e=>console.warn('Falha ao conferir o plano:',e));
 }
 
 // ===== MIGRAÇÃO DE DADOS ANTIGOS (Fase 0.3) =====
@@ -6215,6 +6376,10 @@ function saveFlush(){
     warnSyncIssue('⚠️ Não consegui gravar a cópia offline deste aparelho. Seus dados continuam sendo salvos na nuvem.');
   }
   if(useLocalFallback||!DB_REF)return;
+  // Abriu pela cópia local e o servidor ainda não respondeu: a cópia deste aparelho já foi
+  // gravada aí em cima; a nuvem espera. Subir agora seria gravar por cima do servidor sem
+  // saber o que ele tem (outro aparelho pode ter estudado depois).
+  if(abriuCedo&&!servidorVisto){nuvemPendente=true;return;}
   try{
     syncGravarDoDb().catch(e=>{
       console.warn('Firebase save error:',e);
@@ -7200,29 +7365,32 @@ function syncEnxugarReino(reinoId,bruto){
   syncEnxutoMemo[reinoId]={bruto,enxuto};
   return enxuto;
 }
-function syncMapaDoDb(){
+// fonte = de onde tirar o retrato: o db (gravação normal) ou a cópia local recém-lida (abrir
+// pela cópia local). comPlano = trocar os campos de plano pelo que o servidor tinha.
+function syncMapaDe(fonte,comPlano){
   const m={};
-  Object.keys(db).forEach(k=>{
+  Object.keys(fonte).forEach(k=>{
     if(SYNC_FORA.has(k))return;
-    const e=syncEntradaDe(db[k]);
+    const e=syncEntradaDe(fonte[k]);
     if(e)m[k]=e;
   });
   // históricos enxutos — só nos reinos que existem, como o enxugarHistoricos faz
   const tp=m.topics;
   if(tp&&tp.o){
     const vivos={};
-    (Array.isArray(db.kingdoms)?db.kingdoms:[]).forEach(k=>{
+    (Array.isArray(fonte.kingdoms)?fonte.kingdoms:[]).forEach(k=>{
       if(!k||!(k.id in tp.ch))return;
       tp.ch[k.id]=syncEnxugarReino(k.id,tp.ch[k.id]);vivos[k.id]=1;
     });
     Object.keys(syncEnxutoMemo).forEach(id=>{if(!vivos[id])delete syncEnxutoMemo[id];});
   }
-  CAMPOS_PLANO.forEach(k=>{
+  if(comPlano)CAMPOS_PLANO.forEach(k=>{
     if(planoDoServidor[k]!==undefined){const e=syncEntradaDe(planoDoServidor[k]);if(e)m[k]=e;else delete m[k];}
     else if(planoLidoDoServidor)delete m[k];
   });
   return m;
 }
+function syncMapaDoDb(){return syncMapaDe(db,true);}
 function syncValorDe(e){
   if(!e.o)return JSON.parse(e.s);
   const o={};Object.keys(e.ch).forEach(c=>{o[c]=JSON.parse(e.ch[c]);});
@@ -7230,6 +7398,7 @@ function syncValorDe(e){
 }
 function syncGravarDoDb(){
   const novo=syncMapaDoDb();
+  if(novo.lastModified&&!novo.lastModified.o){try{lmAnotarEnviado(JSON.parse(novo.lastModified.s));}catch(e){}}
   if(!syncBase){
     // sem retrato do servidor (primeira gravação, ou depois de um erro): manda tudo, como antes
     const payload={};Object.keys(novo).forEach(k=>{payload[k]=syncValorDe(novo[k]);});
