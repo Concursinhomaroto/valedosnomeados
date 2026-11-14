@@ -45,19 +45,14 @@ async def main():
         assert r['cartao'] and r['botao'] and r['handler']=='abrirRevisoesAtrasadas()'
         print('   OK\n')
 
-        print('=== C) abas do Diagnostico mostram so o painel escolhido ===')
+        print('=== C) Desempenho: as tres partes aparecem juntas, sem aba pra clicar ===')
         vis="""()=>({sim:getComputedStyle(document.querySelector('.dd-p-sim')).display!=='none',
           reinos:getComputedStyle(document.querySelector('.dd-p-reinos')).display!=='none',
-          erros:getComputedStyle(document.querySelector('.dd-p-erros')).display!=='none'})"""
+          erros:getComputedStyle(document.querySelector('.dd-p-erros')).display!=='none',
+          abas:document.querySelectorAll('.dd-abas, .dd-radio').length})"""
         r0=await page.evaluate(vis)
-        await page.click('label[for=dd-erros]')
-        r1=await page.evaluate(vis)
-        await page.click('label[for=dd-reinos]')
-        r2=await page.evaluate(vis)
-        print('   inicio %s | erros %s | reinos %s'%(r0,r1,r2))
-        assert r0=={'sim':True,'reinos':False,'erros':False}
-        assert r1=={'sim':False,'reinos':False,'erros':True}
-        assert r2=={'sim':False,'reinos':True,'erros':False}
+        print('   %s'%r0)
+        assert r0=={'sim':True,'reinos':True,'erros':True,'abas':0}
         r=await page.evaluate("()=>document.getElementById('controle-erros').innerText")
         assert 'Nenhum erro classificado' in r, r
         print('   OK\n')
