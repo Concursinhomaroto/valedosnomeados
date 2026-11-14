@@ -14663,27 +14663,38 @@ function treinoIAHTML(item){
 function treinoIAPrompt(item){
   const alts=(item.alternativas||[]).map(a=>`${a.letra}) ${a.texto}`).join('\n');
   const marcou=item.userAnswer?item.userAnswer:'(deixou em branco)';
+  const errou=!!item.userAnswer&&item.userAnswer!==item.correta;
   const onde=[item.kingdomName,item.topicName,item.subName].filter(Boolean).join(' › ');
   const proc=[item.banca,item.ano,item.prova].filter(x=>x!==undefined&&x!==null&&String(x).trim()!=='').join(' · ');
-  return`Você é um professor de Enfermagem especializado em concursos públicos brasileiros. Um aluno acabou de responder esta questão${item.userAnswer&&item.userAnswer!==item.correta?' e ERROU':''}. Explique para ele, de forma rápida e clara.
+  const ce=item.formato==='certoerrado';
+  // O resumo que o aluno mesmo estudou desse assunto serve de referência (e a IA deve avisar se algo conflitar com ele).
+  let resumo='';try{const sb=item.subId&&simFindSub(item.subId);resumo=String(sb&&sb.resumo&&sb.resumo.texto||'').replace(/\s+/g,' ').trim().slice(0,1800);}catch(e){}
+  return`Você é um professor de Enfermagem com anos de experiência em concursos públicos brasileiros. Um aluno acabou de responder esta questão${errou?' e ERROU':''}. Explique para ele com precisão técnica e didática, sem enrolar.
 
 ${proc?'Procedência: '+proc+'\n':''}${onde?'Conteúdo: '+onde+'\n':''}
 ${item.textoApoio?'Texto de apoio:\n'+String(item.textoApoio).slice(0,1500)+'\n\n':''}Enunciado:
 ${String(item.questao||'').slice(0,2500)}
 
-${item.formato==='certoerrado'?'(Item de julgamento CERTO/ERRADO: o gabarito é '+(item.correta==='C'?'CERTO':'ERRADO')+'.)':'Alternativas:\n'+alts}
+${ce?'(Item de julgamento CERTO/ERRADO: o gabarito é '+(item.correta==='C'?'CERTO':'ERRADO')+'.)':'Alternativas:\n'+alts}
 
 Gabarito: ${item.correta}
 O aluno marcou: ${marcou}
-${item.explicacao?'Explicação que consta na questão: '+String(item.explicacao).slice(0,1200):''}
+${item.explicacao?'Explicação que consta na questão: '+String(item.explicacao).slice(0,1200)+'\n':''}${resumo?'\nResumo que o aluno estudou deste assunto (use como referência; se algo da questão ou do gabarito conflitar com ele, diga):\n'+resumo+'\n':''}
+ANTES DE ESCREVER, pense com cuidado: confirme por conta própria se o gabarito está coerente com a literatura e a norma vigentes; ${ce?'localize exatamente o trecho do item que o torna '+(item.correta==='C'?'certo':'errado')+'.':'avalie cada alternativa, uma por uma.'}
 
-Responda em português, em NO MÁXIMO 180 palavras, neste formato:
-**Por que a certa é certa:** (2 a 3 frases)
-**Por que a que você marcou está errada:** (a armadilha — diga o que fez ela parecer certa; se ele acertou, explique por que as outras erram)
-**Macete:** (uma frase fácil de lembrar)
+Responda em português, em no máximo 260 palavras, EXATAMENTE neste formato (use os títulos em negrito):
+**Resposta certa:** (a conclusão em uma frase, com o fundamento — o conceito, a regra ou o artigo)
+${ce?'**Onde está o ponto do item:** (o trecho que decide e como ficaria certo, se estiver errado)':'**Alternativa por alternativa:** (uma linha para cada letra: por que está certa ou errada)'}
+**Sua armadilha:** (${errou?'por que a que o aluno marcou parece certa e o que a derruba':'o que poderia confundir nessa questão'})
+**Macete:** (uma frase curta e fácil de lembrar)
 **Revise:** (o nome exato do ponto do assunto para estudar)
 
-Regras: não invente número de lei, artigo, resolução, dose ou prazo; se não tiver certeza de um dado, escreva "confira na fonte oficial". Se o gabarito parecer desatualizado ou duvidoso, avise. Sem enrolação e sem introdução.`;
+Regras: não invente número de lei, artigo, resolução, dose, prazo ou valor; se não tiver certeza de um dado, escreva "confira na fonte oficial". Se o gabarito parecer desatualizado ou duvidoso, avise no início. Nada de introdução, despedida ou elogio.`;
+}
+// Resposta fraca (curta, sem os títulos) não vale: o app tenta de novo com o modelo mais forte.
+function treinoIAValida(t){
+  const x=String(t||'');
+  return x.length>=350&&(x.match(/\*\*[^*\n]{3,40}:\*\*/g)||[]).length>=3;
 }
 async function treinoExplicarIA(forte){
   const s=treinoSessao;if(!s)return;
@@ -14698,7 +14709,12 @@ async function treinoExplicarIA(forte){
   if(box)box.innerHTML='<div class="cron-sub" id="treino-ia-espera"><i class="fa fa-spinner fa-spin"></i> A IA está explicando… <b id="treino-ia-seg">0</b>s</div>';
   const t0=Date.now(),tic=setInterval(()=>{const e=document.getElementById('treino-ia-seg');if(e)e.textContent=Math.floor((Date.now()-t0)/1000);},500);
   try{
-    let raw=await callGeminiRapido(apiKey,treinoIAPrompt(item),{maxOutputTokens:900,forte:!!forte,timeoutMs:forte?40000:25000});
+    const pedido=treinoIAPrompt(item);
+    let raw=await callGeminiRapido(apiKey,pedido,{maxOutputTokens:1500,forte:!!forte,timeoutMs:forte?40000:25000});
+    if(!treinoIAValida(raw)&&!forte){   // saiu fraca no modelo rápido: uma segunda chance com o mais forte
+      const e2=document.getElementById('treino-ia-espera');if(e2&&noPapel())e2.innerHTML='<i class="fa fa-spinner fa-spin"></i> Resposta curta demais — pedindo um capricho a mais… <b id="treino-ia-seg">'+Math.floor((Date.now()-t0)/1000)+'</b>s';
+      try{const r2=await callGeminiRapido(apiKey,pedido,{maxOutputTokens:1500,forte:true,timeoutMs:40000});if(treinoIAValida(r2)||String(r2||'').length>String(raw||'').length)raw=r2;}catch(e3){}
+    }
     raw=String(raw||'').replace(/^```[a-z]*\s*/i,'').replace(/```\s*$/,'').trim().slice(0,3000);
     if(!raw)throw new Error('A IA não devolveu texto. Tente de novo.');
     item.explicacaoIA={texto:raw,em:todayStr()};
