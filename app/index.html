@@ -14657,6 +14657,7 @@ function treinoIAHTML(item){
   const certa=item.userAnswer===item.correta,e=item.explicacaoIA&&item.explicacaoIA.texto?item.explicacaoIA:null;
   return`<div class="treino-ia" id="treino-ia"><div class="treino-ia-cab">
     <button class="btn btn-sm ${certa||e?'btn-ghost':'btn-primary'}" id="treino-ia-btn" onclick="treinoExplicarIA()"><i class="fa fa-wand-magic-sparkles"></i> ${e?'Gerar outra explicação':(certa?'Explicar com IA':'Explicar meu erro com IA')}</button>
+    <button class="btn btn-xs btn-ghost" id="treino-ia-forte" onclick="treinoExplicarIA(true)" title="Usa o modelo mais forte do Gemini: mais capricho, mas demora mais e gasta a cota que é menor"><i class="fa fa-bolt"></i> explicar melhor</button>
     <span class="cron-sub">rápida, em português, sobre este conteúdo</span></div>
     <div id="treino-ia-box">${e?treinoIATexto(e):''}</div></div>`;
 }
@@ -14685,7 +14686,7 @@ Responda em português, em NO MÁXIMO 180 palavras, neste formato:
 
 Regras: não invente número de lei, artigo, resolução, dose ou prazo; se não tiver certeza de um dado, escreva "confira na fonte oficial". Se o gabarito parecer desatualizado ou duvidoso, avise. Sem enrolação e sem introdução.`;
 }
-async function treinoExplicarIA(){
+async function treinoExplicarIA(forte){
   const s=treinoSessao;if(!s)return;
   const item=s.itens[s.idx];if(!item)return;
   const apiKey=(db.geminiApiKey||'').trim();
@@ -14695,9 +14696,10 @@ async function treinoExplicarIA(){
   const noPapel=()=>treinoSessao&&treinoSessao.itens[treinoSessao.idx]===item;
   const box=document.getElementById('treino-ia-box'),btn=document.getElementById('treino-ia-btn');
   if(btn)btn.disabled=true;
-  if(box)box.innerHTML='<div class="cron-sub"><i class="fa fa-spinner fa-spin"></i> A IA está explicando…</div>';
+  if(box)box.innerHTML='<div class="cron-sub" id="treino-ia-espera"><i class="fa fa-spinner fa-spin"></i> A IA está explicando… <b id="treino-ia-seg">0</b>s</div>';
+  const t0=Date.now(),tic=setInterval(()=>{const e=document.getElementById('treino-ia-seg');if(e)e.textContent=Math.floor((Date.now()-t0)/1000);},500);
   try{
-    let raw=await callGeminiGenerate(apiKey,treinoIAPrompt(item),{maxOutputTokens:900});
+    let raw=await callGeminiRapido(apiKey,treinoIAPrompt(item),{maxOutputTokens:900,forte:!!forte,timeoutMs:forte?40000:25000});
     raw=String(raw||'').replace(/^```[a-z]*\s*/i,'').replace(/```\s*$/,'').trim().slice(0,3000);
     if(!raw)throw new Error('A IA não devolveu texto. Tente de novo.');
     item.explicacaoIA={texto:raw,em:todayStr()};
@@ -14709,7 +14711,7 @@ async function treinoExplicarIA(){
   }catch(e){
     if(noPapel()){const b2=document.getElementById('treino-ia-box');if(b2)b2.innerHTML=`<div class="treino-ia-erro">⚠️ ${escapeHtml(e&&e.message||'Não consegui gerar agora.')}</div>`;}
   }finally{
-    treinoIARodando=false;
+    clearInterval(tic);treinoIARodando=false;
     const bt=document.getElementById('treino-ia-btn');if(bt)bt.disabled=false;
   }
 }
@@ -33886,7 +33888,8 @@ function geminiTimeoutMs(maxOut){
 async function tryGeminiModel(apiKey,model,prompt,opts){
   const maxOut=(opts&&opts.maxOutputTokens)||8192;
   const ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
-  const prazo=ctrl?setTimeout(()=>ctrl.abort(),geminiTimeoutMs(maxOut)):null;
+  const tmo=(opts&&opts.timeoutMs)||geminiTimeoutMs(maxOut);
+  const prazo=ctrl?setTimeout(()=>ctrl.abort(),tmo):null;
   try{
     const body={contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:maxOut}};
     // Grounding com Google Search: a IA pesquisa na internet antes de responder, em vez
@@ -33973,7 +33976,7 @@ async function tryGeminiModel(apiKey,model,prompt,opts){
   }catch(e){
     // fetch que nem chegou a responder (rede caiu, DNS, timeout) tambem e temporario
     const abortado=e&&(e.name==='AbortError'||/abort/i.test(e.message||''));
-    return{ok:false,reason:abortado?`sem resposta em ${Math.round(geminiTimeoutMs(maxOut)/1000)}s`:e.message,temporario:true};
+    return{ok:false,reason:abortado?`sem resposta em ${Math.round(((opts&&opts.timeoutMs)||geminiTimeoutMs(maxOut))/1000)}s`:e.message,temporario:true};
   }finally{
     if(prazo)clearTimeout(prazo);
   }
@@ -34092,6 +34095,25 @@ async function callGeminiGenerate(apiKey,prompt,opts){
   }
   if(soTemporario&&!limite)geminiMarcarSobrecarga();
   throw new Error(geminiMensagemErro(attempts,soTemporario,limite));
+}
+// CAMINHO RÁPIDO, para respostas curtas em que a pessoa está esperando na tela (ex.: explicar um erro no Treinar). O caminho normal
+// aguenta até 3 minutos por modelo e tenta os Flash em sequência, com pausas — certo para resumo grande, péssimo para 150 palavras.
+// Aqui: no máximo 2 tentativas, sem pausas, com teto curto. Por padrão começa pelo Flash Lite (resposta bem mais rápida e teto diário
+// muito maior, o que poupa a cota baixa dos Flash); `forte` inverte a ordem (Flash primeiro, Lite de reserva).
+async function callGeminiRapido(apiKey,prompt,opts){
+  if(geminiSobrecarregado())throw new Error(geminiErroSobrecarga());
+  const o=Object.assign({maxOutputTokens:700,forte:false,timeoutMs:25000},opts||{});
+  const flash=geminiOrdemModelos()[0];
+  const ordem=o.forte?[flash,GEMINI_MODELO_RESERVA]:[GEMINI_MODELO_RESERVA,flash];
+  const tentativas=[];let limite=null,soTemporario=true;
+  for(const m of ordem){
+    const r=await tryGeminiModel(apiKey,m,prompt,{maxOutputTokens:o.maxOutputTokens,timeoutMs:o.timeoutMs});
+    if(r.ok)return r.raw;
+    tentativas.push(`${m} (${r.reason})`);
+    if(r.limite)limite=r;
+    if(!r.temporario)soTemporario=false;
+  }
+  throw new Error(geminiMensagemErro(tentativas,soTemporario&&!limite,limite));
 }
 // Igual ao callGeminiGenerate, mas pedindo pra IA pesquisar na internet antes de responder
 // (grounding). A ferramenta de busca é OPCIONAL do ponto de vista do modelo — ele decide

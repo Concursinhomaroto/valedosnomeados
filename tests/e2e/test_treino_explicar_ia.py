@@ -36,11 +36,11 @@ async def main():
 
         print('=== B) gera: prompt completo; resultado na tela e guardado na questao; markdown seguro ===')
         r=await page.evaluate("""async()=>{db.geminiApiKey='CHAVE-DE-TESTE';
-          const real=window.callGeminiGenerate;window.callGeminiGenerate=async(k,pr,o)=>{window.__prompts.push({k,pr,o});await new Promise(r=>setTimeout(r,80));
+          const real=window.callGeminiRapido;window.callGeminiRapido=async(k,pr,o)=>{window.__prompts.push({k,pr,o});await new Promise(r=>setTimeout(r,80));
             return '**Por que a certa é certa:** porque sim <img src=x onerror=alert(1)>.\\n**Macete:** hérnia no prematuro = encarcera.\\n- item um\\n- item dois';};
           const s=treinoSessao,item=s.itens[s.idx];
           const p=treinoExplicarIA();const durante={btnDesab:document.getElementById('treino-ia-btn').disabled,txt:document.getElementById('treino-ia-box').innerText};
-          await p;window.callGeminiGenerate=real;
+          await p;window.callGeminiRapido=real;
           const box=document.getElementById('treino-ia-box');
           return {durante,pr:window.__prompts[0].pr,k:window.__prompts[0].k,max:window.__prompts[0].o&&window.__prompts[0].o.maxOutputTokens,html:box.innerHTML,txt:box.innerText,
             guardado:!!(item.explicacaoIA&&item.explicacaoIA.texto),em:item.explicacaoIA&&item.explicacaoIA.em,btn:document.getElementById('treino-ia-btn').textContent.trim(),desab:document.getElementById('treino-ia-btn').disabled,
@@ -48,7 +48,7 @@ async def main():
         print('   ',{k:r[k] for k in ('durante','k','max','guardado','btn','desab','noAcervo')})
         for t in ['A hernia inguinal e comum na pediatria','D) Alt D 1','C) Alt C certa 1','Gabarito: C','O aluno marcou: D','Explicação que consta na questão: Explicacao oficial 1','Procedência: IDECAN · 2024 · PB Saude','Enfermagem › Urgência › Hérnia inguinal','NO MÁXIMO 180 palavras','não invente número de lei','ERROU']:
             assert t in r['pr'],t
-        assert r['k']=='CHAVE-DE-TESTE' and r['max']==900 and r['durante']['btnDesab'] and 'explicando' in r['durante']['txt']
+        assert r['k']=='CHAVE-DE-TESTE' and r['max']==900 and r['durante']['btnDesab'] and 'explicando' in r['durante']['txt'] and r['durante']['txt'].strip().endswith('s')
         assert r['guardado'] and r['btn']=='Gerar outra explicação' and r['desab'] is False and r['noAcervo']
         assert '<b>Por que a certa é certa:</b>' in r['html'] and '<img' not in r['html'] and 'item um' in r['txt'] and 'pode errar' in r['txt']
         print('   OK\n')
@@ -64,20 +64,49 @@ async def main():
         print('   OK\n')
 
         print('=== D) erro da IA aparece em texto, sem quebrar; da pra tentar de novo; resposta chegando depois de trocar de questao nao suja a tela ===')
-        r=await page.evaluate("""async()=>{const real=window.callGeminiGenerate;
-          window.callGeminiGenerate=async()=>{throw new Error('Você estourou o limite POR MINUTO <b>x</b>');};
+        r=await page.evaluate("""async()=>{const real=window.callGeminiRapido;
+          window.callGeminiRapido=async()=>{throw new Error('Você estourou o limite POR MINUTO <b>x</b>');};
           await treinoExplicarIA();const erro=document.getElementById('treino-ia-box').innerHTML;const livre=treinoIARodando===false&&!document.getElementById('treino-ia-btn').disabled;
-          window.callGeminiGenerate=async()=>'';await treinoExplicarIA();const vazio=document.getElementById('treino-ia-box').innerText;
+          window.callGeminiRapido=async()=>'';await treinoExplicarIA();const vazio=document.getElementById('treino-ia-box').innerText;
           // resposta lenta: troca de questao no meio
           treinoProxima&&0;
-          window.callGeminiGenerate=async()=>{await new Promise(r=>setTimeout(r,200));return 'Resposta lenta.';};
+          window.callGeminiRapido=async()=>{await new Promise(r=>setTimeout(r,200));return 'Resposta lenta.';};
           const s=treinoSessao,item=s.itens[s.idx];const p=treinoExplicarIA();
           treinoAnterior();   // volta pra outra questao enquanto a IA pensa
-          await p;window.callGeminiGenerate=real;
+          await p;window.callGeminiRapido=real;
           const outroBox=document.getElementById('treino-ia-box');
           return {erro,livre,vazio,item:!!item.explicacaoIA,outroSujo:!!(outroBox&&outroBox.innerText.includes('Resposta lenta'))};}""")
         print('   ',r)
         assert 'limite POR MINUTO' in r['erro'] and '<b>x</b>' not in r['erro'] and r['livre'] and 'não devolveu texto' in r['vazio'] and r['item'] and r['outroSujo'] is False
+        print('   OK\n')
+
+        print('=== F) caminho rapido: Lite primeiro, 2 tentativas no maximo, sem pausas, teto curto; "explicar melhor" inverte ===')
+        r=await page.evaluate("""async()=>{const orig=window.fetch;const out={};
+          const url=m=>/models\\/([^:]+):/.exec(m)[1];
+          const run=async(respostas,opts)=>{const chamadas=[];window.fetch=(u,init)=>{chamadas.push(url(u));const r=respostas[Math.min(chamadas.length-1,respostas.length-1)];
+              if(r==='pendurado')return new Promise((res,rej)=>{init.signal&&init.signal.addEventListener('abort',()=>{const e=new Error('abort');e.name='AbortError';rej(e);});});
+              return Promise.resolve(r);};
+            const ok=(t)=>({ok:true,json:async()=>({candidates:[{content:{parts:[{text:t}]},finishReason:'STOP'}]})});
+            const falha=(st,corpo)=>({ok:false,status:st,text:async()=>corpo||'{}'});
+            const t0=performance.now();let res,err=null;
+            try{res=await callGeminiRapido('K','pr',opts);}catch(e){err=e.message;}
+            return {chamadas,res,err,ms:Math.round(performance.now()-t0)};};
+          const ok=(t)=>({ok:true,json:async()=>({candidates:[{content:{parts:[{text:t}]},finishReason:'STOP'}]})});
+          const falha=(st,corpo)=>({ok:false,status:st,text:async()=>corpo||'{}'});
+          geminiLimparSobrecarga();
+          out.liteOk=await run([ok('texto da lite')],{});
+          out.forte=await run([ok('texto do flash')],{forte:true});
+          out.liteFalha503=await run([falha(503),ok('texto do flash')],{});
+          const daily=JSON.stringify({error:{message:'quota',details:[{violations:[{quotaId:'GenerateRequestsPerDayPerProjectPerModel-FreeTier',quotaValue:'20',quotaDimensions:{model:'gemini-x'}}]}]}});
+          out.cota=await run([falha(429,daily),falha(429,daily)],{});
+          out.pendurado=await run(['pendurado','pendurado'],{timeoutMs:60});
+          geminiLimparSobrecarga();window.fetch=orig;return out;}""")
+        print('   ',r)
+        assert r['liteOk']['chamadas']==['gemini-flash-lite-latest'] and r['liteOk']['res']=='texto da lite'
+        assert r['forte']['chamadas'][0]!='gemini-flash-lite-latest' and r['forte']['res']=='texto do flash'
+        assert r['liteFalha503']['chamadas'][0]=='gemini-flash-lite-latest' and len(r['liteFalha503']['chamadas'])==2 and r['liteFalha503']['res']=='texto do flash' and r['liteFalha503']['ms']<800,'sem pausas entre tentativas'
+        assert len(r['cota']['chamadas'])==2 and 'DIÁRIA' in r['cota']['err'] and '20 por dia' in r['cota']['err']
+        assert len(r['pendurado']['chamadas'])==2 and r['pendurado']['err'] and r['pendurado']['ms']<1500,'teto curto: nao fica pendurado'
         print('   OK\n')
 
         print('=== E) celular: sem rolar de lado ===')
