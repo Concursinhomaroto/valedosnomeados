@@ -3369,6 +3369,10 @@ span.ti-meta{cursor:default;}
 
 /* ===== RELÓGIO DO TREINO ===== */
 .treino-relogio{font-weight:900;color:var(--accent);font-variant-numeric:tabular-nums;}
+.treino-ia{margin:10px 0}.treino-ia-cab{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.treino-ia-texto{margin-top:8px;border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:10px;padding:10px 12px;background:var(--panel2);font-size:14px;line-height:1.55}
+.treino-ia-aviso{font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px}.treino-ia-li{margin-left:6px}
+.treino-ia-erro{margin-top:8px;color:var(--red-t,#dc2626);font-size:13px;font-weight:700}
 .treino-relogio-pausado{color:var(--orange-t,#d97706)}
 .treino-pausado .treino-topo{box-shadow:inset 0 -3px 0 var(--orange-t,#d97706)}
 .rev-relogio{display:inline-block;margin-right:8px;padding:1px 9px;border-radius:999px;background:var(--st-acao-bg);color:var(--accent);
@@ -14636,6 +14640,79 @@ function treinoMotivoHTML(item){
     ${escolhido?`<span class="sim-motivo-nota">${escapeHtml(escolhido.conserto)}</span>`:''}
   </div>`;
 }
+// ===== EXPLICAR COM IA (dentro do Treinar) =====
+// Botão logo depois de responder: a IA (a chave do Gemini que você já configurou) explica, em português e em poucas linhas, por que a
+// certa é certa, por que a que você marcou erra (a armadilha) e dá um macete + o ponto do assunto a revisar. Fica guardada na questão
+// (item.explicacaoIA) e volta sozinha da próxima vez. A IA pode errar: o aviso fica à vista.
+let treinoIARodando=false;
+function treinoIAMd(t){
+  let h=escapeHtml(String(t||'')).replace(/\*\*([^*\n]{1,120})\*\*/g,'<b>$1</b>');
+  h=h.split(/\r?\n/).map(l=>/^\s*[-•*]\s+/.test(l)?'<div class="treino-ia-li">• '+l.replace(/^\s*[-•*]\s+/,'')+'</div>':l).join('\n').replace(/\n{2,}/g,'<br><br>').replace(/\n/g,'<br>');
+  return h;
+}
+function treinoIATexto(e){
+  return`<div class="treino-ia-texto"><div class="treino-ia-aviso">🤖 Explicação gerada por IA${e.em?' ('+escapeHtml(paFmt(e.em))+')':''} — pode errar: confira numa fonte oficial antes de decorar.</div>${treinoIAMd(e.texto)}</div>`;
+}
+function treinoIAHTML(item){
+  const certa=item.userAnswer===item.correta,e=item.explicacaoIA&&item.explicacaoIA.texto?item.explicacaoIA:null;
+  return`<div class="treino-ia" id="treino-ia"><div class="treino-ia-cab">
+    <button class="btn btn-sm ${certa||e?'btn-ghost':'btn-primary'}" id="treino-ia-btn" onclick="treinoExplicarIA()"><i class="fa fa-wand-magic-sparkles"></i> ${e?'Gerar outra explicação':(certa?'Explicar com IA':'Explicar meu erro com IA')}</button>
+    <span class="cron-sub">rápida, em português, sobre este conteúdo</span></div>
+    <div id="treino-ia-box">${e?treinoIATexto(e):''}</div></div>`;
+}
+function treinoIAPrompt(item){
+  const alts=(item.alternativas||[]).map(a=>`${a.letra}) ${a.texto}`).join('\n');
+  const marcou=item.userAnswer?item.userAnswer:'(deixou em branco)';
+  const onde=[item.kingdomName,item.topicName,item.subName].filter(Boolean).join(' › ');
+  const proc=[item.banca,item.ano,item.prova].filter(x=>x!==undefined&&x!==null&&String(x).trim()!=='').join(' · ');
+  return`Você é um professor de Enfermagem especializado em concursos públicos brasileiros. Um aluno acabou de responder esta questão${item.userAnswer&&item.userAnswer!==item.correta?' e ERROU':''}. Explique para ele, de forma rápida e clara.
+
+${proc?'Procedência: '+proc+'\n':''}${onde?'Conteúdo: '+onde+'\n':''}
+${item.textoApoio?'Texto de apoio:\n'+String(item.textoApoio).slice(0,1500)+'\n\n':''}Enunciado:
+${String(item.questao||'').slice(0,2500)}
+
+${item.formato==='certoerrado'?'(Item de julgamento CERTO/ERRADO: o gabarito é '+(item.correta==='C'?'CERTO':'ERRADO')+'.)':'Alternativas:\n'+alts}
+
+Gabarito: ${item.correta}
+O aluno marcou: ${marcou}
+${item.explicacao?'Explicação que consta na questão: '+String(item.explicacao).slice(0,1200):''}
+
+Responda em português, em NO MÁXIMO 180 palavras, neste formato:
+**Por que a certa é certa:** (2 a 3 frases)
+**Por que a que você marcou está errada:** (a armadilha — diga o que fez ela parecer certa; se ele acertou, explique por que as outras erram)
+**Macete:** (uma frase fácil de lembrar)
+**Revise:** (o nome exato do ponto do assunto para estudar)
+
+Regras: não invente número de lei, artigo, resolução, dose ou prazo; se não tiver certeza de um dado, escreva "confira na fonte oficial". Se o gabarito parecer desatualizado ou duvidoso, avise. Sem enrolação e sem introdução.`;
+}
+async function treinoExplicarIA(){
+  const s=treinoSessao;if(!s)return;
+  const item=s.itens[s.idx];if(!item)return;
+  const apiKey=(db.geminiApiKey||'').trim();
+  if(!apiKey){toast('⚠️ Sem chave do Gemini — configure em Ajustes para usar a explicação com IA.','var(--red)');try{openAISettingsModal();}catch(e){}return;}
+  if(treinoIARodando)return;
+  treinoIARodando=true;
+  const noPapel=()=>treinoSessao&&treinoSessao.itens[treinoSessao.idx]===item;
+  const box=document.getElementById('treino-ia-box'),btn=document.getElementById('treino-ia-btn');
+  if(btn)btn.disabled=true;
+  if(box)box.innerHTML='<div class="cron-sub"><i class="fa fa-spinner fa-spin"></i> A IA está explicando…</div>';
+  try{
+    let raw=await callGeminiGenerate(apiKey,treinoIAPrompt(item),{maxOutputTokens:900});
+    raw=String(raw||'').replace(/^```[a-z]*\s*/i,'').replace(/```\s*$/,'').trim().slice(0,3000);
+    if(!raw)throw new Error('A IA não devolveu texto. Tente de novo.');
+    item.explicacaoIA={texto:raw,em:todayStr()};
+    acervoSalvar();
+    if(noPapel()){
+      const b2=document.getElementById('treino-ia-box');if(b2)b2.innerHTML=treinoIATexto(item.explicacaoIA);
+      const bt=document.getElementById('treino-ia-btn');if(bt){bt.innerHTML='<i class="fa fa-wand-magic-sparkles"></i> Gerar outra explicação';bt.className='btn btn-sm btn-ghost';}
+    }
+  }catch(e){
+    if(noPapel()){const b2=document.getElementById('treino-ia-box');if(b2)b2.innerHTML=`<div class="treino-ia-erro">⚠️ ${escapeHtml(e&&e.message||'Não consegui gerar agora.')}</div>`;}
+  }finally{
+    treinoIARodando=false;
+    const bt=document.getElementById('treino-ia-btn');if(bt)bt.disabled=false;
+  }
+}
 function treinoAcoesHTML(item){
   return`<div class="treino-acoes">
     <button class="btn btn-xs ${item.favorita?'btn-gold':'btn-ghost'}" onclick="treinoFavoritar()"><i class="fa fa-star"></i> ${item.favorita?'Favoritada':'Favoritar'}</button>
@@ -14701,6 +14778,7 @@ function treinoQuestaoHTML(){
     </div>`:''}
     ${respondida?`<div class="sim-score-banner ${item.userAnswer===item.correta?'sim-good':'sim-bad'}">${item.userAnswer===item.correta?'✔️ Você acertou':'✖️ Você errou'}</div>
       ${simExplicacaoHTML(item)}
+      ${treinoIAHTML(item)}
       ${fonteApoioTreinoHTML(item)}
       ${item.userAnswer!==item.correta?dicasNaCorrecaoHTML(item.subId,item):''}
       ${treinoMotivoHTML(item)}
