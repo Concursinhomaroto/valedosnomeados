@@ -21,6 +21,7 @@ async def main():
     async with async_playwright() as p:
         b,page,errs=await setup_page(p,seed())
         await page.evaluate(ACERVO)
+        await page.evaluate("()=>{db.topics.k1[0].subtopics[0].resumo={texto:'Hernia inguinal no prematuro: risco de encarceramento e necessidade de correcao cirurgica precoce.'};return true;}")
         await page.evaluate("()=>{window.confirm=()=>true;window.__prompts=[];tf=TF_VAZIO();tfIniciado=true;ACERVO_PRONTO=true;showScreen('simgeral');renderSimGeralScreen();treinoIniciar(db.acervo.slice(),{titulo:'T',ordenado:true});renderSimGeralScreen();return true;}")
 
         print('=== A) so aparece depois de responder; errou -> botao em destaque; sem chave avisa ===')
@@ -37,7 +38,7 @@ async def main():
         print('=== B) gera: prompt completo; resultado na tela e guardado na questao; markdown seguro ===')
         r=await page.evaluate("""async()=>{db.geminiApiKey='CHAVE-DE-TESTE';
           const real=window.callGeminiRapido;window.callGeminiRapido=async(k,pr,o)=>{window.__prompts.push({k,pr,o});await new Promise(r=>setTimeout(r,80));
-            return '**Por que a certa é certa:** porque sim <img src=x onerror=alert(1)>.\\n**Macete:** hérnia no prematuro = encarcera.\\n- item um\\n- item dois';};
+            return '**Resposta certa:** C, porque o prematuro tem risco de encarceramento <img src=x onerror=alert(1)>. '+'x'.repeat(200)+'\\n**Alternativa por alternativa:**\\n- A: errada\\n- item dois\\n**Sua armadilha:** a D parece certa.\\n**Macete:** hérnia no prematuro = encarcera.\\n**Revise:** Hérnia inguinal';};
           const s=treinoSessao,item=s.itens[s.idx];
           const p=treinoExplicarIA();const durante={btnDesab:document.getElementById('treino-ia-btn').disabled,txt:document.getElementById('treino-ia-box').innerText};
           await p;window.callGeminiRapido=real;
@@ -46,11 +47,11 @@ async def main():
             guardado:!!(item.explicacaoIA&&item.explicacaoIA.texto),em:item.explicacaoIA&&item.explicacaoIA.em,btn:document.getElementById('treino-ia-btn').textContent.trim(),desab:document.getElementById('treino-ia-btn').disabled,
             noAcervo:!!db.acervo.find(q=>q.questao.startsWith('A hernia')).explicacaoIA};}""")
         print('   ',{k:r[k] for k in ('durante','k','max','guardado','btn','desab','noAcervo')})
-        for t in ['A hernia inguinal e comum na pediatria','D) Alt D 1','C) Alt C certa 1','Gabarito: C','O aluno marcou: D','Explicação que consta na questão: Explicacao oficial 1','Procedência: IDECAN · 2024 · PB Saude','Enfermagem › Urgência › Hérnia inguinal','NO MÁXIMO 180 palavras','não invente número de lei','ERROU']:
+        for t in ['A hernia inguinal e comum na pediatria','D) Alt D 1','C) Alt C certa 1','Gabarito: C','O aluno marcou: D','Explicação que consta na questão: Explicacao oficial 1','Procedência: IDECAN · 2024 · PB Saude','Enfermagem › Urgência › Hérnia inguinal','no máximo 260 palavras','Alternativa por alternativa','Resumo que o aluno estudou','Hernia inguinal no prematuro: risco de encarceramento','ANTES DE ESCREVER','**Sua armadilha:**','não invente número de lei','ERROU']:
             assert t in r['pr'],t
-        assert r['k']=='CHAVE-DE-TESTE' and r['max']==900 and r['durante']['btnDesab'] and 'explicando' in r['durante']['txt'] and r['durante']['txt'].strip().endswith('s')
+        assert r['k']=='CHAVE-DE-TESTE' and r['max']==1500 and r['durante']['btnDesab'] and 'explicando' in r['durante']['txt'] and r['durante']['txt'].strip().endswith('s')
         assert r['guardado'] and r['btn']=='Gerar outra explicação' and r['desab'] is False and r['noAcervo']
-        assert '<b>Por que a certa é certa:</b>' in r['html'] and '<img' not in r['html'] and 'item um' in r['txt'] and 'pode errar' in r['txt']
+        assert '<b>Resposta certa:</b>' in r['html'] and '<img' not in r['html'] and 'item dois' in r['txt'] and 'pode errar' in r['txt']
         print('   OK\n')
 
         print('=== C) volta sozinha ao reabrir a questao; o botao da proxima questao e novo (nao vaza) ===')
@@ -70,7 +71,7 @@ async def main():
           window.callGeminiRapido=async()=>'';await treinoExplicarIA();const vazio=document.getElementById('treino-ia-box').innerText;
           // resposta lenta: troca de questao no meio
           treinoProxima&&0;
-          window.callGeminiRapido=async()=>{await new Promise(r=>setTimeout(r,200));return 'Resposta lenta.';};
+          window.callGeminiRapido=async()=>{await new Promise(r=>setTimeout(r,200));return 'Resposta lenta. '+'y'.repeat(380)+' **Resposta certa:** a. **Sua armadilha:** b. **Macete:** c.';};
           const s=treinoSessao,item=s.itens[s.idx];const p=treinoExplicarIA();
           treinoAnterior();   // volta pra outra questao enquanto a IA pensa
           await p;window.callGeminiRapido=real;
@@ -78,6 +79,26 @@ async def main():
           return {erro,livre,vazio,item:!!item.explicacaoIA,outroSujo:!!(outroBox&&outroBox.innerText.includes('Resposta lenta'))};}""")
         print('   ',r)
         assert 'limite POR MINUTO' in r['erro'] and '<b>x</b>' not in r['erro'] and r['livre'] and 'não devolveu texto' in r['vazio'] and r['item'] and r['outroSujo'] is False
+        print('   OK\n')
+
+        print('=== F0) qualidade: resposta fraca no modelo rapido -> segunda chance com o mais forte; vale a melhor ===')
+        r=await page.evaluate("""async()=>{const real=window.callGeminiRapido;const chamadas=[];
+          const valido='**Resposta certa:** x. '+'z'.repeat(400)+' **Sua armadilha:** y. **Macete:** m. **Revise:** r.';
+          window.callGeminiRapido=async(k,pr,o)=>{chamadas.push(!!o.forte);return chamadas.length===1?'Resposta curtinha.':valido;};
+          const s=treinoSessao;const item=s.itens[s.idx];delete item.explicacaoIA;
+          await treinoExplicarIA();const a={chamadas:chamadas.slice(),temValido:item.explicacaoIA.texto.includes('**Revise:** r.')};
+          chamadas.length=0;window.callGeminiRapido=async(k,pr,o)=>{chamadas.push(!!o.forte);return chamadas.length===1?'Fraca A.':'Fraca B mais comprida.';};
+          delete item.explicacaoIA;await treinoExplicarIA();const b={chamadas:chamadas.slice(),texto:item.explicacaoIA.texto};
+          chamadas.length=0;window.callGeminiRapido=async(k,pr,o)=>{chamadas.push(!!o.forte);if(o.forte)throw new Error('forte caiu');return 'Fraca unica.';};
+          delete item.explicacaoIA;await treinoExplicarIA();const c={chamadas:chamadas.slice(),ok:!!item.explicacaoIA&&item.explicacaoIA.texto==='Fraca unica.'};
+          chamadas.length=0;window.callGeminiRapido=async(k,pr,o)=>{chamadas.push(!!o.forte);return valido;};
+          delete item.explicacaoIA;await treinoExplicarIA();const d={chamadas:chamadas.slice()};
+          window.callGeminiRapido=real;return {a,b,c,d,valida:[treinoIAValida(valido),treinoIAValida('curta'),treinoIAValida('x'.repeat(500))]};}""")
+        print('   ',r)
+        assert r['a']['chamadas']==[False,True] and r['a']['temValido']
+        assert r['b']['chamadas']==[False,True] and r['b']['texto']=='Fraca B mais comprida.'
+        assert r['c']['chamadas']==[False,True] and r['c']['ok'], 'se o forte cair, fica com a primeira (nao perde)'
+        assert r['d']['chamadas']==[False] and r['valida']==[True,False,False]
         print('   OK\n')
 
         print('=== F) caminho rapido: Lite primeiro, 2 tentativas no maximo, sem pausas, teto curto; "explicar melhor" inverte ===')
