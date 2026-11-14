@@ -14657,7 +14657,6 @@ function treinoIAHTML(item){
   const certa=item.userAnswer===item.correta,e=item.explicacaoIA&&item.explicacaoIA.texto?item.explicacaoIA:null;
   return`<div class="treino-ia" id="treino-ia"><div class="treino-ia-cab">
     <button class="btn btn-sm ${certa||e?'btn-ghost':'btn-primary'}" id="treino-ia-btn" onclick="treinoExplicarIA()"><i class="fa fa-wand-magic-sparkles"></i> ${e?'Gerar outra explicação':(certa?'Explicar com IA':'Explicar meu erro com IA')}</button>
-    <button class="btn btn-xs btn-ghost" id="treino-ia-forte" onclick="treinoExplicarIA(true)" title="Usa o modelo mais forte do Gemini: mais capricho, mas demora mais e gasta a cota que é menor"><i class="fa fa-bolt"></i> explicar melhor</button>
     <span class="cron-sub">rápida, em português, sobre este conteúdo</span></div>
     <div id="treino-ia-box">${e?treinoIATexto(e):''}</div></div>`;
 }
