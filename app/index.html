@@ -3369,6 +3369,8 @@ span.ti-meta{cursor:default;}
 
 /* ===== RELÓGIO DO TREINO ===== */
 .treino-relogio{font-weight:900;color:var(--accent);font-variant-numeric:tabular-nums;}
+.treino-relogio-pausado{color:var(--orange-t,#d97706)}
+.treino-pausado .treino-topo{box-shadow:inset 0 -3px 0 var(--orange-t,#d97706)}
 .rev-relogio{display:inline-block;margin-right:8px;padding:1px 9px;border-radius:999px;background:var(--st-acao-bg);color:var(--accent);
   font-weight:900;font-variant-numeric:tabular-nums;}
 .rev-relogio-pausa{opacity:.55;}
@@ -14251,7 +14253,7 @@ function treinoIniciar(pool,meta){
     revisao:(meta&&meta.revisao)||null,
     seg:0,segPend:0,segLancado:0,ultimoTick:Date.now(),
     iniciadoEm:Date.now(),respondidas:0,certas:0,erradas:0,
-    puladas:new Set(),respondidasSet:new Set()};
+    puladas:new Set(),respondidasSet:new Set(),pausado:false};
   treinoTempoLigar();
   return true;
 }
@@ -14277,9 +14279,23 @@ function treinoTempoTick(){
   s.ultimoTick=agora;
   const tela=document.getElementById('screen-simgeral');
   const ativa=!document.hidden&&!!tela&&tela.classList.contains('active')&&!cronometroManualRodando();
-  if(ativa){s.seg+=delta;s.segPend+=delta;}
+  if(ativa&&!s.pausado){s.seg+=delta;s.segPend+=delta;}   // pausado: o relógio para e nada entra no estudo do dia
   const el=document.getElementById('treino-relogio');
-  if(el)el.textContent='⏱ '+fmtHMS(Math.floor(s.seg));
+  if(el)el.textContent=(s.pausado?'⏸ ':'⏱ ')+fmtHMS(Math.floor(s.seg));
+}
+// Pausar/continuar o tempo do treino (botão ou tecla P). Ao pausar, o que já correu entra no estudo do dia na hora.
+function treinoPausar(){
+  const s=treinoSessao;if(!s)return;
+  if(!s.pausado){treinoTempoTick();treinoTempoDescarregar((s.itens[s.idx]||{}).subId);s.pausado=true;}
+  else{s.pausado=false;s.ultimoTick=Date.now();}
+  treinoPausaAtualizar();
+}
+function treinoPausaAtualizar(){
+  const s=treinoSessao;if(!s)return;
+  const b=document.getElementById('treino-pausa'),r=document.getElementById('treino-relogio'),w=document.querySelector('.treino-sessao-wrap');
+  if(b){b.innerHTML=s.pausado?'<i class="fa fa-play"></i> Continuar':'<i class="fa fa-pause"></i> Pausar';b.setAttribute('aria-pressed',String(!!s.pausado));b.title=s.pausado?'Continuar o tempo (P)':'Pausar o tempo (P)';}
+  if(r){r.textContent=(s.pausado?'⏸ ':'⏱ ')+fmtHMS(Math.floor(s.seg));r.classList.toggle('treino-relogio-pausado',!!s.pausado);}
+  if(w)w.classList.toggle('treino-pausado',!!s.pausado);
 }
 function treinoTempoDescarregar(subId){
   const s=treinoSessao;
@@ -14779,13 +14795,14 @@ function treinoSessaoLateralHTML(){
 }
 function treinoSessaoHTML(){
   const s=treinoSessao;
-  return`<div class="treino-sessao-wrap">
+  return`<div class="treino-sessao-wrap${s.pausado?' treino-pausado':''}">
     <div class="section-card treino-sessao">
       <div class="treino-topo">
         <button class="btn btn-sm btn-ghost" onclick="treinoEncerrar()"><i class="fa fa-arrow-left"></i> Encerrar</button>
         <div class="treino-topo-titulo"><span>treinando</span><b>${escapeHtml(s.titulo)} · questão ${s.idx+1} de ${s.itens.length}</b></div>
         <div class="treino-placar-sessao">
-          <span class="treino-relogio" id="treino-relogio" title="Tempo desta sessão — entra no seu estudo do dia">⏱ ${fmtHMS(Math.floor(s.seg||0))}</span>
+          <span class="treino-relogio${s.pausado?' treino-relogio-pausado':''}" id="treino-relogio" title="Tempo desta sessão — entra no seu estudo do dia">${s.pausado?'⏸':'⏱'} ${fmtHMS(Math.floor(s.seg||0))}</span>
+          <button class="btn btn-xs btn-ghost" id="treino-pausa" onclick="treinoPausar()" aria-pressed="${!!s.pausado}" title="${s.pausado?'Continuar o tempo (P)':'Pausar o tempo (P)'}">${s.pausado?'<i class="fa fa-play"></i> Continuar':'<i class="fa fa-pause"></i> Pausar'}</button>
           <span>${s.respondidas} respondidas</span><span class="pill-ok">${s.certas} certas</span>
           <span class="pill-bad">${s.erradas} erradas</span>
         </div>
@@ -37373,6 +37390,7 @@ function treinoAtalhoTeclado(e){
   if(!item)return;
   const respondida=s.respondidasSet.has(s.idx);
   const k=e.key.toUpperCase();
+  if(k==='P'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();treinoPausar();return;}
   // Tecla so SELECIONA — confirma com Enter (mesmo comportamento do clique: selecionar e
   // responder sao dois passos, pra dar pra conferir antes).
   if(!respondida&&/^[A-E]$/.test(k)){

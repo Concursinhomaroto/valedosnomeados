@@ -134,3 +134,6 @@ Para cada **banca** (você cria: Cebraspe, FGV…) e cada **assunto**: quantas q
 - **IA para testar na mão:** "🤖 Prompt para IA" gera um pedido por matéria/chefe (lista fechada dos seus assuntos, banca, 5 anos, cargo; manda usar `null` quando não confirmar e não inventar). "📥 Importar" lê o JSON, mostra a **prévia** (reconhecidos, sem correspondência, inválidos, "já têm dado seu") e só aplica o que você marcar; dado seu não é sobrescrito sem marcar "sobrescrever". O que vem da IA fica com a marca **IA** até você abrir e salvar.
 
 **Ver os assuntos no Plano:** sem escolher matéria, a lista fica fechada ("Clique numa matéria acima…"). "Abrir todas as matérias" mostra tudo; a busca, "só os que mais caem" e "ordenar pelo que mais cai" também mostram os assuntos de **todas** as matérias (já abertos). A última matéria aberta volta na próxima visita (só neste aparelho).
+
+### Pausar o tempo no Treinar
+Na sessão de treino há um botão **⏸ Pausar / ▶ Continuar** ao lado do relógio (e a tecla **P**, fora de campos de texto). Pausado, o relógio para (mostra ⏸), nada soma no estudo do dia e a faixa do topo fica laranja; ao pausar, o que já correu entra no estudo do dia na hora. Você pode responder pausado (o tempo não conta). Cada sessão nova começa sem pausa.
