@@ -6356,7 +6356,12 @@ function checkOverdueNotifications(force){
 // quando você faz uma pausa de 0,8 s (ou, clicando sem parar, no máximo a cada 4 s), com uma
 // passada em vez de três. Esconder ou fechar a aba grava na hora o que estiver marcado.
 const SAVE_ESPERA_MS=800,SAVE_MAX_MS=4000;
-let savePendente=false,saveDesde=0;
+let savePendente=false,saveDesde=0,nuvemEnvios=0,nuvemUltimoOk=0;
+// Fechar a aba com algo ainda subindo: o navegador pergunta antes (o que está só marcado já é
+// gravado no pagehide, mas o envio pra nuvem pode não terminar a tempo — melhor avisar).
+window.addEventListener('beforeunload',e=>{
+  if(savePendente||nuvemEnvios>0){try{saveFlush();}catch(x){}e.preventDefault();e.returnValue='';}
+});
 function saveDB(){
   db.lastModified=Date.now();
   savePendente=true;
@@ -6365,6 +6370,7 @@ function saveDB(){
   if(!saveDesde)saveDesde=agora;
   clearTimeout(saveTimeout);
   saveTimeout=setTimeout(saveFlush,Math.max(0,Math.min(SAVE_ESPERA_MS,saveDesde+SAVE_MAX_MS-agora)));
+  statLogAtualizar();
   maybeBackupDB();
   adminIndexAtualizar();
 }
@@ -6372,6 +6378,7 @@ function saveFlush(){
   clearTimeout(saveTimeout);saveTimeout=null;saveDesde=0;
   if(!savePendente)return;
   savePendente=false;
+  statLogGravarLocal();
   try{
     gravarCacheLocal();
   }catch(e){
@@ -6387,7 +6394,9 @@ function saveFlush(){
   // saber o que ele tem (outro aparelho pode ter estudado depois).
   if(abriuCedo&&!servidorVisto){nuvemPendente=true;return;}
   try{
-    syncGravarDoDb().catch(e=>{
+    nuvemEnvios++;
+    syncGravarDoDb().then(()=>{nuvemEnvios--;nuvemUltimoOk=Date.now();}).catch(e=>{
+      nuvemEnvios=Math.max(0,nuvemEnvios-1);
       console.warn('Firebase save error:',e);
       isSaving=false;
       syncBase=null;   // na próxima, manda tudo de novo (set), como antes
@@ -6913,6 +6922,7 @@ function abrirDetalhesBackup(){
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
       <button class="btn" onclick="forcarBackupAgora()"><i class="fa fa-shield-halved"></i> Fazer backup agora</button>
+      <button class="btn" onclick="abrirRecuperarEstatisticas()"><i class="fa fa-life-ring"></i> Recuperar estatísticas</button>
       <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
     </div>
 
@@ -7017,6 +7027,165 @@ function restoreFromBackup(slot){
     const sc=document.querySelector('.screen.active')?.id;
     if(sc==='screen-dashboard')renderDashboard();
   }).catch(e=>{console.warn('Falha ao restaurar backup:',e);toast('Falha ao restaurar esse backup.','var(--red)');});
+}
+
+// ===== NUNCA PERDER AS ESTATÍSTICAS =====
+// Três camadas, todas pequenas:
+//  1) Diário: a cada dia fica guardado (no registro E numa cópia só deste aparelho, fora do
+//     IndexedDB do registro) um retrato curto — XP, horas, questões. Se o registro voltar
+//     pra trás por qualquer motivo, o diário mostra o quanto tinha.
+//  2) Recuperar: compara o que está na conta agora com as cópias de segurança, o diário e o
+//     aparelho, e "junta pelo maior" — só SOBE números (XP, tempo, questões por dia), nunca
+//     apaga nada nem troca o resto da conta.
+//  3) Reconstruir as questões por dia a partir das próprias questões (a data em que cada
+//     uma foi contada).
+const STATLOG_DIAS=90;
+function statLogChave(){return 'vdn_statlog_'+((currentUser&&currentUser.uid)||'local');}
+function statLogRetrato(){
+  const r=(db.questoesPorDia||{})[todayStr()]||{};
+  return{xp:+db.xp||0,life:+db.lifetimeSeconds||0,seg:+((db.sessions||{})[todayStr()])||0,n:r.n||0,c:r.c||0,x:r.x||0,ts:Date.now()};
+}
+function statLogAtualizar(){
+  try{
+    if(!db.statLog||typeof db.statLog!=='object'||Array.isArray(db.statLog))db.statLog={};
+    const hoje=todayStr(),novo=statLogRetrato(),ant=db.statLog[hoje];
+    if(!ant||ant.xp!==novo.xp||ant.life!==novo.life||ant.seg!==novo.seg||ant.n!==novo.n||ant.x!==novo.x)db.statLog[hoje]=novo;
+    const ks=Object.keys(db.statLog).sort();
+    while(ks.length>STATLOG_DIAS)delete db.statLog[ks.shift()];
+  }catch(e){console.warn('Diário de estatísticas:',e);}
+}
+function statLogLerLocal(){
+  try{const t=localStorage.getItem(statLogChave());const o=t?JSON.parse(t):null;return o&&typeof o==='object'?o:{};}catch(e){return {};}
+}
+function statLogGravarLocal(){
+  try{
+    const atual=statLogLerLocal(),hoje=todayStr();
+    atual[hoje]=statLogRetrato();
+    const ks=Object.keys(atual).sort();
+    while(ks.length>STATLOG_DIAS)delete atual[ks.shift()];
+    localStorage.setItem(statLogChave(),JSON.stringify(atual));
+  }catch(e){}
+}
+function estatResumo(d){
+  d=d||{};
+  const q=d.questoesPorDia||{},hoje=todayStr();
+  let qn=0;Object.keys(q).forEach(k=>{qn+=(q[k]&&q[k].n)||0;});
+  const sem=[];for(let i=0;i<7;i++){const k=addDays(hoje,-i);sem.push((q[k]&&q[k].n)||0);}
+  const ses=d.sessions||{},sg=Object.keys(ses).reduce((a,k)=>a+(+ses[k]||0),0);
+  return{xp:+d.xp||0,life:+d.lifetimeSeconds||0,qn,sem,sg,lm:+d.lastModified||0};
+}
+// Junta pelo maior. Devolve quantos números subiram.
+function estatJuntar(src){
+  if(!src||typeof src!=='object')return 0;
+  let mud=0;
+  ['xp','lifetimeSeconds','longestStreak','totalSessionsCount','longestSingleSessionSec','fcCreatedTotal','fcCurrentStreak','fcLongestStreak'].forEach(k=>{
+    const a=+src[k]||0;if(a>(+db[k]||0)){db[k]=a;mud++;}
+  });
+  ['kingdomSeconds','subTotalSeconds','sessions'].forEach(k=>{
+    const s=src[k];if(!s||typeof s!=='object'||Array.isArray(s))return;
+    if(!db[k]||typeof db[k]!=='object')db[k]={};
+    Object.keys(s).forEach(c=>{const a=+s[c]||0;if(a>(+db[k][c]||0)){db[k][c]=a;mud++;}});
+  });
+  const q=src.questoesPorDia;
+  if(q&&typeof q==='object'){
+    if(!db.questoesPorDia)db.questoesPorDia={};
+    Object.keys(q).forEach(d=>{
+      const r=q[d];if(!r||!(r.n>0))return;
+      const a=db.questoesPorDia[d];
+      if(!a||(a.n||0)<r.n){db.questoesPorDia[d]={n:r.n||0,c:r.c||0,x:r.x||0};mud++;}
+    });
+  }
+  if(Array.isArray(src.goalHitDays)){
+    if(!Array.isArray(db.goalHitDays))db.goalHitDays=[];
+    src.goalHitDays.forEach(d=>{if(d&&db.goalHitDays.indexOf(d)<0){db.goalHitDays.push(d);mud++;}});
+  }
+  return mud;
+}
+// Do diário: o que ele guardou de cada dia vira piso (XP, tempo do dia, questões do dia).
+function estatJuntarDiario(log){
+  if(!log||typeof log!=='object')return 0;
+  let mud=0;
+  Object.keys(log).forEach(d=>{
+    const r=log[d];if(!r)return;
+    if((+r.xp||0)>(+db.xp||0)){db.xp=+r.xp;mud++;}
+    if((+r.life||0)>(+db.lifetimeSeconds||0)){db.lifetimeSeconds=+r.life;mud++;}
+    if(!db.sessions)db.sessions={};
+    if((+r.seg||0)>(+db.sessions[d]||0)){db.sessions[d]=+r.seg;mud++;}
+    if(r.n>0){
+      if(!db.questoesPorDia)db.questoesPorDia={};
+      const a=db.questoesPorDia[d];
+      if(!a||(a.n||0)<r.n){db.questoesPorDia[d]={n:r.n,c:r.c||0,x:r.x||0};mud++;}
+    }
+  });
+  return mud;
+}
+// Das questões: cada uma lembra o último dia em que foi contada.
+async function estatReconstruirDoAcervo(){
+  try{await acervoCarregarJa();}catch(e){}
+  const cont={};
+  (db.acervo||[]).forEach(q=>{
+    if(!q||!q.contadaEm)return;
+    const o=cont[q.contadaEm]=cont[q.contadaEm]||{n:0,c:0,x:0};
+    o.n++;if(q.contadaResultado==='C')o.c++;else o.x++;
+  });
+  if(!db.questoesPorDia)db.questoesPorDia={};
+  let mud=0;
+  Object.keys(cont).forEach(d=>{
+    const a=db.questoesPorDia[d];
+    if(!a||(a.n||0)<cont[d].n){db.questoesPorDia[d]=cont[d];mud++;}
+  });
+  return mud;
+}
+const fmtHorasEst=s=>{s=Math.round(s||0);return Math.floor(s/3600)+'h'+String(Math.floor(s%3600/60)).padStart(2,'0');};
+async function abrirRecuperarEstatisticas(){
+  openModal('🛟 Recuperar minhas estatísticas','<div class="empty" style="padding:16px"><i class="fa fa-spinner fa-spin"></i><p>Procurando suas estatísticas nas cópias de segurança e neste aparelho…</p></div>');
+  const fontes=[{nome:'Agora, na conta',d:db,atual:true}];
+  try{
+    const local=lerCacheLocal();
+    if(local&&local.lastModified)fontes.push({nome:'Cópia deste aparelho',d:local});
+  }catch(e){}
+  try{
+    const snap=await userRef(BKP_META).once('value'),meta=snap.val()||{};
+    for(const slot of backupSlotsOrdenados(meta)){
+      try{
+        const b=(await userRef(BKP+'/'+slot).once('value')).val();
+        if(b)fontes.push({nome:'Backup de '+fmtDateBR(meta[slot].data),d:b});
+      }catch(e){}
+    }
+  }catch(e){}
+  const diario=statLogLerLocal(),dias=Object.keys(diario).sort();
+  const linhas=fontes.map(f=>{const r=estatResumo(f.d);return{...f,r};});
+  window.__estatFontes=fontes;
+  const ok=nuvemUltimoOk?new Date(nuvemUltimoOk).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'ainda não nesta sessão';
+  openModal('🛟 Recuperar minhas estatísticas',`
+    <div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:12px">Compara o que está na conta com as cópias que existem.
+    Se alguma tiver <b>mais</b> XP, tempo ou questões, "Juntar pelo maior" traz esses números de volta —
+    <b>só sobe</b>, não apaga nem troca mais nada.</div>
+    <div style="overflow-x:auto;margin-bottom:12px"><table style="width:100%;font-size:12px;border-collapse:collapse">
+      <tr style="text-align:left;color:var(--muted)"><th>Fonte</th><th>XP</th><th>Tempo</th><th>Questões (total)</th><th>Últimos 7 dias</th></tr>
+      ${linhas.map(l=>`<tr style="border-top:1px solid var(--border2)"><td style="padding:6px 4px"><b>${escapeHtml(l.nome)}</b></td><td>${l.r.xp}</td><td>${fmtHorasEst(l.r.life)}</td><td>${l.r.qn}</td><td>${l.r.sem.join(' · ')}</td></tr>`).join('')}
+    </table></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Diário deste aparelho: ${dias.length?dias.length+' dia(s), de '+fmtDateBR(dias[0])+' a '+fmtDateBR(dias[dias.length-1]):'ainda vazio (começa a registrar a partir de agora)'}.
+    Último envio confirmado à nuvem: <b>${ok}</b>.</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn btn-primary" onclick="estatExecutarJuntar()"><i class="fa fa-arrows-rotate"></i> Juntar pelo maior (backups + aparelho + diário)</button>
+      <button class="btn" onclick="estatExecutarReconstruir()"><i class="fa fa-list-check"></i> Reconstruir questões por dia a partir das questões</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+    </div>`);
+}
+function estatExecutarJuntar(){
+  let mud=0;
+  (window.__estatFontes||[]).forEach(f=>{if(!f.atual)mud+=estatJuntar(f.d);});
+  mud+=estatJuntarDiario(statLogLerLocal());
+  if(mud){saveDB();saveFlush();try{renderHeader();const sc=document.querySelector('.screen.active')?.id;if(sc==='screen-dashboard')renderDashboard();}catch(e){}}
+  closeModal();
+  toast(mud?`✅ ${mud} número(s) recuperado(s) e salvo(s).`:'Nada a recuperar: a conta já tem o maior valor de todas as cópias.',mud?'var(--green)':'');
+}
+async function estatExecutarReconstruir(){
+  const mud=await estatReconstruirDoAcervo();
+  if(mud){saveDB();saveFlush();try{const sc=document.querySelector('.screen.active')?.id;if(sc==='screen-dashboard')renderDashboard();}catch(e){}}
+  closeModal();
+  toast(mud?`✅ ${mud} dia(s) de questões reconstruído(s).`:'As questões por dia já estão completas.',mud?'var(--green)':'');
 }
 
 // ===== TEMA CLARO/ESCURO =====
