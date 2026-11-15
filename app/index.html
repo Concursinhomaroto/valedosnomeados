@@ -16179,7 +16179,20 @@ function acervoMigrarOrigem(manual){
 function acervoMigrarOrigemUmaVez(){if(!db.migracaoOrigemV1&&(db.acervo||[]).length)acervoMigrarOrigem(false);}
 // Link com filtros (?f_...): depois que o acervo carrega, abre direto o Treinar com a seleção.
 function tfAposAcervo(){try{acervoMigrarOrigemUmaVez();}catch(e){console.warn('migração de banca/ano:',e);}
-  try{if(tfTemParams(new URLSearchParams(location.search))){tfIniciar();showScreen('simgeral');}}catch(e){}}
+  try{
+    const sp=new URLSearchParams(location.search);
+    if(tfTemParams(sp)){
+      tfIniciar();
+      // Limpa o URL ANTES de renderizar: se o app travar (memória no celular),
+      // o Safari restauraria exatamente esse URL e entraria em loop de crash.
+      // Depois de ler os filtros, o URL volta ao caminho limpo.
+      try{const q=[...sp.keys()].filter(k=>!k.startsWith('f_')).map(k=>k+'='+sp.get(k)).join('&');history.replaceState(null,'',location.pathname+(q?'?'+q:'')+location.hash);}catch(e2){}
+      // showScreen adiado: o acervo acabou de ser carregado; renderizar tudo de vez
+      // (banco, provas, treino, decks) consome muita memória no iPhone e pode causar crash.
+      // Dar um tick ao browser antes de renderizar distribui melhor a carga.
+      setTimeout(()=>{try{showScreen('simgeral');}catch(e3){console.warn('tfAposAcervo showScreen:',e3);}},0);
+    }
+  }catch(e){}}
 // ===== QUESTÕES INÉDITAS (dentro de Treinar): prompt pronto + importar =====
 // 1) escolhe Mundo › Chefe › Miniboss(es), formato, quantidade e o estilo/banca; 2) copia o prompt e cola numa IA externa;
 // 3) cola aqui o JSON que ela devolver: as questões entram no Acervo (com banca/ano/prova), ligadas ao miniboss certo.
