@@ -3504,9 +3504,9 @@ span.ti-meta{cursor:default;}
 .dash-v2 .dash-faixa{align-self:start;}
 .dash-diag{position:static;}
 .dash-col-hoje>.dash-hoje{flex:0 0 auto;}
-.dash-col-hoje>.dash-tempo-mini{flex:0 0 auto;}
-.dash-tempo-mini #study-chart-wrap-mini{flex:0 0 auto;min-height:190px;display:block;overflow:hidden;}
-.dash-tempo-mini #study-chart-wrap-mini svg{width:100%!important;height:auto!important;}
+.dash-col-hoje>.dash-tempo-mini{flex:1 1 auto;}
+.dash-tempo-mini #study-chart-wrap-mini{flex:1 1 auto;min-height:190px;position:relative;overflow:hidden;}
+.dash-tempo-mini #study-chart-wrap-mini svg{position:absolute;left:0;top:0;width:100%!important;height:100%!important;}
 .dash-hoje{padding:14px 16px;container-type:inline-size;}
 .dash-hoje>.dash-head{flex-wrap:wrap;gap:4px 12px;margin-bottom:10px;}
 .dash-hoje>.dash-head .sec-title{margin:0;}
@@ -24600,7 +24600,7 @@ function renderStudyChartEm(wrapId,totalId){
   // ela que impedia a dobra de caber em janela baixa (notebook de 768px, zoom 100%).
   // O piso e baixo de proposito: se o clamp ficar acima da caixa, o SVG passa da
   // borda e o overflow:hidden come os rotulos das datas.
-  const H=Math.max(56,Math.min(260,Math.round(wrap.clientHeight||130)));
+  const H=Math.max(56,Math.min(wrapId==='study-chart-wrap-mini'?520:260,Math.round(wrap.clientHeight||130)));
   const apertado=H<120;
   const padL=4,padR=4,padT=apertado?16:20,padB=apertado?22:28;
   const bw=Math.floor((W-padL-padR)/bars.length);
