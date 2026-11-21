@@ -2856,6 +2856,8 @@ button.dash-faixa-atrasadas:hover{border-color:var(--st-atrasado);}
 .dash-faixa-prova[data-urg="passou"] .gamify-val{color:var(--st-emdia);}
 
 .dash-col-hoje{grid-area:hoje;display:flex;flex-direction:column;gap:16px;min-width:0;}
+.dash-tempo-mini{display:none!important;}
+.rec-off-agenda .dash-tempo-mini{display:flex!important;flex-direction:column;min-height:0;}
 .dash-hoje{padding:18px 20px;border:2px solid var(--border2);}
 .dash-hoje .dash-sec{font-size:15px;}
 .dash-hoje #fila-conta{margin:2px 0 12px;}
@@ -3961,6 +3963,20 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
         </div>
       </div>
 
+      <div class="section-card dash-tempo-mini">
+        <div class="dash-head">
+          <div class="sec-title dash-sec">📊 Tempo estudado</div>
+          <div class="dash-head-tools">
+            <span id="study-chart-total-mini" class="dash-foot dash-foot-inline"></span>
+            <div class="chart-tabs">
+              <button class="chart-tab active" id="ct-day-m" onclick="setChartTab('day',this)">Diário</button>
+              <button class="chart-tab" id="ct-week-m" onclick="setChartTab('week',this)">Semanal</button>
+              <button class="chart-tab" id="ct-month-m" onclick="setChartTab('month',this)">Mensal</button>
+            </div>
+          </div>
+        </div>
+        <div class="chart-svg-wrap" id="study-chart-wrap-mini" style="min-height:80px"></div>
+      </div>
     </div>
 
     <div class="section-card dash-diag">
@@ -5841,7 +5857,10 @@ async function loadDB(callback){
           // Abrindo pela cópia local, vale o lastModified que a cópia tinha AO ABRIR: o que
           // você mexeu enquanto o servidor não respondia não pode fazer uma cópia velha
           // parecer mais nova que o servidor. E o db já É a cópia (mais o que você mexeu).
-          const lmLocal=abriuCedo?lmLocalNoBoot:((local&&local.lastModified)||0);
+          // Inclui trabalho feito offline após abrir: lmLocalNoBoot é o snapshot do boot,
+          // mas db.lastModified já reflete estudos posteriores — usa o maior dos dois.
+          const lmLocalAtual=Math.max(lmLocalNoBoot,db.lastModified||0);
+          const lmLocal=abriuCedo?lmLocalAtual:((local&&local.lastModified)||0);
           if(local&&lmLocal>(data.lastModified||0)){
             if(!abriuCedo)Object.assign(db,semCarimbo(local));
             usedLocalOverride=true;
@@ -11699,7 +11718,14 @@ function marcaConfirmar(){
   if(!subId)return;
   const ok=marcaSalvarSelecao(subId);
   marcaEsconderBotao();
-  if(ok){marcaAplicarTodas(true);toast('🖍️ Marcado.','var(--green)');}
+  if(ok){
+    // Só reaplica no elemento que acabou de ser marcado — não varre todos os resumos
+    // da tela (evita travar quando há muitos itens abertos na revisão).
+    document.querySelectorAll(MARCA_SEL+'[data-sub="'+subId.replace(/"/g,'')+'"]')
+      .forEach(root=>{delete root.dataset.marcado;});
+    marcaAplicarTodas();
+    toast('🖍️ Marcado.','var(--green)');
+  }
 }
 // Um listener so, no documento, em vez de um por resumo desenhado: o painel e a tela
 // de revisao recriam esse HTML o tempo todo, e listener preso ao elemento morreria
@@ -24492,22 +24518,21 @@ let currentChartTab='day';
 let chartResizeTimer=null;
 window.addEventListener('resize',()=>{
   clearTimeout(chartResizeTimer);
-  chartResizeTimer=setTimeout(()=>{
-    const w=document.getElementById('study-chart-wrap');
-    if(w&&w.offsetParent!==null)renderStudyChart();
-  },150);
+  chartResizeTimer=setTimeout(()=>{renderStudyChart();},150);
 });
 function setChartTab(tab,el){
   currentChartTab=tab;
-  document.querySelectorAll('.chart-tab').forEach(c=>c.classList.remove('active'));
+  // Sincroniza os dois conjuntos de abas (normal e mini)
+  const isMini=el&&el.id&&el.id.endsWith('-m');
+  document.querySelectorAll(isMini?'.chart-tab[id$="-m"]':'.chart-tab:not([id$="-m"])').forEach(c=>c.classList.remove('active'));
   if(el)el.classList.add('active');
   renderStudyChart();
 }
 
-function renderStudyChart(){
-  const wrap=document.getElementById('study-chart-wrap');
-  const totalEl=document.getElementById('study-chart-total');
-  if(!wrap)return;
+function renderStudyChartEm(wrapId,totalId){
+  const wrap=document.getElementById(wrapId);
+  const totalEl=document.getElementById(totalId);
+  if(!wrap||wrap.offsetParent===null)return;
   const sessions=db.sessions||{};
 
   const today=new Date();today.setHours(0,0,0,0);
@@ -24612,6 +24637,10 @@ function renderStudyChart(){
   <div id="chart-tip" style="text-align:center;font-size:12px;color:var(--accent);font-weight:800;min-height:14px;margin-top:2px"></div>`;
 
   if(totalEl) totalEl.textContent=totalSec>0?`Total no período: ${fmtTime(totalSec)}`:'Nenhum estudo registrado neste período';
+}
+function renderStudyChart(){
+  renderStudyChartEm('study-chart-wrap','study-chart-total');
+  renderStudyChartEm('study-chart-wrap-mini','study-chart-total-mini');
 }
 
 
@@ -26507,6 +26536,11 @@ function renderRevisions(){
   if(!items.length){
     container.innerHTML=`<div class="empty"><i class="fa fa-check-double"></i><p>${revFilter==='overdue'?'Nenhuma revisão atrasada! 🎉':'Nenhuma revisão aqui.'}</p></div>`;return;
   }
+  const REV_PAG=30;
+  const totalItens=items.length;
+  if(!container._revPag)container._revPag=1;
+  const exibir=Math.min(container._revPag*REV_PAG,totalItens);
+  items=items.slice(0,exibir);
   const rnCls=['rn-1','rn-2','rn-3','rn-4'];
   container.innerHTML=items.map(item=>{
     const isPast=item.date<today;const isToday=item.date===today;
@@ -26544,7 +26578,12 @@ function renderRevisions(){
         : `<button class="btn btn-xs" style="background:rgba(108,71,255,0.08);color:var(--accent);border:1px solid var(--border)" onclick="goToSubtopic('${item.subId}')"><i class="fa fa-eye"></i> Ver</button>`
       }
     </div>`;
-  }).join('');
+  }).join('')
+  +(exibir<totalItens?`<button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="revisoesMostrarMais(this.closest('#revisions-list'))"><i class="fa fa-chevron-down"></i> Ver mais (${totalItens-exibir} restantes)</button>`:'');
+}
+function revisoesMostrarMais(container){
+  container._revPag=(container._revPag||1)+1;
+  renderRevisions();
 }
 
 // Conta só o que já passou do prazo (mesma regra da aba "Atrasadas") — não mistura
