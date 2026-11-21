@@ -3503,15 +3503,20 @@ span.ti-meta{cursor:default;}
 .dash-v2 .dash-faixa{align-self:start;}
 .dash-diag{position:static;}
 .dash-col-hoje>.dash-hoje{flex:0 0 auto;}
-.dash-col-hoje>.dash-acomp{flex:1 1 auto;display:flex;flex-direction:column;gap:12px;padding:14px 16px;margin:0;}
-.dash-col-hoje.mov-left>.dash-acomp{flex:0 0 auto;}
+.dash-col-hoje>.dash-acomp{flex:0 0 auto;display:flex;flex-direction:column;gap:12px;padding:14px 16px;margin:0;}
+.dash-col-hoje>.dash-duo{flex:1 1 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;}
+.dash-col-hoje.mov-left>.dash-duo{flex:0 0 auto;}
+.dash-duo>.section-card{margin:0;padding:14px 16px;min-width:0;}
+.duo-conq .acomp-conq{border:0;padding:0;display:block;}
+.dash-fold .duo-conq .badges-row{display:flex;flex-wrap:wrap;gap:6px;overflow:visible;margin:8px 0;-webkit-mask-image:none;mask-image:none;}
+.duo-erros .dd-painel{margin:0;padding:0;border:0;}
 .dash-col-hoje.mov-left>.dash-erros-card{flex:1 1 auto;}
 .dash-erros-card{margin:0;padding:14px 16px;}
 .dash-erros-card .dd-painel+.dd-painel{margin-top:12px;padding-top:10px;}
 .acomp-grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px;flex:1 1 auto;min-height:0;}
 .acomp-tempo,.acomp-fc{min-width:0;display:flex;flex-direction:column;gap:4px;}
 .acomp-tempo .dash-head{flex-wrap:wrap;gap:4px 8px;margin:0;}
-.acomp-tempo #study-chart-wrap-mini{flex:1 1 auto;min-height:130px;position:relative;overflow:hidden;}
+.acomp-tempo #study-chart-wrap-mini{flex:1 1 auto;min-height:110px;position:relative;overflow:hidden;}
 .acomp-tempo #study-chart-wrap-mini svg{position:absolute;left:0;top:0;width:100%!important;height:100%!important;}
 .acomp-fc .sec-title{margin:0 0 4px;}
 .acomp-conq{border-top:1.5px dashed var(--border);padding-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;}
@@ -3526,7 +3531,7 @@ span.ti-meta{cursor:default;}
 .dash-erros-card .dd-p-rank .rank-row{break-inside:avoid;}
 .dash-fold.medindo{align-items:start!important;}
 .dash-fold.medindo .dash-col-hoje>*{flex:0 0 auto!important;}
-.dash-fold.medindo #study-chart-wrap-mini{flex:0 0 auto!important;height:130px;}
+.dash-fold.medindo #study-chart-wrap-mini{flex:0 0 auto!important;height:110px;}
 .dash-tempo-mini #study-chart-wrap-mini{flex:1 1 auto;min-height:190px;position:relative;overflow:hidden;}
 .dash-tempo-mini #study-chart-wrap-mini svg{position:absolute;left:0;top:0;width:100%!important;height:100%!important;}
 .dash-hoje{padding:14px 16px;container-type:inline-size;}
@@ -4011,11 +4016,22 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
             <div id="fc-trend-total" class="dash-foot"></div>
           </div>
         </div>
+      </div>
+      <div class="dash-duo">
+        <div class="section-card duo-conq">
         <div class="acomp-conq">
           <div class="gamify-badges-title">🏅 CONQUISTAS</div>
           <span id="dash-badges-summary" class="gamify-badges-summary"></span>
           <div class="badges-row" id="dash-badges"></div>
           <a class="dash-verlink" onclick="showScreen('conquistas')">ver todas →</a>
+        </div>
+        </div>
+        <div class="section-card duo-erros">
+      <div class="dd-painel dd-p-erros">
+        <div class="dd-sub">🔬 Por que você erra</div>
+        <div id="controle-erros"></div>
+        <div id="controle-erros-foot" class="dash-foot"></div>
+      </div>
         </div>
       </div>
       <div class="section-card dash-erros-card" id="dash-erros-card" style="display:none"></div>
@@ -4033,11 +4049,6 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
         <div class="dd-sub">⚠️ Reinos que pedem atenção</div>
         <div class="atencao-legenda">Revisões atrasadas e <b>% de acerto nos flashcards desde sempre</b> — não é quanto do reino você já estudou.</div>
         <div id="avg-time-list"></div>
-      </div>
-      <div class="dd-painel dd-p-erros">
-        <div class="dd-sub">🔬 Por que você erra</div>
-        <div id="controle-erros"></div>
-        <div id="controle-erros-foot" class="dash-foot"></div>
       </div>
       <div class="dd-painel dd-p-rank">
         <div class="dd-sub">🏅 Ranking de reinos</div>
@@ -26788,7 +26799,7 @@ function renderDashboard(){const r=comIndiceFC(renderDashboardInterno);setTimeou
 function dashBalancear(){
   const col=document.querySelector('.dash-col-hoje'),diag=document.querySelector('.dash-diag');
   const card=document.getElementById('dash-erros-card');
-  const movs=[document.querySelector('.dd-p-erros'),document.querySelector('.dd-p-rank')];
+  const movs=[document.querySelector('.dd-p-rank')];
   if(!col||!diag||!card||movs.some(m=>!m)||!col.offsetParent)return;
   const raiz=col.parentNode;
   movs.forEach(m=>{if(m.parentNode!==diag)diag.appendChild(m);});
@@ -26801,8 +26812,8 @@ function dashBalancear(){
   const h=movs.map(m=>m.offsetHeight+12);
   raiz.classList.remove('medindo');
   let melhor=0,dif=Math.abs(R-L);
-  for(let mask=1;mask<4;mask++){
-    const soma=(mask&1?h[0]:0)+(mask&2?h[1]:0);
+  for(let mask=1;mask<2;mask++){
+    const soma=h[0];
     const d=Math.abs((R-soma)-(L+16+soma+28));
     if(d<dif){dif=d;melhor=mask;}
   }
