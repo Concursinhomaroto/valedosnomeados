@@ -2856,7 +2856,6 @@ button.dash-faixa-atrasadas:hover{border-color:var(--st-atrasado);}
 .dash-faixa-prova[data-urg="passou"] .gamify-val{color:var(--st-emdia);}
 
 .dash-col-hoje{grid-area:hoje;display:flex;flex-direction:column;gap:16px;min-width:0;}
-.dash-tempo-mini{display:flex;flex-direction:column;min-height:0;}
 .dash-hoje{padding:18px 20px;border:2px solid var(--border2);}
 .dash-hoje .dash-sec{font-size:15px;}
 .dash-hoje #fila-conta{margin:2px 0 12px;}
@@ -3504,13 +3503,30 @@ span.ti-meta{cursor:default;}
 .dash-v2 .dash-faixa{align-self:start;}
 .dash-diag{position:static;}
 .dash-col-hoje>.dash-hoje{flex:0 0 auto;}
-.dash-col-hoje>.dash-tempo-mini{flex:1 1 auto;}
-.dash-col-hoje.erros-left>.dash-tempo-mini{flex:0 0 auto;}
-.dash-col-hoje.erros-left>.dash-erros-card{flex:1 1 auto;}
-.dash-erros-card{margin:0;}
+.dash-col-hoje>.dash-acomp{flex:1 1 auto;display:flex;flex-direction:column;gap:12px;padding:14px 16px;margin:0;}
+.dash-col-hoje.mov-left>.dash-acomp{flex:0 0 auto;}
+.dash-col-hoje.mov-left>.dash-erros-card{flex:1 1 auto;}
+.dash-erros-card{margin:0;padding:14px 16px;}
+.dash-erros-card .dd-painel+.dd-painel{margin-top:12px;padding-top:10px;}
+.acomp-grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px;flex:1 1 auto;min-height:0;}
+.acomp-tempo,.acomp-fc{min-width:0;display:flex;flex-direction:column;gap:4px;}
+.acomp-tempo .dash-head{flex-wrap:wrap;gap:4px 8px;margin:0;}
+.acomp-tempo #study-chart-wrap-mini{flex:1 1 auto;min-height:130px;position:relative;overflow:hidden;}
+.acomp-tempo #study-chart-wrap-mini svg{position:absolute;left:0;top:0;width:100%!important;height:100%!important;}
+.acomp-fc .sec-title{margin:0 0 4px;}
+.acomp-conq{border-top:1.5px dashed var(--border);padding-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;}
+.acomp-conq .gamify-badges-title{margin:0;}
+.acomp-conq .badges-row{flex:1 1 300px;min-width:0;}
+.dd-p-rank .rank-row{padding:3px 8px;gap:8px;min-height:0;}
+.dd-p-rank .rank-row>span{font-size:16px!important;}
+.dd-p-rank .rank-conta,.dd-p-rank .rank-tempo-lbl{display:none;}
+.dd-p-rank .rank-tempo>div{font-size:12px!important;}
+.dd-p-rank .rank-nome{font-size:12px!important;}
+.dash-erros-card .dd-p-rank #kingdom-ranking{columns:2;column-gap:10px;}
+.dash-erros-card .dd-p-rank .rank-row{break-inside:avoid;}
 .dash-fold.medindo{align-items:start!important;}
 .dash-fold.medindo .dash-col-hoje>*{flex:0 0 auto!important;}
-.dash-fold.medindo #study-chart-wrap-mini{flex:0 0 auto!important;height:190px;}
+.dash-fold.medindo #study-chart-wrap-mini{flex:0 0 auto!important;height:130px;}
 .dash-tempo-mini #study-chart-wrap-mini{flex:1 1 auto;min-height:190px;position:relative;overflow:hidden;}
 .dash-tempo-mini #study-chart-wrap-mini svg{position:absolute;left:0;top:0;width:100%!important;height:100%!important;}
 .dash-hoje{padding:14px 16px;container-type:inline-size;}
@@ -3971,21 +3987,36 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
         </div>
       </div>
 
-      <div class="section-card dash-tempo-mini">
-        <div class="dash-head">
-          <div class="sec-title dash-sec">📊 Tempo estudado</div>
-          <div class="dash-head-tools">
-            <span id="study-chart-total-mini" class="dash-foot dash-foot-inline"></span>
-            <div class="chart-tabs">
-              <button class="chart-tab active" id="ct-day-m" onclick="setChartTab('day',this)">Diário</button>
-              <button class="chart-tab" id="ct-week-m" onclick="setChartTab('week',this)">Semanal</button>
-              <button class="chart-tab" id="ct-month-m" onclick="setChartTab('month',this)">Mensal</button>
+      <div class="section-card dash-acomp">
+        <div class="acomp-grid">
+          <div class="acomp-tempo dash-tempo-mini">
+            <div class="dash-head">
+              <div class="sec-title dash-sec">📊 Tempo estudado</div>
+              <div class="dash-head-tools">
+                <div class="chart-tabs">
+                  <button class="chart-tab active" id="ct-day-m" onclick="setChartTab('day',this)">Diário</button>
+                  <button class="chart-tab" id="ct-week-m" onclick="setChartTab('week',this)">Semanal</button>
+                  <button class="chart-tab" id="ct-month-m" onclick="setChartTab('month',this)">Mensal</button>
+                </div>
+                <button class="btn btn-xs btn-ghost" onclick="exportStudyCSV()" title="Baixar histórico de estudos em CSV"><i class="fa fa-download"></i></button>
+                <button class="btn btn-xs btn-ghost" onclick="exportHistoryPDF()" title="Gerar PDF do histórico de estudos e desempenho"><i class="fa fa-file-pdf"></i></button>
+              </div>
             </div>
-            <button class="btn btn-xs btn-ghost" onclick="exportStudyCSV()" title="Baixar histórico de estudos em CSV"><i class="fa fa-download"></i></button>
-            <button class="btn btn-xs btn-ghost" onclick="exportHistoryPDF()" title="Gerar PDF do histórico de estudos e desempenho"><i class="fa fa-file-pdf"></i></button>
+            <span id="study-chart-total-mini" class="dash-foot"></span>
+            <div class="chart-svg-wrap" id="study-chart-wrap-mini"></div>
+          </div>
+          <div class="acomp-fc">
+            <div class="sec-title dash-sec">📈 Flashcards</div>
+            <div id="fc-trend-chart"></div>
+            <div id="fc-trend-total" class="dash-foot"></div>
           </div>
         </div>
-        <div class="chart-svg-wrap" id="study-chart-wrap-mini" style="min-height:80px"></div>
+        <div class="acomp-conq">
+          <div class="gamify-badges-title">🏅 CONQUISTAS</div>
+          <span id="dash-badges-summary" class="gamify-badges-summary"></span>
+          <div class="badges-row" id="dash-badges"></div>
+          <a class="dash-verlink" onclick="showScreen('conquistas')">ver todas →</a>
+        </div>
       </div>
       <div class="section-card dash-erros-card" id="dash-erros-card" style="display:none"></div>
     </div>
@@ -4008,6 +4039,10 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
         <div id="controle-erros"></div>
         <div id="controle-erros-foot" class="dash-foot"></div>
       </div>
+      <div class="dd-painel dd-p-rank">
+        <div class="dd-sub">🏅 Ranking de reinos</div>
+        <div id="kingdom-ranking"></div>
+      </div>
     </div>
 
     <div class="section-card dash-agenda">
@@ -4025,26 +4060,8 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
   </div>
 
   <details class="dash-mais" id="dash-mais">
-    <summary><span>📊 Mais números</span><span class="dash-mais-dica">conquistas, tempo, flashcards, ranking, totais</span></summary>
+    <summary><span>📊 Totais</span><span class="dash-mais-dica">chefões, minibosses, tempo total, revisões</span></summary>
     <div class="dash-fold dash-mais-grid">
-      <div class="section-card gamify-badges dash-mais-largo">
-        <div class="gamify-badges-title">🏅 CONQUISTAS</div>
-        <span id="dash-badges-summary" class="gamify-badges-summary"></span>
-        <div class="badges-row" id="dash-badges"></div>
-        <a class="dash-verlink" onclick="showScreen('conquistas')">ver todas →</a>
-      </div>
-
-      <div class="section-card dash-mais-card">
-        <div class="sec-title dash-sec">📈 Aproveitamento nos flashcards</div>
-        <div id="fc-trend-chart"></div>
-        <div id="fc-trend-total" class="dash-foot"></div>
-      </div>
-
-      <div class="section-card dash-mais-card">
-        <div class="sec-title dash-sec">🏅 Ranking de reinos</div>
-        <div id="kingdom-ranking"></div>
-      </div>
-
       <div class="stats-grid dash-mais-largo" id="dash-stats" style="grid-template-columns:repeat(6,1fr);gap:8px"></div>
 
     </div>
@@ -24607,7 +24624,7 @@ function renderStudyChartEm(wrapId,totalId){
   // ela que impedia a dobra de caber em janela baixa (notebook de 768px, zoom 100%).
   // O piso e baixo de proposito: se o clamp ficar acima da caixa, o SVG passa da
   // borda e o overflow:hidden come os rotulos das datas.
-  const H=Math.max(56,Math.min(wrapId==='study-chart-wrap-mini'?520:260,Math.round(wrap.clientHeight||130)));
+  const H=Math.max(56,Math.min(wrapId==='study-chart-wrap-mini'?190:260,Math.round(wrap.clientHeight||130)));
   const apertado=H<120;
   const padL=4,padR=4,padT=apertado?16:20,padB=apertado?22:28;
   const bw=Math.floor((W-padL-padR)/bars.length);
@@ -26770,19 +26787,29 @@ function renderDashboard(){const r=comIndiceFC(renderDashboardInterno);setTimeou
 // "Por que você erra" fica na coluna que sobraria mais curta.
 function dashBalancear(){
   const col=document.querySelector('.dash-col-hoje'),diag=document.querySelector('.dash-diag');
-  const erros=document.querySelector('.dd-p-erros'),card=document.getElementById('dash-erros-card');
-  if(!col||!diag||!erros||!card||!col.offsetParent)return;
+  const card=document.getElementById('dash-erros-card');
+  const movs=[document.querySelector('.dd-p-erros'),document.querySelector('.dd-p-rank')];
+  if(!col||!diag||!card||movs.some(m=>!m)||!col.offsetParent)return;
   const raiz=col.parentNode;
-  if(erros.parentNode!==diag){diag.appendChild(erros);card.style.display='none';}
-  col.classList.remove('erros-left');
+  movs.forEach(m=>{if(m.parentNode!==diag)diag.appendChild(m);});
+  card.style.display='none';col.classList.remove('mov-left');
   if(diag.offsetLeft<=col.offsetLeft+10){renderStudyChart();return;}
   raiz.classList.add('medindo');
   const kids=[...col.children].filter(c=>c.offsetParent!==null&&c!==card);
   const L=kids.reduce((a,c)=>a+c.offsetHeight,0)+16*(kids.length-1);
   const R=diag.offsetHeight;
-  const E=erros.offsetHeight+40;
+  const h=movs.map(m=>m.offsetHeight+12);
   raiz.classList.remove('medindo');
-  if(Math.abs((R-E)-(L+16+E))<Math.abs(R-L)){card.style.display='';card.appendChild(erros);col.classList.add('erros-left');}
+  let melhor=0,dif=Math.abs(R-L);
+  for(let mask=1;mask<4;mask++){
+    const soma=(mask&1?h[0]:0)+(mask&2?h[1]:0);
+    const d=Math.abs((R-soma)-(L+16+soma+28));
+    if(d<dif){dif=d;melhor=mask;}
+  }
+  if(melhor){
+    card.style.display='';col.classList.add('mov-left');
+    movs.forEach((m,i)=>{if(melhor&(1<<i))card.appendChild(m);});
+  }
   renderStudyChart();
 }
 window.addEventListener('resize',()=>{clearTimeout(window._dashBalT);window._dashBalT=setTimeout(()=>{if(document.querySelector('.screen.active')?.id==='screen-dashboard')dashBalancear();},250);});
