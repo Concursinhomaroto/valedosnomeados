@@ -1044,6 +1044,8 @@ nav{
 .treino-montar-bar select{width:auto;padding:6px 8px;font-size:12px;}
 .treino-montar-count{font-size:11px;color:var(--muted);font-weight:700;margin-left:auto;}
 .rec-off-sala #nav-sala,.rec-off-redacoes #nav-redacoes,.rec-off-agenda #nav-agenda,.rec-off-agenda .dash-agenda{display:none!important}
+.dash-tempo-mini{display:none!important}
+.rec-off-agenda .dash-tempo-mini{display:flex!important;flex-direction:column;min-height:0}
 .acv-tab{width:100%;border-collapse:collapse}.acv-tab td{padding:6px 4px;border-bottom:1px solid var(--border);font-size:13px}.acv-tab td:last-child{text-align:right}
 .pa-topo{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
 .pa-total{font-size:14px;font-weight:700}.pa-total b{font-size:22px;color:var(--accent)}.pa-pct{color:var(--muted);margin-left:6px}
@@ -3977,6 +3979,21 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
         </div>
         <div class="chart-svg-wrap" id="study-chart-wrap-mini" style="min-height:80px"></div>
       </div>
+    </div>
+    <!-- Gráfico de tempo estudado: visível na coluna esquerda quando a agenda está desligada -->
+    <div class="section-card dash-col-hoje dash-tempo-mini rec-off-agenda-show">
+      <div class="dash-head">
+        <div class="sec-title dash-sec">📊 Tempo estudado</div>
+        <div class="dash-head-tools">
+          <span id="study-chart-total-mini" class="dash-foot dash-foot-inline"></span>
+          <div class="chart-tabs">
+            <button class="chart-tab active" id="ct-day-m" onclick="setChartTab('day',this,'mini')">Diário</button>
+            <button class="chart-tab" id="ct-week-m" onclick="setChartTab('week',this,'mini')">Semanal</button>
+            <button class="chart-tab" id="ct-month-m" onclick="setChartTab('month',this,'mini')">Mensal</button>
+          </div>
+        </div>
+      </div>
+      <div class="chart-svg-wrap" style="min-height:140px" id="study-chart-wrap-mini"></div>
     </div>
 
     <div class="section-card dash-diag">
@@ -26542,6 +26559,12 @@ function renderRevisions(){
   const exibir=Math.min(container._revPag*REV_PAG,totalItens);
   items=items.slice(0,exibir);
   const rnCls=['rn-1','rn-2','rn-3','rn-4'];
+  // Paginação: exibir de 30 em 30 para não travar com centenas de revisões
+  const REV_PAG=30;
+  const totalItens=items.length;
+  const exibir=container._revPag?Math.min(container._revPag*REV_PAG,totalItens):REV_PAG;
+  if(!container._revPag)container._revPag=1;
+  items=items.slice(0,exibir);
   container.innerHTML=items.map(item=>{
     const isPast=item.date<today;const isToday=item.date===today;
     const after=isAfterExam(item.date);
