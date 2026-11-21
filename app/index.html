@@ -3504,7 +3504,10 @@ span.ti-meta{cursor:default;}
 .dash-fold.dash-v2{grid-template-areas:"faixa faixa" "hoje diag" "agenda agenda";align-items:stretch;}
 .dash-v2 .dash-faixa{align-self:start;}
 .dash-diag{position:static;}
-.dash-col-hoje>.dash-hoje{flex:1 1 auto;}
+.dash-col-hoje>.dash-hoje{flex:0 0 auto;}
+.dash-col-hoje>.dash-tempo-mini{flex:1 1 auto;}
+.dash-tempo-mini #study-chart-wrap-mini{flex:1 1 auto;min-height:140px;display:block;overflow:hidden;}
+.dash-tempo-mini #study-chart-wrap-mini svg{width:100%!important;height:auto!important;}
 .dash-hoje{padding:14px 16px;container-type:inline-size;}
 .dash-hoje>.dash-head{flex-wrap:wrap;gap:4px 12px;margin-bottom:10px;}
 .dash-hoje>.dash-head .sec-title{margin:0;}
