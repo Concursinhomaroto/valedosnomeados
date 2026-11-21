@@ -6000,9 +6000,11 @@ async function loadDB(callback){
         backupCheckInicial();
         if(!usedLocalOverride)redesenharComDadosNovos();
       }
+      if(syncCarimbosAtuais)syncGuardarVistos(syncCarimbosAtuais);
     }else{
       overlay.style.display='none';
       redesenharComDadosNovos();
+      if(syncCarimbosAtuais)syncGuardarVistos(syncCarimbosAtuais);
       if(data&&typeof data.lastModified==='number'&&!lmsEnviados.has(data.lastModified))toast('☁️ Atualizado com o que você estudou em outro aparelho','var(--green)');
     }
   },(error)=>{
@@ -6029,6 +6031,7 @@ async function loadDB(callback){
   });
   };
 
+  syncVigiarCarimbos();
   if(!abriuCedo){ligarOuvinteCompleto();return;}
 
   // ----- modo econômico: vigia só o lastModified (e o plano), não o registro inteiro -----
@@ -6081,7 +6084,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&aoVivoPen
 // iPad/Safari: ao dormir ou trocar de app, a conexão com o servidor costuma ficar "morta" sem
 // avisar, e o app deixa de receber o que o PC estudou. Ao voltar, reinicia a conexão e
 // confere o carimbo do servidor; se for de outro aparelho, baixa na hora.
-const APP_VERSION='v316';
+const APP_VERSION='v317';
 let syncEscondidoEm=0,syncRevalidando=false;
 function syncFmt(ts){if(!ts)return '—';const d=new Date(ts);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
 async function sincronizarAgora(){
@@ -6095,17 +6098,18 @@ async function sincronizarAgora(){
     const sn=await Promise.race([DB_REF.once('value'),new Promise((_,rj)=>setTimeout(()=>rj(new Error('tempo esgotado')),12000))]);
     const data=sn.val();
     if(!data){toast('A nuvem não devolveu dados.','var(--red)');return;}
-    const igual=data.lastModified===db.lastModified||lmsEnviados.has(data.lastModified);
+    // Sempre aplica o que está na nuvem: o carimbo lastModified não prova que os dados são iguais.
     let antes=null;try{antes=JSON.parse(JSON.stringify(estatRetratoParaJuntar()));}catch(e){}
-    const xpAntes=+db.lifetimeSeconds||0;
-    if(!igual){
-      Object.assign(db,data);
-      if(antes){try{estatJuntar(antes);}catch(e){}}
-      applyDefaults();applyPlanGating();
-      try{gravarCacheLocal();}catch(e){}
-      redesenharComDadosNovos2();
-    }
-    toast((igual?'☁️ Já estava igual à nuvem':'☁️ Atualizado com a nuvem')+' · app '+APP_VERSION+' · nuvem '+syncFmt(data.lastModified)+' · aqui '+syncFmt(db.lastModified),'var(--green)');
+    const antesSeg=+db.lifetimeSeconds||0;
+    Object.assign(db,data);
+    syncBase=syncMapa(data);
+    if(antes){try{estatJuntar(antes);}catch(e){}}
+    applyDefaults();applyPlanGating();
+    try{gravarCacheLocal();}catch(e){}
+    redesenharComDadosNovos2();
+    try{const st=await noLerComTimeout(userRef('vdn_sync'),5000);if(st)syncGuardarVistos(st);}catch(e){}
+    const dif=Math.round(((+db.lifetimeSeconds||0)-antesSeg)/60);
+    toast('☁️ Sincronizado · app '+APP_VERSION+' · nuvem '+syncFmt(data.lastModified)+(dif>0?' · +'+dif+' min de estudo trazidos':''),'var(--green)');
   }catch(e){
     toast('Não consegui sincronizar: '+(e.message||e),'var(--red)');
   }finally{
@@ -7677,7 +7681,7 @@ function syncGravar(payload){
   const up=syncDelta(syncBase,novo,payload);
   syncBase=novo;
   if(!Object.keys(up).length){isSaving=false;return Promise.resolve();}   // nada mudou: nada sobe
-  return DB_REF.update(up);
+  return DB_REF.update(up).then(syncCarimbar);
 }
 // ----- Retrato tirado direto do db, numa passada só -----
 // syncMapa(payloadParaFirebase()) dava três voltas no registro: texto, objeto de novo, e texto
@@ -7750,7 +7754,7 @@ function syncGravarDoDb(){
     // sem retrato do servidor (primeira gravação, ou depois de um erro): manda tudo, como antes
     const payload={};Object.keys(novo).forEach(k=>{payload[k]=syncValorDe(novo[k]);});
     syncBase=novo;
-    return DB_REF.set(payload);
+    return DB_REF.set(payload).then(syncCarimbar);
   }
   const base=syncBase,up={};
   Object.keys(novo).forEach(k=>{
@@ -7764,7 +7768,29 @@ function syncGravarDoDb(){
   Object.keys(base).forEach(k=>{if(!(k in novo))up[k]=null;});
   syncBase=novo;
   if(!Object.keys(up).length){isSaving=false;return Promise.resolve();}   // nada mudou: nada sobe
-  return DB_REF.update(up);
+  return DB_REF.update(up).then(syncCarimbar);
+}
+// Carimbo POR APARELHO. O lastModified do registro é sobrescrito por quem gravou por último,
+// então se o iPad gravava depois do PC, o carimbo do servidor virava o do iPad e escondia o
+// estudo do PC (que o iPad nunca baixou). Cada aparelho escreve só a própria chave, então um
+// não apaga o sinal do outro.
+const SYNC_DEVICE_ID=(()=>{try{let v=localStorage.getItem('vdn_device_id');if(!v){v=Math.random().toString(36).slice(2,10)+Date.now().toString(36);localStorage.setItem('vdn_device_id',v);}return v;}catch(e){return 'x'+Math.random().toString(36).slice(2,10);}})();
+function syncCarimbar(){
+  try{const r=userRef('vdn_sync/'+SYNC_DEVICE_ID);if(r)r.set(Date.now());}catch(e){}
+}
+function syncLerVistos(){try{return JSON.parse(localStorage.getItem('vdn_sync_seen')||'{}')||{};}catch(e){return {};}}
+let syncCarimbosAtuais=null;
+function syncGuardarVistos(o){try{localStorage.setItem('vdn_sync_seen',JSON.stringify(o||{}));}catch(e){}}
+function syncVigiarCarimbos(){
+  const r=userRef('vdn_sync');if(!r)return;
+  r.on('value',snap=>{
+    const o=snap.val()||{};syncCarimbosAtuais=o;
+    const vistos=syncLerVistos();
+    const mudou=Object.keys(o).some(id=>id!==SYNC_DEVICE_ID&&o[id]!==vistos[id]);
+    if(!mudou)return;
+    if(ouvinteCompletoLigado){syncGuardarVistos(o);return;}   // o ouvinte completo já traz os dados
+    irAoVivo();
+  },()=>{});
 }
 function payloadParaFirebase(){
   // O banco de questoes tem no proprio (vdn_acervo) e nao entra aqui: e o que mantem o
