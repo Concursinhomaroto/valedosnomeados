@@ -5903,17 +5903,23 @@ async function loadDB(callback){
           // Abrindo pela cópia local, vale o lastModified que a cópia tinha AO ABRIR: o que
           // você mexeu enquanto o servidor não respondia não pode fazer uma cópia velha
           // parecer mais nova que o servidor. E o db já É a cópia (mais o que você mexeu).
-          // Inclui trabalho feito offline após abrir: lmLocalNoBoot é o snapshot do boot,
-          // mas db.lastModified já reflete estudos posteriores — usa o maior dos dois.
-          const lmLocalAtual=Math.max(lmLocalNoBoot,db.lastModified||0);
-          const lmLocal=abriuCedo?lmLocalAtual:((local&&local.lastModified)||0);
+          // NÃO usar db.lastModified aqui: todo saveDB() (inclusive os automáticos da abertura)
+          // o troca por "agora", e a cópia velha do iPad passava a parecer mais nova que o PC.
+          const lmLocal=abriuCedo?lmLocalNoBoot:((local&&local.lastModified)||0);
           if(local&&lmLocal>(data.lastModified||0)){
             if(!abriuCedo)Object.assign(db,semCarimbo(local));
             usedLocalOverride=true;
           }
         }catch(e){}
       }
-      if(!usedLocalOverride)Object.assign(db,data);
+      if(!usedLocalOverride){
+        // O servidor é mais novo que a cópia deste aparelho. Antes de trocar, guarda o que
+        // ESTE aparelho estudou depois (offline) e devolve pelo maior valor: nada se perde.
+        let antes=null;
+        if(abriuCedo&&!firebaseReady){try{antes=JSON.parse(JSON.stringify(estatRetratoParaJuntar()));}catch(e){}}
+        Object.assign(db,data);
+        if(antes){try{if(estatJuntar(antes)>0)setTimeout(saveDB,0);}catch(e){}}
+      }
     }else if(!firebaseReady){
       // O Firebase veio vazio no primeiro carregamento da sessão — antes de assumir "conta
       // nova", confere se este MESMO navegador guarda uma cópia local de dados de verdade
@@ -5992,6 +5998,7 @@ async function loadDB(callback){
     }else{
       overlay.style.display='none';
       redesenharComDadosNovos();
+      if(data&&typeof data.lastModified==='number'&&!lmsEnviados.has(data.lastModified))toast('☁️ Atualizado com o que você estudou em outro aparelho','var(--green)');
     }
   },(error)=>{
     clearTimeout(safetyTimer);
@@ -6066,6 +6073,50 @@ function irAoVivo(){
   ligarOuvinteCompleto();
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&aoVivoPendente)irAoVivo();});
+// iPad/Safari: ao dormir ou trocar de app, a conexão com o servidor costuma ficar "morta" sem
+// avisar, e o app deixa de receber o que o PC estudou. Ao voltar, reinicia a conexão e
+// confere o carimbo do servidor; se for de outro aparelho, baixa na hora.
+let syncEscondidoEm=0,syncRevalidando=false;
+async function syncRevalidar(motivo){
+  if(syncRevalidando||useLocalFallback||!DB_REF||!firebaseDB||!servidorVisto)return;
+  syncRevalidando=true;
+  try{
+    if(motivo==='online'||((motivo==='visivel'||motivo==='pageshow')&&Date.now()-syncEscondidoEm>15000)){
+      try{firebaseDB.goOffline();firebaseDB.goOnline();}catch(e){}
+    }
+    const r=userRef('vdn_v1/lastModified');
+    const v=r?await noLerComTimeout(r,8000):undefined;
+    if(typeof v==='number'&&v!==db.lastModified&&!lmsEnviados.has(v)){
+      if(ouvinteCompletoLigado){
+        // já ouvindo tudo: força uma leitura completa caso o ouvinte tenha ficado surdo
+        const sn=await DB_REF.once('value');const data=sn.val();
+        if(data&&typeof data.lastModified==='number'&&data.lastModified!==db.lastModified&&!lmsEnviados.has(data.lastModified)){
+          if(savePendente)saveFlush();
+          Object.assign(db,data);applyDefaults();applyPlanGating();
+          try{gravarCacheLocal();}catch(e){}
+          redesenharComDadosNovos2();
+          toast('☁️ Atualizado com o que você estudou em outro aparelho','var(--green)');
+        }
+      }else irAoVivo();
+    }
+  }catch(e){console.warn('syncRevalidar:',e);}
+  finally{syncRevalidando=false;}
+}
+function redesenharComDadosNovos2(){
+  try{renderHeader();renderMap();updateRevBadge();updateEditaisBadge();updateFCBadge();}catch(e){}
+  const sc=document.querySelector('.screen.active')?.id;
+  try{
+    if(sc==='screen-revisions')renderRevisions();
+    if(sc==='screen-dashboard')renderDashboard();
+    if(sc==='screen-editais')renderEditais();
+    if(sc==='screen-flashcards')renderFlashcardsScreen();
+  }catch(e){}
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)syncEscondidoEm=Date.now();else syncRevalidar('visivel');});
+window.addEventListener('pageshow',e=>{if(e.persisted)syncRevalidar('pageshow');});
+window.addEventListener('online',()=>syncRevalidar('online'));
+window.addEventListener('focus',()=>syncRevalidar('foco'));
+setInterval(()=>{if(!document.hidden)syncRevalidar('ciclo');},90000);
 function aoVerLM(v,overlay,msg){
   if(ouvinteCompletoLigado)return;
   if(!servidorVisto){
@@ -7140,6 +7191,11 @@ function estatResumo(d){
   return{xp:+d.xp||0,life:+d.lifetimeSeconds||0,qn,sem,sg,lm:+d.lastModified||0};
 }
 // Junta pelo maior. Devolve quantos números subiram.
+function estatRetratoParaJuntar(){
+  const o={};
+  ['xp','lifetimeSeconds','longestStreak','totalSessionsCount','longestSingleSessionSec','fcCreatedTotal','fcCurrentStreak','fcLongestStreak','kingdomSeconds','subTotalSeconds','sessions','questoesPorDia','goalHitDays'].forEach(k=>{o[k]=db[k];});
+  return o;
+}
 function estatJuntar(src){
   if(!src||typeof src!=='object')return 0;
   let mud=0;
