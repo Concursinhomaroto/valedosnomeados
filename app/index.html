@@ -3907,6 +3907,7 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
 <!-- ===== DASHBOARD ===== -->
 <div class="screen active" id="screen-dashboard">
   <div class="sec-title">🏆 Painel do Herói
+    <span id="sync-chip" class="backup-badge" onclick="sincronizarAgora()" title="Toque para sincronizar agora com a nuvem" style="cursor:pointer;margin-right:6px">☁️ Sincronizar</span>
     <span id="backup-badge" class="backup-badge" style="display:none" onclick="abrirDetalhesBackup()" title="Estado da cópia de segurança automática dos seus dados"></span>
   </div>
 
@@ -5880,7 +5881,11 @@ async function loadDB(callback){
   ouvinteCompletoLigado=true;
   vigiasDesligar();
   DB_REF.on('value',(snapshot)=>{
-    if(isSaving&&firebaseReady){isSaving=false;return;}
+    if(isSaving&&firebaseReady){
+      // Só descarta o eco da PRÓPRIA gravação; uma atualização de outro aparelho passa.
+      let vv;try{vv=snapshot.child('lastModified').val();}catch(e){}
+      if(vv===undefined||vv===null||lmsEnviados.has(vv)||vv===db.lastModified){isSaving=false;return;}
+    }
     isSaving=false;
     clearTimeout(safetyTimer);
     const wasReady=firebaseReady;
@@ -6076,7 +6081,53 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&aoVivoPen
 // iPad/Safari: ao dormir ou trocar de app, a conexão com o servidor costuma ficar "morta" sem
 // avisar, e o app deixa de receber o que o PC estudou. Ao voltar, reinicia a conexão e
 // confere o carimbo do servidor; se for de outro aparelho, baixa na hora.
+const APP_VERSION='v316';
 let syncEscondidoEm=0,syncRevalidando=false;
+function syncFmt(ts){if(!ts)return '—';const d=new Date(ts);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
+async function sincronizarAgora(){
+  const chip=document.getElementById('sync-chip');
+  if(useLocalFallback||!DB_REF||!firebaseDB){toast('Sem conexão com a nuvem neste momento.','var(--red)');return;}
+  if(chip)chip.textContent='☁️ Sincronizando...';
+  try{
+    if(savePendente)saveFlush();
+    for(let i=0;i<20&&nuvemEnvios>0;i++)await new Promise(r=>setTimeout(r,250));
+    try{firebaseDB.goOffline();firebaseDB.goOnline();}catch(e){}
+    const sn=await Promise.race([DB_REF.once('value'),new Promise((_,rj)=>setTimeout(()=>rj(new Error('tempo esgotado')),12000))]);
+    const data=sn.val();
+    if(!data){toast('A nuvem não devolveu dados.','var(--red)');return;}
+    const igual=data.lastModified===db.lastModified||lmsEnviados.has(data.lastModified);
+    let antes=null;try{antes=JSON.parse(JSON.stringify(estatRetratoParaJuntar()));}catch(e){}
+    const xpAntes=+db.lifetimeSeconds||0;
+    if(!igual){
+      Object.assign(db,data);
+      if(antes){try{estatJuntar(antes);}catch(e){}}
+      applyDefaults();applyPlanGating();
+      try{gravarCacheLocal();}catch(e){}
+      redesenharComDadosNovos2();
+    }
+    toast((igual?'☁️ Já estava igual à nuvem':'☁️ Atualizado com a nuvem')+' · app '+APP_VERSION+' · nuvem '+syncFmt(data.lastModified)+' · aqui '+syncFmt(db.lastModified),'var(--green)');
+  }catch(e){
+    toast('Não consegui sincronizar: '+(e.message||e),'var(--red)');
+  }finally{
+    if(chip)chip.textContent='☁️ Sincronizar';
+  }
+}
+// Atualização automática: o iPad (principalmente instalado na tela de início) pode ficar dias com
+// a página antiga aberta. Compara a versão que está rodando com a do servidor e recarrega.
+async function appConferirVersao(){
+  try{
+    const r=await fetch('/sw.js',{cache:'no-store'});if(!r.ok)return;
+    const t=await r.text();const m=t.match(/vdn-shell-(v\d+)/);
+    if(!m||m[1]===APP_VERSION)return;
+    if(savePendente)saveFlush();
+    if(nuvemEnvios>0)return;
+    toast('🔄 Nova versão do app. Atualizando...','var(--green)');
+    setTimeout(()=>location.reload(),1200);
+  }catch(e){}
+}
+setTimeout(appConferirVersao,8000);
+setInterval(()=>{if(!document.hidden)appConferirVersao();},300000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(appConferirVersao,1500);});
 async function syncRevalidar(motivo){
   if(syncRevalidando||useLocalFallback||!DB_REF||!firebaseDB||!servidorVisto)return;
   syncRevalidando=true;
