@@ -3505,6 +3505,12 @@ span.ti-meta{cursor:default;}
 .dash-diag{position:static;}
 .dash-col-hoje>.dash-hoje{flex:0 0 auto;}
 .dash-col-hoje>.dash-tempo-mini{flex:1 1 auto;}
+.dash-col-hoje.erros-left>.dash-tempo-mini{flex:0 0 auto;}
+.dash-col-hoje.erros-left>.dash-erros-card{flex:1 1 auto;}
+.dash-erros-card{margin:0;}
+.dash-fold.medindo{align-items:start!important;}
+.dash-fold.medindo .dash-col-hoje>*{flex:0 0 auto!important;}
+.dash-fold.medindo #study-chart-wrap-mini{flex:0 0 auto!important;height:190px;}
 .dash-tempo-mini #study-chart-wrap-mini{flex:1 1 auto;min-height:190px;position:relative;overflow:hidden;}
 .dash-tempo-mini #study-chart-wrap-mini svg{position:absolute;left:0;top:0;width:100%!important;height:100%!important;}
 .dash-hoje{padding:14px 16px;container-type:inline-size;}
@@ -3981,6 +3987,7 @@ body.vista-agenda .dash-v2>*:not(.dash-agenda){display:none;}
         </div>
         <div class="chart-svg-wrap" id="study-chart-wrap-mini" style="min-height:80px"></div>
       </div>
+      <div class="section-card dash-erros-card" id="dash-erros-card" style="display:none"></div>
     </div>
 
     <div class="section-card dash-diag">
@@ -26758,7 +26765,27 @@ function renderRenewalBanner(){
     banner.style.display='flex';
   }
 }
-function renderDashboard(){return comIndiceFC(renderDashboardInterno);}
+function renderDashboard(){const r=comIndiceFC(renderDashboardInterno);setTimeout(dashBalancear,0);return r;}
+// Deixa as duas colunas do painel com a mesma altura sem esticar nada: o bloco
+// "Por que você erra" fica na coluna que sobraria mais curta.
+function dashBalancear(){
+  const col=document.querySelector('.dash-col-hoje'),diag=document.querySelector('.dash-diag');
+  const erros=document.querySelector('.dd-p-erros'),card=document.getElementById('dash-erros-card');
+  if(!col||!diag||!erros||!card||!col.offsetParent)return;
+  const raiz=col.parentNode;
+  if(erros.parentNode!==diag){diag.appendChild(erros);card.style.display='none';}
+  col.classList.remove('erros-left');
+  if(diag.offsetLeft<=col.offsetLeft+10){renderStudyChart();return;}
+  raiz.classList.add('medindo');
+  const kids=[...col.children].filter(c=>c.offsetParent!==null&&c!==card);
+  const L=kids.reduce((a,c)=>a+c.offsetHeight,0)+16*(kids.length-1);
+  const R=diag.offsetHeight;
+  const E=erros.offsetHeight+40;
+  raiz.classList.remove('medindo');
+  if(Math.abs((R-E)-(L+16+E))<Math.abs(R-L)){card.style.display='';card.appendChild(erros);col.classList.add('erros-left');}
+  renderStudyChart();
+}
+window.addEventListener('resize',()=>{clearTimeout(window._dashBalT);window._dashBalT=setTimeout(()=>{if(document.querySelector('.screen.active')?.id==='screen-dashboard')dashBalancear();},250);});
 function renderDashboardInterno(){
   renderBackupBadge(); // o dia pode ter virado com a aba aberta
   renderRenewalBanner();
