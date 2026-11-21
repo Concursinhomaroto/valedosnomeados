@@ -5517,6 +5517,11 @@ function authSignOut(){
   try{salaPresenceLeave&&salaPresenceLeave();}catch(e){}
   authFirebase.signOut();
 }
+async function authRecarregarLimpo(){
+  try{if('caches' in window){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));}}catch(e){}
+  try{if(navigator.serviceWorker){const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.unregister()));}}catch(e){}
+  location.reload();
+}
 function authShowLoginScreen(){
   const overlay=document.getElementById('loading-overlay');
   const login=document.getElementById('screen-login');
@@ -5538,8 +5543,27 @@ function authUpdateLogoutBtn(){
     btn.style.display='none';
   }
 }
+let authRespondeu=false;
 if(authFirebase){
+  // Safari/iPad: o IndexedDB onde o Firebase guarda a sessão às vezes trava e o
+  // onAuthStateChanged nunca dispara — a tela ficava eternamente em "Verificando sessão...".
+  setTimeout(()=>{
+    if(authRespondeu)return;
+    const msg=document.getElementById('loading-msg');
+    if(msg)msg.innerHTML='Demorando mais que o normal...<br><button class="btn btn-primary" style="margin-top:10px" onclick="authRecarregarLimpo()">Recarregar</button>';
+  },5000);
+  setTimeout(()=>{
+    if(authRespondeu)return;
+    try{
+      const u=authFirebase.currentUser;
+      if(u){authRespondeu=true;currentUser=u;authUpdateLogoutBtn();if(!appBooted){appBooted=true;bootApp();}return;}
+    }catch(e){}
+    authRespondeu=true;
+    authShowLoginScreen();
+    try{authShowError('A verificação da sessão demorou. Entre de novo (seus dados estão salvos na conta).');}catch(e){}
+  },10000);
   authFirebase.onAuthStateChanged((user)=>{
+    authRespondeu=true;
     currentUser=user;
     authUpdateLogoutBtn();
     if(user){
@@ -26559,12 +26583,6 @@ function renderRevisions(){
   const exibir=Math.min(container._revPag*REV_PAG,totalItens);
   items=items.slice(0,exibir);
   const rnCls=['rn-1','rn-2','rn-3','rn-4'];
-  // Paginação: exibir de 30 em 30 para não travar com centenas de revisões
-  const REV_PAG=30;
-  const totalItens=items.length;
-  const exibir=container._revPag?Math.min(container._revPag*REV_PAG,totalItens):REV_PAG;
-  if(!container._revPag)container._revPag=1;
-  items=items.slice(0,exibir);
   container.innerHTML=items.map(item=>{
     const isPast=item.date<today;const isToday=item.date===today;
     const after=isAfterExam(item.date);
